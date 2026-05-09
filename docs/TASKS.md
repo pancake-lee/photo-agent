@@ -28,6 +28,7 @@
 | 1.9 | Go：批量 VLM 调用（并发控制 3 并发）     | 1.5h     | `backend/internal/service/processor.go` |
 | 1.10 | Go：元数据保存到 SQLite                  | 30min    | `backend/internal/service/photo.go`   |
 | 1.11 | Go：Dify 知识库文档写入 API              | 1h       | `backend/internal/vlm/dify.go`        |
+| 1.12 | Go：批量 VLM 预处理脚本（独立运行）      | 1h       | `scripts/batch_vlm/main.go`           |
 
 ### 当日验收标准
 
@@ -52,13 +53,24 @@ $ sqlite3 data/sqlite/photo_agent.db "SELECT COUNT(*) FROM photos"
 45
 
 # Dify 知识库中有文档（需在 Dify 后台确认或调用 API 查询）
+
+# 预描述模式：先用脚本批量生成描述
+$ cd scripts/batch_vlm && go run main.go \
+  -input ../../demo_data/photos/ \
+  -output ../../data/descriptions.json
+# 输出：生成 45 条描述，耗时 3m20s
+
+# 然后导入时自动读取 descriptions.json
+$ curl -X POST http://localhost:8080/api/import/jobs \
+  -d '{"sourcePath":"./demo_data/photos/2024-02-云南","recursive":false}'
+# 导入任务跳过 VLM 调用，直接读取预生成描述
 ```
 
 ### 风险与应对
 
 | 风险                         | 应对                                          |
 | ---------------------------- | --------------------------------------------- |
-| API Key 配置错误导致调用失败 | 先写一个 `test_vlm.go` 单独测试 VLM 调用      |
+| API Key 配置错误导致调用失败 | 先写一个 `test_vlm.go` 单独测试 VLM 调用；脚本支持 `--dry-run` 先验证配置 |
 | Go 依赖下载慢                | 配置 GOPROXY=https://goproxy.cn               |
 | Dify API 写入知识库失败      | 记录失败文档，导入任务状态标记为部分完成      |
 
@@ -171,6 +183,7 @@ $ docker-compose logs -f backend
 - [ ] SQLite 初始化无报错，表结构正确
 - [ ] 导入任务能创建并完成，SQLite 中有照片记录
 - [ ] Dify 知识库中有对应数量的文档（调用 API 确认）
+- [ ] 批量 VLM 脚本能独立运行，生成 `descriptions.json`
 
 ### Day 2 检查点
 
@@ -194,8 +207,9 @@ $ docker-compose logs -f backend
 
 | 风险                     | 概率 | 影响 | 预案                                             |
 | ------------------------ | ---- | ---- | ------------------------------------------------ |
-| API 调用费用过高         | 中   | 成本 | 用 GPT-4o-mini，批量导入限制 3 并发              |
-| Day 1 代码量过大做不完   | 中   | 进度 | 优先保证 1.1-1.6 + 1.9，1.7-1.8 可简化          |
+| API 调用费用过高         | 中   | 成本 | 用 GPT-4o-mini / 火山引擎低成本模型，批量导入限制 3 并发 |
+| 火山引擎 API 调用失败    | 低   | 进度 | 备用 OpenAI / Qwen API Key，三选一降级           |
+| Day 1 代码量过大做不完   | 中   | 进度 | 优先保证 1.1-1.6 + 1.9 + 1.12，1.7-1.8 可简化   |
 | Dify 手动配置耗时超预期  | 高   | 进度 | Day 2 优先配置工具和 Agent，知识库可次日补       |
 | Agent 工具路由不准       | 中   | 体验 | 优化系统提示词，明确工具使用场景                 |
 | 时间不够，Day 3 测试不足 | 中   | 质量 | 先保证 1 个端到端场景通过，其余放 README 备注    |

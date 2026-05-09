@@ -56,7 +56,7 @@ Go Backend (:8080)
 ### 2.3 AI 模型（云端 API）
 
 - **LLM 对话**：GPT-4o-mini / Qwen-Turbo / Kimi — Dify 内部配置
-- **VLM 图片描述**：GPT-4o-mini / Qwen-VL — Go Backend 直接 HTTP 调用
+- **VLM 图片描述**：GPT-4o-mini / Qwen-VL / 火山引擎 Doubao-vision — Go Backend 直接 HTTP 调用
 - **Embedding**：text-embedding-3-small / Qwen-Embedding — Dify 内部配置
 
 ---
@@ -64,6 +64,10 @@ Go Backend (:8080)
 ## 3. 数据流
 
 ### 3.1 照片导入流程
+
+导入流水线支持**两种模式**，通过配置切换：
+
+**模式 A：预描述模式（推荐用于开发/演示）**
 
 ```
 用户在 Dify 聊天输入："导入 ~/Photos/2024-02-云南"
@@ -73,7 +77,7 @@ Dify Agent: 意图识别 → 调用 import_photos 工具
 Go: 创建导入任务 (SQLite)
 Go: 扫描文件夹 → 按文件夹名解析时间线标签
 Go: 复制照片到 data/photos/{timeline}/
-Go: 对每个照片调用 VLM API (HTTP) 生成描述
+Go: 读取预生成的 descriptions.json，匹配照片路径获取描述
 Go: 保存元数据到 SQLite (路径/时间线/标签/描述/EXIF)
 Go: 通过 Dify API 将描述写入知识库 (照片ID + 描述文本)
     ↓
@@ -82,6 +86,12 @@ Go: 更新导入任务状态为完成
     ↓
 Dify Agent: 回复 "导入完成，共 45 张照片"
 ```
+
+**模式 B：实时 VLM 模式（完整功能）**
+
+与模式 A 的区别仅在第 5 步：Go 实时调用 VLM API（火山引擎/ OpenAI / Qwen）生成描述，其余流程相同。支持并发控制（默认 3 并发）和失败重试（3 次）。
+
+**预描述文件的生成**：通过独立脚本 `scripts/batch_vlm/main.go` 提前批量处理，不依赖 Dify 或其他服务。脚本扫描照片文件夹，调用 VLM API，输出 `descriptions.json`。
 
 **批量导入并发控制**：VLM API 调用限制并发数（如 3 个并发），避免费用过高和速率限制。失败自动重试 3 次。
 
@@ -102,6 +112,57 @@ Dify Web UI 渲染回复（文本 + Markdown 图片链接）
 ```
 
 **图片在回复中的展示**：Agent 回复中包含 Markdown 图片链接 `![描述](http://localhost:8080/api/photos/{id}/image)`，Dify 的 Markdown 渲染器会自动展示图片。用户点击可查看原图。
+
+### 3.3 批量 VLM 预处理脚本
+
+**为什么需要独立脚本**
+
+VLM 调用耗时较长（单张 2-5 秒，300 张约 15-30 分钟），且费用按调用次数计费。开发阶段反复触发导入会重复调用 VLM，成本高且慢。独立脚本提前批量处理一次，开发时直接复用结果。
+
+**脚本位置**：`scripts/batch_vlm/main.go`
+
+**脚本输入输出**
+
+- 输入：照片根文件夹路径（如 `./demo_data/photos/`）
+- 输出：`data/descriptions.json`
+
+**descriptions.json 格式**
+
+```json
+{
+  "photos/2024-02-云南/IMG_001.jpg": {
+    "description": "雪山日照金山，前景有五彩经幡...",
+    "model": "doubao-vision-pro",
+    "processed_at": "2026-05-09T10:30:00Z"
+  }
+}
+```
+
+**脚本执行流程**
+
+1. 递归扫描输入文件夹，收集所有图片文件（jpg / png / jpeg）
+2. 对每个图片调用 VLM API（火山引擎 / OpenAI / Qwen），使用固定提示词
+3. 并发控制：默认 3 并发，失败自动重试 3 次
+4. 逐步写入 `descriptions.json`（避免中途崩溃丢失全部进度）
+5. 输出处理统计（成功 / 失败 / 总耗时）
+
+**固定提示词**（与导入流水线实时模式使用同一 Prompt）
+
+```
+请详细描述这张照片的内容。包括：
+- 主体内容（人/物/风景）
+- 场景环境（室内/室外、自然/城市）
+- 光线氛围（明亮/昏暗、自然光/人工光）
+- 色彩风格（鲜艳/柔和、冷暖倾向）
+- 构图特点（前景/背景、对称/非对称）
+```
+
+**脚本使用方式**
+
+```bash
+cd scripts/batch_vlm
+go run main.go -input ../../demo_data/photos/ -output ../../data/descriptions.json
+```
 
 ---
 
@@ -262,11 +323,15 @@ photo-agent/
 │   │   ├── config/               # 配置管理
 │   │   └── vlm/                  # VLM HTTP 客户端
 │   └── go.mod
+├── scripts/
+│   └── batch_vlm/
+│       └── main.go               # 批量 VLM 预处理脚本
 ├── dify/
 │   └── docker-compose.yaml       # Dify 本地部署配置
 ├── data/
 │   ├── photos/                   # 照片文件存储
-│   └── sqlite/                   # SQLite 数据库文件
+│   ├── sqlite/                   # SQLite 数据库文件
+│   └── descriptions.json         # 预生成的照片描述（由脚本生成）
 └── docs/
 ```
 
@@ -299,9 +364,16 @@ go run cmd/server/main.go
 PORT=8080
 DB_PATH=./data/sqlite/photo_agent.db
 PHOTO_STORAGE_PATH=./data/photos
-VLM_API_KEY=your-openai-or-qwen-key
-VLM_MODEL=gpt-4o-mini
-VLM_BASE_URL=https://api.openai.com/v1  # 或 Qwen/Kimi 的 base URL
+DESCRIPTIONS_PATH=./data/descriptions.json  # 预描述文件路径（预描述模式下使用）
+
+# VLM 配置（三选一）
+VLM_PROVIDER=volcengine  # 或 openai / qwen
+VLM_API_KEY=your-api-key
+VLM_MODEL=doubao-vision-pro  # 或 gpt-4o-mini / qwen-vl-max
+VLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3  # 火山引擎 endpoint
+# VLM_BASE_URL=https://api.openai.com/v1               # OpenAI endpoint
+# VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1  # Qwen endpoint
+
 DIFY_API_KEY=your-dify-api-key
 DIFY_BASE_URL=http://localhost/v1
 DIFY_KNOWLEDGE_BASE_ID=your-dataset-id
@@ -319,7 +391,8 @@ DIFY_KNOWLEDGE_BASE_ID=your-dataset-id
 | 照片批量导入 | Go 代码 | 需要异步调度、并发控制、重试机制 |
 | 照片元数据管理 | Go 代码 | 业务数据，需要事务和关系查询 |
 | 文件服务 | Go 代码 | 本地文件读写，Go 标准库高效 |
-| VLM 图片描述 | Go 代码 | HTTP 调用云端 API，Go 可直接实现 |
+| VLM 图片描述（实时） | Go 代码 | HTTP 调用云端 API，Go 可直接实现 |
+| VLM 批量预处理 | Go 独立脚本 | 耗时长、费用高，独立运行避免开发阶段重复调用 |
 | 图片在聊天中展示 | Dify Markdown | Agent 回复包含图片 URL，Dify 自动渲染 |
 
 ---
@@ -330,6 +403,7 @@ DIFY_KNOWLEDGE_BASE_ID=your-dataset-id
 |------|------|------|
 | Dify 本地部署资源占用高 | 中 | 限制并发 worker 数，部署在 8G+ 内存机器 |
 | Dify 知识库同步延迟 | 中 | 导入时批量写入，失败重试；查询时 Go SQLite 兜底 |
-| VLM API 费用过高 | 中 | 批量导入限制并发（3 并发），使用 GPT-4o-mini 低成本模型 |
+| VLM API 费用过高 | 中 | 批量导入限制并发（3 并发），使用 GPT-4o-mini / 火山引擎低成本模型 |
+| 火山引擎 API 格式与 OpenAI 不兼容 | 低 | 火山引擎 Ark 平台支持 OpenAI 兼容格式（/v1/chat/completions），只需切换 base URL 和 model 名 |
 | Dify 回复中 Markdown 图片渲染异常 | 低 | 确保图片 URL 可访问（同机部署时 localhost 互通），备选方案：只返回文字描述 + 照片 ID |
 | Go 调用 VLM 需要图片 base64 编解码性能问题 | 低 | 批量导入异步处理，单图编码在百毫秒级 |
