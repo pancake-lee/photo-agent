@@ -71,6 +71,11 @@
 
 后端模块全部实现，编译通过，服务可启动：
 
+**构建命令**（输出到 `./bin/`）：
+
+- `make backend` — 编译 server 和 batch_vlm 到 `bin/`
+- `make clean` — 清理构建输出
+
 - **API 路由**（Gin）：12 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
 - **数据层**（GORM + SQLite）：`Photo` / `ImportJob` 两表，自动迁移
 - **配置管理**：复用 `pconfig`，TOML + 环境变量覆盖（`PHOTO_AGENT_*` 前缀）

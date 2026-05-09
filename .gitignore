@@ -1,0 +1,25 @@
+# Build outputs
+bin/
+backend/server
+backend/batch_vlm
+
+# Data
+data/
+backend/data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
