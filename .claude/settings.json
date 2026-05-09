@@ -11,7 +11,9 @@
       "Bash(go build *)",
       "Bash(git filter-branch *)",
       "Bash(git stash *)",
-      "Read(//root/go/pkg/mod/github.com/go-kratos/kratos/v2@v2.7.2/config/**)"
+      "Read(//root/go/pkg/mod/github.com/go-kratos/kratos/v2@v2.7.2/config/**)",
+      "Bash(grep -rn \"ChatCompletion\\\\|Chat\" /root/go/pkg/mod/github.com/volcengine/volcengine-go-sdk@*/service/arkruntime/*.go 2>/dev/null | head -30)",
+      "Read(//root/go/pkg/mod/github.com/volcengine/**)"
     ]
   }
 }

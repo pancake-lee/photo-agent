@@ -5,19 +5,20 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/pancake-lee/photo-agent/internal/config"
-	"github.com/pancake-lee/photo-agent/internal/vlm"
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/plogger"
+	"github.com/pancake-lee/photo-agent/internal/config"
+	"github.com/pancake-lee/photo-agent/internal/vlm"
 )
 
 var (
-	inputFlag  = flag.String("input", "", "input photo directory")
-	outputFlag = flag.String("output", "./data/descriptions.json", "output descriptions json file")
-	configFlag = flag.String("config", "", "config file path (e.g. pancake.yaml)")
+	inputFlag   = flag.String("input", "", "input photo directory")
+	outputFlag  = flag.String("output", "./data/descriptions.json", "output descriptions json file")
+	configFlag  = flag.String("config", "", "config file path (e.g. pancake.yaml)")
 	concurrency = flag.Int("concurrency", 3, "max concurrency")
 	retry       = flag.Int("retry", 3, "retry times on failure")
 	dryRun      = flag.Bool("dry-run", false, "dry run, test config only")
@@ -146,6 +147,7 @@ func scanImages(root string) ([]string, error) {
 			return nil
 		}
 		ext := filepath.Ext(path)
+		ext = strings.ToLower(ext)
 		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
 			images = append(images, path)
 		}

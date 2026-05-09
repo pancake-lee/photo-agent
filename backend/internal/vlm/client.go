@@ -22,6 +22,80 @@ const vlmPrompt = `请详细描述这张照片的内容。包括：
 func DescribeImage(imagePath string) (string, string, error) {
 	cfg := config.Get().VLM
 
+	switch cfg.Provider {
+	case "volcengine":
+		return describeWithArk(imagePath, cfg)
+	default:
+		return describeWithHTTP(imagePath, cfg)
+	}
+}
+
+// describeWithArk 使用火山方舟 Responses HTTP API 调用
+func describeWithArk(imagePath string, cfg config.VLMConfig) (string, string, error) {
+	imageData, err := os.ReadFile(imagePath)
+	if err != nil {
+		return "", "", fmt.Errorf("read image failed: %w", err)
+	}
+
+	base64Image := base64.StdEncoding.EncodeToString(imageData)
+	mimeType := getMimeType(imagePath)
+	imageURL := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image)
+
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	}
+
+	reqBody := map[string]any{
+		"model": cfg.Model,
+		"input": []map[string]any{
+			{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "input_image", "image_url": imageURL},
+					{"type": "input_text", "text": vlmPrompt},
+				},
+			},
+		},
+	}
+
+	req, err := putil.NewHttpRequestJson("POST", baseURL+"/responses", map[string]string{
+		"Authorization": "Bearer " + cfg.APIKey,
+	}, nil, reqBody)
+	if err != nil {
+		return "", "", fmt.Errorf("build request failed: %w", err)
+	}
+
+	bodyBytes, err := putil.HttpDo(req)
+	if err != nil {
+		return "", "", fmt.Errorf("http request failed: %w", err)
+	}
+
+	var resp responsesResp
+	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+		return "", "", fmt.Errorf("unmarshal response failed: %w", err)
+	}
+
+	description := ""
+	if len(resp.Output) > 0 && len(resp.Output[0].Content) > 0 {
+		description = resp.Output[0].Content[0].Text
+	}
+
+	if description == "" {
+		return "", "", fmt.Errorf("empty response: %s", string(bodyBytes))
+	}
+
+	modelUsed := resp.Model
+	if modelUsed == "" {
+		modelUsed = cfg.Model
+	}
+
+	plogger.Infof("VLM described %s, model=%s, len=%d", imagePath, modelUsed, len(description))
+	return description, modelUsed, nil
+}
+
+// describeWithHTTP 使用 OpenAI 兼容 HTTP 调用
+func describeWithHTTP(imagePath string, cfg config.VLMConfig) (string, string, error) {
 	imageData, err := os.ReadFile(imagePath)
 	if err != nil {
 		return "", "", fmt.Errorf("read image failed: %w", err)
@@ -75,6 +149,19 @@ func DescribeImage(imagePath string) (string, string, error) {
 
 	plogger.Infof("VLM described %s, model=%s, len=%d", imagePath, modelUsed, len(description))
 	return description, modelUsed, nil
+}
+
+// responsesResp 火山方舟 Responses API 响应结构
+type responsesResp struct {
+	Model  string `json:"model"`
+	Output []struct {
+		Type    string `json:"type"`
+		Role    string `json:"role"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	} `json:"output"`
 }
 
 // openAIChatResp OpenAI 兼容格式的响应结构
