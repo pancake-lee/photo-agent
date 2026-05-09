@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	inputFlag   = flag.String("input", "", "input photo directory")
-	outputFlag  = flag.String("output", "./data/descriptions.json", "output descriptions json file")
+	inputFlag  = flag.String("input", "", "input photo directory")
+	outputFlag = flag.String("output", "./data/descriptions.json", "output descriptions json file")
+	configFlag = flag.String("config", "", "config file path (e.g. pancake.yaml)")
 	concurrency = flag.Int("concurrency", 3, "max concurrency")
 	retry       = flag.Int("retry", 3, "retry times on failure")
 	dryRun      = flag.Bool("dry-run", false, "dry run, test config only")
@@ -30,8 +31,14 @@ func main() {
 		plogger.Fatal("-input is required")
 	}
 
-	if err := config.Init(); err != nil {
-		plogger.Fatalf("config init failed: %v", err)
+	if *configFlag != "" {
+		if err := config.Init(*configFlag); err != nil {
+			plogger.Fatalf("config init failed: %v", err)
+		}
+	} else {
+		if err := config.Init(); err != nil {
+			plogger.Fatalf("config init failed: %v", err)
+		}
 	}
 
 	if *dryRun {

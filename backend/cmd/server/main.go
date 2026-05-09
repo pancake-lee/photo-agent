@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pancake-lee/photo-agent/internal/api"
 	"github.com/pancake-lee/photo-agent/internal/config"
@@ -8,11 +10,20 @@ import (
 	"github.com/pancake-lee/pgo/pkg/plogger"
 )
 
+var configFlag = flag.String("config", "", "config file path (e.g. pancake.yaml)")
+
 func main() {
+	flag.Parse()
 	plogger.InitConsoleLogger()
 
-	if err := config.Init(); err != nil {
-		plogger.Fatalf("config init failed: %v", err)
+	if *configFlag != "" {
+		if err := config.Init(*configFlag); err != nil {
+			plogger.Fatalf("config init failed: %v", err)
+		}
+	} else {
+		if err := config.Init(); err != nil {
+			plogger.Fatalf("config init failed: %v", err)
+		}
 	}
 
 	if err := service.InitDB(); err != nil {

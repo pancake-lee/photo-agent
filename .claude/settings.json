@@ -8,7 +8,10 @@
       "Bash(go version *)",
       "Bash(go mod *)",
       "Bash(GOPROXY=https://goproxy.cn,direct go mod tidy)",
-      "Bash(go build *)"
+      "Bash(go build *)",
+      "Bash(git filter-branch *)",
+      "Bash(git stash *)",
+      "Read(//root/go/pkg/mod/github.com/go-kratos/kratos/v2@v2.7.2/config/**)"
     ]
   }
 }

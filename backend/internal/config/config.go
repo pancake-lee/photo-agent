@@ -11,35 +11,35 @@ import (
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Addr string `default:":8080"`
+	Addr string `json:"addr" toml:"addr" default:":8080"`
 }
 
 // DBConfig 数据库配置
 type DBConfig struct {
-	SqlitePath string `toml:"sqlite_path" default:"./data/sqlite/photo_agent.db"`
+	SqlitePath string `json:"sqlite_path" toml:"sqlite_path" default:"./data/sqlite/photo_agent.db"`
 }
 
 // StorageConfig 存储配置
 type StorageConfig struct {
-	PhotoPath         string `toml:"photo_path" default:"./data/photos"`
-	DescriptionsPath  string `toml:"descriptions_path" default:"./data/descriptions.json"`
+	PhotoPath        string `json:"photo_path" toml:"photo_path" default:"./data/photos"`
+	DescriptionsPath string `json:"descriptions_path" toml:"descriptions_path" default:"./data/descriptions.json"`
 }
 
 // VLMConfig VLM 配置
 type VLMConfig struct {
-	Provider    string `default:"openai"`
-	APIKey      string `toml:"api_key"`
-	Model       string `default:"gpt-4o-mini"`
-	BaseURL     string `toml:"base_url" default:"https://api.openai.com/v1"`
-	Concurrency int    `default:"3"`
-	Retry       int    `default:"3"`
+	Provider    string `json:"provider" toml:"provider" default:"openai"`
+	APIKey      string `json:"api_key" toml:"api_key"`
+	Model       string `json:"model" toml:"model" default:"gpt-4o-mini"`
+	BaseURL     string `json:"base_url" toml:"base_url" default:"https://api.openai.com/v1"`
+	Concurrency int    `json:"concurrency" toml:"concurrency" default:"3"`
+	Retry       int    `json:"retry" toml:"retry" default:"3"`
 }
 
 // DifyConfig Dify 配置
 type DifyConfig struct {
-	APIKey    string `toml:"api_key"`
-	BaseURL   string `toml:"base_url" default:"http://localhost/v1"`
-	DatasetID string `toml:"dataset_id"`
+	APIKey    string `json:"api_key" toml:"api_key"`
+	BaseURL   string `json:"base_url" toml:"base_url" default:"http://localhost/v1"`
+	DatasetID string `json:"dataset_id" toml:"dataset_id"`
 }
 
 // Config 全局配置
