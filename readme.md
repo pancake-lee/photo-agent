@@ -63,6 +63,7 @@
 - [docs/TASKS.md](docs/TASKS.md) — 3 天开发任务拆分。每天结束交付一个可运行的里程碑，Dify + Go 双栈。
 - [docs/note.md](docs/note.md) — 决策备忘。记录被否定/推翻的技术栈和数据集方案，以及前期讨论归档。
 - [docs/learn.md](docs/learn.md) — 技术学习笔记。
+- [backend/test/backend_e2e.go](backend/test/backend_e2e.go) — Day1 E2E 测试程序。自动启停 server、调用全部 API、测试后清理数据。
 
 ## 当前状态
 
@@ -77,11 +78,14 @@
 **构建命令**（输出到 `./bin/`）：
 
 - `make backend` — 编译 server 和 batch_vlm 到 `bin/`
+- `make test-e2e` — 编译 E2E 测试程序到 `bin/e2e_test`
 - `make clean` — 清理构建输出
 
-- **API 路由**（Gin）：12 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
+- **API 路由**（Gin）：11 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
+  - 请求体字段统一使用下划线命名（如 `source_path`、`photo_path`）
 - **数据层**（GORM + SQLite）：`Photo` / `ImportJob` 两表，自动迁移
 - **配置管理**：复用 `pconfig`，TOML + 环境变量覆盖（`PHOTO_AGENT_*` 前缀）
+  - 支持的环境变量：`PORT`、`DB_PATH`、`PHOTO_PATH`、`DESCRIPTIONS_PATH`、`TIMELINE_PATH`、`VLM_PROVIDER`、`VLM_API_KEY`、`VLM_MODEL`、`VLM_BASE_URL`、`DIFY_API_KEY`、`DIFY_BASE_URL`、`DIFY_DATASET_ID`
 - **VLM 客户端**：纯 HTTP 实现（无 SDK），`volcengine` 走 Responses API，其他走 OpenAI Chat Completions API；调用前自动压缩图片为 JPG（ImageMagick `convert -resize 512x512> -quality 85 -format jpg`），`/root/project/` 下文件压缩后输出到 `PhotoPath` 对应路径，已存在则直接复用
   - 配置项：`vlm.max_image_size_mb`（浮点数，单位 MB）、`vlm.prompt`（自定义描述提示词）
 - **导入流水线**：扫描 → 复用已压缩图片（或拷贝到 `data/photos/`）→ 读取预描述（`data/descriptions.json`）→ 根据 EXIF 拍摄时间匹配时间线 → SQLite → Dify 知识库
@@ -93,3 +97,8 @@
   - 去重：已有描述条目自动跳过并汇总数量；已有压缩图直接复用
 - **Server 启动参数**：`-config`（指定配置文件）、`-l`（控制台日志开关，默认文件日志）
 - **文件服务**：图片统一存储在 `data/photos/` 下，保持原始目录结构；压缩版本即为最终存储文件，server 导入时直接复用
+- **E2E 测试**：`backend/test/backend_e2e.go`，可独立运行的测试程序
+  - 自动在临时目录准备测试数据（图片、时间线 md、预描述 json）
+  - 自动编译并启动 server 子进程，使用独立配置和数据库
+  - 顺序测试全部 11 个 API 端点（健康检查、导入任务、照片、时间线、标签）
+  - 测试完成后 kill server 并删除临时目录，不留测试数据
