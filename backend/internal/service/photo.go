@@ -10,7 +10,7 @@ import (
 )
 
 // SavePhoto 保存照片元数据到数据库
-func SavePhoto(filename, filePath, timeline, tags, description string, width, height int) (*model.Photo, error) {
+func SavePhoto(filename, filePath, timeline, tags, description string, width, height int, shotAt *time.Time) (*model.Photo, error) {
 	photo := &model.Photo{
 		ID:          uuid.NewV4().String(),
 		Filename:    filename,
@@ -18,6 +18,7 @@ func SavePhoto(filename, filePath, timeline, tags, description string, width, he
 		Timeline:    timeline,
 		Tags:        tags,
 		Description: description,
+		ShotAt:      shotAt,
 		Width:       width,
 		Height:      height,
 		ImportedAt:  time.Now(),

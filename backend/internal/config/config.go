@@ -23,6 +23,7 @@ type DBConfig struct {
 type StorageConfig struct {
 	PhotoPath        string `json:"photo_path" toml:"photo_path" default:"./data/photos"`
 	DescriptionsPath string `json:"descriptions_path" toml:"descriptions_path" default:"./data/descriptions.json"`
+	TimelinePath     string `json:"timeline_path" toml:"timeline_path"`
 }
 
 // VLMConfig VLM 配置

@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"image"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/model"
 	"github.com/pancake-lee/photo-agent/internal/vlm"
-	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/plogger"
+	"github.com/rwcarlsen/goexif/exif"
 	"github.com/satori/go.uuid"
 )
 
@@ -92,41 +91,35 @@ func (p *ImportProcessor) Process(ctx context.Context, jobID, sourcePath string,
 func (p *ImportProcessor) processSingleImage(jobID string, img ImageInfo, current, total int) {
 	plogger.Infof("[%d/%d] Processing: %s", current, total, img.Filename)
 
-	// 复制文件
-	relPath, err := StorePhoto(img.SourcePath, imgTimeline(img.SourcePath, img.Timeline))
+	// 复制文件（若已有压缩版本则直接复用）
+	relPath, err := StorePhoto(img.SourcePath, "")
 	if err != nil {
 		p.appendJobLog(jobID, fmt.Sprintf("store failed %s: %v", img.Filename, err))
 		p.incFailed(jobID)
 		return
 	}
 
-	// 获取图片尺寸
+	// 获取图片尺寸与 EXIF 拍摄时间
 	width, height := getImageSize(img.SourcePath)
+	shotAt := getExifShotAt(img.SourcePath)
 
-	// 获取描述（预描述优先，否则实时 VLM）
+	// 根据拍摄时间匹配活动
+	timeline := ""
+	if shotAt != nil {
+		timeline = FindEventByTime(*shotAt)
+	}
+
+	// 获取描述（仅从预描述文件读取）
 	description := ""
 	if desc, ok := GetPreDescription(relPath); ok {
 		description = desc
 		plogger.Infof("Using pre-description for %s", img.Filename)
 	} else {
-		// 实时调用 VLM
-		err := papp.NewRunner("vlm").RunRetry(
-			config.Get().VLM.Retry, 2*time.Second,
-			func() error {
-				var e error
-				description, _, e = vlm.DescribeImage(img.SourcePath)
-				return e
-			},
-		)
-		if err != nil {
-			p.appendJobLog(jobID, fmt.Sprintf("vlm failed %s: %v", img.Filename, err))
-			p.incFailed(jobID)
-			// 继续保存，只是描述为空
-		}
+		plogger.Infof("No pre-description for %s, importing with empty description", img.Filename)
 	}
 
 	// 保存到数据库
-	photo, err := SavePhoto(img.Filename, relPath, imgTimeline(img.SourcePath, img.Timeline), "", description, width, height)
+	photo, err := SavePhoto(img.Filename, relPath, timeline, "", description, width, height, shotAt)
 	if err != nil {
 		p.appendJobLog(jobID, fmt.Sprintf("save db failed %s: %v", img.Filename, err))
 		p.incFailed(jobID)
@@ -235,15 +228,6 @@ func (p *ImportProcessor) appendJobLog(id, msg string) {
 
 // --- util ---
 
-func imgTimeline(sourcePath, defaultTimeline string) string {
-	// 从源路径的父文件夹名提取时间线
-	parent := filepath.Base(filepath.Dir(sourcePath))
-	if parent == "." || parent == "" {
-		return defaultTimeline
-	}
-	return parent
-}
-
 func getImageSize(path string) (int, int) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -256,4 +240,23 @@ func getImageSize(path string) (int, int) {
 		return 0, 0
 	}
 	return config.Width, config.Height
+}
+
+func getExifShotAt(path string) *time.Time {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+
+	x, err := exif.Decode(file)
+	if err != nil {
+		return nil
+	}
+
+	tm, err := x.DateTime()
+	if err != nil {
+		return nil
+	}
+	return &tm
 }

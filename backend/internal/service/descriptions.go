@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/pgo/pkg/plogger"
@@ -69,6 +70,15 @@ func GetPreDescription(relPath string) (string, bool) {
 
 	for _, k := range keys {
 		if entry, ok := m[k]; ok {
+			return entry.Description, true
+		}
+	}
+
+	// 扩展名模糊匹配（原始 RAW 压缩为 jpg 后扩展名变化）
+	baseNoExt := strings.TrimSuffix(relPath, filepath.Ext(relPath))
+	for k, entry := range m {
+		keyNoExt := strings.TrimSuffix(k, filepath.Ext(k))
+		if keyNoExt == baseNoExt || keyNoExt == filepath.ToSlash(baseNoExt) {
 			return entry.Description, true
 		}
 	}

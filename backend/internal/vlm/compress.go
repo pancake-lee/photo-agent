@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/pancake-lee/photo-agent/internal/config"
 )
 
 // maybeCompressImage 检查图片大小，超过限制时压缩为 JPEG。
@@ -67,14 +69,14 @@ func GetCompressedPath(inputPath string) string {
 }
 
 // resolveCompressOutput 解析压缩输出路径。
-// /root/project/ 下的文件映射到 /root/share/ 对应路径，其他使用临时文件。
+// /root/project/ 下的文件映射到 PhotoPath 对应路径，其他使用临时文件。
 func resolveCompressOutput(inputPath string) (string, func(), error) {
 	const projectPrefix = "/root/project/"
 	if strings.HasPrefix(inputPath, projectPrefix) {
 		rel := strings.TrimPrefix(inputPath, projectPrefix)
 		base := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
 		dir := filepath.Dir(rel)
-		outputPath := filepath.Join("/root/share", dir, base+".jpg")
+		outputPath := filepath.Join(config.Get().Storage.PhotoPath, dir, base+".jpg")
 		return outputPath, nil, nil
 	}
 

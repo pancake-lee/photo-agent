@@ -83,13 +83,14 @@
 - **API 路由**（Gin）：12 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
 - **数据层**（GORM + SQLite）：`Photo` / `ImportJob` 两表，自动迁移
 - **配置管理**：复用 `pconfig`，TOML + 环境变量覆盖（`PHOTO_AGENT_*` 前缀）
-- **VLM 客户端**：纯 HTTP 实现（无 SDK），`volcengine` 走 Responses API，其他走 OpenAI Chat Completions API；调用前自动压缩图片为 JPG（ImageMagick `convert -resize 512x512> -quality 85 -format jpg`），`/root/project/` 下文件输出到 `/root/share/` 对应路径，已存在则直接复用
+- **VLM 客户端**：纯 HTTP 实现（无 SDK），`volcengine` 走 Responses API，其他走 OpenAI Chat Completions API；调用前自动压缩图片为 JPG（ImageMagick `convert -resize 512x512> -quality 85 -format jpg`），`/root/project/` 下文件压缩后输出到 `PhotoPath` 对应路径，已存在则直接复用
   - 配置项：`vlm.max_image_size_mb`（浮点数，单位 MB）、`vlm.prompt`（自定义描述提示词）
-- **导入流水线**：扫描 → 复制到 `data/photos/` → 描述（预描述优先 / 实时 VLM 降级）→ SQLite → Dify 知识库
+- **导入流水线**：扫描 → 复用已压缩图片（或拷贝到 `data/photos/`）→ 读取预描述（`data/descriptions.json`）→ 根据 EXIF 拍摄时间匹配时间线 → SQLite → Dify 知识库
   - 并发控制：默认 3 并发
-  - 失败重试：复用 `papp.Runner.RunRetry`，默认 3 次
-  - 预描述模式：读取 `data/descriptions.json`，跳过 VLM 调用
+  - 无预描述时以空描述入库，不调用 VLM
+  - 时间线从配置指定的 md 表格文件读取，根据拍摄时间匹配活动名称
 - **批量 VLM 脚本**：`backend/cmd/batch_vlm/main.go`，独立运行，输出 `descriptions.json`
   - 参数：`-config`（指定配置文件）、`-l`（控制台日志开关）、`-force`（强制重做，清理已有压缩图和描述）
   - 去重：已有描述条目自动跳过并汇总数量；已有压缩图直接复用
-- **文件服务**：图片存储到 `data/photos/{timeline}/`，自动生成唯一文件名
+- **Server 启动参数**：`-config`（指定配置文件）、`-l`（控制台日志开关，默认文件日志）
+- **文件服务**：图片统一存储在 `data/photos/` 下，保持原始目录结构；压缩版本即为最终存储文件，server 导入时直接复用

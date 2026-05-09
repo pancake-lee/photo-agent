@@ -18,7 +18,8 @@
       "Read(//root/project/proto-agent/**)",
       "Bash(convert --version)",
       "Bash(convert -list format)",
-      "Bash(convert /root/project/proto-agent/DSC_0143.JPG -resize \"2048x2048>\" -quality 85 -format jpg /root/project/proto-agent/DSC_0143.comp.JPG)"
+      "Bash(convert /root/project/proto-agent/DSC_0143.JPG -resize \"2048x2048>\" -quality 85 -format jpg /root/project/proto-agent/DSC_0143.comp.JPG)",
+      "Bash(go get *)"
     ]
   }
 }

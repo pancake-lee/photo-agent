@@ -8,13 +8,17 @@ import (
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/service"
 	"github.com/pancake-lee/pgo/pkg/plogger"
+	"go.uber.org/zap/zapcore"
 )
 
-var configFlag = flag.String("config", "", "config file path (e.g. pancake.yaml)")
+var (
+	configFlag = flag.String("config", "", "config file path (e.g. pancake.yaml)")
+	logConsole = flag.Bool("l", false, "log to console; false for file only")
+)
 
 func main() {
 	flag.Parse()
-	plogger.InitConsoleLogger()
+	plogger.InitLogger(*logConsole, zapcore.DebugLevel, "")
 
 	if *configFlag != "" {
 		if err := config.Init(*configFlag); err != nil {

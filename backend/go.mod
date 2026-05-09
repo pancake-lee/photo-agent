@@ -89,6 +89,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rs/cors v1.11.1 // indirect
+	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/tdewolff/minify/v2 v2.20.19 // indirect
 	github.com/tdewolff/parse/v2 v2.7.12 // indirect
