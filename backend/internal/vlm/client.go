@@ -11,7 +11,7 @@ import (
 	"github.com/pancake-lee/pgo/pkg/putil"
 )
 
-const vlmPrompt = `请详细描述这张照片的内容。包括：
+const defaultVlmPrompt = `请详细描述这张照片的内容。包括：
 - 主体内容（人/物/风景）
 - 场景环境（室内/室外、自然/城市）
 - 光线氛围（明亮/昏暗、自然光/人工光）
@@ -22,16 +22,29 @@ const vlmPrompt = `请详细描述这张照片的内容。包括：
 func DescribeImage(imagePath string) (string, string, error) {
 	cfg := config.Get().VLM
 
+	imagePath, cleanup, err := maybeCompressImage(imagePath, cfg.MaxImageSizeMB)
+	if err != nil {
+		return "", "", fmt.Errorf("compress image failed: %w", err)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	prompt := cfg.Prompt
+	if prompt == "" {
+		prompt = defaultVlmPrompt
+	}
+
 	switch cfg.Provider {
 	case "volcengine":
-		return describeWithArk(imagePath, cfg)
+		return describeWithArk(imagePath, cfg, prompt)
 	default:
-		return describeWithHTTP(imagePath, cfg)
+		return describeWithHTTP(imagePath, cfg, prompt)
 	}
 }
 
 // describeWithArk 使用火山方舟 Responses HTTP API 调用
-func describeWithArk(imagePath string, cfg config.VLMConfig) (string, string, error) {
+func describeWithArk(imagePath string, cfg config.VLMConfig, prompt string) (string, string, error) {
 	imageData, err := os.ReadFile(imagePath)
 	if err != nil {
 		return "", "", fmt.Errorf("read image failed: %w", err)
@@ -53,7 +66,7 @@ func describeWithArk(imagePath string, cfg config.VLMConfig) (string, string, er
 				"role": "user",
 				"content": []map[string]any{
 					{"type": "input_image", "image_url": imageURL},
-					{"type": "input_text", "text": vlmPrompt},
+					{"type": "input_text", "text": prompt},
 				},
 			},
 		},
@@ -77,8 +90,18 @@ func describeWithArk(imagePath string, cfg config.VLMConfig) (string, string, er
 	}
 
 	description := ""
-	if len(resp.Output) > 0 && len(resp.Output[0].Content) > 0 {
-		description = resp.Output[0].Content[0].Text
+	for _, out := range resp.Output {
+		if out.Type == "message" {
+			for _, c := range out.Content {
+				if c.Type == "output_text" && c.Text != "" {
+					description = c.Text
+					break
+				}
+			}
+		}
+		if description != "" {
+			break
+		}
 	}
 
 	if description == "" {
@@ -95,7 +118,7 @@ func describeWithArk(imagePath string, cfg config.VLMConfig) (string, string, er
 }
 
 // describeWithHTTP 使用 OpenAI 兼容 HTTP 调用
-func describeWithHTTP(imagePath string, cfg config.VLMConfig) (string, string, error) {
+func describeWithHTTP(imagePath string, cfg config.VLMConfig, prompt string) (string, string, error) {
 	imageData, err := os.ReadFile(imagePath)
 	if err != nil {
 		return "", "", fmt.Errorf("read image failed: %w", err)
@@ -110,7 +133,7 @@ func describeWithHTTP(imagePath string, cfg config.VLMConfig) (string, string, e
 			{
 				"role": "user",
 				"content": []map[string]any{
-					{"type": "text", "text": vlmPrompt},
+					{"type": "text", "text": prompt},
 					{"type": "image_url", "image_url": map[string]string{
 						"url": fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image),
 					}},
@@ -161,6 +184,10 @@ type responsesResp struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
+		Summary []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"summary"`
 	} `json:"output"`
 }
 
@@ -174,22 +201,4 @@ type openAIChatResp struct {
 	} `json:"choices"`
 }
 
-func getMimeType(path string) string {
-	ext := ""
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '.' {
-			ext = path[i+1:]
-			break
-		}
-	}
-	switch ext {
-	case "png":
-		return "image/png"
-	case "jpg", "jpeg":
-		return "image/jpeg"
-	case "webp":
-		return "image/webp"
-	default:
-		return "image/jpeg"
-	}
-}
+

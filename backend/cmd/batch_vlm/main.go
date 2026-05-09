@@ -13,6 +13,7 @@ import (
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/vlm"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -22,11 +23,13 @@ var (
 	concurrency = flag.Int("concurrency", 3, "max concurrency")
 	retry       = flag.Int("retry", 3, "retry times on failure")
 	dryRun      = flag.Bool("dry-run", false, "dry run, test config only")
+	logConsole  = flag.Bool("l", false, "log to console; false for file only")
+	force       = flag.Bool("force", false, "force reprocess all images")
 )
 
 func main() {
 	flag.Parse()
-	plogger.InitConsoleLogger()
+	plogger.InitLogger(*logConsole, zapcore.DebugLevel, "")
 
 	if *inputFlag == "" {
 		plogger.Fatal("-input is required")
@@ -66,12 +69,36 @@ func main() {
 	result := make(map[string]vlmDescEntry)
 	var mu sync.Mutex
 
+	// 加载已有结果
+	if data, err := os.ReadFile(*outputFlag); err == nil {
+		_ = json.Unmarshal(data, &result)
+	}
+
+	// force 模式：清理已有压缩文件和描述条目
+	if *force {
+		for _, img := range images {
+			_ = os.Remove(vlm.GetCompressedPath(img))
+		}
+		mu.Lock()
+		for _, img := range images {
+			relPath, _ := filepath.Rel(*inputFlag, img)
+			if relPath == "" {
+				relPath = filepath.Base(img)
+			}
+			relPath = filepath.ToSlash(relPath)
+			delete(result, relPath)
+		}
+		mu.Unlock()
+		plogger.Info("Force mode: cleared existing compressed images and descriptions")
+	}
+
 	sem := make(chan struct{}, *concurrency)
 	var wg sync.WaitGroup
 
 	start := time.Now()
 	successCount := 0
 	failCount := 0
+	skippedCount := 0
 	var countMu sync.Mutex
 
 	for i, img := range images {
@@ -87,6 +114,20 @@ func main() {
 				relPath = filepath.Base(imgPath)
 			}
 			relPath = filepath.ToSlash(relPath)
+
+			// 检查是否已有描述
+			if !*force {
+				mu.Lock()
+				_, exists := result[relPath]
+				mu.Unlock()
+				if exists {
+					plogger.Infof("[%d/%d] Skipped (already described): %s", idx+1, len(images), relPath)
+					countMu.Lock()
+					skippedCount++
+					countMu.Unlock()
+					return
+				}
+			}
 
 			plogger.Infof("[%d/%d] Processing: %s", idx+1, len(images), relPath)
 
@@ -132,8 +173,8 @@ func main() {
 	}
 
 	elapsed := time.Since(start)
-	plogger.Infof("Batch VLM done: success=%d, failed=%d, total=%d, elapsed=%v",
-		successCount, failCount, len(images), elapsed)
+	plogger.Infof("Batch VLM done: success=%d, failed=%d, skipped=%d, total=%d, elapsed=%v",
+		successCount, failCount, skippedCount, len(images), elapsed)
 	plogger.Infof("Output: %s", *outputFlag)
 }
 

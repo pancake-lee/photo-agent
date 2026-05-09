@@ -27,12 +27,14 @@ type StorageConfig struct {
 
 // VLMConfig VLM 配置
 type VLMConfig struct {
-	Provider    string `json:"provider" toml:"provider" default:"openai"`
-	APIKey      string `json:"api_key" toml:"api_key"`
-	Model       string `json:"model" toml:"model" default:"gpt-4o-mini"`
-	BaseURL     string `json:"base_url" toml:"base_url" default:"https://api.openai.com/v1"`
-	Concurrency int    `json:"concurrency" toml:"concurrency" default:"3"`
-	Retry       int    `json:"retry" toml:"retry" default:"3"`
+	Provider       string `json:"provider" toml:"provider" default:"openai"`
+	APIKey         string `json:"api_key" toml:"api_key"`
+	Model          string `json:"model" toml:"model" default:"gpt-4o-mini"`
+	BaseURL        string `json:"base_url" toml:"base_url" default:"https://api.openai.com/v1"`
+	Concurrency    int    `json:"concurrency" toml:"concurrency" default:"3"`
+	Retry          int    `json:"retry" toml:"retry" default:"3"`
+	MaxImageSizeMB float64 `json:"max_image_size_mb" toml:"max_image_size_mb" default:"1"`
+	Prompt         string `json:"prompt" toml:"prompt"`
 }
 
 // DifyConfig Dify 配置

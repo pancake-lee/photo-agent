@@ -39,6 +39,10 @@
   - 先读取最小必要代码，分析并解决当前问题，再继续下一个
   - 不要同时加载多个不相关的问题，避免反复读取大量文件导致上下文压缩循环
   - 每个问题处理完后，用简短总结标记进度，再进入下一个
+- 环境路径映射规则
+  - `/root/project/` 是只读挂载（宿主机项目目录映射到容器），`/root/share/` 是读写挂载
+  - 所有对 `/root/project/` 下文件的处理输出，统一写到 `/root/share/` 下相同的相对路径
+  - 例如：`/root/project/proto-agent/DSC_0143.JPG` 的压缩输出 → `/root/share/proto-agent/DSC_0143.jpg`
 - 优先复用 pgo 代码库封装
   - `/root/code/pgo` 是本人维护的 Go 代码库，`pkg/` 下包含大量日常封装
   - 本项目通过 `go.work` 直接引用本地 pgo，而非 import GitHub 版本
@@ -79,10 +83,13 @@
 - **API 路由**（Gin）：12 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
 - **数据层**（GORM + SQLite）：`Photo` / `ImportJob` 两表，自动迁移
 - **配置管理**：复用 `pconfig`，TOML + 环境变量覆盖（`PHOTO_AGENT_*` 前缀）
-- **VLM 客户端**：OpenAI 兼容格式，支持 `openai` / `volcengine` / `qwen` 三供应商切换
+- **VLM 客户端**：纯 HTTP 实现（无 SDK），`volcengine` 走 Responses API，其他走 OpenAI Chat Completions API；调用前自动压缩图片为 JPG（ImageMagick `convert -resize 512x512> -quality 85 -format jpg`），`/root/project/` 下文件输出到 `/root/share/` 对应路径，已存在则直接复用
+  - 配置项：`vlm.max_image_size_mb`（浮点数，单位 MB）、`vlm.prompt`（自定义描述提示词）
 - **导入流水线**：扫描 → 复制到 `data/photos/` → 描述（预描述优先 / 实时 VLM 降级）→ SQLite → Dify 知识库
   - 并发控制：默认 3 并发
   - 失败重试：复用 `papp.Runner.RunRetry`，默认 3 次
   - 预描述模式：读取 `data/descriptions.json`，跳过 VLM 调用
 - **批量 VLM 脚本**：`backend/cmd/batch_vlm/main.go`，独立运行，输出 `descriptions.json`
+  - 参数：`-config`（指定配置文件）、`-l`（控制台日志开关）、`-force`（强制重做，清理已有压缩图和描述）
+  - 去重：已有描述条目自动跳过并汇总数量；已有压缩图直接复用
 - **文件服务**：图片存储到 `data/photos/{timeline}/`，自动生成唯一文件名
