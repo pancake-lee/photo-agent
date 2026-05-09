@@ -1,627 +1,335 @@
-# Media Agent - 技术方案文档
+# Photo Agent - 技术方案文档
+
+> 设计约束：Dify 本地部署作为 Agent 核心（图形化工作流可观测 + 自带聊天 UI），Go 负责业务后端，零 Python、零前端框架。
 
 ## 1. 架构设计
 
-### 1.1 架构原则
+### 1.1 核心原则
 
-- **Go + Python 双栈**：Go 做工程后端（API + 业务 + 数据），Python 做 AI 引擎（VLM + LLM + 向量检索）
-- **职责分离**：Go 负责元数据管理和业务流程，Python 负责纯 AI 计算
-- **单机可运行**：两个服务进程运行在一台机器上，通过本地 HTTP 通信
-- **模型可插拔**：LLM / VLM / Embedding 模型通过配置切换
+- **Dify 作为唯一交互入口**：用户通过 Dify 的 Web UI 进行所有对话，Dify 负责 Agent 编排、知识库 RAG、工作流可视化、模型管理
+- **Go 作为业务后端**：照片元数据 CRUD、文件管理、导入任务调度、VLM 调用
+- **零 Python、零前端框架**：VLM 视觉描述、Embedding 均通过云端 API 由 Go 直接 HTTP 调用；不引入 Next.js/React/Vue 等前端框架，聊天界面直接使用 Dify 自带 UI
 
 ### 1.2 整体架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     CLI 交互层 (Python Click + Rich)        │
-│                      media_agent/cli/main.py                │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ HTTP
-┌─────────────────────────────▼───────────────────────────────┐
-│                    Go Backend (Gin + GORM)                  │
-│                   media_agent/backend/                      │
-│                                                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │   API 层    │  │  业务服务层  │  │   数据访问层         │ │
-│  │  (Gin)      │  │  (Service)  │  │  (GORM + SQLite)    │ │
-│  │             │  │             │  │                     │ │
-│  │ • 路由定义  │  │ • 素材管理  │  │ • 素材元数据        │ │
-│  │ • 请求校验  │  │ • 会话管理  │  │ • 会话记录          │ │
-│  │ • 中间件    │  │ • 导入任务  │  │ • 导入日志          │ │
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘ │
-└─────────┼────────────────┼────────────────────┼────────────┘
-          │                │                    │
-          │         ┌──────┴──────┐             │
-          │         │  文件系统    │             │
-          │         │ (本地存储)   │             │
-          │         └─────────────┘             │
-          │                                     │
-          └─────────────────┬───────────────────┘
-                            │ HTTP JSON
-┌───────────────────────────▼───────────────────────────────┐
-│               Python AI Service (FastAPI)                 │
-│                    media_agent/ai/                        │
-│                                                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐│
-│  │   Agent     │  │   工具层     │  │     模型层           ││
-│  │ (LangChain) │  │  (Tools)    │  │   (Models)          ││
-│  │             │  │             │  │                     ││
-│  │ • 意图理解  │  │ • 向量检索  │  │ • VLM API           ││
-│  │ • 工具路由  │  │ • 标签查询  │  │ • LLM API           ││
-│  │ • 记忆管理  │  │ • 素材分析  │  │ • Embedding         ││
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘│
-└─────────┼────────────────┼────────────────────┼───────────┘
-          │                │                    │
-          └────────────────┴────────┬───────────┘
-                                    │
-                          ┌─────────▼─────────┐
-                          │    Chroma 向量库   │
-                          │  (本地持久化存储)   │
-                          └───────────────────┘
+用户浏览器
+    ↓ HTTP
+Dify Web UI (:80, Docker)
+    ├── Agent 意图识别
+    ├── 知识库向量检索 (RAG)
+    ├── 工具调用 → Go API
+    └── 模型管理 (LLM / Embedding)
+    ↓ HTTP (OpenAPI Schema 工具)
+Go Backend (:8080)
+    ├── 照片元数据管理 (GORM + SQLite)
+    ├── 文件服务 (本地文件系统)
+    ├── 导入流水线 (并发控制、重试)
+    └── VLM HTTP 代理 (云端 API)
 ```
 
-### 1.3 模块职责
+### 1.3 职责边界
 
-| 服务       | 模块       | 技术         | 职责                                       |
-| ---------- | ---------- | ------------ | ------------------------------------------ |
-| Go Backend | API        | Gin          | HTTP 路由、请求校验、响应封装              |
-| Go Backend | Service    | Go           | 业务逻辑：素材管理、会话管理、导入任务编排 |
-| Go Backend | Repository | GORM         | SQLite 数据访问（CRUD）                    |
-| Go Backend | Config     | Viper        | 配置管理、环境变量                         |
-| Python AI  | API        | FastAPI      | AI 服务 HTTP 接口                          |
-| Python AI  | Agent      | LangChain    | 意图理解、工具路由、回复生成               |
-| Python AI  | VLM        | OpenAI SDK   | 视觉描述模型封装                           |
-| Python AI  | LLM        | OpenAI SDK   | 大语言模型封装                             |
-| Python AI  | Vector     | Chroma       | 向量存储与检索                             |
-| CLI        | Main       | Click + Rich | 用户交互、命令解析、结果展示、服务编排     |
+- **Dify 负责**：Agent 意图识别、工具路由、知识库向量检索、工作流可视化、模型管理、聊天 UI 渲染
+- **Dify 不负责**：文件存储、业务数据持久化、批量导入调度、VLM 直接调用
+- **Go 负责**：照片元数据管理、文件服务、导入流水线、时间线/标签查询、VLM HTTP 代理、图片文件服务端点
+- **Go 不负责**：Agent 编排、向量检索、对话管理、UI 渲染
 
 ---
 
 ## 2. 技术选型
 
-### 2.1 Go 后端
+### 2.1 Agent 层
 
-| 组件      | 选型          | 版本  | 理由                                     |
-| --------- | ------------- | ----- | ---------------------------------------- |
-| HTTP 框架 | **Gin**       | ^1.9  | Go 最流行的 Web 框架，生态成熟，性能优秀 |
-| ORM       | **GORM**      | ^1.25 | Go 最流行的 ORM，支持 SQLite，开发效率高 |
-| 配置      | **Viper**     | ^1.18 | 支持环境变量、配置文件，Go 项目标配      |
-| 日志      | **Zap**       | ^1.27 | 高性能结构化日志                         |
-| 校验      | **validator** | ^10.0 | 请求参数校验                             |
+- **Dify 社区版**：Docker 本地部署，Agent 编排 + 知识库 + 工作流可视化 + 自带聊天 UI
+- **Agent 模式**：Function Calling（工具调用稳定，可观测）
+- **知识库检索**：语义搜索 + 全文搜索混合
 
-### 2.2 Python AI 服务
+### 2.2 业务后端
 
-| 组件        | 选型          | 版本   | 理由                                |
-| ----------- | ------------- | ------ | ----------------------------------- |
-| API 框架    | **FastAPI**   | ^0.115 | 异步高性能，自动生成 Swagger        |
-| Agent 框架  | **LangChain** | ^0.3   | JD 要求，工具调用/记忆/链式编排完善 |
-| VLM/LLM SDK | **OpenAI**    | ^1.0   | 统一封装，支持多模型切换            |
-| 向量数据库  | **Chroma**    | ^0.5   | 纯 Python，无需独立服务，嵌入式运行 |
-| 数据校验    | **Pydantic**  | ^2.0   | FastAPI 和 LangChain 都原生支持     |
+- **Go 1.22+**：业务后端语言
+- **Gin**：HTTP 路由框架
+- **GORM**：ORM + SQLite
+- **SQLite**：单机数据持久化
+- **本地文件系统**：照片文件存储
 
-### 2.3 AI 模型
+### 2.3 AI 模型（云端 API）
 
-| 用途           | 推荐模型                   | 备选                 | 备注                                   |
-| -------------- | -------------------------- | -------------------- | -------------------------------------- |
-| 视觉描述 (VLM) | **GPT-4o-mini**            | Qwen-VL-Max          | 成本低（$0.15/M tokens），视觉理解足够 |
-| Agent LLM      | **GPT-4o-mini**            | Kimi k1.5 / Qwen-Max | 同一模型即可，减少配置复杂度           |
-| 文本嵌入       | **text-embedding-3-small** | BGE-small-zh         | OpenAI embedding 性价比高，中文支持好  |
-
-### 2.4 依赖清单
-
-**Go (`backend/go.mod`)**：
-
-```
-github.com/gin-gonic/gin v1.9.1
-gorm.io/gorm v1.25.5
-gorm.io/driver/sqlite v1.5.4
-github.com/spf13/viper v1.18.2
-go.uber.org/zap v1.27.0
-github.com/go-playground/validator/v10 v10.16.0
-```
-
-**Python (`ai/requirements.txt`)**：
-
-```
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-pydantic>=2.0.0
-langchain>=0.3.0
-langchain-openai>=0.2.0
-langchain-community>=0.3.0
-chromadb>=0.5.0
-httpx>=0.27.0
-python-dotenv>=1.0.0
-pillow>=10.0.0
-```
-
-**Python CLI (`cli/requirements.txt`)**：
-
-```
-click>=8.0.0
-rich>=13.0.0
-httpx>=0.27.0
-python-dotenv>=1.0.0
-```
+- **LLM 对话**：GPT-4o-mini / Qwen-Turbo / Kimi — Dify 内部配置
+- **VLM 图片描述**：GPT-4o-mini / Qwen-VL — Go Backend 直接 HTTP 调用
+- **Embedding**：text-embedding-3-small / Qwen-Embedding — Dify 内部配置
 
 ---
 
-## 3. 数据模型设计
+## 3. 数据流
 
-### 3.1 Go 业务模型（GORM）
+### 3.1 照片导入流程
+
+```
+用户在 Dify 聊天输入："导入 ~/Photos/2024-02-云南"
+    ↓
+Dify Agent: 意图识别 → 调用 import_photos 工具
+    ↓
+Go: 创建导入任务 (SQLite)
+Go: 扫描文件夹 → 按文件夹名解析时间线标签
+Go: 复制照片到 data/photos/{timeline}/
+Go: 对每个照片调用 VLM API (HTTP) 生成描述
+Go: 保存元数据到 SQLite (路径/时间线/标签/描述/EXIF)
+Go: 通过 Dify API 将描述写入知识库 (照片ID + 描述文本)
+    ↓
+Dify: 自动 Embedding → 存入向量库
+Go: 更新导入任务状态为完成
+    ↓
+Dify Agent: 回复 "导入完成，共 45 张照片"
+```
+
+**批量导入并发控制**：VLM API 调用限制并发数（如 3 个并发），避免费用过高和速率限制。失败自动重试 3 次。
+
+### 3.2 聊天对话流程
+
+```
+用户在 Dify Web UI 输入自然语言
+    ↓
+Dify Agent: 意图识别
+    ├─ 需要检索照片描述 → Dify 知识库 RAG (内部)
+    ├─ 需要查时间线/标签 → 调用 Go API 工具
+    ├─ 需要照片列表 → 调用 Go API 工具
+    └─ 纯创作建议 → 直接 LLM 生成
+    ↓
+Dify: 整合工具结果 + RAG 结果 → 生成回复
+    ↓
+Dify Web UI 渲染回复（文本 + Markdown 图片链接）
+```
+
+**图片在回复中的展示**：Agent 回复中包含 Markdown 图片链接 `![描述](http://localhost:8080/api/photos/{id}/image)`，Dify 的 Markdown 渲染器会自动展示图片。用户点击可查看原图。
+
+---
+
+## 4. API 设计
+
+### 4.1 Go Backend API
+
+```
+GET    /api/health                  健康检查
+
+# 照片管理
+GET    /api/photos                 照片列表 (分页, query: timeline, tags, keyword)
+GET    /api/photos/:id             单张照片详情
+GET    /api/photos/:id/image       获取图片文件 (支持缩略图参数 ?size=thumb)
+
+# 时间线
+GET    /api/timelines              所有时间线列表
+GET    /api/timelines/:name/photos 某时间线下的照片
+
+# 标签
+GET    /api/tags                   所有标签列表
+GET    /api/tags/:name/photos      某标签下的照片
+
+# 导入任务
+POST   /api/import/jobs            创建导入任务 (body: {sourcePath, recursive})
+GET    /api/import/jobs/:id        查询导入进度
+GET    /api/import/jobs/:id/logs   导入日志
+
+# VLM 代理 (内部使用，也可供 Dify 直接调用)
+POST   /internal/vlm/describe      单张图片描述 (body: multipart/form-data 图片)
+```
+
+### 4.2 Dify 自定义工具配置
+
+Dify 通过 OpenAPI Schema 配置外部工具，指向 Go Backend：
+
+| 工具名 | 方法 | Go API | 用途 |
+|--------|------|--------|------|
+| `list_timelines` | GET | `/api/timelines` | 列出所有时间线 |
+| `get_photos_by_timeline` | GET | `/api/timelines/{name}/photos` | 按时间线查照片 |
+| `get_photos_by_tags` | GET | `/api/photos?tags={tags}` | 按标签查照片 |
+| `get_photo_detail` | GET | `/api/photos/{id}` | 获取单张照片详情 |
+| `import_photos` | POST | `/api/import/jobs` | 创建照片导入任务 |
+| `get_import_status` | GET | `/api/import/jobs/{id}` | 查询导入任务进度 |
+
+**知识库检索**无需配置为外部工具，Dify 内部知识库直接通过 RAG 查询。
+
+---
+
+## 5. Dify 配置详情
+
+### 5.1 模型配置
+
+在 Dify 设置 → 模型供应商中配置：
+
+- **系统推理模型**：OpenAI GPT-4o-mini（或 Qwen-Turbo）
+- **Embedding 模型**：OpenAI text-embedding-3-small（或 Qwen-Embedding）
+- **Rerank 模型**（可选）：Cohere Rerank 或开源模型
+
+### 5.2 知识库配置
+
+1. 创建数据集"照片描述库"
+2. 检索设置：
+   - 检索模式：语义搜索 + 全文搜索
+   - Top-K：5
+   - 分数阈值：0.5
+3. 文档格式：每篇文档对应一张照片
+   ```
+   标题：照片 {photo_id}
+   内容：{vlm_description}
+   元数据：{timeline, tags}
+   ```
+
+### 5.3 Agent 配置
+
+- **应用类型**：Agent（支持工具调用）
+- **Agent 模式**：Function Calling
+- **系统提示词**：
+  ```
+  你是 Photo Agent，一位个人摄影资产助手。你帮助用户通过自然语言检索照片、回顾拍摄经历、分析摄影主题。
+
+  可用能力：
+  1. 通过知识库检索照片描述（语义搜索）
+  2. 通过工具查询时间线和标签
+  3. 基于历史作品提供创作建议
+  4. 通过工具导入本地照片文件夹
+
+  回答时：
+  - 如果提到具体照片，使用 Markdown 图片语法展示照片，格式：![描述](http://localhost:8080/api/photos/{photo_id}/image)
+  - 时间线查询使用 list_timelines / get_photos_by_timeline 工具
+  - 标签查询使用 get_photos_by_tags 工具
+  - 导入照片使用 import_photos 工具
+  - 模糊描述检索使用知识库 RAG（自动）
+  ```
+
+### 5.4 工作流可视化
+
+Dify Agent 的 Function Calling 过程在对话界面中可看到：
+- 模型思考（意图识别）
+- 工具调用（如 `list_timelines`）
+- 工具结果
+- 最终答案生成
+
+如需更复杂的可视化流程（如条件分支、循环），可在 Dify 中搭建"工作流"类型应用替代简单 Agent。
+
+---
+
+## 6. 数据模型
+
+### 6.1 Go + SQLite
 
 ```go
-// backend/internal/model/photo.go
 type Photo struct {
-    ID          uint           `gorm:"primaryKey" json:"id"`
-    Path        string         `gorm:"index;not null" json:"path"`        // 相对路径
-    Filename    string         `json:"filename"`
-    Timeline    string         `gorm:"index" json:"timeline"`             // 时间线标签
-    Tags        string         `json:"tags"`                              // JSON 数组字符串
-    Description string         `json:"description"`                       // AI 描述
-    Status      string         `gorm:"default:pending" json:"status"`     // pending / processing / done / failed
-    CreatedAt   time.Time      `json:"created_at"`
-    UpdatedAt   time.Time      `json:"updated_at"`
+    ID          string    `gorm:"primaryKey" json:"id"`
+    Filename    string    `json:"filename"`
+    FilePath    string    `json:"file_path"`
+    Timeline    string    `json:"timeline"`          // e.g. "2024-02-云南"
+    Tags        string    `json:"tags"`              // JSON array string
+    Description string    `json:"description"`       // VLM generated
+    ShotAt      *time.Time `json:"shot_at"`          // EXIF DateTimeOriginal
+    Width       int       `json:"width"`
+    Height      int       `json:"height"`
+    ImportedAt  time.Time `json:"imported_at"`
 }
 
-// backend/internal/model/session.go
-type ChatSession struct {
-    ID        string    `gorm:"primaryKey" json:"id"`              // UUID
-    Title     string    `json:"title"`
-    Messages  []ChatMessage `gorm:"foreignKey:SessionID" json:"messages"`
-    CreatedAt time.Time `json:"created_at"`
-}
-
-type ChatMessage struct {
-    ID        uint      `gorm:"primaryKey" json:"id"`
-    SessionID string    `gorm:"index;not null" json:"session_id"`
-    Role      string    `json:"role"`                              // user / assistant / system
-    Content   string    `json:"content"`
-    ToolsUsed string    `json:"tools_used"`                        // JSON 数组
-    Sources   string    `json:"sources"`                           // JSON 数组
-    CreatedAt time.Time `json:"created_at"`
+type ImportJob struct {
+    ID              string    `gorm:"primaryKey" json:"id"`
+    Status          string    `json:"status"`           // pending / processing / completed / failed
+    SourcePath      string    `json:"source_path"`
+    TotalPhotos     int       `json:"total_photos"`
+    ProcessedPhotos int       `json:"processed_photos"`
+    FailedPhotos    int       `json:"failed_photos"`
+    CreatedAt       time.Time `json:"created_at"`
+    CompletedAt     *time.Time `json:"completed_at"`
 }
 ```
 
-### 3.2 时间线知识库（JSON 文件）
+### 6.2 Dify 知识库文档格式
 
-```json
-{
-  "timelines": {
-    "2024-02-云南": {
-      "name": "2024-02-云南",
-      "photo_count": 45,
-      "description": "云南旅拍，以雪山和森林风光为主...",
-      "tags": ["雪山", "森林", "人像", "日出"],
-      "created_at": "2026-05-08T10:00:00"
-    }
-  },
-  "tag_index": {
-    "雪山": ["photos/2024-02-云南/IMG_0234.jpg"],
-    "海边": ["photos/2023-10-青岛/IMG_0012.jpg"]
-  }
-}
-```
-
-### 3.3 Chroma 向量存储 Schema（Python）
-
-```python
-collection.add(
-    ids=["photo_001"],
-    documents=["雪山前景，人物背影，蓝天，光线明亮..."],
-    metadatas=[{
-        "path": "photos/2024-02-云南/IMG_0234.jpg",
-        "photo_id": 1,
-        "timeline": "2024-02-云南"
-    }],
-    embeddings=[...]
-)
-```
+每张照片对应一篇文档：
+- **文档标题**：`photo_{id}`
+- **文档内容**：VLM 生成的描述文本
+- **分段策略**：按句子分段，每段保留上下文
 
 ---
 
-## 4. 核心流程设计
-
-### 4.1 照片导入流程
+## 7. 项目结构
 
 ```
-CLI: media-agent photo import ./photos/2024-02-云南/ --timeline "2024-02-云南"
-
-1. CLI 扫描目录，获取所有图片文件
-
-2. CLI 调用 Go API: POST /api/v1/photos/import_batch
-   Go 批量创建 Photo 记录（status = pending）
-   Go 返回 batch_id 和 photo_id 列表
-
-3. CLI 逐个调用 Python AI: POST /ai/describe
-   - Python VLM 生成描述
-   - Python LLM 提取标签
-   - Python 将描述文本存入 Chroma（向量库）
-   - Python 返回 {description, tags}
-
-4. CLI 调用 Go API: PUT /api/v1/photos/:id
-   Go 更新 SQLite（description, tags, status = done）
-
-5. CLI 输出进度和结果
-```
-
-### 4.2 Agent 对话流程
-
-```
-CLI: media-agent chat
-用户输入: "帮我找云南的雪山照片"
-
-1. CLI 调用 Go API: POST /api/v1/chat
-
-2. Go 从 SQLite 加载会话历史（最近 10 轮）
-
-3. Go 调用 Python AI: POST /ai/chat
-   传入: {message, history, tools_available}
-
-4. Python Agent 意图理解 + 工具路由
-   System Prompt: "你是个人摄影助手..."
-   → 调用 vector_search("雪山", timeline="云南")
-   → 返回 Top-5 结果
-
-5. Python LLM 汇总生成回复
-
-6. Python 返回 {reply, sources, tools_used}
-
-7. Go 保存会话记录到 SQLite
-
-8. Go 返回给 CLI，Rich 渲染输出
-```
-
-### 4.3 摄影主题分析流程
-
-```
-用户输入: "分析我 2024 年云南系列的风格特点"
-
-1. CLI 调用 Go API: POST /api/v1/chat
-
-2. Go 加载会话历史
-
-3. Go 调用 Python AI: POST /ai/chat
-
-4. Python Agent 执行工具链
-   → timeline_query("2024-02-云南"): Go 从 SQLite 返回概况
-   → vector_search("云南", timeline="2024-02-云南")
-
-5. Python LLM 生成分析
-
-6. 返回引用来源
-```
-
----
-
-## 5. API 设计
-
-### 5.1 Go Backend API
-
-| 方法 | 路径                               | 描述                               |
-| ---- | ---------------------------------- | ---------------------------------- |
-| POST | `/api/v1/photos/import_batch`      | 批量导入照片（创建元数据）         |
-| PUT  | `/api/v1/photos/:id`               | 更新照片元数据（描述、标签、状态） |
-| GET  | `/api/v1/photos`                   | 列出照片（支持分页、时间线过滤）   |
-| GET  | `/api/v1/photos/:id`               | 获取照片详情                       |
-| GET  | `/api/v1/photos/search`            | 搜索照片（关键词、时间线过滤）     |
-| POST | `/api/v1/chat`                     | 发送消息，获取 Agent 回复          |
-| GET  | `/api/v1/chat/:session_id/history` | 获取会话历史                       |
-| GET  | `/api/v1/timelines`                | 获取所有时间线列表                 |
-| GET  | `/api/v1/timelines/:name`          | 获取某个时间线概况                 |
-| GET  | `/api/v1/health`                   | 健康检查                           |
-
-### 5.2 Python AI Service API
-
-| 方法 | 路径           | 描述         |
-| ---- | -------------- | ------------ |
-| POST | `/ai/describe` | 单张图片描述 |
-| POST | `/ai/chat`     | Agent 对话   |
-| POST | `/ai/search`   | 向量检索     |
-| POST | `/ai/embed`    | 文本嵌入     |
-| GET  | `/ai/health`   | 健康检查     |
-
-### 5.3 核心接口详情
-
-**Go: POST /api/v1/photos/import_batch**
-
-```go
-type ImportBatchRequest struct {
-    Photos   []PhotoMeta `json:"photos" validate:"required,dive"`
-    Timeline string      `json:"timeline"`
-}
-
-type PhotoMeta struct {
-    Path     string `json:"path" validate:"required"`
-    Filename string `json:"filename"`
-}
-
-type ImportBatchResponse struct {
-    BatchID string      `json:"batch_id"`
-    Photos  []PhotoInfo `json:"photos"`
-}
-
-type PhotoInfo struct {
-    ID     uint   `json:"id"`
-    Path   string `json:"path"`
-    Status string `json:"status"`
-}
-```
-
-**Python: POST /ai/describe**
-
-```python
-class DescribeRequest(BaseModel):
-    image_path: str           # 本地绝对路径
-    timeline: str | None = None
-
-class DescribeResponse(BaseModel):
-    description: str
-    tags: list[str]
-```
-
-**Go ↔ Python 通信: POST /ai/chat**
-
-```python
-class ChatRequest(BaseModel):
-    message: str
-    history: list[dict]       # [{"role": "user", "content": "..."}, ...]
-    timeline: str | None = None
-
-class ChatResponse(BaseModel):
-    reply: str
-    sources: list[SourceInfo] | None = None
-    tools_used: list[str] | None = None
-
-class SourceInfo(BaseModel):
-    path: str
-    description: str
-    score: float
-```
-
----
-
-## 6. 配置设计
-
-### 6.1 Go 后端配置（`backend/config.yaml` 或环境变量）
-
-```yaml
-server:
-  host: 0.0.0.0
-  port: 8080
-
-database:
-  dsn: ./data/media_agent.db
-
-ai_service:
-  url: http://localhost:8000
-  timeout: 30
-
-log:
-  level: info
-  format: json
-```
-
-### 6.2 Python AI 服务配置（`ai/.env`）
-
-```bash
-# AI 模型配置
-LLM_PROVIDER=openai
-LLM_API_KEY=sk-xxx
-LLM_MODEL=gpt-4o-mini
-
-VLM_PROVIDER=openai
-VLM_API_KEY=sk-xxx
-VLM_MODEL=gpt-4o-mini
-
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_KEY=sk-xxx
-EMBEDDING_MODEL=text-embedding-3-small
-
-# 数据路径
-CHROMA_PERSIST_DIR=./data/chroma
-DATA_DIR=./data
-
-# 服务配置
-AI_HOST=0.0.0.0
-AI_PORT=8000
-LOG_LEVEL=INFO
-```
-
-### 6.3 目录结构约定
-
-```
-media_agent/
-├── backend/                 # Go 后端
-│   ├── cmd/
-│   │   └── server/
-│   │       └── main.go
+photo-agent/
+├── backend/                      # Go 业务后端
+│   ├── cmd/server/
+│   │   └── main.go
 │   ├── internal/
-│   │   ├── api/             # HTTP handler (Gin)
-│   │   ├── service/         # 业务逻辑
-│   │   ├── repository/      # 数据访问 (GORM)
-│   │   └── model/           # 数据模型
-│   ├── config/
-│   │   └── config.yaml
+│   │   ├── api/                  # HTTP handlers
+│   │   ├── model/                # GORM 模型
+│   │   ├── service/              # 业务逻辑
+│   │   ├── config/               # 配置管理
+│   │   └── vlm/                  # VLM HTTP 客户端
 │   └── go.mod
-├── ai/                      # Python AI 服务
-│   ├── main.py              # FastAPI 入口
-│   ├── services/
-│   │   ├── vlm.py
-│   │   ├── llm.py
-│   │   ├── embedding.py
-│   │   └── vector.py
-│   ├── agent/
-│   │   ├── orchestrator.py
-│   │   └── prompts.py
-│   ├── tools/
-│   │   ├── vector_search.py
-│   │   └── tag_query.py
-│   └── requirements.txt
-├── cli/                     # Python CLI
-│   ├── main.py
-│   ├── commands/
-│   │   ├── init.py
-│   │   ├── photo.py
-│   │   ├── chat.py
-│   │   └── debug.py
-│   └── requirements.txt
-├── data/                    # 数据目录 (gitignore)
-│   ├── media_agent.db       # SQLite (Go 管理)
-│   ├── chroma/              # Chroma 向量存储 (Python 管理)
-│   ├── timeline_kb.json     # 时间线知识库
-│   └── photos/              # 原始照片
-│       ├── 2024-02-云南/
-│       ├── 2023-10-青岛/
-│       └── ...
-├── docs/                    # 文档
-│   ├── PRD.md
-│   ├── TECH_SPEC.md
-│   ├── TASKS.md
-│   └── note.md
-└── README.md
+├── dify/
+│   └── docker-compose.yaml       # Dify 本地部署配置
+├── data/
+│   ├── photos/                   # 照片文件存储
+│   └── sqlite/                   # SQLite 数据库文件
+└── docs/
 ```
 
 ---
 
-## 7. 部署方案
+## 8. 部署
 
-### 7.1 本地开发运行
-
-**启动 Python AI 服务**：
+### 8.1 Dify 部署
 
 ```bash
-cd ai
-pip install -r requirements.txt
-cp .env.example .env
-# 编辑 .env，填入 API Key
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd dify
+docker-compose up -d
+# 访问 http://localhost 完成初始化配置
+# 配置模型供应商、创建知识库、配置 Agent 应用
 ```
 
-**启动 Go 后端**：
+### 8.2 Go Backend 部署
 
 ```bash
 cd backend
-go mod tidy
-cp config.example.yaml config.yaml
-# 编辑 config.yaml，配置 ai_service.url
-
+go mod download
 go run cmd/server/main.go
+# 默认端口 :8080
 ```
 
-**使用 CLI**：
+### 8.3 环境变量
 
-```bash
-cd cli
-pip install -r requirements.txt
-
-media-agent init
-media-agent photo import ./data/photos/2024-02-云南/ --timeline "2024-02-云南"
-media-agent chat
+**Go (`backend/.env`)**：
 ```
-
-### 7.2 Docker 部署
-
-```yaml
-# docker-compose.yml
-version: "3.8"
-services:
-  ai-service:
-    build: ./ai
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./data:/app/data
-      - ./ai/.env:/app/.env
-    environment:
-      - CHROMA_PERSIST_DIR=/app/data/chroma
-      - DATA_DIR=/app/data
-
-  backend:
-    build: ./backend
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/app/data
-      - ./backend/config.yaml:/app/config.yaml
-    depends_on:
-      - ai-service
+PORT=8080
+DB_PATH=./data/sqlite/photo_agent.db
+PHOTO_STORAGE_PATH=./data/photos
+VLM_API_KEY=your-openai-or-qwen-key
+VLM_MODEL=gpt-4o-mini
+VLM_BASE_URL=https://api.openai.com/v1  # 或 Qwen/Kimi 的 base URL
+DIFY_API_KEY=your-dify-api-key
+DIFY_BASE_URL=http://localhost/v1
+DIFY_KNOWLEDGE_BASE_ID=your-dataset-id
 ```
-
-### 7.3 性能预估
-
-| 场景                          | 耗时    | 瓶颈                |
-| ----------------------------- | ------- | ------------------- |
-| 单张照片描述                  | 3-5s    | VLM API 调用        |
-| 单张照片完整处理（描述+嵌入） | 5-8s    | VLM + Embedding API |
-| 100 张照片批量导入            | 8-15min | API 串行调用        |
-| 单次对话（含检索）            | 3-5s    | LLM API + 向量检索  |
-| 向量检索（Top-10）            | <100ms  | Chroma 本地查询     |
-
-**优化建议**：
-
-- 批量导入时加进度条，支持断点续传
-- 照片处理可并行（限制并发数，避免 API 限流）
-- Go 后端可并发调用 Python AI 服务
 
 ---
 
-## 8. 安全与隐私
+## 9. 功能实现方式决策
 
-- **API Key 管理**：通过 `.env` 注入 Python AI 服务，绝不提交到 Git
-- **个人照片保护**：`data/photos/` 加入 `.gitignore`
-- **日志脱敏**：日志中不输出完整的 API Key 和图片内容
-- **访问控制**：MVP 阶段无用户系统，单机单用户使用
-
----
-
-## 9. 监控与调试
-
-### 9.1 日志设计
-
-**Go 后端**：结构化 JSON 日志（Zap）
-
-```json
-{
-  "timestamp": "2026-05-08T10:30:00",
-  "level": "INFO",
-  "module": "api.chat",
-  "session_id": "uuid",
-  "event": "ai_chat",
-  "duration_ms": 2500,
-  "tools_used": ["vector_search"]
-}
-```
-
-**Python AI 服务**：标准日志 + LangChain 回调追踪
-
-### 9.2 调试工具
-
-- `media-agent debug search "query"`：测试向量检索（调用 Python AI）
-- `media-agent debug describe path/to/image.jpg`：测试视觉描述
-- `media-agent debug timeline "2024-02-云南"`：查看时间线概况
-- Go Swagger UI：`http://localhost:8080/swagger/index.html`
-- Python Swagger UI：`http://localhost:8000/docs`
+| 功能 | 实现方式 | 理由 |
+|------|---------|------|
+| Agent 对话编排 | Dify | 图形化可观测，自带聊天 UI |
+| 知识库向量检索 | Dify | 内置 RAG，无需自建向量库 |
+| 聊天界面 | Dify | 自带 Web UI，无需前端开发 |
+| 照片批量导入 | Go 代码 | 需要异步调度、并发控制、重试机制 |
+| 照片元数据管理 | Go 代码 | 业务数据，需要事务和关系查询 |
+| 文件服务 | Go 代码 | 本地文件读写，Go 标准库高效 |
+| VLM 图片描述 | Go 代码 | HTTP 调用云端 API，Go 可直接实现 |
+| 图片在聊天中展示 | Dify Markdown | Agent 回复包含图片 URL，Dify 自动渲染 |
 
 ---
 
-## 10. 扩展路线图
+## 10. 风险与应对
 
-### 10.1 短期（V1.1）
-
-- [ ] Go 后端：支持批量并行导入（并发控制）
-- [ ] Python AI：支持图片缩略图生成（Pillow）
-- [ ] Python AI：支持多模型对比（同一查询用不同模型）
-- [ ] CLI：支持配置文件管理
-
-### 10.2 中期（V1.2）
-
-- [ ] 接入 Dify 平台（展示平台使用能力）
-- [ ] 支持视频关键帧提取（ffmpeg）
-- [ ] Web UI（Streamlit / Gradio）
-
-### 10.3 长期（V2.0）
-
-- [ ] Go 后端增强：用户系统、权限管理
-- [ ] 云端部署：支持 OSS + 云数据库
-- [ ] 与 Dify 深度集成：提供插件版本
+| 风险 | 概率 | 应对 |
+|------|------|------|
+| Dify 本地部署资源占用高 | 中 | 限制并发 worker 数，部署在 8G+ 内存机器 |
+| Dify 知识库同步延迟 | 中 | 导入时批量写入，失败重试；查询时 Go SQLite 兜底 |
+| VLM API 费用过高 | 中 | 批量导入限制并发（3 并发），使用 GPT-4o-mini 低成本模型 |
+| Dify 回复中 Markdown 图片渲染异常 | 低 | 确保图片 URL 可访问（同机部署时 localhost 互通），备选方案：只返回文字描述 + 照片 ID |
+| Go 调用 VLM 需要图片 base64 编解码性能问题 | 低 | 批量导入异步处理，单图编码在百毫秒级 |
