@@ -9,7 +9,7 @@ import (
 
 // CreateImportJobRequest 创建导入任务请求
 type CreateImportJobRequest struct {
-	SourcePath string `json:"sourcePath" binding:"required"`
+	SourcePath string `json:"source_path" binding:"required"`
 	Recursive  bool   `json:"recursive"`
 }
 

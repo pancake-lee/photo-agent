@@ -23,12 +23,12 @@
 | 1.4 | Go：配置管理（Viper + 环境变量）         | 30min    | `backend/internal/config/config.go`   |
 | 1.5 | Go：VLM HTTP 客户端封装                  | 1h       | `backend/internal/vlm/client.go`      |
 | 1.6 | Go：导入任务 API（创建、查询、日志）     | 1h       | `backend/internal/api/import.go`      |
-| 1.7 | Go：目录扫描 + 时间线标签解析            | 1h       | `backend/internal/service/scanner.go` |
+| 1.7 | Go：目录扫描 + 时间线标签解析（从配置指定的 md 表格读取，按 EXIF 拍摄时间匹配） | 1h       | `backend/internal/service/scanner.go` |
 | 1.8 | Go：文件复制到 data/photos/              | 30min    | `backend/internal/service/storage.go` |
-| 1.9 | Go：批量 VLM 调用（并发控制 3 并发）     | 1.5h     | `backend/internal/service/processor.go` |
+| 1.9 | Go：导入流水线（读取预描述、匹配时间线、写入 SQLite） | 1.5h     | `backend/internal/service/processor.go` |
 | 1.10 | Go：元数据保存到 SQLite                  | 30min    | `backend/internal/service/photo.go`   |
 | 1.11 | Go：Dify 知识库文档写入 API              | 1h       | `backend/internal/vlm/dify.go`        |
-| 1.12 | Go：批量 VLM 预处理脚本（独立运行）      | 1h       | `scripts/batch_vlm/main.go`           |
+| 1.12 | Go：批量 VLM 预处理脚本（独立运行）      | 1h       | `backend/cmd/batch_vlm/main.go`       |
 
 ### 当日验收标准
 
@@ -40,8 +40,8 @@ $ curl http://localhost:8080/api/health
 {"status":"ok"}
 
 # 测试导入
-$ curl -X POST http://localhost:8080/api/import/jobs \
-  -d '{"sourcePath":"./demo_data/photos/2024-02-云南","recursive":false}'
+$ curl -X POST http://localhost:8080/api/import \
+  -d '{"source_path":"/root/project/photos/","recursive":true}'
 {"id":"job_xxx","status":"processing"}
 
 # 等待完成后验证
@@ -54,16 +54,16 @@ $ sqlite3 data/sqlite/photo_agent.db "SELECT COUNT(*) FROM photos"
 
 # Dify 知识库中有文档（需在 Dify 后台确认或调用 API 查询）
 
-# 预描述模式：先用脚本批量生成描述
-$ cd scripts/batch_vlm && go run main.go \
-  -input ../../demo_data/photos/ \
+# 先用脚本批量生成描述
+$ cd backend/cmd/batch_vlm && go run main.go \
+  -input /root/project/photos/ \
   -output ../../data/descriptions.json
 # 输出：生成 45 条描述，耗时 3m20s
 
 # 然后导入时自动读取 descriptions.json
-$ curl -X POST http://localhost:8080/api/import/jobs \
-  -d '{"sourcePath":"./demo_data/photos/2024-02-云南","recursive":false}'
-# 导入任务跳过 VLM 调用，直接读取预生成描述
+$ curl -X POST http://localhost:8080/api/import \
+  -d '{"source_path":"/root/project/photos/","recursive":true}'
+# 导入任务直接读取预生成描述，不再调用 VLM
 ```
 
 ### 风险与应对
@@ -143,7 +143,7 @@ $ curl http://localhost:8080/api/photos/photo_001/image > test.jpg
 | 3.3 | 导入并发控制完善（3 并发 + 失败重试 3 次）          | 1h       | `backend/internal/service/...`  |
 | 3.4 | 错误处理 + 结构化日志完善                         | 1h       | 各处 middleware                 |
 | 3.5 | Docker Compose 编排（Dify + Go + 数据卷）         | 1h       | `docker-compose.yml`            |
-| 3.6 | 演示数据准备（整理时间线文件夹）                  | 1h       | `demo_data/photos/*/`           |
+| 3.6 | 演示数据准备（准备时间线 md 表格 + 测试照片）     | 1h       | `demo_data/timeline.md`         |
 | 3.7 | README 完善（痛点 + 亮点 + 快速启动指南）         | 1.5h     | `README.md`                     |
 | 3.8 | 全量测试 + Bug 修复                               | 1.5h     | -                               |
 

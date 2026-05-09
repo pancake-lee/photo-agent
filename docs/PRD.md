@@ -63,10 +63,16 @@ P2 (加分项): 个人摄影风格知识库 + 时间线关联分析
 
 **功能描述**：
 
-- 用户按时间线组织照片文件夹（如 `photos/2024-02-云南/`）
-- AI 生成每张照片的视觉描述，结合文件夹时间线标签
+- 用户提供图片存储的根目录，程序递归遍历所有图片文件，不约束用户的目录组织方式
+- AI 生成每张照片的视觉描述
+- 用户提供时间线描述文件（Markdown 表格格式：时间/活动/like/post），程序解析后根据照片 EXIF 拍摄时间匹配对应的活动名称
+  - 例如时间线记录”2026-02-01 ~ 2026-02-05 云南旅游”，则该时间段内拍摄的所有照片时间线均为”云南旅游”
+  - 支持单日、日期范围（`~` 分隔）、月份精度等多种时间格式
 - 用户可就作品档案提问，Agent 基于知识库回答
 - 支持追问和澄清
+
+**进阶扩展**（后续迭代）：
+- 根据文件名/大小/md5 识别重复文件，避免重复处理
 
 **验收标准**：
 
@@ -142,20 +148,24 @@ P2 (加分项): 个人摄影风格知识库 + 时间线关联分析
 
 ### 3.2 数据预处理
 
-**照片导入流程**（Go 后端管理元数据，Python AI 服务处理 AI）：
+**照片导入流程**（Go 后端全栈，零 Python）：
 
-1. 用户按时间线命名文件夹：`photos/{时间线标签}/`（如 `photos/2024-02-云南/`）
-2. CLI 扫描文件夹，调用 Go API 创建照片元数据记录（status = pending）
-3. CLI 调用 Python AI 服务，对每张照片生成视觉描述并提取标签
-4. Python 将描述文本嵌入并存入 Chroma 向量库
-5. CLI 调用 Go API 更新元数据（描述、标签、status = done）
+1. 用户将原始照片放入任意目录结构（如硬盘上的照片文件夹）
+2. 运行 `batch_vlm` 工具预处理：
+   - 递归扫描所有图片，调用 VLM 生成视觉描述
+   - 自动压缩超大图片（ImageMagick），压缩后的 JPG 直接存入 `data/photos/` 作为最终存储文件
+   - 输出 `descriptions.json`（路径 → 描述映射）
+3. 用户编写时间线描述文件（Markdown 表格），配置 `storage.timeline_path`
+4. 启动 server，调用导入 API 扫描照片目录：
+   - 读取 EXIF 拍摄时间
+   - 根据拍摄时间匹配时间线文件中的活动名称
+   - 从 `descriptions.json` 读取预生成的描述
+   - 保存元数据到 SQLite（照片路径、描述、时间线标签、拍摄时间等）
+   - 可选：同步写入 Dify 知识库
 
-**真人短片截图处理流程**（可选，用于展示）：
-
-1. 用户放入 `assets/{短片名}/` 目录
-2. 系统读取图片，生成场景描述
-3. 描述文本向量化，存入 Chroma
-4. 元数据存入 SQLite
+**工作流约束**：
+- 所有照片必须先经 `batch_vlm` 预处理，server 导入时不再实时调用 VLM
+- 时间线标签完全来自用户提供的 md 表格，不依赖文件夹命名
 
 ### 3.3 数据量级预估
 
@@ -208,16 +218,22 @@ P2 (加分项): 个人摄影风格知识库 + 时间线关联分析
 ### 5.1 CLI 交互流程
 
 ```bash
-# 1. 初始化系统（建库、配置）
-$ media-agent init
+# 1. 预处理：生成描述与压缩图
+$ ./batch_vlm -input /root/project/photos/ -output ./data/descriptions.json
+> 发现 312 张照片
+> 正在处理（1/312）...
+> 全部完成，descriptions.json 已生成
 
-# 2. 导入照片（按时间线文件夹）
-$ media-agent photo import ./photos/2024-02-云南/ --timeline "2024-02-云南"
-> 发现 45 张照片
-> 正在处理（1/45）...
-> 全部处理完成，已建立向量索引
+# 2. 配置时间线与启动 server
+# 编辑 config.yaml：指定 storage.timeline_path
+$ ./server -config config.yaml
+> Server starting on :8080
 
-# 3. 启动 Agent 对话
+# 3. 调用导入 API（扫描照片目录入库）
+$ curl -X POST http://localhost:8080/api/import \
+  -d '{"source_path":"/root/project/photos/","recursive":true}'
+
+# 4. 启动 Agent 对话（通过 Dify 聊天界面）
 $ media-agent chat
 
 🤖 Media Agent > 你好！我是你的摄影助手。今天想找什么照片？
@@ -275,7 +291,8 @@ $ media-agent chat
 
 ### 6.2 假设
 
-- 用户能提供清晰的时间线文件夹命名
+- 用户能提供图片存储根目录路径
+- 用户能编写 Markdown 格式的时间线描述文件
 - 云端 API 在国内可稳定访问（或用户有代理）
 - 单张图片大小 < 5MB（VLM API 限制）
 

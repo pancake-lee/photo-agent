@@ -13,7 +13,6 @@ import (
 type ImageInfo struct {
 	SourcePath string
 	Filename   string
-	Timeline   string
 }
 
 // ScanDirectory 扫描目录下的图片文件
@@ -24,9 +23,6 @@ func ScanDirectory(root string, recursive bool) ([]ImageInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read dir failed: %w", err)
 	}
-
-	// 时间线标签 = 文件夹名
-	timeline := filepath.Base(root)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -48,7 +44,6 @@ func ScanDirectory(root string, recursive bool) ([]ImageInfo, error) {
 		images = append(images, ImageInfo{
 			SourcePath: filepath.Join(root, entry.Name()),
 			Filename:   entry.Name(),
-			Timeline:   timeline,
 		})
 	}
 

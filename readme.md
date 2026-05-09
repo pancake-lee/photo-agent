@@ -40,9 +40,8 @@
   - 不要同时加载多个不相关的问题，避免反复读取大量文件导致上下文压缩循环
   - 每个问题处理完后，用简短总结标记进度，再进入下一个
 - 环境路径映射规则
-  - `/root/project/` 是只读挂载（宿主机项目目录映射到容器），`/root/share/` 是读写挂载
-  - 所有对 `/root/project/` 下文件的处理输出，统一写到 `/root/share/` 下相同的相对路径
-  - 例如：`/root/project/proto-agent/DSC_0143.JPG` 的压缩输出 → `/root/share/proto-agent/DSC_0143.jpg`
+  - `/root/project/` 是只读挂载（宿主机项目目录映射到容器）
+  - `batch_vlm` 压缩 `/root/project/` 下图片时，输出到 `storage.photo_path` 对应路径（默认 `./data/photos/`），保持原始目录结构
 - 优先复用 pgo 代码库封装
   - `/root/code/pgo` 是本人维护的 Go 代码库，`pkg/` 下包含大量日常封装
   - 本项目通过 `go.work` 直接引用本地 pgo，而非 import GitHub 版本

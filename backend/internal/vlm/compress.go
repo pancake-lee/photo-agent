@@ -11,7 +11,7 @@ import (
 )
 
 // maybeCompressImage 检查图片大小，超过限制时压缩为 JPEG。
-// /root/project/ 下的文件输出到 /root/share/ 对应路径，其他使用临时文件。
+// /root/project/ 下的文件输出到 PhotoPath 对应路径，其他使用临时文件。
 // 未超限时返回原路径和 nil cleanup。
 func maybeCompressImage(imagePath string, maxSizeMB float64) (string, func(), error) {
 	if maxSizeMB <= 0 {

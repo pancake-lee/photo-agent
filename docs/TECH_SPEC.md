@@ -65,20 +65,20 @@ Go Backend (:8080)
 
 ### 3.1 照片导入流程
 
-导入流水线支持**两种模式**，通过配置切换：
-
-**模式 A：预描述模式（推荐用于开发/演示）**
+所有照片必须先经 `batch_vlm` 预处理生成描述，server 导入时不再实时调用 VLM。导入流水线如下：
 
 ```
-用户在 Dify 聊天输入："导入 ~/Photos/2024-02-云南"
+用户在 Dify 聊天输入："导入 ~/Photos/"
     ↓
 Dify Agent: 意图识别 → 调用 import_photos 工具
     ↓
 Go: 创建导入任务 (SQLite)
-Go: 扫描文件夹 → 按文件夹名解析时间线标签
-Go: 复制照片到 data/photos/{timeline}/
+Go: 递归扫描文件夹，收集所有图片文件
+Go: 读取 EXIF 拍摄时间
+Go: 根据拍摄时间匹配时间线文件（配置指定的 md 表格）中的活动名称
 Go: 读取预生成的 descriptions.json，匹配照片路径获取描述
-Go: 保存元数据到 SQLite (路径/时间线/标签/描述/EXIF)
+Go: 复用已压缩图片（batch_vlm 已将压缩后的 JPG 存入 PhotoPath）
+Go: 保存元数据到 SQLite (路径/时间线/标签/描述/拍摄时间/EXIF)
 Go: 通过 Dify API 将描述写入知识库 (照片ID + 描述文本)
     ↓
 Dify: 自动 Embedding → 存入向量库
@@ -87,13 +87,15 @@ Go: 更新导入任务状态为完成
 Dify Agent: 回复 "导入完成，共 45 张照片"
 ```
 
-**模式 B：实时 VLM 模式（完整功能）**
+**工作流约束**：
+- 所有照片必须先经 `batch_vlm` 预处理，server 导入时不再实时调用 VLM
+- 时间线标签完全来自用户提供的 md 表格，不依赖文件夹命名
+- 压缩后的 JPG 直接存入 `data/photos/` 作为最终存储文件，server 导入时直接复用
+- 无预描述时以空描述入库，不调用 VLM
 
-与模式 A 的区别仅在第 5 步：Go 实时调用 VLM API（火山引擎/ OpenAI / Qwen）生成描述，其余流程相同。支持并发控制（默认 3 并发）和失败重试（3 次）。
+**预描述文件的生成**：通过独立脚本 `backend/cmd/batch_vlm/main.go` 提前批量处理，不依赖 Dify 或其他服务。脚本扫描照片文件夹，调用 VLM API，输出 `descriptions.json`。
 
-**预描述文件的生成**：通过独立脚本 `scripts/batch_vlm/main.go` 提前批量处理，不依赖 Dify 或其他服务。脚本扫描照片文件夹，调用 VLM API，输出 `descriptions.json`。
-
-**批量导入并发控制**：VLM API 调用限制并发数（如 3 个并发），避免费用过高和速率限制。失败自动重试 3 次。
+**批量导入并发控制**：VLM API 调用限制并发数（默认 3 并发），避免费用过高和速率限制。失败自动重试 3 次。
 
 ### 3.2 聊天对话流程
 
@@ -119,7 +121,7 @@ Dify Web UI 渲染回复（文本 + Markdown 图片链接）
 
 VLM 调用耗时较长（单张 2-5 秒，300 张约 15-30 分钟），且费用按调用次数计费。开发阶段反复触发导入会重复调用 VLM，成本高且慢。独立脚本提前批量处理一次，开发时直接复用结果。
 
-**脚本位置**：`scripts/batch_vlm/main.go`
+**脚本位置**：`backend/cmd/batch_vlm/main.go`
 
 **脚本输入输出**
 
@@ -160,8 +162,8 @@ VLM 调用耗时较长（单张 2-5 秒，300 张约 15-30 分钟），且费用
 **脚本使用方式**
 
 ```bash
-cd scripts/batch_vlm
-go run main.go -input ../../demo_data/photos/ -output ../../data/descriptions.json
+cd backend/cmd/batch_vlm
+go run main.go -input /root/project/photos/ -output ../../data/descriptions.json
 ```
 
 ---
@@ -323,9 +325,12 @@ photo-agent/
 │   │   ├── config/               # 配置管理
 │   │   └── vlm/                  # VLM HTTP 客户端
 │   └── go.mod
-├── scripts/
-│   └── batch_vlm/
-│       └── main.go               # 批量 VLM 预处理脚本
+├── backend/
+│   ├── cmd/
+│   │   ├── server/
+│   │   │   └── main.go           # Server 入口
+│   │   └── batch_vlm/
+│   │       └── main.go           # 批量 VLM 预处理脚本
 ├── dify/
 │   └── docker-compose.yaml       # Dify 本地部署配置
 ├── data/
@@ -364,7 +369,8 @@ go run cmd/server/main.go
 PORT=8080
 DB_PATH=./data/sqlite/photo_agent.db
 PHOTO_STORAGE_PATH=./data/photos
-DESCRIPTIONS_PATH=./data/descriptions.json  # 预描述文件路径（预描述模式下使用）
+DESCRIPTIONS_PATH=./data/descriptions.json  # 预描述文件路径
+TIMELINE_PATH=./data/timeline.md            # 时间线描述文件路径（md 表格格式）
 
 # VLM 配置（三选一）
 VLM_PROVIDER=volcengine  # 或 openai / qwen
@@ -391,7 +397,6 @@ DIFY_KNOWLEDGE_BASE_ID=your-dataset-id
 | 照片批量导入 | Go 代码 | 需要异步调度、并发控制、重试机制 |
 | 照片元数据管理 | Go 代码 | 业务数据，需要事务和关系查询 |
 | 文件服务 | Go 代码 | 本地文件读写，Go 标准库高效 |
-| VLM 图片描述（实时） | Go 代码 | HTTP 调用云端 API，Go 可直接实现 |
 | VLM 批量预处理 | Go 独立脚本 | 耗时长、费用高，独立运行避免开发阶段重复调用 |
 | 图片在聊天中展示 | Dify Markdown | Agent 回复包含图片 URL，Dify 自动渲染 |
 

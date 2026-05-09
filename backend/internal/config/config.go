@@ -97,6 +97,12 @@ func overrideFromEnv(cfg *Config) {
 	if v := os.Getenv("PHOTO_AGENT_PHOTO_PATH"); v != "" {
 		cfg.Storage.PhotoPath = v
 	}
+	if v := os.Getenv("PHOTO_AGENT_DESCRIPTIONS_PATH"); v != "" {
+		cfg.Storage.DescriptionsPath = v
+	}
+	if v := os.Getenv("PHOTO_AGENT_TIMELINE_PATH"); v != "" {
+		cfg.Storage.TimelinePath = v
+	}
 	if v := os.Getenv("PHOTO_AGENT_VLM_PROVIDER"); v != "" {
 		cfg.VLM.Provider = v
 	}
