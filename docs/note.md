@@ -4,6 +4,28 @@
 
 ---
 
+## batch_vlm 并发安全问题
+
+**问题**：`descriptions.json` 在并发 VLM 处理中存在两个安全隐患。
+
+**背景**：batch_vlm 默认 3 并发调用 VLM API，每处理 10 张保存一次中间结果到 JSON。
+
+**隐患 1 — map 并发读写 panic**
+- `saveResult` 内部 `json.MarshalIndent` 遍历 map，但调用时未加锁
+- 同时其他 goroutine 可能正在写入 `result[relPath] = ...`
+- 后果：`fatal error: concurrent map read and map write`
+
+**隐患 2 — 文件非原子写入**
+- `os.WriteFile` 直接覆盖目标文件，不是原子操作
+- 并发保存或程序中断时可能产生半写损坏的 JSON
+- 一旦损坏，之前所有 VLM 调用结果丢失
+
+**修复方案**（[backend/cmd/batch_vlm/main.go](backend/cmd/batch_vlm/main.go)）：
+- 中间保存时先 `mu.Lock()` 深拷贝 map 到 snapshot，解锁后再 Marshal + WriteFile
+- `saveResult` 改为临时文件 + `os.Rename` 原子覆盖
+
+---
+
 ## 1. 技术栈变更记录
 
 ### 1.1 纯 Python 单栈 → Go + Python 双栈（重新启用）

@@ -24,7 +24,8 @@
       "Bash(./backend_e2e)",
       "Bash(./test/backend_e2e)",
       "Bash(backend/test/backend_e2e)",
-      "Bash(make test-e2e *)"
+      "Bash(make test-e2e *)",
+      "Bash(python3 -c \"import json; data=json.load\\(open\\('/root/code/photo-agnet/docs/photo_agent.excalidraw'\\)\\); print\\(f'elements count: {len\\(data[\\\\\"elements\\\\\"]\\)}'\\); print\\('JSON valid: OK'\\)\")"
     ]
   }
 }

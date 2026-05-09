@@ -4,7 +4,8 @@ backend/server
 backend/batch_vlm
 
 # Data
-data/
+data/*
+!data/descriptions.json
 backend/data/
 
 # IDE

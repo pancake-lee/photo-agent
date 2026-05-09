@@ -160,7 +160,13 @@ func main() {
 
 			// 每处理 10 张保存一次中间结果
 			if (idx+1)%10 == 0 {
-				_ = saveResult(*outputFlag, result)
+				mu.Lock()
+				snapshot := make(map[string]vlmDescEntry, len(result))
+				for k, v := range result {
+					snapshot[k] = v
+				}
+				mu.Unlock()
+				_ = saveResult(*outputFlag, snapshot)
 			}
 		}(i, img)
 	}
@@ -212,5 +218,9 @@ func saveResult(path string, result map[string]vlmDescEntry) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
