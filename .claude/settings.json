@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat /root/code/pgo/go.mod)",
+      "Read(//root/code/pgo/**)",
+      "Bash(find /root/code/pgo/pkg -type f -name \"*.go\" | head -80)",
+      "Read(//root/code/pgo/pkg/**)",
+      "Bash(go version *)",
+      "Bash(go mod *)",
+      "Bash(GOPROXY=https://goproxy.cn,direct go mod tidy)",
+      "Bash(go build *)"
+    ]
+  }
+}

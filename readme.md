@@ -39,6 +39,15 @@
   - 先读取最小必要代码，分析并解决当前问题，再继续下一个
   - 不要同时加载多个不相关的问题，避免反复读取大量文件导致上下文压缩循环
   - 每个问题处理完后，用简短总结标记进度，再进入下一个
+- 优先复用 pgo 代码库封装
+  - `/root/code/pgo` 是本人维护的 Go 代码库，`pkg/` 下包含大量日常封装
+  - 本项目通过 `go.work` 直接引用本地 pgo，而非 import GitHub 版本
+  - 编码时优先使用 pgo 已有封装：
+    - `pconfig` — 配置管理（TOML/YAML、环境变量覆盖、default tag、Scan 到结构体）
+    - `plogger` — 基于 zap 的日志（console/json 模式、kratos 兼容）
+    - `putil` — HTTP 请求封装（`NewHttpRequestJson`、`HttpDo`）、字符串/路径/时间工具
+    - `papp` — Runner 模式（`RunRetry`、`RunInterval`、`RunTimeout`）
+  - 如果发现 pgo 封装有缺陷或需要扩展，可以同步维护 pgo
 - 输出 Markdown 文档时减少使用表格
   - 长文本内容会把表格撑得很宽，阅读体验差
   - 优先使用标题层级（## / ###）+ 无序列表（-）+ 缩进组织内容
@@ -54,6 +63,21 @@
 
 ## 当前状态
 
-- [ ] Day 1：Go 后端核心代码（路由/模型/配置/VLM/导入流水线）
+- [x] Day 1：Go 后端核心代码（路由/模型/配置/VLM/导入流水线）— 编译通过，健康检查可访问
 - [ ] Day 2：查询 API + Dify 配置（工具/OpenAPI/Agent/知识库）
 - [ ] Day 3：联调 + Docker Compose + 交付
+
+### Day 1 已完成的模块
+
+后端模块全部实现，编译通过，服务可启动：
+
+- **API 路由**（Gin）：12 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
+- **数据层**（GORM + SQLite）：`Photo` / `ImportJob` 两表，自动迁移
+- **配置管理**：复用 `pconfig`，TOML + 环境变量覆盖（`PHOTO_AGENT_*` 前缀）
+- **VLM 客户端**：OpenAI 兼容格式，支持 `openai` / `volcengine` / `qwen` 三供应商切换
+- **导入流水线**：扫描 → 复制到 `data/photos/` → 描述（预描述优先 / 实时 VLM 降级）→ SQLite → Dify 知识库
+  - 并发控制：默认 3 并发
+  - 失败重试：复用 `papp.Runner.RunRetry`，默认 3 次
+  - 预描述模式：读取 `data/descriptions.json`，跳过 VLM 调用
+- **批量 VLM 脚本**：`backend/cmd/batch_vlm/main.go`，独立运行，输出 `descriptions.json`
+- **文件服务**：图片存储到 `data/photos/{timeline}/`，自动生成唯一文件名

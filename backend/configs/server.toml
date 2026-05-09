@@ -1,0 +1,22 @@
+[server]
+addr = ":8080"
+
+[db]
+sqlite_path = "./data/sqlite/photo_agent.db"
+
+[storage]
+photo_path = "./data/photos"
+descriptions_path = "./data/descriptions.json"
+
+[vlm]
+provider = "openai"
+api_key = ""
+model = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+concurrency = 3
+retry = 3
+
+[dify]
+api_key = ""
+base_url = "http://localhost/v1"
+dataset_id = ""
