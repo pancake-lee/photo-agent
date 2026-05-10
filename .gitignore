@@ -25,8 +25,6 @@ Thumbs.db
 *.out
 vendor/
 
-# 个人配置文件
-pancake.yaml
 backend/init_dify
 
 # Dify volumes: ignore all runtime data, but keep sandbox config
@@ -36,3 +34,4 @@ dify/volumes/sandbox/*
 !dify/volumes/sandbox/conf/
 dify/volumes/sandbox/conf/*
 !dify/volumes/sandbox/conf/config.yaml
+.local
