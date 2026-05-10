@@ -2,24 +2,45 @@ package api
 
 import (
 	"net/http"
+	"path/filepath"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/service"
 )
 
 // ListPhotos 照片列表（分页、过滤）
 func ListPhotos(c *gin.Context) {
-	timeline := c.Query("timeline")
-	tag := c.Query("tag")
-	keyword := c.Query("keyword")
-	_ = timeline
-	_ = tag
-	_ = keyword
+	page, _ := strconv.Atoi(c.Query("page"))
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
 
-	// TODO: Day 2 实现分页和过滤
+	params := service.ListPhotosParams{
+		Page:     page,
+		PageSize: pageSize,
+		Timeline: c.Query("timeline"),
+		Tag:      c.Query("tag"),
+		Keyword:  c.Query("keyword"),
+	}
+
+	photos, total, err := service.ListPhotos(params)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"items": []any{},
-		"total": 0,
+		"items":       photos,
+		"total":       total,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": (int(total) + pageSize - 1) / pageSize,
 	})
 }
 
@@ -39,7 +60,6 @@ func GetPhoto(c *gin.Context) {
 func GetPhotoImage(c *gin.Context) {
 	id := c.Param("id")
 	size := c.Query("size")
-	_ = size
 
 	photo, err := service.GetPhotoByID(id)
 	if err != nil {
@@ -47,6 +67,19 @@ func GetPhotoImage(c *gin.Context) {
 		return
 	}
 
-	// TODO: Day 2 实现缩略图
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented", "photo_id": photo.ID})
+	photoPath := config.Get().Storage.PhotoPath
+	fullPath := filepath.Join(photoPath, photo.FilePath)
+
+	// 缩略图模式
+	if size == "thumb" {
+		thumbPath, err := service.GetThumbnail(fullPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "generate thumbnail failed: " + err.Error()})
+			return
+		}
+		c.File(thumbPath)
+		return
+	}
+
+	c.File(fullPath)
 }
