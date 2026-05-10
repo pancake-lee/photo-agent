@@ -34,4 +34,6 @@ dify/volumes/sandbox/*
 !dify/volumes/sandbox/conf/
 dify/volumes/sandbox/conf/*
 !dify/volumes/sandbox/conf/config.yaml
+
 .local
+.env
