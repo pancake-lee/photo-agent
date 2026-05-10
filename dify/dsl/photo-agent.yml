@@ -1,182 +1,183 @@
-# Photo Agent DSL
-# 导入方式：Studio -> 创建空白应用 -> 导入 DSL 文件
-# 注意：导入前需先在"工具->自定义"中导入 docs/dify_tools_openapi.yaml
-# 导入后需补充：绑定知识库、配置模型 API Key
-
 app:
-  description: '个人摄影资产 AI 助手，帮助用户通过自然语言检索照片、回顾拍摄经历'
+  description: 个人摄影资产 AI 助手，帮助用户通过自然语言检索照片、回顾拍摄经历
   icon: 📷
   icon_background: '#FFE4E8'
+  icon_type: emoji
   mode: agent-chat
-  name: Photo Agent
+  name: PhotoAgent
   use_icon_as_answer_icon: false
-
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.3.8@592c8252795b5f75807de2d609a03196ed02596b409f7642b4a07548c7ff57ef
+    version: null
 kind: app
-version: "0.3.0"
-
-workflow:
-  environment_variables: []
-
-  conversation_variables: []
-
-  features:
-    file_upload:
+model_config:
+  agent_mode:
+    enabled: true
+    max_iteration: 5
+    prompt: null
+    strategy: react
+    tools:
+    - enabled: true
+      notAuthor: false
+      provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
+      provider_name: photo_agent
+      provider_type: api
+      tool_label: list_timelines
+      tool_name: list_timelines
+      tool_parameters: {}
+      type: api
+    - enabled: true
+      notAuthor: false
+      provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
+      provider_name: photo_agent
+      provider_type: api
+      tool_label: get_photos_by_timeline
+      tool_name: get_photos_by_timeline
+      tool_parameters:
+        name: null
+      type: api
+    - enabled: true
+      notAuthor: false
+      provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
+      provider_name: photo_agent
+      provider_type: api
+      tool_label: get_photos_by_tags
+      tool_name: get_photos_by_tags
+      tool_parameters:
+        tag: null
+      type: api
+    - enabled: true
+      notAuthor: false
+      provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
+      provider_name: photo_agent
+      provider_type: api
+      tool_label: get_photo_detail
+      tool_name: get_photo_detail
+      tool_parameters:
+        id: null
+      type: api
+    - enabled: true
+      notAuthor: false
+      provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
+      provider_name: photo_agent
+      provider_type: api
+      tool_label: import_photos
+      tool_name: import_photos
+      tool_parameters:
+        recursive: true
+        source_path: null
+      type: api
+    - enabled: true
+      notAuthor: false
+      provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
+      provider_name: photo_agent
+      provider_type: api
+      tool_label: get_import_status
+      tool_name: get_import_status
+      tool_parameters:
+        id: null
+      type: api
+  annotation_reply:
+    enabled: false
+  chat_prompt_config:
+    prompt:
+    - role: system
+      text: ''
+  completion_prompt_config:
+    conversation_histories_role:
+      assistant_prefix: ''
+      user_prefix: ''
+    prompt:
+      text: ''
+  dataset_configs:
+    datasets:
+      datasets: []
+    retrieval_model: multiple
+    top_k: 4
+  dataset_query_variable: ''
+  external_data_tools: []
+  file_upload:
+    allowed_file_extensions:
+    - .JPG
+    - .JPEG
+    - .PNG
+    - .GIF
+    - .WEBP
+    - .SVG
+    - .MP4
+    - .MOV
+    - .MPEG
+    - .WEBM
+    allowed_file_types: []
+    allowed_file_upload_methods:
+    - remote_url
+    - local_file
+    enabled: false
+    image:
+      detail: high
       enabled: false
-      image:
-        enabled: false
-        number_limits: 3
-        detail: high
-        transfer_methods:
-          - local_file
-          - remote_url
-    opening_statement: ''
-    retriever_resource:
-      enabled: true
-    suggested_questions: []
-    speech_to_text:
-      enabled: false
-    text_to_speech:
-      enabled: false
-      voice: ''
-      language: ''
+      number_limits: 3
+      transfer_methods:
+      - remote_url
+      - local_file
+    number_limits: 3
+  model:
+    completion_params:
+      max_tokens: 2048
+      stop: []
+      temperature: 0.7
+      top_p: 1
+    mode: chat
+    name: gpt-4o
+    provider: langgenius/openai/openai
+  more_like_this:
+    enabled: false
+  opening_statement: ''
+  pre_prompt: '你是 Photo Agent，一位个人摄影资产助手。你帮助用户通过自然语言检索照片、回顾拍摄经历、分析摄影主题。
 
-  graph:
-    nodes:
-      # 开始节点
-      - id: 'start-node'
-        type: start
-        position:
-          x: 80
-          y: 180
-        width: 244
-        height: 72
-        selected: false
 
-      # LLM / Agent 节点
-      - id: 'llm-node'
-        type: llm
-        position:
-          x: 380
-          y: 180
-        width: 244
-        height: 400
-        selected: false
-        data:
-          # 模型配置（导入后请在 UI 中选择实际配置的模型）
-          model:
-            provider: ''
-            name: ''
-            mode: chat
-            temperature: 0.7
-            top_p: 1.0
-            max_tokens: 2048
+    可用能力：
 
-          # 系统提示词
-          prompt_template: |
-            你是 Photo Agent，一位个人摄影资产助手。你帮助用户通过自然语言检索照片、回顾拍摄经历、分析摄影主题。
+    1. 通过知识库检索照片描述（语义搜索）
 
-            可用能力：
-            1. 通过知识库检索照片描述（语义搜索）
-            2. 通过工具查询时间线和标签
-            3. 基于历史作品提供创作建议
-            4. 通过工具导入本地照片文件夹
+    2. 通过工具查询时间线和标签
 
-            回答时：
-            - 如果提到具体照片，使用 Markdown 图片语法展示照片，格式：![描述](http://host.docker.internal:8080/api/photos/{photo_id}/image)
-            - 时间线查询使用 list_timelines / get_photos_by_timeline 工具
-            - 标签查询使用 get_photos_by_tags 工具
-            - 导入照片使用 import_photos 工具
-            - 模糊描述检索使用知识库 RAG（自动）
+    3. 基于历史作品提供创作建议
 
-          # Agent 模式配置
-          agent_mode:
-            enabled: true
-            max_iteration: 5
-            strategy: function_call  # function_call 或 react
-            tools:
-              # 自定义工具引用
-              # 注意：provider_name 需与"工具->自定义"中导入时的名称一致
-              - provider_name: photo_agent
-                provider_type: api
-                tool_name: list_timelines
-                tool_label: 列出时间线
-                tool_parameters:
-                  {}  # 此工具无参数
-              - provider_name: photo_agent
-                provider_type: api
-                tool_name: get_photos_by_timeline
-                tool_label: 按时间线查照片
-                tool_parameters:
-                  name:
-                    type: mixed
-                    value: ''
-              - provider_name: photo_agent
-                provider_type: api
-                tool_name: get_photos_by_tags
-                tool_label: 按标签查照片
-                tool_parameters:
-                  tag:
-                    type: mixed
-                    value: ''
-              - provider_name: photo_agent
-                provider_type: api
-                tool_name: get_photo_detail
-                tool_label: 照片详情
-                tool_parameters:
-                  id:
-                    type: mixed
-                    value: ''
-              - provider_name: photo_agent
-                provider_type: api
-                tool_name: import_photos
-                tool_label: 导入照片
-                tool_parameters:
-                  source_path:
-                    type: mixed
-                    value: ''
-                  recursive:
-                    type: mixed
-                    value: true
-              - provider_name: photo_agent
-                provider_type: api
-                tool_name: get_import_status
-                tool_label: 导入状态
-                tool_parameters:
-                  id:
-                    type: mixed
-                    value: ''
+    4. 通过工具导入本地照片文件夹
 
-          # 知识库检索配置
-          retriever_resource:
-            enabled: true
 
-      # 答案输出节点
-      - id: 'answer-node'
-        type: answer
-        position:
-          x: 680
-          y: 180
-        width: 244
-        height: 72
-        selected: false
+    回答时：
 
-    edges:
-      - id: 'start-to-llm'
-        source: 'start-node'
-        sourceHandle: source
-        target: 'llm-node'
-        targetHandle: target
-        type: custom
-        data:
-          sourceType: start
-          targetType: llm
+    - 如果提到具体照片，使用 Markdown 图片语法展示照片，格式：![描述](http://host.docker.internal:8080/api/photos/{photo_id}/image)
 
-      - id: 'llm-to-answer'
-        source: 'llm-node'
-        sourceHandle: source
-        target: 'answer-node'
-        targetHandle: target
-        type: custom
-        data:
-          sourceType: llm
-          targetType: answer
+    - 时间线查询使用 list_timelines / get_photos_by_timeline 工具
+
+    - 标签查询使用 get_photos_by_tags 工具
+
+    - 导入照片使用 import_photos 工具
+
+    - 模糊描述检索使用知识库 RAG（自动）
+
+    '
+  prompt_type: simple
+  retriever_resource:
+    enabled: true
+  sensitive_word_avoidance:
+    config: {}
+    enabled: false
+    type: ''
+  speech_to_text:
+    enabled: false
+  suggested_questions: []
+  suggested_questions_after_answer:
+    enabled: false
+  text_to_speech:
+    enabled: false
+    language: ''
+    voice: ''
+  user_input_form: []
+version: 0.6.0

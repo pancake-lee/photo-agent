@@ -33,7 +33,30 @@
       "WebFetch(domain:docs.dify.ai)",
       "WebFetch(domain:gist.github.com)",
       "WebFetch(domain:github.com)",
-      "Bash(make init-dify *)"
+      "Bash(make init-dify *)",
+      "Bash(ls -la /root/code/dify/docker/ 2>/dev/null || echo \"not found\")",
+      "Read(//root/code/dify/docker/**)",
+      "Bash(grep -E \"^  [a-z_]+:\\($| #\\)\" /root/code/dify/docker/docker-compose.yaml)",
+      "Bash(cp /root/code/dify/docker/docker-compose.yaml /root/code/photo-agnet/dify/docker-compose.yaml)",
+      "Bash(cp /root/code/dify/docker/.env /root/code/photo-agnet/dify/.env)",
+      "Bash(cp -r /root/code/dify/docker/nginx /root/code/photo-agnet/dify/nginx)",
+      "Bash(cp -r /root/code/dify/docker/ssrf_proxy /root/code/photo-agnet/dify/ssrf_proxy)",
+      "Bash(cp -f /root/code/dify/docker/docker-compose.yaml /root/code/photo-agnet/dify/docker-compose.yaml)",
+      "Bash(cp -f /root/code/dify/docker/.env /root/code/photo-agnet/dify/.env)",
+      "Bash(cp -rf /root/code/dify/docker/nginx /root/code/photo-agnet/dify/nginx)",
+      "Bash(cp -rf /root/code/dify/docker/ssrf_proxy /root/code/photo-agnet/dify/ssrf_proxy)",
+      "Read(//root/code/dify/api/models/**)",
+      "Read(//root/code/dify/api/core/app/app_config/easy_ui_based_app/agent/**)",
+      "Read(//root/code/dify/api/core/app/app_config/easy_ui_based_app/dataset/**)",
+      "Read(//root/code/dify/api/core/app/apps/agent_chat/**)",
+      "Bash(grep -rn \"export_dsl\\\\|import_app\" /root/code/dify/api/tests --include=\"*.py\" -l | head -20)",
+      "Read(//root/code/dify/api/tests/**)",
+      "Bash(grep -rn \"agent-chat\\\\|agent_chat\" /root/code/dify/api/tests --include=\"*.py\" -A5 -B5 | head -120)",
+      "Bash(find /root/code/dify -type f \\\\\\( -name \"*.yml\" -o -name \"*.yaml\" \\\\\\) | xargs grep -l \"model_config\" 2>/dev/null | head -20)",
+      "Read(//root/code/dify/**)",
+      "WebFetch(domain:forum.dify.ai)",
+      "Bash(python3 -c \"from core.tools.entities.tool_entities import ToolProviderType; print\\([f'{t.name}={t.value}' for t in ToolProviderType]\\)\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

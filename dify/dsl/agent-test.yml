@@ -1,0 +1,154 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  icon_type: emoji
+  mode: agent-chat
+  name: agent-test
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/volcengine:0.0.5@d8da06d778d3cecdb2be116169d9845f9d8bc553f71f739740f12c1955d76b31
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/json_process:0.0.5@8b5a248c0ecf6bd07de46a0b4ae98b14637a762199df2e462fe41013d222d2a6
+    version: null
+kind: app
+model_config:
+  agent_mode:
+    enabled: true
+    max_iteration: 10
+    prompt: null
+    strategy: function_call
+    tools:
+    - enabled: true
+      notAuthor: false
+      provider_id: langgenius/json_process/json_process
+      provider_name: langgenius/json_process/json_process
+      provider_type: builtin
+      tool_label: JSON 解析
+      tool_name: parse
+      tool_parameters:
+        content: null
+        ensure_ascii: true
+        json_filter: null
+      type: builtin
+    - enabled: true
+      notAuthor: false
+      provider_id: langgenius/json_process/json_process
+      provider_name: langgenius/json_process/json_process
+      provider_type: builtin
+      tool_label: JSON 删除
+      tool_name: json_delete
+      tool_parameters:
+        content: null
+        ensure_ascii: true
+        query: null
+      type: builtin
+    - enabled: true
+      notAuthor: false
+      provider_id: langgenius/json_process/json_process
+      provider_name: langgenius/json_process/json_process
+      provider_type: builtin
+      tool_label: JSON 替换
+      tool_name: json_replace
+      tool_parameters:
+        content: null
+        ensure_ascii: true
+        query: null
+        replace_model: pattern
+        replace_pattern: null
+        replace_value: null
+        value_decode: false
+      type: builtin
+    - enabled: true
+      notAuthor: false
+      provider_id: langgenius/json_process/json_process
+      provider_name: langgenius/json_process/json_process
+      provider_type: builtin
+      tool_label: JSON 插入
+      tool_name: json_insert
+      tool_parameters:
+        content: null
+        create_path: 'False'
+        ensure_ascii: true
+        new_value: null
+        query: null
+        value_decode: false
+      type: builtin
+  annotation_reply:
+    enabled: false
+  chat_prompt_config:
+    prompt:
+    - role: system
+      text: ''
+  completion_prompt_config:
+    conversation_histories_role:
+      assistant_prefix: ''
+      user_prefix: ''
+    prompt:
+      text: ''
+  dataset_configs:
+    datasets:
+      datasets: []
+    retrieval_model: multiple
+    top_k: 4
+  dataset_query_variable: ''
+  external_data_tools: []
+  file_upload:
+    allowed_file_extensions:
+    - .JPG
+    - .JPEG
+    - .PNG
+    - .GIF
+    - .WEBP
+    - .SVG
+    - .MP4
+    - .MOV
+    - .MPEG
+    - .WEBM
+    allowed_file_types: []
+    allowed_file_upload_methods:
+    - remote_url
+    - local_file
+    enabled: false
+    image:
+      detail: high
+      enabled: false
+      number_limits: 3
+      transfer_methods:
+      - remote_url
+      - local_file
+    number_limits: 3
+  model:
+    completion_params:
+      stop: []
+    mode: chat
+    name: doubao-seed-1-6-250615
+    provider: langgenius/volcengine/volcengine
+  more_like_this:
+    enabled: false
+  opening_statement: ''
+  pre_prompt: 你是测试AI，你只需要回复“收到”
+  prompt_type: simple
+  retriever_resource:
+    enabled: true
+  sensitive_word_avoidance:
+    config: {}
+    enabled: false
+    type: ''
+  speech_to_text:
+    enabled: false
+  suggested_questions: []
+  suggested_questions_after_answer:
+    enabled: false
+  text_to_speech:
+    enabled: false
+    language: ''
+    voice: ''
+  user_input_form: []
+version: 0.6.0

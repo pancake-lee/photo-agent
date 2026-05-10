@@ -77,6 +77,9 @@
   - 第二批：vlm 727张使用Doubao-1.5-vision-pro-32k，剩91,828 /共500,000 tokens
     - Batch VLM done: success=727, failed=0, skipped=250, total=977, elapsed=21m39.279845176s
 - [x] Day 2：查询 API + Dify 配置（工具/OpenAPI/Agent/知识库）— 全部 API 实现，Dify 部署配置、初始化脚本、Agent DSL 完成
+  - go代码开发没问题，但是最好用上pgo中proto定义，导出swagger那一套
+    - 现在swagger直接由ai维护，有时候ai的输出不稳定，尤其是代码和文档不能及时同步修改的问题
+  - dify导入ai输出的dsl，折腾了很久，主要是自定义tool的问题，最终都浓缩到dify/SKILL.md了
 - [ ] Day 3：联调 + Docker Compose + 交付
 
 ### Day 1 已完成的模块
