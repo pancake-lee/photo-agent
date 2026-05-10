@@ -3,6 +3,7 @@ package vlm
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -10,6 +11,9 @@ import (
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
 )
+
+// ErrQuotaExceeded 表示 VLM API 额度已耗尽，重试无意义，应停止程序
+var ErrQuotaExceeded = errors.New("VLM API quota exceeded")
 
 const defaultVlmPrompt = `请详细描述这张照片的内容。包括：
 - 主体内容（人/物/风景）
@@ -105,7 +109,7 @@ func describeWithArk(imagePath string, cfg config.VLMConfig, prompt string) (str
 	}
 
 	if description == "" {
-		return "", "", fmt.Errorf("empty response: %s", string(bodyBytes))
+		return "", "", wrapAPIError(bodyBytes)
 	}
 
 	modelUsed := resp.Model
@@ -161,7 +165,7 @@ func describeWithHTTP(imagePath string, cfg config.VLMConfig, prompt string) (st
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", "", fmt.Errorf("no choices in response")
+		return "", "", wrapAPIError(bodyBytes)
 	}
 
 	description := resp.Choices[0].Message.Content
@@ -201,4 +205,27 @@ type openAIChatResp struct {
 	} `json:"choices"`
 }
 
+// apiError 通用 API 错误结构
+type apiError struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Type    string `json:"type"`
+	} `json:"error"`
+}
+
+// wrapAPIError 解析 API 错误响应，识别额度耗尽等不可恢复错误
+func wrapAPIError(bodyBytes []byte) error {
+	var apiErr apiError
+	if err := json.Unmarshal(bodyBytes, &apiErr); err != nil || apiErr.Error.Code == "" {
+		return fmt.Errorf("empty response: %s", string(bodyBytes))
+	}
+
+	switch apiErr.Error.Code {
+	case "SetLimitExceeded", "InsufficientQuota", "RateLimitExceeded":
+		return fmt.Errorf("%w: code=%s type=%s msg=%s", ErrQuotaExceeded, apiErr.Error.Code, apiErr.Error.Type, apiErr.Error.Message)
+	default:
+		return fmt.Errorf("api error: code=%s type=%s msg=%s", apiErr.Error.Code, apiErr.Error.Type, apiErr.Error.Message)
+	}
+}
 

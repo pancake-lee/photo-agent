@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -139,6 +140,9 @@ func main() {
 			})
 
 			if err != nil {
+				if errors.Is(err, vlm.ErrQuotaExceeded) {
+					plogger.Fatalf("Quota exceeded, stopping: %v", err)
+				}
 				plogger.Warnf("Failed %s: %v", relPath, err)
 				countMu.Lock()
 				failCount++

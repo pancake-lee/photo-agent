@@ -68,6 +68,11 @@
 ## 当前状态
 
 - [x] Day 1：Go 后端核心代码（路由/模型/配置/VLM/导入流水线）— 编译通过，健康检查可访问
+  - photo_path配置多了proto-agent，因为代码本来根据输入算了相对路径，相对projectPrefix是写死在代码里的，这个要改改，要迁移文件，要改配置，要改代码
+  - 第一批：vlm 250张用完Doubao-Seed-1.6-vision的400,000 tokens左右
+    - 前期测试跑了一些，所以tokens统计不精准，大概就是这个数
+  - 第二批：vlm 727张使用Doubao-1.5-vision-pro-32k，剩91,828 /共500,000 tokens
+    - Batch VLM done: success=727, failed=0, skipped=250, total=977, elapsed=21m39.279845176s
 - [ ] Day 2：查询 API + Dify 配置（工具/OpenAPI/Agent/知识库）
 - [ ] Day 3：联调 + Docker Compose + 交付
 
