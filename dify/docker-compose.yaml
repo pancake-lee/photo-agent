@@ -1,0 +1,145 @@
+version: "3.8"
+
+services:
+  # Dify API 服务
+  api:
+    image: langgenius/dify-api:latest
+    restart: unless-stopped
+    environment:
+      # 运行模式
+      MODE: api
+      # 密钥配置
+      SECRET_KEY: ${SECRET_KEY:-dify-default-secret-key-change-me}
+      CONSOLE_API_URL: ${CONSOLE_API_URL:-http://localhost}
+      CONSOLE_WEB_URL: ${CONSOLE_WEB_URL:-http://localhost}
+      SERVICE_API_URL: ${SERVICE_API_URL:-http://localhost}
+      APP_API_URL: ${APP_API_URL:-http://localhost}
+      # 数据库
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-difyai123456}
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-dify}
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      # Celery
+      CELERY_BROKER_URL: redis://redis:6379/1
+      # 向量数据库
+      VECTOR_STORE: weaviate
+      WEAVIATE_ENDPOINT: http://weaviate:8080
+      WEAVIATE_API_KEY: ${WEAVIATE_API_KEY:-WVF5YThaHlkYwhGUSmCRgsX3tD5ngdN8pkih}
+      # 文件存储
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/api/storage
+      # 其他
+      LOG_LEVEL: INFO
+    volumes:
+      - ./volumes/storage:/app/api/storage
+    depends_on:
+      - db
+      - redis
+      - weaviate
+    networks:
+      - dify-network
+
+  # Dify Worker（异步任务）
+  worker:
+    image: langgenius/dify-api:latest
+    restart: unless-stopped
+    environment:
+      MODE: worker
+      SECRET_KEY: ${SECRET_KEY:-dify-default-secret-key-change-me}
+      CONSOLE_API_URL: ${CONSOLE_API_URL:-http://localhost}
+      CONSOLE_WEB_URL: ${CONSOLE_WEB_URL:-http://localhost}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-difyai123456}
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-dify}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      CELERY_BROKER_URL: redis://redis:6379/1
+      VECTOR_STORE: weaviate
+      WEAVIATE_ENDPOINT: http://weaviate:8080
+      WEAVIATE_API_KEY: ${WEAVIATE_API_KEY:-WVF5YThaHlkYwhGUSmCRgsX3tD5ngdN8pkih}
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/api/storage
+      LOG_LEVEL: INFO
+    volumes:
+      - ./volumes/storage:/app/api/storage
+    depends_on:
+      - db
+      - redis
+      - weaviate
+    networks:
+      - dify-network
+
+  # Dify Web 前端
+  web:
+    image: langgenius/dify-web:latest
+    restart: unless-stopped
+    environment:
+      CONSOLE_API_URL: ${CONSOLE_API_URL:-http://localhost}
+      APP_API_URL: ${APP_API_URL:-http://localhost}
+      PORT: 3000
+    networks:
+      - dify-network
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - api
+      - web
+    networks:
+      - dify-network
+
+  # PostgreSQL 数据库
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-difyai123456}
+      POSTGRES_DB: ${DB_DATABASE:-dify}
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    networks:
+      - dify-network
+
+  # Redis 缓存
+  redis:
+    image: redis:6-alpine
+    restart: unless-stopped
+    volumes:
+      - ./volumes/redis:/data
+    networks:
+      - dify-network
+
+  # Weaviate 向量数据库
+  weaviate:
+    image: semitechnologies/weaviate:1.19.0
+    restart: unless-stopped
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
+      ENABLE_MODULES: ""
+      CLUSTER_HOSTNAME: node1
+    volumes:
+      - ./volumes/weaviate:/var/lib/weaviate
+    networks:
+      - dify-network
+
+networks:
+  dify-network:
+    driver: bridge

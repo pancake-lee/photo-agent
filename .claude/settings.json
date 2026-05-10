@@ -28,7 +28,12 @@
       "Bash(python3 -c \"import json; data=json.load\\(open\\('/root/code/photo-agnet/docs/photo_agent.excalidraw'\\)\\); print\\(f'elements count: {len\\(data[\\\\\"elements\\\\\"]\\)}'\\); print\\('JSON valid: OK'\\)\")",
       "Bash(sqlite3 /root/code/photo-agnet/data/sqlite/photo_agent.db \"SELECT COUNT\\(*\\) FROM photos;\")",
       "Bash(sqlite3 /root/code/photo-agnet/data/sqlite/photo_agent.db \"SELECT DISTINCT timeline FROM photos WHERE timeline != '' LIMIT 5;\")",
-      "Bash(sqlite3 /root/code/photo-agnet/data/sqlite/photo_agent.db \"PRAGMA table_info\\(photos\\);\")"
+      "Bash(sqlite3 /root/code/photo-agnet/data/sqlite/photo_agent.db \"PRAGMA table_info\\(photos\\);\")",
+      "WebSearch",
+      "WebFetch(domain:docs.dify.ai)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(make init-dify *)"
     ]
   }
 }

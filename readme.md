@@ -63,6 +63,9 @@
 - [docs/TASKS.md](docs/TASKS.md) — 3 天开发任务拆分。每天结束交付一个可运行的里程碑，Dify + Go 双栈。
 - [docs/note.md](docs/note.md) — 决策备忘。记录被否定/推翻的技术栈和数据集方案，以及前期讨论归档。
 - [docs/learn.md](docs/learn.md) — 技术学习笔记。
+- [docs/DIFY_SETUP.md](docs/DIFY_SETUP.md) — Dify 部署与配置指南。包含 docker-compose 启动、模型配置、Agent 创建、工具导入步骤。
+- [docs/dify_tools_openapi.yaml](docs/dify_tools_openapi.yaml) — Dify 自定义工具 OpenAPI Schema，6 个工具指向 Go Backend API。
+- [dify/dsl/photo-agent.yml](dify/dsl/photo-agent.yml) — Dify Agent DSL 文件。包含系统提示词、模型配置、工具绑定、知识库引用，可导入复现 Agent 配置。
 - [backend/test/backend_e2e.go](backend/test/backend_e2e.go) — Day1 E2E 测试程序。自动启停 server、调用全部 API、测试后清理数据。
 
 ## 当前状态
@@ -73,7 +76,7 @@
     - 前期测试跑了一些，所以tokens统计不精准，大概就是这个数
   - 第二批：vlm 727张使用Doubao-1.5-vision-pro-32k，剩91,828 /共500,000 tokens
     - Batch VLM done: success=727, failed=0, skipped=250, total=977, elapsed=21m39.279845176s
-- [ ] Day 2：查询 API + Dify 配置（工具/OpenAPI/Agent/知识库）
+- [x] Day 2：查询 API + Dify 配置（工具/OpenAPI/Agent/知识库）— 全部 API 实现，Dify 部署配置、初始化脚本、Agent DSL 完成
 - [ ] Day 3：联调 + Docker Compose + 交付
 
 ### Day 1 已完成的模块
@@ -85,6 +88,9 @@
 - `make backend` — 编译 server 和 batch_vlm 到 `bin/`
 - `make test-e2e` — 编译 E2E 测试程序到 `bin/e2e_test`
 - `make clean` — 清理构建输出
+
+**新增编译目标**：
+- `make init-dify` — 编译 Dify 知识库初始化脚本到 `bin/init_dify`
 
 - **API 路由**（Gin）：11 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
   - 请求体字段统一使用下划线命名（如 `source_path`、`photo_path`）
@@ -107,3 +113,23 @@
   - 自动编译并启动 server 子进程，使用独立配置和数据库
   - 顺序测试全部 11 个 API 端点（健康检查、导入任务、照片、时间线、标签）
   - 测试完成后 kill server 并删除临时目录，不留测试数据
+
+### Day 2 已完成的模块
+
+**查询 API**（全部实现，支持 curl 测试）：
+
+- **照片列表** `GET /api/photos` — 分页 + timeline/tag/keyword 过滤，默认 20 条/页，最大 100 条
+- **照片详情** `GET /api/photos/:id` — 单张照片完整元数据
+- **图片文件服务** `GET /api/photos/:id/image` — 原图直接返回；`?size=thumb` 返回 300px 宽缩略图（Lanczos 缩放，JPEG 质量 85，缓存到 `data/thumbnails/`）
+- **时间线列表** `GET /api/timelines` — 数据库中所有不重复时间线
+- **时间线照片** `GET /api/timelines/:name/photos` — 按时间线查询照片
+- **标签列表** `GET /api/tags` — 解析 Tags JSON 提取所有不重复标签
+- **标签照片** `GET /api/tags/:name/photos` — 按标签查询照片
+
+**Dify 部署与配置**：
+
+- **容器编排** `dify/docker-compose.yaml` — 精简版 7 服务（api、worker、web、nginx、db、redis、weaviate），配套 `.env.example` 和 `nginx.conf`
+- **持久化卷**：`volumes/postgres`（数据库）、`volumes/redis`（缓存）、`volumes/weaviate`（向量数据）、`volumes/storage`（文件上传）
+- **初始化脚本** `backend/cmd/init_dify/main.go` — 通过 Dify Console API 自动登录、创建知识库、读取 SQLite 照片描述、批量上传文档、轮询 Embedding 索引状态
+- **自定义工具 Schema** `docs/dify_tools_openapi.yaml` — 6 个工具（时间线/标签/照片/导入）的 OpenAPI 定义
+- **Agent DSL** `dify/dsl/photo-agent.yml` — 包含系统提示词、模型参数、工具绑定、知识库引用的可导入配置文件，纳入 Git 版本控制

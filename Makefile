@@ -1,4 +1,4 @@
-.PHONY: all backend backend-test clean
+.PHONY: all backend backend-test init-dify clean
 
 BIN_DIR := bin
 
@@ -12,6 +12,10 @@ backend:
 backend-test: backend
 	@mkdir -p $(BIN_DIR)
 	cd backend && go build -ldflags "-s -w" -o ../$(BIN_DIR)/backendTest ./test/backendTest.go
+
+init-dify:
+	@mkdir -p $(BIN_DIR)
+	cd backend && go build -ldflags "-s -w" -o ../$(BIN_DIR)/init_dify ./cmd/init_dify
 
 clean:
 	rm -rf $(BIN_DIR)

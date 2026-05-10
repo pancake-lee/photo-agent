@@ -1,0 +1,202 @@
+openapi: "3.0.3"
+info:
+  title: Photo Agent Tools
+  description: Photo Agent 自定义工具，提供照片库查询、导入等功能
+  version: "1.0.0"
+servers:
+  - url: http://host.docker.internal:8080
+    description: Go Backend（宿主机通过 docker 内部网络访问）
+
+paths:
+  /api/timelines:
+    get:
+      operationId: list_timelines
+      summary: 列出所有时间线
+      description: 查询照片库中所有不重复的时间线名称
+      responses:
+        "200":
+          description: 时间线列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /api/timelines/{name}/photos:
+    get:
+      operationId: get_photos_by_timeline
+      summary: 按时间线查照片
+      description: 获取某时间线下的所有照片
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 时间线名称（如 2024-02-云南）
+      responses:
+        "200":
+          description: 照片列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timeline:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Photo"
+                  total:
+                    type: integer
+
+  /api/photos:
+    get:
+      operationId: get_photos_by_tags
+      summary: 按标签查照片
+      description: 根据标签关键词查询照片
+      parameters:
+        - name: tag
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 标签名称
+      responses:
+        "200":
+          description: 照片列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Photo"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+
+  /api/photos/{id}:
+    get:
+      operationId: get_photo_detail
+      summary: 获取单张照片详情
+      description: 根据照片 ID 查询详细信息
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 照片 ID
+      responses:
+        "200":
+          description: 照片详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+
+  /api/import/jobs:
+    post:
+      operationId: import_photos
+      summary: 创建照片导入任务
+      description: 扫描指定目录，将照片导入照片库
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source_path:
+                  type: string
+                  description: 照片源目录路径
+                recursive:
+                  type: boolean
+                  description: 是否递归扫描子目录
+                  default: true
+      responses:
+        "200":
+          description: 导入任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportJob"
+
+  /api/import/jobs/{id}:
+    get:
+      operationId: get_import_status
+      summary: 查询导入任务进度
+      description: 获取导入任务的状态和进度
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 导入任务 ID
+      responses:
+        "200":
+          description: 导入任务详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportJob"
+
+components:
+  schemas:
+    Photo:
+      type: object
+      properties:
+        id:
+          type: string
+        filename:
+          type: string
+        file_path:
+          type: string
+        timeline:
+          type: string
+        tags:
+          type: string
+        description:
+          type: string
+        shot_at:
+          type: string
+          format: date-time
+        width:
+          type: integer
+        height:
+          type: integer
+        imported_at:
+          type: string
+          format: date-time
+
+    ImportJob:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        source_path:
+          type: string
+        total_photos:
+          type: integer
+        processed_photos:
+          type: integer
+        failed_photos:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time

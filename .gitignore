@@ -27,3 +27,4 @@ vendor/
 
 # 个人配置文件
 pancake.yaml
+backend/init_dify
