@@ -66,6 +66,8 @@
 - [docs/DIFY_SETUP.md](docs/DIFY_SETUP.md) — Dify 部署与配置指南。包含 docker-compose 启动、模型配置、Agent 创建、工具导入步骤。
 - [docs/dify_tools_openapi.yaml](docs/dify_tools_openapi.yaml) — Dify 自定义工具 OpenAPI Schema，6 个工具指向 Go Backend API。
 - [dify/dsl/photo-agent.yml](dify/dsl/photo-agent.yml) — Dify Agent DSL 文件。包含系统提示词、模型配置、工具绑定、知识库引用，可导入复现 Agent 配置。
+- [dify/dsl/SKILL.md](dify/dsl/SKILL.md) — DSL 开发技能。涵盖 DSL 结构差异、Agent 工具配置、导入陷阱（InFailedSqlTransaction）与标准工作流程，含人工介入节点。
+- [dify/SKILL.md](dify/SKILL.md) — Dify 自动化工作流技能。AI 主导 DSL 生成与 API 调用，但在环境依赖和副作用操作时必须停下来向用户汇报。
 - [backend/test/backend_e2e.go](backend/test/backend_e2e.go) — Day1 E2E 测试程序。自动启停 server、调用全部 API、测试后清理数据。
 
 ## 当前状态
@@ -79,7 +81,8 @@
 - [x] Day 2：查询 API + Dify 配置（工具/OpenAPI/Agent/知识库）— 全部 API 实现，Dify 部署配置、初始化脚本、Agent DSL 完成
   - go代码开发没问题，但是最好用上pgo中proto定义，导出swagger那一套
     - 现在swagger直接由ai维护，有时候ai的输出不稳定，尤其是代码和文档不能及时同步修改的问题
-  - dify导入ai输出的dsl，折腾了很久，主要是自定义tool的问题，最终都浓缩到dify/SKILL.md了
+  - dify部署从简化版升级为官方完整docker-compose（12服务），自包含于本仓库，不再依赖外部dify仓库
+  - dify导入ai输出的dsl，折腾了很久，主要是自定义tool的问题，最终都浓缩到dify/dsl/SKILL.md和dify/SKILL.md了
 - [ ] Day 3：联调 + Docker Compose + 交付
 
 ### Day 1 已完成的模块
@@ -131,8 +134,16 @@
 
 **Dify 部署与配置**：
 
-- **容器编排** `dify/docker-compose.yaml` — 精简版 7 服务（api、worker、web、nginx、db、redis、weaviate），配套 `.env.example` 和 `nginx.conf`
-- **持久化卷**：`volumes/postgres`（数据库）、`volumes/redis`（缓存）、`volumes/weaviate`（向量数据）、`volumes/storage`（文件上传）
+- **容器编排** `dify/docker-compose.yaml` — 官方完整版 12 服务（init_permissions、api、worker、worker_beat、web、db_postgres、redis、sandbox、plugin_daemon、ssrf_proxy、nginx、weaviate），配套 `.env`、nginx 和 ssrf_proxy 配置模板
+- **自包含部署**：所有必要文件（compose、env、nginx/、ssrf_proxy/）已从官方仓库拷贝到本仓库 `dify/` 目录，不再依赖外部 `../dify` 仓库
+- **持久化卷配置**：
+  - `dify/volumes/` 运行时数据全部 gitignore，仅保留 `sandbox/conf/config.yaml`（必须预置，否则 sandbox 容器启动失败）
+  - 宿主机路径映射在 `.env` 中配置，DSL 文件映射到 `dify/dsl/`
 - **初始化脚本** `backend/cmd/init_dify/main.go` — 通过 Dify Console API 自动登录、创建知识库、读取 SQLite 照片描述、批量上传文档、轮询 Embedding 索引状态
-- **自定义工具 Schema** `docs/dify_tools_openapi.yaml` — 6 个工具（时间线/标签/照片/导入）的 OpenAPI 定义
-- **Agent DSL** `dify/dsl/photo-agent.yml` — 包含系统提示词、模型参数、工具绑定、知识库引用的可导入配置文件，纳入 Git 版本控制
+- **自定义工具 Schema** `docs/dify_tools_openapi.yaml` — 6 个工具（时间线/标签/照片/导入）的 OpenAPI 定义，需在 Dify "工具 → 自定义"中导入
+- **Agent DSL** `dify/dsl/photo-agent.yml` — Dify DSL v0.6.0 格式，`agent-chat` 模式使用 `model_config` 顶层结构（非 `workflow`），包含系统提示词、模型参数、工具绑定、知识库引用
+- **自定义 API 工具绑定约束**：自定义工具的 `provider_id` 是 Dify 内部生成的 UUID（如 `6549e9fe-4b0d-45bb-992d-5c6d45fe7007`），无法手写。必须先导入无 tools 的 DSL，在 UI 中绑定工具后导出，获得含正确 UUID 的基准 DSL
+- **导入陷阱**：DSL 导入路径不验证 `agent_mode.tools` 内容，配置错误不会立即报错，但会在查看详情时触发 `InFailedSqlTransaction`（PostgreSQL 事务卡住）。解决方法是重启 Dify 容器
+- **SKILL 文件**：
+  - `dify/dsl/SKILL.md` — DSL 开发经验与约束，含人工介入节点（首次创建工具 Agent、修改工具配置、事务恢复、模型切换）
+  - `dify/SKILL.md` — Dify 自动化工作流闭环，含前置条件检查、导入/运行错误处理、人工介入决策树

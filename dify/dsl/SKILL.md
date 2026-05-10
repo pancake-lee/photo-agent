@@ -1,9 +1,13 @@
 ---
 name: dify-dsl-dev
-description: Dify DSL 开发技能。AI 可自主处理提示词、模型参数等修改；但涉及自定义 API 工具时，必须在关键节点停下来向用户汇报，指导用户完成人工操作后再继续。
+description: Dify DSL 开发踩坑补充。与开源 skill `dify-dsl-generator` 配合使用，覆盖其未涉及的 Agent 模式陷阱、自定义 API 工具 UUID 问题、数据库事务错误等实战经验。
 ---
 
-# Dify DSL 开发技能
+# Dify DSL 开发踩坑补充
+
+> 本文档是开源 skill `dify-dsl-generator` 的补充，仅记录该 skill 未覆盖的、实际踩过的坑。DSL 基础结构、节点类型、edges 连接等通用知识请参考该 skill。
+
+---
 
 ## 核心原则
 
@@ -111,14 +115,7 @@ description: Dify DSL 开发技能。AI 可自主处理提示词、模型参数�
 
 ---
 
-## DSL 结构速查
-
-### 两种顶层结构（绝对不能混用）
-
-| `app.mode` | 顶层结构 | 说明 |
-|---|---|---|
-| `agent-chat` / `chat` / `completion` | `model_config` | 对话/Agent/补全类应用 |
-| `advanced-chat` / `workflow` | `workflow` | 工作流类应用（含 nodes / edges） |
+## Agent 模式工具配置速查
 
 ### Agent 模式必填字段
 
@@ -153,7 +150,7 @@ tools:
 
 ---
 
-## 已知限制（AI 应知晓）
+## 已知限制（踩坑记录）
 
 - 导入/导出 DSL **不会**包含知识库绑定信息（`dataset_configs.datasets` 始终为空数组），知识库需导入后在 UI 中手动绑定
 - `annotation_reply` / `tags` 等字段在查看详情时触发数据库查询，若事务已损坏会导致级联报错

@@ -1,0 +1,6 @@
+{
+  "name": "photo-agent-skills",
+  "version": "1.0.0",
+  "description": "Custom skills for photo-agent project",
+  "skills": "./.claude/skills"
+}
