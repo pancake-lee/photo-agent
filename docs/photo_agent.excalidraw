@@ -100,8 +100,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 8 },
-      "boundElements": [{ "type": "text", "id": "text-p0" }],
+      "roundness": {
+        "type": 3,
+        "value": 8
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "text-p0"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -110,7 +118,9 @@
       "index": "a2",
       "isDeleted": false,
       "seed": 3,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -170,17 +180,27 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 8 },
-      "boundElements": [{ "type": "text", "id": "text-p1" }],
+      "roundness": {
+        "type": 3,
+        "value": 8
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "text-p1"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
       "version": 1,
       "versionNonce": 5,
-      "index": "a4",
+      "index": "a3",
       "isDeleted": false,
       "seed": 5,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -216,7 +236,7 @@
       "baseline": 13,
       "version": 1,
       "versionNonce": 6,
-      "index": "a5",
+      "index": "ay",
       "isDeleted": false,
       "seed": 6,
       "autoResize": true,
@@ -240,8 +260,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 8 },
-      "boundElements": [{ "type": "text", "id": "text-p2" }],
+      "roundness": {
+        "type": 3,
+        "value": 8
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "text-p2"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -250,7 +278,9 @@
       "index": "a6",
       "isDeleted": false,
       "seed": 7,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -350,8 +380,19 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
-      "boundElements": [{ "id": "user-text", "type": "text" }, { "id": "arrow-user-dify", "type": "arrow" }],
+      "roundness": {
+        "type": 2
+      },
+      "boundElements": [
+        {
+          "id": "user-text",
+          "type": "text"
+        },
+        {
+          "id": "arrow-user-dify",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -419,7 +460,10 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 8 },
+      "roundness": {
+        "type": 3,
+        "value": 8
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
@@ -488,8 +532,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "batch-scan-text" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "batch-scan-text"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -498,7 +550,9 @@
       "index": "aD",
       "isDeleted": false,
       "seed": 14,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -558,8 +612,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "batch-dedup-text" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "batch-dedup-text"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -568,7 +630,9 @@
       "index": "aF",
       "isDeleted": false,
       "seed": 16,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -628,8 +692,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "batch-compress-text" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "batch-compress-text"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -638,7 +710,9 @@
       "index": "aH",
       "isDeleted": false,
       "seed": 18,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -698,8 +772,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "batch-vlm-text" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "batch-vlm-text"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -708,7 +790,9 @@
       "index": "aJ",
       "isDeleted": false,
       "seed": 20,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -768,8 +852,20 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "batch-output-text" }, { "id": "arrow-batch-go", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "batch-output-text"
+        },
+        {
+          "id": "arrow-batch-go",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -778,7 +874,9 @@
       "index": "aL",
       "isDeleted": false,
       "seed": 22,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -838,7 +936,10 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 8 },
+      "roundness": {
+        "type": 3,
+        "value": 8
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
@@ -907,8 +1008,20 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "go-api-text" }, { "id": "arrow-dify-go", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "go-api-text"
+        },
+        {
+          "id": "arrow-dify-go",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -917,7 +1030,9 @@
       "index": "aP",
       "isDeleted": false,
       "seed": 26,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -977,8 +1092,28 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "go-import-text" }, { "id": "arrow-batch-go", "type": "arrow" }, { "id": "arrow-go-sqlite", "type": "arrow" }, { "id": "arrow-go-photos", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "go-import-text"
+        },
+        {
+          "id": "arrow-batch-go",
+          "type": "arrow"
+        },
+        {
+          "id": "arrow-go-sqlite",
+          "type": "arrow"
+        },
+        {
+          "id": "arrow-go-photos",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -987,7 +1122,9 @@
       "index": "aR",
       "isDeleted": false,
       "seed": 28,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -1014,11 +1151,11 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 2,
-      "text": "导入流水线\n扫描 → 复用压缩图\n读取预描述 → EXIF时间匹配时间线\n→ SQLite  /  → Dify 知识库",
+      "text": "照片扫描入库\n复用压缩图 · 读取预描述\nEXIF 时间 + 时间线匹配\n→ SQLite 元数据",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "go-import",
-      "originalText": "导入流水线\n扫描 → 复用压缩图\n读取预描述 → EXIF时间匹配时间线\n→ SQLite  /  → Dify 知识库",
+      "originalText": "照片扫描入库\n复用压缩图 · 读取预描述\nEXIF 时间 + 时间线匹配\n→ SQLite 元数据",
       "lineHeight": 1.25,
       "baseline": 12,
       "version": 1,
@@ -1032,151 +1169,11 @@
     },
     {
       "type": "rectangle",
-      "id": "go-vlm",
-      "x": 300,
-      "y": 245,
-      "width": 260,
-      "height": 60,
-      "angle": 0,
-      "strokeColor": "#1976d2",
-      "backgroundColor": "#ffffff",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "go-vlm-text" }],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "version": 1,
-      "versionNonce": 30,
-      "index": "aT",
-      "isDeleted": false,
-      "seed": 30,
-      "customData": { "legacyTextWrap": true },
-      "hasTextLink": false
-    },
-    {
-      "type": "text",
-      "id": "go-vlm-text",
-      "x": 305,
-      "y": 254,
-      "width": 250,
-      "height": 42.5,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": null,
-      "boundElements": [],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "fontSize": 13,
-      "fontFamily": 2,
-      "text": "VLM 客户端\n纯 HTTP · 自动压缩 · 重试机制",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "containerId": "go-vlm",
-      "originalText": "VLM 客户端\n纯 HTTP · 自动压缩 · 重试机制",
-      "lineHeight": 1.25,
-      "baseline": 12,
-      "version": 1,
-      "versionNonce": 31,
-      "index": "aU",
-      "isDeleted": false,
-      "seed": 31,
-      "autoResize": true,
-      "hasTextLink": false,
-      "rawText": ""
-    },
-    {
-      "type": "rectangle",
-      "id": "go-api-expand",
-      "x": 280,
-      "y": 320,
-      "width": 260,
-      "height": 30,
-      "angle": 0,
-      "strokeColor": "#1976d2",
-      "backgroundColor": "#bbdefb",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": { "type": 3, "value": 4 },
-      "boundElements": [{ "type": "text", "id": "go-api-expand-text" }],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "version": 1,
-      "versionNonce": 32,
-      "index": "aV",
-      "isDeleted": false,
-      "seed": 32,
-      "customData": { "legacyTextWrap": true },
-      "hasTextLink": false
-    },
-    {
-      "type": "text",
-      "id": "go-api-expand-text",
-      "x": 285,
-      "y": 326,
-      "width": 250,
-      "height": 17.5,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": null,
-      "boundElements": [],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "fontSize": 11,
-      "fontFamily": 2,
-      "text": "GORM + SQLite  │  pconfig  │  putil  │  pgo",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "containerId": "go-api-expand",
-      "originalText": "GORM + SQLite  │  pconfig  │  putil  │  pgo",
-      "lineHeight": 1.25,
-      "baseline": 12,
-      "version": 1,
-      "versionNonce": 33,
-      "index": "aW",
-      "isDeleted": false,
-      "seed": 33,
-      "autoResize": true,
-      "hasTextLink": false,
-      "rawText": ""
-    },
-    {
-      "type": "rectangle",
       "id": "dify-outer",
       "x": 620,
       "y": 0,
       "width": 260,
-      "height": 360,
+      "height": 385,
       "angle": 0,
       "strokeColor": "#388e3c",
       "backgroundColor": "#e8f5e9",
@@ -1187,7 +1184,10 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 8 },
+      "roundness": {
+        "type": 3,
+        "value": 8
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
@@ -1256,8 +1256,28 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "dify-agent-text" }, { "id": "arrow-user-dify", "type": "arrow" }, { "id": "arrow-kb-agent", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "dify-agent-text"
+        },
+        {
+          "id": "arrow-user-dify",
+          "type": "arrow"
+        },
+        {
+          "id": "arrow-kb-agent",
+          "type": "arrow"
+        },
+        {
+          "id": "arrow-agent-attach",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -1266,7 +1286,9 @@
       "index": "aZ",
       "isDeleted": false,
       "seed": 36,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -1293,11 +1315,11 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 2,
-      "text": "Agent 应用\nagent-chat · ReAct · gpt-4o\n系统提示词 + 知识库",
+      "text": "Agent 应用\nagent-chat · ReAct · LLM\n系统提示词 + 知识库",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "dify-agent",
-      "originalText": "Agent 应用\nagent-chat · ReAct · gpt-4o\n系统提示词 + 知识库",
+      "originalText": "Agent 应用\nagent-chat · ReAct · LLM\n系统提示词 + 知识库",
       "lineHeight": 1.25,
       "baseline": 12,
       "version": 1,
@@ -1326,8 +1348,20 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "dify-tools-text" }, { "id": "arrow-dify-go", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "dify-tools-text"
+        },
+        {
+          "id": "arrow-dify-go",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -1336,7 +1370,9 @@
       "index": "ab",
       "isDeleted": false,
       "seed": 38,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -1363,11 +1399,11 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 2,
-      "text": "自定义工具 (6个)\n时间线 / 标签 / 照片\n导入 / 详情 / 状态\n→ Go Backend API",
+      "text": "自定义工具 (6个)\n时间线 / 标签 / 照片查询\n导入 / 详情 / 状态\n→ Go Backend API",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "dify-tools",
-      "originalText": "自定义工具 (6个)\n时间线 / 标签 / 照片\n导入 / 详情 / 状态\n→ Go Backend API",
+      "originalText": "自定义工具 (6个)\n时间线 / 标签 / 照片查询\n导入 / 详情 / 状态\n→ Go Backend API",
       "lineHeight": 1.25,
       "baseline": 12,
       "version": 1,
@@ -1383,7 +1419,7 @@
       "type": "rectangle",
       "id": "dify-kb",
       "x": 640,
-      "y": 235,
+      "y": 315,
       "width": 220,
       "height": 60,
       "angle": 0,
@@ -1396,8 +1432,20 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "dify-kb-text" }, { "id": "arrow-kb-agent", "type": "arrow" }, { "id": "arrow-sqlite-kb", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "dify-kb-text"
+        },
+        {
+          "id": "arrow-kb-agent",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -1406,14 +1454,16 @@
       "index": "ad",
       "isDeleted": false,
       "seed": 40,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
       "type": "text",
       "id": "dify-kb-text",
       "x": 645,
-      "y": 244,
+      "y": 323,
       "width": 210,
       "height": 42.5,
       "angle": 0,
@@ -1433,11 +1483,11 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 2,
-      "text": "知识库\nWeaviate 向量检索",
+      "text": "知识库\n向量检索",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "dify-kb",
-      "originalText": "知识库\nWeaviate 向量检索",
+      "originalText": "知识库\n向量检索",
       "lineHeight": 1.25,
       "baseline": 12,
       "version": 1,
@@ -1445,76 +1495,6 @@
       "index": "ae",
       "isDeleted": false,
       "seed": 41,
-      "autoResize": true,
-      "hasTextLink": false,
-      "rawText": ""
-    },
-    {
-      "type": "rectangle",
-      "id": "dify-docker",
-      "x": 640,
-      "y": 315,
-      "width": 220,
-      "height": 30,
-      "angle": 0,
-      "strokeColor": "#388e3c",
-      "backgroundColor": "#c8e6c9",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": { "type": 3, "value": 4 },
-      "boundElements": [{ "type": "text", "id": "dify-docker-text" }],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "version": 1,
-      "versionNonce": 42,
-      "index": "af",
-      "isDeleted": false,
-      "seed": 42,
-      "customData": { "legacyTextWrap": true },
-      "hasTextLink": false
-    },
-    {
-      "type": "text",
-      "id": "dify-docker-text",
-      "x": 645,
-      "y": 321,
-      "width": 210,
-      "height": 17.5,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": null,
-      "boundElements": [],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "fontSize": 11,
-      "fontFamily": 2,
-      "text": "Docker Compose 12服务  │  Weaviate",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "containerId": "dify-docker",
-      "originalText": "Docker Compose 12服务  │  Weaviate",
-      "lineHeight": 1.25,
-      "baseline": 12,
-      "version": 1,
-      "versionNonce": 43,
-      "index": "ag",
-      "isDeleted": false,
-      "seed": 43,
       "autoResize": true,
       "hasTextLink": false,
       "rawText": ""
@@ -1536,8 +1516,20 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "data-photos-text" }, { "id": "arrow-go-photos", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "data-photos-text"
+        },
+        {
+          "id": "arrow-go-photos",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -1546,7 +1538,9 @@
       "index": "ah",
       "isDeleted": false,
       "seed": 44,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -1606,8 +1600,20 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "data-sqlite-text" }, { "id": "arrow-go-sqlite", "type": "arrow" }, { "id": "arrow-sqlite-kb", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "data-sqlite-text"
+        },
+        {
+          "id": "arrow-go-sqlite",
+          "type": "arrow"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -1616,7 +1622,9 @@
       "index": "aj",
       "isDeleted": false,
       "seed": 46,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -1676,8 +1684,16 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3, "value": 6 },
-      "boundElements": [{ "type": "text", "id": "data-kb-text" }, { "id": "arrow-sqlite-kb", "type": "arrow" }],
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "data-kb-text"
+        }
+      ],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
@@ -1686,7 +1702,9 @@
       "index": "al",
       "isDeleted": false,
       "seed": 48,
-      "customData": { "legacyTextWrap": true },
+      "customData": {
+        "legacyTextWrap": true
+      },
       "hasTextLink": false
     },
     {
@@ -1713,11 +1731,11 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 2,
-      "text": "Dify 知识库\n照片描述向量 (Weaviate)",
+      "text": "Dify 知识库\n照片描述向量",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "data-kb",
-      "originalText": "Dify 知识库\n照片描述向量 (Weaviate)",
+      "originalText": "Dify 知识库\n照片描述向量",
       "lineHeight": 1.25,
       "baseline": 12,
       "version": 1,
@@ -1746,17 +1764,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "user", "mode": "orbit", "fixedPoint": [0.5, 1] },
-      "endBinding": { "elementId": "dify-agent", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "user",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "dify-agent",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, 60]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          60
+        ]
+      ],
       "version": 1,
       "versionNonce": 50,
       "index": "an",
@@ -1822,17 +1865,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "batch-scan", "mode": "orbit", "fixedPoint": [0.5, 1] },
-      "endBinding": { "elementId": "batch-dedup", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "batch-scan",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "batch-dedup",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, 15]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          15
+        ]
+      ],
       "version": 1,
       "versionNonce": 52,
       "index": "ap",
@@ -1858,17 +1926,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "batch-dedup", "mode": "orbit", "fixedPoint": [0.5, 1] },
-      "endBinding": { "elementId": "batch-compress", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "batch-dedup",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "batch-compress",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, 15]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          15
+        ]
+      ],
       "version": 1,
       "versionNonce": 53,
       "index": "aq",
@@ -1894,17 +1987,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "batch-compress", "mode": "orbit", "fixedPoint": [0.5, 1] },
-      "endBinding": { "elementId": "batch-vlm", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "batch-compress",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "batch-vlm",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, 15]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          15
+        ]
+      ],
       "version": 1,
       "versionNonce": 54,
       "index": "ar",
@@ -1930,17 +2048,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "batch-vlm", "mode": "orbit", "fixedPoint": [0.5, 1] },
-      "endBinding": { "elementId": "batch-output", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "batch-vlm",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "batch-output",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, 15]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          15
+        ]
+      ],
       "version": 1,
       "versionNonce": 55,
       "index": "as",
@@ -1966,17 +2109,50 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "batch-output", "mode": "orbit", "fixedPoint": [1, 0.5] },
-      "endBinding": { "elementId": "go-import", "mode": "orbit", "fixedPoint": [0, 0.5] },
+      "startBinding": {
+        "elementId": "batch-output",
+        "mode": "orbit",
+        "fixedPoint": [
+          1,
+          0.5
+        ]
+      },
+      "endBinding": {
+        "elementId": "go-import",
+        "mode": "orbit",
+        "fixedPoint": [
+          0,
+          0.5
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [40, 0], [40, 80], [80, 80]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          40,
+          0
+        ],
+        [
+          40,
+          80
+        ],
+        [
+          80,
+          80
+        ]
+      ],
       "version": 1,
       "versionNonce": 56,
       "index": "at",
@@ -2042,17 +2218,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "go-import", "mode": "orbit", "fixedPoint": [0.27, 1] },
-      "endBinding": { "elementId": "data-photos", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "go-import",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.27,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "data-photos",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, 175]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          175
+        ]
+      ],
       "version": 1,
       "versionNonce": 58,
       "index": "av",
@@ -2078,17 +2279,46 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "go-import", "mode": "orbit", "fixedPoint": [0.5, 1] },
-      "endBinding": { "elementId": "data-sqlite", "mode": "orbit", "fixedPoint": [0.5, 0] },
+      "startBinding": {
+        "elementId": "go-import",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "data-sqlite",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [50, 87.5], [50, 175]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          50,
+          87.5
+        ],
+        [
+          50,
+          175
+        ]
+      ],
       "version": 1,
       "versionNonce": 59,
       "index": "aw",
@@ -2096,82 +2326,6 @@
       "seed": 59,
       "hasTextLink": false,
       "moveMidPointsWithElement": false
-    },
-    {
-      "type": "arrow",
-      "id": "arrow-sqlite-kb",
-      "x": 580,
-      "y": 427,
-      "width": 60,
-      "height": 0,
-      "angle": 0,
-      "strokeColor": "#616161",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": { "type": 2 },
-      "boundElements": [],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "startBinding": { "elementId": "data-sqlite", "mode": "orbit", "fixedPoint": [1, 0.5] },
-      "endBinding": { "elementId": "data-kb", "mode": "orbit", "fixedPoint": [0, 0.5] },
-      "lastCommittedPoint": null,
-      "startArrowhead": null,
-      "endArrowhead": "arrow",
-      "points": [[0, 0], [60, 0]],
-      "version": 1,
-      "versionNonce": 60,
-      "index": "ax",
-      "isDeleted": false,
-      "seed": 60,
-      "hasTextLink": false,
-      "moveMidPointsWithElement": false
-    },
-    {
-      "type": "text",
-      "id": "label-init-dify",
-      "x": 585,
-      "y": 412,
-      "width": 60,
-      "height": 15,
-      "angle": 0,
-      "strokeColor": "#757575",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": null,
-      "boundElements": [],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "fontSize": 11,
-      "fontFamily": 2,
-      "text": "init_dify",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "containerId": null,
-      "originalText": "init_dify",
-      "lineHeight": 1.25,
-      "baseline": 13,
-      "version": 1,
-      "versionNonce": 61,
-      "index": "ay",
-      "isDeleted": false,
-      "seed": 61,
-      "autoResize": true,
-      "hasTextLink": false,
-      "rawText": ""
     },
     {
       "type": "arrow",
@@ -2190,17 +2344,50 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "dify-tools", "mode": "orbit", "fixedPoint": [0, 0.5] },
-      "endBinding": { "elementId": "go-api", "mode": "orbit", "fixedPoint": [1, 0.5] },
+      "startBinding": {
+        "elementId": "dify-tools",
+        "mode": "orbit",
+        "fixedPoint": [
+          0,
+          0.5
+        ]
+      },
+      "endBinding": {
+        "elementId": "go-api",
+        "mode": "orbit",
+        "fixedPoint": [
+          1,
+          0.5
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": "arrow",
       "endArrowhead": "arrow",
-      "points": [[0, 0], [-40, 0], [-40, -80], [-80, -80]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -40,
+          0
+        ],
+        [
+          -40,
+          -80
+        ],
+        [
+          -80,
+          -80
+        ]
+      ],
       "version": 1,
       "versionNonce": 62,
       "index": "az",
@@ -2210,52 +2397,12 @@
       "moveMidPointsWithElement": false
     },
     {
-      "type": "text",
-      "id": "label-tools-api",
-      "x": 560,
-      "y": 130,
-      "width": 60,
-      "height": 15,
-      "angle": 0,
-      "strokeColor": "#757575",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": null,
-      "boundElements": [],
-      "updated": 1778342958509,
-      "link": null,
-      "locked": false,
-      "fontSize": 11,
-      "fontFamily": 2,
-      "text": "HTTP 工具",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "containerId": null,
-      "originalText": "HTTP 工具",
-      "lineHeight": 1.25,
-      "baseline": 13,
-      "version": 1,
-      "versionNonce": 63,
-      "index": "b0",
-      "isDeleted": false,
-      "seed": 63,
-      "autoResize": true,
-      "hasTextLink": false,
-      "rawText": ""
-    },
-    {
       "type": "arrow",
       "id": "arrow-kb-agent",
       "x": 750,
-      "y": 235,
+      "y": 315,
       "width": 0,
-      "height": 60,
+      "height": 220,
       "angle": 0,
       "strokeColor": "#9e9e9e",
       "backgroundColor": "transparent",
@@ -2266,17 +2413,42 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "boundElements": [],
       "updated": 1778342958509,
       "link": null,
       "locked": false,
-      "startBinding": { "elementId": "dify-kb", "mode": "orbit", "fixedPoint": [0.5, 0] },
-      "endBinding": { "elementId": "dify-agent", "mode": "orbit", "fixedPoint": [0.5, 1] },
+      "startBinding": {
+        "elementId": "dify-kb",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
+      "endBinding": {
+        "elementId": "dify-agent",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
       "lastCommittedPoint": null,
       "startArrowhead": null,
       "endArrowhead": "arrow",
-      "points": [[0, 0], [0, -60]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          -220
+        ]
+      ],
       "version": 1,
       "versionNonce": 64,
       "index": "b1",
@@ -2289,7 +2461,7 @@
       "type": "text",
       "id": "label-rag",
       "x": 760,
-      "y": 200,
+      "y": 260,
       "width": 50,
       "height": 15,
       "angle": 0,
@@ -2404,6 +2576,227 @@
       "autoResize": true,
       "hasTextLink": false,
       "rawText": ""
+    },
+    {
+      "type": "rectangle",
+      "id": "dify-attach",
+      "x": 640,
+      "y": 235,
+      "width": 220,
+      "height": 60,
+      "angle": 0,
+      "strokeColor": "#388e3c",
+      "backgroundColor": "#ffffff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "dify-attach-text"
+        }
+      ],
+      "updated": 1778342958509,
+      "link": null,
+      "locked": false,
+      "version": 1,
+      "versionNonce": 99999,
+      "isDeleted": false,
+      "seed": 99999,
+      "customData": {
+        "legacyTextWrap": true
+      },
+      "hasTextLink": false,
+      "index": "b5"
+    },
+    {
+      "type": "text",
+      "id": "dify-attach-text",
+      "x": 645,
+      "y": 243,
+      "width": 210,
+      "height": 42.5,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1778342958509,
+      "link": null,
+      "locked": false,
+      "fontSize": 13,
+      "fontFamily": 2,
+      "text": "附件临时分析\n用户上传图片 → VLM 识别 → 合并上下文",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "dify-attach",
+      "originalText": "附件临时分析\n用户上传图片 → VLM 识别 → 合并上下文",
+      "lineHeight": 1.25,
+      "baseline": 12,
+      "version": 1,
+      "versionNonce": 99998,
+      "isDeleted": false,
+      "seed": 99998,
+      "autoResize": true,
+      "hasTextLink": false,
+      "rawText": "",
+      "index": "b6"
+    },
+    {
+      "type": "arrow",
+      "id": "arrow-agent-attach",
+      "x": 750,
+      "y": 95,
+      "width": 0,
+      "height": 140,
+      "angle": 0,
+      "strokeColor": "#9e9e9e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": {
+        "type": 2
+      },
+      "boundElements": [],
+      "updated": 1778342958509,
+      "link": null,
+      "locked": false,
+      "startBinding": {
+        "elementId": "dify-agent",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          1
+        ]
+      },
+      "endBinding": {
+        "elementId": "dify-attach",
+        "mode": "orbit",
+        "fixedPoint": [
+          0.5,
+          0
+        ]
+      },
+      "lastCommittedPoint": null,
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          140
+        ]
+      ],
+      "version": 1,
+      "versionNonce": 99997,
+      "isDeleted": false,
+      "seed": 99997,
+      "hasTextLink": false,
+      "moveMidPointsWithElement": false,
+      "index": "b7"
+    },
+    {
+      "type": "rectangle",
+      "id": "go-init",
+      "x": 300,
+      "y": 245,
+      "width": 260,
+      "height": 60,
+      "angle": 0,
+      "strokeColor": "#1976d2",
+      "backgroundColor": "#ffffff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": {
+        "type": 3,
+        "value": 6
+      },
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "go-init-text"
+        }
+      ],
+      "updated": 1778342958509,
+      "link": null,
+      "locked": false,
+      "version": 1,
+      "versionNonce": 99996,
+      "isDeleted": false,
+      "seed": 99996,
+      "customData": {
+        "legacyTextWrap": true
+      },
+      "hasTextLink": false,
+      "index": "b8"
+    },
+    {
+      "type": "text",
+      "id": "go-init-text",
+      "x": 305,
+      "y": 253,
+      "width": 250,
+      "height": 42.5,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1778342958509,
+      "link": null,
+      "locked": false,
+      "fontSize": 13,
+      "fontFamily": 2,
+      "text": "init_dify\nSQLite → Dify 知识库同步",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "go-init",
+      "originalText": "init_dify\nSQLite → Dify 知识库同步",
+      "lineHeight": 1.25,
+      "baseline": 12,
+      "version": 1,
+      "versionNonce": 99995,
+      "isDeleted": false,
+      "seed": 99995,
+      "autoResize": true,
+      "hasTextLink": false,
+      "rawText": "",
+      "index": "b9"
     }
   ],
   "appState": {
@@ -2425,7 +2818,9 @@
     "currentItemFrameRole": null,
     "scrollX": 400,
     "scrollY": 150,
-    "zoom": { "value": 0.75 },
+    "zoom": {
+      "value": 0.75
+    },
     "currentItemRoundness": "round",
     "gridSize": 20,
     "gridStep": 5,

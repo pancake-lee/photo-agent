@@ -68,6 +68,7 @@
 - [dify/dsl/photo-agent.yml](dify/dsl/photo-agent.yml) — Dify Agent DSL 文件。包含系统提示词、模型配置、工具绑定、知识库引用，可导入复现 Agent 配置。
 - [dify/dsl/SKILL.md](dify/dsl/SKILL.md) — DSL 开发技能。涵盖 DSL 结构差异、Agent 工具配置、导入陷阱（InFailedSqlTransaction）与标准工作流程，含人工介入节点。
 - [dify/SKILL.md](dify/SKILL.md) — Dify 自动化工作流技能。AI 主导 DSL 生成与 API 调用，但在环境依赖和副作用操作时必须停下来向用户汇报。
+- [.claude/EXCALIDRAW_NOTES.md](.claude/EXCALIDRAW_NOTES.md) — Excalidraw 文件维护经验。index 格式安全范围、shape-text 双向绑定、boundElements 引用有效性等踩坑记录。
 - [backend/test/backend_e2e.go](backend/test/backend_e2e.go) — Day1 E2E 测试程序。自动启停 server、调用全部 API、测试后清理数据。
 
 ## 当前状态
