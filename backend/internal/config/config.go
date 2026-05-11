@@ -40,9 +40,13 @@ type VLMConfig struct {
 
 // DifyConfig Dify 配置
 type DifyConfig struct {
-	APIKey    string `json:"api_key" toml:"api_key"`
-	BaseURL   string `json:"base_url" toml:"base_url" default:"http://localhost/v1"`
-	DatasetID string `json:"dataset_id" toml:"dataset_id"`
+	APIKey      string `json:"api_key" toml:"api_key"`
+	BaseURL     string `json:"base_url" toml:"base_url" default:"http://localhost/v1"`
+	DatasetID   string `json:"dataset_id" toml:"dataset_id"`
+	Email       string `json:"email" toml:"email"`
+	Password    string `json:"password" toml:"password"`
+	DatasetName string `json:"dataset_name" toml:"dataset_name" default:"照片描述库"`
+	DBPath      string `json:"db_path" toml:"db_path"`
 }
 
 // Config 全局配置
@@ -56,23 +60,19 @@ type Config struct {
 
 var globalConfig Config
 
-// Init 初始化配置，加载配置文件和环境变量
+// Init 初始化配置，加载配置文件
 func Init(paths ...string) error {
 	if len(paths) == 0 {
 		paths = append(paths, filepath.Join(putil.GetExecFolder(), "configs"))
 	}
 
 	if err := pconfig.InitConfig(paths...); err != nil {
-		// 配置文件不存在时仅记录日志，不报错（环境变量优先）
 		fmt.Println("config load warning:", err)
 	}
 
 	if err := pconfig.Scan(&globalConfig); err != nil {
 		return fmt.Errorf("scan config failed: %w", err)
 	}
-
-	// 环境变量覆盖：支持 PHOTO_AGENT_ 前缀
-	overrideFromEnv(&globalConfig)
 
 	// 确保数据目录存在
 	ensureDir(globalConfig.DB.SqlitePath)
@@ -84,46 +84,6 @@ func Init(paths ...string) error {
 // Get 获取全局配置
 func Get() *Config {
 	return &globalConfig
-}
-
-// overrideFromEnv 用环境变量覆盖配置
-func overrideFromEnv(cfg *Config) {
-	if v := os.Getenv("PHOTO_AGENT_PORT"); v != "" {
-		cfg.Server.Addr = ":" + v
-	}
-	if v := os.Getenv("PHOTO_AGENT_DB_PATH"); v != "" {
-		cfg.DB.SqlitePath = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_PHOTO_PATH"); v != "" {
-		cfg.Storage.PhotoPath = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_DESCRIPTIONS_PATH"); v != "" {
-		cfg.Storage.DescriptionsPath = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_TIMELINE_PATH"); v != "" {
-		cfg.Storage.TimelinePath = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_VLM_PROVIDER"); v != "" {
-		cfg.VLM.Provider = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_VLM_API_KEY"); v != "" {
-		cfg.VLM.APIKey = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_VLM_MODEL"); v != "" {
-		cfg.VLM.Model = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_VLM_BASE_URL"); v != "" {
-		cfg.VLM.BaseURL = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_DIFY_API_KEY"); v != "" {
-		cfg.Dify.APIKey = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_DIFY_BASE_URL"); v != "" {
-		cfg.Dify.BaseURL = v
-	}
-	if v := os.Getenv("PHOTO_AGENT_DIFY_DATASET_ID"); v != "" {
-		cfg.Dify.DatasetID = v
-	}
 }
 
 func ensureDir(path string) {

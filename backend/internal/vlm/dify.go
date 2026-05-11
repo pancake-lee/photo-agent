@@ -31,7 +31,7 @@ func WriteToKnowledgeBase(photoID, description, timeline string) error {
 		}
 	}
 
-	url := fmt.Sprintf("%s/datasets/%s/document/create-by-text", cfg.BaseURL, cfg.DatasetID)
+	url := fmt.Sprintf("%s/v1/datasets/%s/document/create-by-text", cfg.BaseURL, cfg.DatasetID)
 	req, err := putil.NewHttpRequestJson("POST", url, map[string]string{
 		"Authorization": "Bearer " + cfg.APIKey,
 	}, nil, doc)

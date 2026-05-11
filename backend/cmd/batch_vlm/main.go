@@ -18,14 +18,11 @@ import (
 )
 
 var (
-	inputFlag   = flag.String("input", "", "input photo directory")
-	outputFlag  = flag.String("output", "./data/descriptions.json", "output descriptions json file")
-	configFlag  = flag.String("config", "", "config file path (e.g. pancake.yaml)")
-	concurrency = flag.Int("concurrency", 3, "max concurrency")
-	retry       = flag.Int("retry", 3, "retry times on failure")
-	dryRun      = flag.Bool("dry-run", false, "dry run, test config only")
-	logConsole  = flag.Bool("l", false, "log to console; false for file only")
-	force       = flag.Bool("force", false, "force reprocess all images")
+	inputFlag  = flag.String("input", "", "input photo directory")
+	configFlag = flag.String("c", "", "config file path (e.g. pancake.yaml)")
+	dryRun     = flag.Bool("dry-run", false, "dry run, test config only")
+	logConsole = flag.Bool("l", false, "log to console; false for file only")
+	force      = flag.Bool("force", false, "force reprocess all images")
 )
 
 func main() {
@@ -46,8 +43,18 @@ func main() {
 		}
 	}
 
+	cfg := config.Get()
+	outputPath := cfg.Storage.DescriptionsPath
+	concurrency := cfg.VLM.Concurrency
+	if concurrency <= 0 {
+		concurrency = 3
+	}
+	retry := cfg.VLM.Retry
+	if retry <= 0 {
+		retry = 3
+	}
+
 	if *dryRun {
-		cfg := config.Get()
 		plogger.Infof("Dry run mode")
 		plogger.Infof("VLM Provider: %s", cfg.VLM.Provider)
 		plogger.Infof("VLM Model: %s", cfg.VLM.Model)
@@ -65,13 +72,13 @@ func main() {
 		return
 	}
 
-	plogger.Infof("Found %d images, concurrency=%d, retry=%d", len(images), *concurrency, *retry)
+	plogger.Infof("Found %d images, concurrency=%d, retry=%d", len(images), concurrency, retry)
 
 	result := make(map[string]vlmDescEntry)
 	var mu sync.Mutex
 
 	// 加载已有结果
-	if data, err := os.ReadFile(*outputFlag); err == nil {
+	if data, err := os.ReadFile(outputPath); err == nil {
 		_ = json.Unmarshal(data, &result)
 	}
 
@@ -93,7 +100,7 @@ func main() {
 		plogger.Info("Force mode: cleared existing compressed images and descriptions")
 	}
 
-	sem := make(chan struct{}, *concurrency)
+	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 
 	start := time.Now()
@@ -133,7 +140,7 @@ func main() {
 			plogger.Infof("[%d/%d] Processing: %s", idx+1, len(images), relPath)
 
 			var desc, modelName string
-			err := papp.NewRunner("batch_vlm").RunRetry(*retry, 2*time.Second, func() error {
+			err := papp.NewRunner("batch_vlm").RunRetry(retry, 2*time.Second, func() error {
 				var e error
 				desc, modelName, e = vlm.DescribeImage(imgPath)
 				return e
@@ -170,7 +177,7 @@ func main() {
 					snapshot[k] = v
 				}
 				mu.Unlock()
-				_ = saveResult(*outputFlag, snapshot)
+				_ = saveResult(outputPath, snapshot)
 			}
 		}(i, img)
 	}
@@ -178,14 +185,14 @@ func main() {
 	wg.Wait()
 
 	// 最终保存
-	if err := saveResult(*outputFlag, result); err != nil {
+	if err := saveResult(outputPath, result); err != nil {
 		plogger.Fatalf("save result failed: %v", err)
 	}
 
 	elapsed := time.Since(start)
 	plogger.Infof("Batch VLM done: success=%d, failed=%d, skipped=%d, total=%d, elapsed=%v",
 		successCount, failCount, skippedCount, len(images), elapsed)
-	plogger.Infof("Output: %s", *outputFlag)
+	plogger.Infof("Output: %s", outputPath)
 }
 
 func scanImages(root string) ([]string, error) {

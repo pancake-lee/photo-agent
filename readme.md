@@ -46,7 +46,7 @@
   - `/root/code/pgo` 是本人维护的 Go 代码库，`pkg/` 下包含大量日常封装
   - 本项目通过 `go.work` 直接引用本地 pgo，而非 import GitHub 版本
   - 编码时优先使用 pgo 已有封装：
-    - `pconfig` — 配置管理（TOML/YAML、环境变量覆盖、default tag、Scan 到结构体）
+    - `pconfig` — 配置管理（TOML/YAML、default tag、Scan 到结构体）
     - `plogger` — 基于 zap 的日志（console/json 模式、kratos 兼容）
     - `putil` — HTTP 请求封装（`NewHttpRequestJson`、`HttpDo`）、字符串/路径/时间工具
     - `papp` — Runner 模式（`RunRetry`、`RunInterval`、`RunTimeout`）
@@ -102,18 +102,23 @@
 - **API 路由**（Gin）：11 个端点，覆盖健康检查、照片 CRUD、时间线、标签、导入任务
   - 请求体字段统一使用下划线命名（如 `source_path`、`photo_path`）
 - **数据层**（GORM + SQLite）：`Photo` / `ImportJob` 两表，自动迁移
-- **配置管理**：复用 `pconfig`，TOML + 环境变量覆盖（`PHOTO_AGENT_*` 前缀）
-  - 支持的环境变量：`PORT`、`DB_PATH`、`PHOTO_PATH`、`DESCRIPTIONS_PATH`、`TIMELINE_PATH`、`VLM_PROVIDER`、`VLM_API_KEY`、`VLM_MODEL`、`VLM_BASE_URL`、`DIFY_API_KEY`、`DIFY_BASE_URL`、`DIFY_DATASET_ID`
+- **配置管理**：复用 `pconfig`，YAML/TOML 配置文件统一承载全部参数
+  - 所有参数统一走配置文件，不通过环境变量覆盖
+  - `dify.base_url` 为 Dify 根地址（如 `http://192.168.3.159`，不带 `/v1`）
 - **VLM 客户端**：纯 HTTP 实现（无 SDK），`volcengine` 走 Responses API，其他走 OpenAI Chat Completions API；调用前自动压缩图片为 JPG（ImageMagick `convert -resize 512x512> -quality 85 -format jpg`），`/root/project/` 下文件压缩后输出到 `PhotoPath` 对应路径，已存在则直接复用
   - 配置项：`vlm.max_image_size_mb`（浮点数，单位 MB）、`vlm.prompt`（自定义描述提示词）
 - **导入流水线**：扫描 → 复用已压缩图片（或拷贝到 `data/photos/`）→ 读取预描述（`data/descriptions.json`）→ 根据 EXIF 拍摄时间匹配时间线 → SQLite → Dify 知识库
   - 并发控制：默认 3 并发
   - 无预描述时以空描述入库，不调用 VLM
   - 时间线从配置指定的 md 表格文件读取，根据拍摄时间匹配活动名称
-- **批量 VLM 脚本**：`backend/cmd/batch_vlm/main.go`，独立运行，输出 `descriptions.json`
-  - 参数：`-config`（指定配置文件）、`-l`（控制台日志开关）、`-force`（强制重做，清理已有压缩图和描述）
+- **批量 VLM 脚本**：`backend/cmd/batch_vlm/main.go`，独立运行，输出到 `storage.descriptions_path`
+  - 参数：`-c`（配置文件路径）、`-l`（控制台日志开关）、`-input`（输入照片目录）、`-force`（强制重做）、`-dry-run`（仅测试配置）
+  - `concurrency` / `retry` 从 `vlm` 配置读取
   - 去重：已有描述条目自动跳过并汇总数量；已有压缩图直接复用
-- **Server 启动参数**：`-config`（指定配置文件）、`-l`（控制台日志开关，默认文件日志）
+- **Server 启动参数**：`-c`（配置文件路径）、`-l`（控制台日志开关，默认文件日志）
+- **Dify 初始化脚本**：`backend/cmd/init_dify/main.go`，自动登录、创建知识库、上传照片描述
+  - 参数：`-c`（配置文件路径）、`-l`（控制台日志开关）
+  - 全部参数（`dify.email` / `dify.password` / `dify.dataset_name` / `dify.db_path`）从配置文件读取
 - **文件服务**：图片统一存储在 `data/photos/` 下，保持原始目录结构；压缩版本即为最终存储文件，server 导入时直接复用
 - **E2E 测试**：`backend/test/backend_e2e.go`，可独立运行的测试程序
   - 自动在临时目录准备测试数据（图片、时间线 md、预描述 json）
@@ -141,6 +146,7 @@
   - `dify/volumes/` 运行时数据全部 gitignore，仅保留 `sandbox/conf/config.yaml`（必须预置，否则 sandbox 容器启动失败）
   - 宿主机路径映射在 `.env` 中配置，DSL 文件映射到 `dify/dsl/`
 - **初始化脚本** `backend/cmd/init_dify/main.go` — 通过 Dify Console API 自动登录、创建知识库、读取 SQLite 照片描述、批量上传文档、轮询 Embedding 索引状态
+  - **Dify v1.14.0 登录兼容**：密码先 Base64 编码再传输；登录后使用 `cookiejar` 管理 cookie，Console API 请求自动附加 `X-CSRF-Token` header（v1.11.1+ 引入 CSRF 校验）
 - **自定义工具 Schema** `docs/dify_tools_openapi.yaml` — 6 个工具（时间线/标签/照片/导入）的 OpenAPI 定义，需在 Dify "工具 → 自定义"中导入
 - **Agent DSL** `dify/dsl/photo-agent.yml` — Dify DSL v0.6.0 格式，`agent-chat` 模式使用 `model_config` 顶层结构（非 `workflow`），包含系统提示词、模型参数、工具绑定、知识库引用
 - **自定义 API 工具绑定约束**：自定义工具的 `provider_id` 是 Dify 内部生成的 UUID（如 `6549e9fe-4b0d-45bb-992d-5c6d45fe7007`），无法手写。必须先导入无 tools 的 DSL，在 UI 中绑定工具后导出，获得含正确 UUID 的基准 DSL

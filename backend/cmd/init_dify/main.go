@@ -1,9 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +17,7 @@ import (
 	"github.com/pancake-lee/photo-agent/internal/model"
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -19,19 +25,72 @@ import (
 
 // DifyClient Dify API 客户端
 type DifyClient struct {
-	BaseURL     string
-	Email       string
-	Password    string
-	AuthToken   string
-	DatasetID   string
-	DatasetKey  string
+	BaseURL    string
+	Email      string
+	Password   string
+	client     *http.Client
+	AuthToken  string // access_token，用于 Dataset API
+	DatasetID  string
+	DatasetKey string
 }
 
-// LoginResponse 登录响应
-type LoginResponse struct {
-	Data struct {
-		AccessToken string `json:"access_token"`
-	} `json:"data"`
+// newDifyClient 创建带 cookiejar 的 Dify 客户端
+func newDifyClient(baseURL, email, password string) *DifyClient {
+	jar, _ := cookiejar.New(nil)
+	return &DifyClient{
+		BaseURL:  strings.TrimSuffix(baseURL, "/"),
+		Email:    email,
+		Password: password,
+		client:   &http.Client{Jar: jar},
+	}
+}
+
+// csrfToken 从 cookiejar 中提取 csrf_token
+func (c *DifyClient) csrfToken() string {
+	if c.client.Jar == nil {
+		return ""
+	}
+	u, _ := url.Parse(c.BaseURL)
+	for _, cookie := range c.client.Jar.Cookies(u) {
+		if cookie.Name == "csrf_token" {
+			return cookie.Value
+		}
+	}
+	return ""
+}
+
+// doConsole 执行 Console API 请求（自动携带 cookie + CSRF token）
+func (c *DifyClient) doConsole(method, rawURL string, body any) ([]byte, error) {
+	var req *http.Request
+	var err error
+
+	if body != nil {
+		req, err = putil.NewHttpRequestJson(method, rawURL, nil, nil, body)
+	} else {
+		req, err = putil.NewHttpRequest(method, rawURL, nil, nil, "")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if csrf := c.csrfToken(); csrf != "" {
+		req.Header.Set("X-CSRF-Token", csrf)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody))
+	}
+	return respBody, nil
 }
 
 // Dataset 数据集信息
@@ -53,7 +112,7 @@ type CreateDatasetResponse struct {
 // DocumentResponse 文档响应
 type DocumentResponse struct {
 	Data struct {
-		ID            string `json:"id"`
+		ID             string `json:"id"`
 		IndexingStatus string `json:"indexing_status"`
 	} `json:"data"`
 }
@@ -66,16 +125,13 @@ type IndexingStatusResponse struct {
 }
 
 var (
-	flagConfigFile = flag.String("config", "", "配置文件路径")
-	flagDifyURL    = flag.String("dify-url", "http://localhost", "Dify 地址")
-	flagEmail      = flag.String("email", "", "Dify 管理员邮箱")
-	flagPassword   = flag.String("password", "", "Dify 管理员密码")
-	flagDatasetName = flag.String("dataset-name", "照片描述库", "知识库名称")
-	flagDBPath     = flag.String("db-path", "", "SQLite 数据库路径（覆盖配置）")
+	flagConfigFile = flag.String("c", "", "配置文件路径")
+	logConsole     = flag.Bool("l", false, "log to console; false for file only")
 )
 
 func main() {
 	flag.Parse()
+	plogger.InitLogger(*logConsole, zapcore.DebugLevel, "")
 
 	// 加载配置
 	cfgPaths := []string{}
@@ -86,27 +142,14 @@ func main() {
 		plogger.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 检查必要参数
-	if *flagEmail == "" || *flagPassword == "" {
-		fmt.Println("用法: init_dify --email <邮箱> --password <密码> [选项]")
-		fmt.Println()
-		fmt.Println("必选参数:")
-		fmt.Println("  --email     Dify 管理员邮箱")
-		fmt.Println("  --password  Dify 管理员密码")
-		fmt.Println()
-		fmt.Println("可选参数:")
-		fmt.Println("  --config        配置文件路径")
-		fmt.Println("  --dify-url      Dify 地址 (默认: http://localhost)")
-		fmt.Println("  --dataset-name  知识库名称 (默认: 照片描述库)")
-		fmt.Println("  --db-path       SQLite 数据库路径")
-		os.Exit(1)
+	cfg := config.Get()
+
+	// 检查必要配置
+	if cfg.Dify.Email == "" || cfg.Dify.Password == "" {
+		plogger.Fatal("配置文件中缺少 dify.email 或 dify.password")
 	}
 
-	client := &DifyClient{
-		BaseURL:  strings.TrimSuffix(*flagDifyURL, "/"),
-		Email:    *flagEmail,
-		Password: *flagPassword,
-	}
+	client := newDifyClient(cfg.Dify.BaseURL, cfg.Dify.Email, cfg.Dify.Password)
 
 	// 1. 登录获取 token
 	plogger.Info("正在登录 Dify...")
@@ -116,8 +159,12 @@ func main() {
 	plogger.Info("登录成功")
 
 	// 2. 查找或创建数据集
-	plogger.Infof("查找知识库: %s", *flagDatasetName)
-	dataset, err := client.findOrCreateDataset(*flagDatasetName)
+	datasetName := cfg.Dify.DatasetName
+	if datasetName == "" {
+		datasetName = "照片描述库"
+	}
+	plogger.Infof("查找知识库: %s", datasetName)
+	dataset, err := client.findOrCreateDataset(datasetName)
 	if err != nil {
 		plogger.Fatalf("创建知识库失败: %v", err)
 	}
@@ -132,9 +179,9 @@ func main() {
 	}
 
 	// 4. 读取 SQLite 照片数据
-	dbPath := *flagDBPath
+	dbPath := cfg.Dify.DBPath
 	if dbPath == "" {
-		dbPath = config.Get().DB.SqlitePath
+		dbPath = cfg.DB.SqlitePath
 	}
 	photos, err := loadPhotosFromDB(dbPath)
 	if err != nil {
@@ -165,7 +212,7 @@ func main() {
 	// 7. 输出配置摘要
 	fmt.Println()
 	fmt.Println("=== Dify 初始化完成 ===")
-	fmt.Printf("知识库名称: %s\n", *flagDatasetName)
+	fmt.Printf("知识库名称: %s\n", datasetName)
 	fmt.Printf("知识库 ID:   %s\n", client.DatasetID)
 	fmt.Printf("上传文档数:  %d\n", len(docIDs))
 	fmt.Println()
@@ -178,9 +225,11 @@ func main() {
 
 // login 登录获取 auth token
 func (c *DifyClient) login() error {
+	// Dify v1.11.1+ 要求密码 Base64 编码后传输
+	encodedPw := base64.StdEncoding.EncodeToString([]byte(c.Password))
 	body := map[string]string{
 		"email":    c.Email,
-		"password": c.Password,
+		"password": encodedPw,
 	}
 
 	req, err := putil.NewHttpRequestJson("POST", c.BaseURL+"/console/api/login", nil, nil, body)
@@ -188,35 +237,40 @@ func (c *DifyClient) login() error {
 		return fmt.Errorf("构建请求失败: %w", err)
 	}
 
-	respBody, err := putil.HttpDo(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败: %w", err)
 	}
+	defer resp.Body.Close()
 
-	var result LoginResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return fmt.Errorf("解析响应失败: %w", err)
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("登录失败: status=%d body=%s", resp.StatusCode, string(respBody))
 	}
 
-	if result.Data.AccessToken == "" {
-		return fmt.Errorf("登录响应中未找到 access_token")
-	}
-
-	c.AuthToken = result.Data.AccessToken
+	// 从 cookiejar 提取 access_token，供 Dataset API 使用
+	c.AuthToken = c.accessTokenFromJar()
 	return nil
+}
+
+// accessTokenFromJar 从 cookiejar 提取 access_token
+func (c *DifyClient) accessTokenFromJar() string {
+	if c.client.Jar == nil {
+		return ""
+	}
+	u, _ := url.Parse(c.BaseURL)
+	for _, cookie := range c.client.Jar.Cookies(u) {
+		if cookie.Name == "access_token" {
+			return cookie.Value
+		}
+	}
+	return ""
 }
 
 // findOrCreateDataset 查找或创建数据集
 func (c *DifyClient) findOrCreateDataset(name string) (*Dataset, error) {
 	// 先列出已有数据集
-	req, err := putil.NewHttpRequest("GET", c.BaseURL+"/console/api/datasets?page=1&limit=100", map[string]string{
-		"Authorization": "Bearer " + c.AuthToken,
-	}, nil, "")
-	if err != nil {
-		return nil, err
-	}
-
-	respBody, err := putil.HttpDo(req)
+	respBody, err := c.doConsole("GET", c.BaseURL+"/console/api/datasets?page=1&limit=100", nil)
 	if err != nil {
 		return nil, fmt.Errorf("列出数据集失败: %w", err)
 	}
@@ -238,14 +292,7 @@ func (c *DifyClient) findOrCreateDataset(name string) (*Dataset, error) {
 		"indexing_technique": "high_quality",
 	}
 
-	req, err = putil.NewHttpRequestJson("POST", c.BaseURL+"/console/api/datasets", map[string]string{
-		"Authorization": "Bearer " + c.AuthToken,
-	}, nil, body)
-	if err != nil {
-		return nil, err
-	}
-
-	respBody, err = putil.HttpDo(req)
+	respBody, err = c.doConsole("POST", c.BaseURL+"/console/api/datasets", body)
 	if err != nil {
 		return nil, fmt.Errorf("创建数据集失败: %w", err)
 	}
@@ -265,14 +312,7 @@ func (c *DifyClient) findOrCreateDataset(name string) (*Dataset, error) {
 
 // fetchDatasetAPIKey 获取数据集的 Service API key
 func (c *DifyClient) fetchDatasetAPIKey() error {
-	req, err := putil.NewHttpRequest("GET", c.BaseURL+"/console/api/datasets/"+c.DatasetID+"/api-keys", map[string]string{
-		"Authorization": "Bearer " + c.AuthToken,
-	}, nil, "")
-	if err != nil {
-		return err
-	}
-
-	respBody, err := putil.HttpDo(req)
+	respBody, err := c.doConsole("GET", c.BaseURL+"/console/api/datasets/"+c.DatasetID+"/api-keys", nil)
 	if err != nil {
 		return err
 	}
@@ -292,14 +332,7 @@ func (c *DifyClient) fetchDatasetAPIKey() error {
 	}
 
 	// 没有现有 key，创建一个
-	req, err = putil.NewHttpRequestJson("POST", c.BaseURL+"/console/api/datasets/"+c.DatasetID+"/api-keys", map[string]string{
-		"Authorization": "Bearer " + c.AuthToken,
-	}, nil, map[string]any{})
-	if err != nil {
-		return err
-	}
-
-	respBody, err = putil.HttpDo(req)
+	respBody, err = c.doConsole("POST", c.BaseURL+"/console/api/datasets/"+c.DatasetID+"/api-keys", map[string]any{})
 	if err != nil {
 		return err
 	}
@@ -338,8 +371,8 @@ func (c *DifyClient) uploadPhotos(photos []model.Photo) ([]string, error) {
 		}
 
 		body := map[string]any{
-			"name":    fmt.Sprintf("照片 %s", photo.ID),
-			"text":    content,
+			"name":               fmt.Sprintf("照片 %s", photo.ID),
+			"text":               content,
 			"indexing_technique": "high_quality",
 			"process_rule": map[string]any{
 				"mode": "automatic",
