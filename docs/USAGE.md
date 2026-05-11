@@ -39,6 +39,7 @@ dataset_name = "照片描述库"
 ```
 
 **说明**：
+
 - `storage.timeline_path` 指向一个 Markdown 表格文件，记录活动时间线（见下方格式）
 - `vlm.*` 配置三选一：volcengine / openai / qwen
 
@@ -69,6 +70,7 @@ make backend
 ```
 
 产出四个可执行文件到 `bin/`：
+
 - `server` — Go 后端服务
 - `batch_vlm` — 批量 VLM 预处理脚本
 - `init_dify` — Dify 知识库初始化脚本
@@ -88,12 +90,14 @@ cd /root/code/photo-agnet
 ```
 
 参数说明：
+
 - `-c` — 配置文件路径
 - `-input` — 照片根目录
 - `-force` — 强制重新处理（可选）
 - `-dry-run` — 仅验证配置，不实际调用（可选）
 
 脚本会自动：
+
 - 扫描所有图片（jpg / png / jpeg / webp）
 - 压缩超大图片（ImageMagick，512x512，质量 85）
 - 调用 VLM API 生成描述
@@ -156,6 +160,12 @@ docker compose up -d
 2. 添加你使用的 LLM（如火山引擎 Doubao / OpenAI GPT-4o-mini）
 3. 配置 API Key 和模型参数
 4. 设置系统推理模型和 Embedding 模型
+   1. 火山的embedding要用openai的兼容api
+   2. 还要写一个代理 `http//127.0.0.1:10000/v1`
+   3. openai-api-compatible插件会帮你在加上 `/embeddings`
+      1. 也正因如此，所以火山的url `https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal`无法直接配置，需要代理
+   4. doubao-embedding-vision-251215
+      1. doubao-embedding文档没有接入指引，url也不知道，模型id对不对也不知道，只能用vision版本
 
 ---
 
@@ -181,6 +191,7 @@ docker compose up -d
 4. 保存
 
 工具列表：
+
 - `list_timelines` — 列出所有时间线
 - `get_photos_by_timeline` — 按时间线查照片
 - `get_photos_by_tags` — 按标签查照片
@@ -196,6 +207,7 @@ docker compose up -d
 2. 选择 `dify/dsl/photo-agent.yml`
 
 导入后补充操作：
+
 - 在"上下文"区域绑定知识库（选择第七步创建的知识库）
 - 检查"工具"区域是否已启用全部 6 个自定义工具
 - 如工具绑定丢失，先在第八步确认工具已导入，再重新绑定

@@ -39,6 +39,9 @@ func main() {
 	r := gin.Default()
 	api.SetupRoutes(r)
 
+	// Embedding 代理（兼容 OpenAI 格式 -> 火山引擎 multimodal）
+	r.POST("/v1/embeddings", api.EmbeddingProxy)
+
 	plogger.Infof("Server starting on %s", cfg.Server.Addr)
 	if err := r.Run(cfg.Server.Addr); err != nil {
 		plogger.Fatalf("server run failed: %v", err)

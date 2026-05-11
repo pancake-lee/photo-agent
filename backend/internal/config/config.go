@@ -38,6 +38,13 @@ type VLMConfig struct {
 	Prompt         string `json:"prompt" toml:"prompt"`
 }
 
+// EmbeddingConfig Embedding 代理配置
+type EmbeddingConfig struct {
+	APIKey  string `json:"api_key" toml:"api_key"`
+	Model   string `json:"model" toml:"model" default:"doubao-embedding-vision-251215"`
+	BaseURL string `json:"base_url" toml:"base_url" default:"https://ark.cn-beijing.volces.com/api/v3"`
+}
+
 // DifyConfig Dify 配置
 type DifyConfig struct {
 	APIKey      string `json:"api_key" toml:"api_key"`
@@ -51,11 +58,12 @@ type DifyConfig struct {
 
 // Config 全局配置
 type Config struct {
-	Server  ServerConfig
-	DB      DBConfig
-	Storage StorageConfig
-	VLM     VLMConfig
-	Dify    DifyConfig
+	Server    ServerConfig
+	DB        DBConfig
+	Storage   StorageConfig
+	VLM       VLMConfig
+	Embedding EmbeddingConfig
+	Dify      DifyConfig
 }
 
 var globalConfig Config
