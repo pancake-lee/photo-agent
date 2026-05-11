@@ -13,6 +13,7 @@ import (
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/photo-agent/internal/config"
+	"github.com/pancake-lee/photo-agent/internal/service"
 	"github.com/pancake-lee/photo-agent/internal/vlm"
 	"go.uber.org/zap/zapcore"
 )
@@ -29,10 +30,6 @@ func main() {
 	flag.Parse()
 	plogger.InitLogger(*logConsole, zapcore.DebugLevel, "")
 
-	if *inputFlag == "" {
-		plogger.Fatal("-input is required")
-	}
-
 	if *configFlag != "" {
 		if err := config.Init(*configFlag); err != nil {
 			plogger.Fatalf("config init failed: %v", err)
@@ -44,6 +41,17 @@ func main() {
 	}
 
 	cfg := config.Get()
+
+	// -input 为空时，从配置文件读取 storage.photo_src
+	if *inputFlag == "" {
+		if cfg.Storage.PhotoSrc != "" {
+			*inputFlag = cfg.Storage.PhotoSrc
+			plogger.Infof("Using photo_src from config: %s", *inputFlag)
+		} else {
+			plogger.Fatal("-input is required (or set storage.photo_src in config)")
+		}
+	}
+
 	outputPath := cfg.Storage.DescriptionsPath
 	concurrency := cfg.VLM.Concurrency
 	if concurrency <= 0 {
@@ -126,10 +134,28 @@ func main() {
 			// 检查是否已有描述
 			if !*force {
 				mu.Lock()
-				_, exists := result[relPath]
+				entry, exists := result[relPath]
 				mu.Unlock()
 				if exists {
-					plogger.Infof("[%d/%d] Skipped (already described): %s", idx+1, len(images), relPath)
+					// 已有描述：检查是否已有 shot_at
+					if entry.ShotAt != "" {
+						plogger.Infof("[%d/%d] Skipped (already described): %s", idx+1, len(images), relPath)
+						countMu.Lock()
+						skippedCount++
+						countMu.Unlock()
+						return
+					}
+					// 已有描述但无 shot_at：补充 shot_at，跳过 VLM
+					shotAt := service.GetExifShotAt(imgPath)
+					shotAtStr := ""
+					if shotAt != nil {
+						shotAtStr = shotAt.UTC().Format(time.RFC3339)
+					}
+					mu.Lock()
+					entry.ShotAt = shotAtStr
+					result[relPath] = entry
+					mu.Unlock()
+					plogger.Infof("[%d/%d] ShotAt appended (skip VLM): %s", idx+1, len(images), relPath)
 					countMu.Lock()
 					skippedCount++
 					countMu.Unlock()
@@ -157,11 +183,19 @@ func main() {
 				return
 			}
 
+			// 读取 EXIF 拍摄时间
+			shotAt := service.GetExifShotAt(imgPath)
+			shotAtStr := ""
+			if shotAt != nil {
+				shotAtStr = shotAt.UTC().Format(time.RFC3339)
+			}
+
 			mu.Lock()
 			result[relPath] = vlmDescEntry{
 				Description: desc,
 				Model:       modelName,
 				ProcessedAt: time.Now().UTC().Format(time.RFC3339),
+				ShotAt:      shotAtStr,
 			}
 			mu.Unlock()
 
@@ -218,6 +252,7 @@ type vlmDescEntry struct {
 	Description string `json:"description"`
 	Model       string `json:"model"`
 	ProcessedAt string `json:"processed_at"`
+	ShotAt      string `json:"shot_at"` // EXIF 拍摄时间，RFC3339 格式
 }
 
 func saveResult(path string, result map[string]vlmDescEntry) error {

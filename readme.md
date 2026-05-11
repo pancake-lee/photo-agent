@@ -65,7 +65,7 @@
 ## 文档索引
 
 - [docs/PRD.md](docs/PRD.md) — 产品需求。一句话：让摄影照片库"会说话"的 AI Agent。面向摄影爱好者，核心能力是用自然语言检索照片、基于历史作品问答和激发创作思路。
-- [docs/TECH_SPEC.md](docs/TECH_SPEC.md) — 技术方案。Dify + Go 双栈，Dify 负责 Agent 编排/知识库/聊天 UI，Go 负责业务后端/VLM 代理，零 Python/零前端框架。
+- [docs/TECH_SPEC.md](docs/TECH_SPEC.md) — 技术方案。Dify + Go 双栈。照片数据流：`batch_vlm` 预处理（生成 `descriptions.json`）→ `server` 启动自动同步到 SQLite + Dify 知识库，无需手动触发导入。
 - [docs/TASKS.md](docs/TASKS.md) — 3 天开发任务拆分。每天结束交付一个可运行的里程碑，Dify + Go 双栈。
 - [docs/note.md](docs/note.md) — 决策备忘。记录被否定/推翻的技术栈和数据集方案，以及前期讨论归档。
 - [docs/learn.md](docs/learn.md) — 技术学习笔记。
@@ -110,7 +110,7 @@
    - 职责：从零到可聊天的完整操作步骤
    - 当操作步骤与代码实际参数冲突时，以代码为准（例如 init_dify 的启动参数）
 
-开发任务拆分和进度记录在 [docs/TASKS.md](docs/TASKS.md)。Day 1（Go 后端核心）和 Day 2（查询 API + Dify 配置）已完成，Day 3（联调 + Docker Compose + 交付）进行中。
+开发任务拆分和进度记录在 [docs/TASKS.md](docs/TASKS.md)。Day 1（Go 后端核心）、Day 2（查询 API + Dify 配置）、Day 3（联调 + Docker Compose + 交付）已完成。当前为迭代优化阶段，主要工作包括：server 启动自动同步、`descriptions.json` 嵌入 EXIF 拍摄时间、时间线日期解析与匹配优化。
 
 **构建命令**：
 

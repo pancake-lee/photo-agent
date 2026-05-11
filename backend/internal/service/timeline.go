@@ -119,7 +119,9 @@ func FindEventByTime(t time.Time) string {
 		return ""
 	}
 
-	date := t.Truncate(24 * time.Hour)
+	// 统一转换为本地时区，取日期零点（Truncate 基于 UTC 零点，时区不一致会导致偏差）
+	local := t.In(time.Local)
+	date := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
 	for _, e := range entries {
 		if !date.Before(e.StartAt) && !date.After(e.EndAt) {
 			return e.Event
@@ -198,6 +200,7 @@ func parseDate(s string) (time.Time, time.Time, error) {
 		"2006-01-02 15:04:05",
 		"2006-01",
 		"2006/01/02",
+		"060102", // yyMMdd 简写格式，如 250309 → 2025-03-09
 	}
 	for _, layout := range layouts {
 		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {

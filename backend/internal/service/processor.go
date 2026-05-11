@@ -99,23 +99,33 @@ func (p *ImportProcessor) processSingleImage(jobID string, img ImageInfo, curren
 		return
 	}
 
-	// 获取图片尺寸与 EXIF 拍摄时间
-	width, height := getImageSize(img.SourcePath)
-	shotAt := getExifShotAt(img.SourcePath)
+	// 获取图片尺寸
+	width, height := GetImageSize(img.SourcePath)
+
+	// 获取描述和拍摄时间（优先从预描述文件读取）
+	description := ""
+	var shotAt *time.Time
+	if entry, ok := GetDescriptionEntry(relPath); ok {
+		description = entry.Description
+		if entry.ShotAt != "" {
+			if t, err := time.Parse(time.RFC3339, entry.ShotAt); err == nil {
+				shotAt = &t
+			}
+		}
+		plogger.Infof("Using pre-description for %s", img.Filename)
+	} else {
+		plogger.Infof("No pre-description for %s, importing with empty description", img.Filename)
+	}
+
+	// 预描述中无 shot_at 时，fallback 到读取原始文件 EXIF
+	if shotAt == nil {
+		shotAt = GetExifShotAt(img.SourcePath)
+	}
 
 	// 根据拍摄时间匹配活动
 	timeline := ""
 	if shotAt != nil {
 		timeline = FindEventByTime(*shotAt)
-	}
-
-	// 获取描述（仅从预描述文件读取）
-	description := ""
-	if desc, ok := GetPreDescription(relPath); ok {
-		description = desc
-		plogger.Infof("Using pre-description for %s", img.Filename)
-	} else {
-		plogger.Infof("No pre-description for %s, importing with empty description", img.Filename)
 	}
 
 	// 保存到数据库
@@ -228,7 +238,8 @@ func (p *ImportProcessor) appendJobLog(id, msg string) {
 
 // --- util ---
 
-func getImageSize(path string) (int, int) {
+// GetImageSize 获取图片尺寸（width, height）
+func GetImageSize(path string) (int, int) {
 	file, err := os.Open(path)
 	if err != nil {
 		return 0, 0
@@ -242,7 +253,8 @@ func getImageSize(path string) (int, int) {
 	return config.Width, config.Height
 }
 
-func getExifShotAt(path string) *time.Time {
+// GetExifShotAt 读取 EXIF 拍摄时间（DateTimeOriginal）
+func GetExifShotAt(path string) *time.Time {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil

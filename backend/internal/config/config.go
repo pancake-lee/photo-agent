@@ -22,6 +22,7 @@ type DBConfig struct {
 // StorageConfig 存储配置
 type StorageConfig struct {
 	PhotoPath        string `json:"photo_path" toml:"photo_path" default:"./data/photos"`
+	PhotoSrc         string `json:"photo_src" toml:"photo_src"` // 原始照片源目录（batch_vlm 默认输入）
 	DescriptionsPath string `json:"descriptions_path" toml:"descriptions_path" default:"./data/descriptions.json"`
 	TimelinePath     string `json:"timeline_path" toml:"timeline_path"`
 }

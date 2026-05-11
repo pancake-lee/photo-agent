@@ -34,6 +34,13 @@ func main() {
 		plogger.Fatalf("db init failed: %v", err)
 	}
 
+	// 启动时后台自动同步照片数据（不阻塞 server 启动）
+	go func() {
+		if err := service.AutoSync(); err != nil {
+			plogger.Warnf("auto sync failed: %v", err)
+		}
+	}()
+
 	cfg := config.Get()
 
 	r := gin.Default()

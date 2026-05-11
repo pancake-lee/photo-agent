@@ -65,33 +65,32 @@ Go Backend (:8080)
 
 ### 3.1 照片导入流程
 
-所有照片必须先经 `batch_vlm` 预处理生成描述，server 导入时不再实时调用 VLM。导入流水线如下：
+所有照片必须先经 `batch_vlm` 预处理生成描述，server 启动时自动同步到 SQLite 和 Dify，无需手动触发。导入流水线如下：
 
 ```
-用户在 Dify 聊天输入："导入 ~/Photos/"
+batch_vlm 增量处理照片目录
     ↓
-Dify Agent: 意图识别 → 调用 import_photos 工具
+输出/更新 descriptions.json
     ↓
-Go: 创建导入任务 (SQLite)
-Go: 递归扫描文件夹，收集所有图片文件
-Go: 读取 EXIF 拍摄时间
-Go: 根据拍摄时间匹配时间线文件（配置指定的 md 表格）中的活动名称
-Go: 读取预生成的 descriptions.json，匹配照片路径获取描述
-Go: 复用已压缩图片（batch_vlm 已将压缩后的 JPG 存入 PhotoPath）
-Go: 保存元数据到 SQLite (路径/时间线/标签/描述/拍摄时间/EXIF)
-Go: 通过 Dify API 将描述写入知识库 (照片ID + 描述文本)
+启动 server
+    ↓
+Go: 后台自动同步 (AutoSync)
+Go: 扫描 photo_path 下所有图片
+Go: 读取 descriptions.json，匹配照片路径获取描述
+Go: 对比 SQLite photos 表，识别新增/变更
+Go: 新照片：读取 EXIF → 匹配时间线 → 写入 SQLite → 同步 Dify
+Go: 已有照片：如 description 变化 → 更新 SQLite → 同步 Dify
+Go: 无变化 → 跳过
     ↓
 Dify: 自动 Embedding → 存入向量库
-Go: 更新导入任务状态为完成
-    ↓
-Dify Agent: 回复 "导入完成，共 45 张照片"
 ```
 
 **工作流约束**：
-- 所有照片必须先经 `batch_vlm` 预处理，server 导入时不再实时调用 VLM
+- 所有照片必须先经 `batch_vlm` 预处理，server 不再实时调用 VLM
 - 时间线标签完全来自用户提供的 md 表格，不依赖文件夹命名
-- 压缩后的 JPG 直接存入 `data/photos/` 作为最终存储文件，server 导入时直接复用
+- 压缩后的 JPG 直接存入 `data/photos/` 作为最终存储文件，server 自动复用
 - 无预描述时以空描述入库，不调用 VLM
+- 增量场景：新照片放入目录 → 运行 `batch_vlm`（自动跳过已有）→ 重启 server（自动同步增量）
 
 **预描述文件的生成**：通过独立脚本 `backend/cmd/batch_vlm/main.go` 提前批量处理，不依赖 Dify 或其他服务。脚本扫描照片文件夹，调用 VLM API，输出 `descriptions.json`。
 
@@ -145,7 +144,7 @@ VLM 调用耗时较长（单张 2-5 秒，300 张约 15-30 分钟），且费用
 1. 递归扫描输入文件夹，收集所有图片文件（jpg / png / jpeg）
 2. 对每个图片调用 VLM API（火山引擎 / OpenAI / Qwen），使用默认提示词
 3. 并发控制：默认 3 并发，失败自动重试 3 次
-4. 逐步写入 `descriptions.json`（避免中途崩溃丢失全部进度）
+4. 每张处理完的结果写入内存 map，每处理满 10 张时保存一次中间结果到文件（临时文件 + 原子 rename），全部完成后最终保存到文件
 5. 输出处理统计（成功 / 失败 / 总耗时）
 
 **默认提示词**（可在配置文件中通过 `vlm.prompt` 自定义，空时回退到此默认值）

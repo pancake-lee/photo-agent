@@ -112,6 +112,33 @@ cd /root/code/photo-agnet
 ./bin/server -c backend/configs/server.toml
 ```
 
+server 启动后会**自动执行一次同步**：
+
+- 扫描 `storage.photo_path` 目录下所有图片
+- 读取 `descriptions.json` 中的预生成描述
+- 对比 SQLite `photos` 表，执行增量导入
+  - **新照片**：读取 EXIF、匹配时间线、写入 SQLite
+  - **已有照片**：如 `descriptions.json` 中描述有变化，自动更新
+  - **无变化**：跳过
+- 如已配置 `dify.api_key` 和 `dify.dataset_id`，自动同步到 Dify 知识库
+
+同步在后台 goroutine 中执行，不阻塞 server 启动。日志中会输出同步结果：
+
+```
+AutoSync: 45 images scanned, 0 existing in DB
+AutoSync done: new=45, updated=0, skipped=0
+```
+
+**后续新增照片**：只需把新照片放入原目录，重新运行 `batch_vlm`（会自动跳过已有描述），然后重启 server 即可自动同步增量。
+
+**手动触发同步**：如需立即重新同步（不重启 server），可调用 import API：
+
+```bash
+curl -X POST http://localhost:8080/api/import/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"source_path":"/your/photo/path","recursive":true}'
+```
+
 验证健康检查：
 
 ```bash
@@ -121,25 +148,7 @@ curl http://localhost:8080/api/health
 
 ---
 
-## 第四步：导入照片到数据库
-
-```bash
-curl -X POST http://localhost:8080/api/import/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"source_path":"/root/project/photos/","recursive":true}'
-```
-
-返回导入任务 ID，异步处理。查询进度：
-
-```bash
-curl http://localhost:8080/api/import/jobs/{job_id}
-```
-
-导入流程：扫描目录 → 复用已压缩图片 → 读取 `descriptions.json` → 匹配时间线 → 写入 SQLite。无预描述时以空描述入库。
-
----
-
-## 第五步：启动 Dify
+## 第四步：启动 Dify
 
 ```bash
 cd dify
@@ -152,7 +161,7 @@ docker compose up -d
 
 ---
 
-## 第六步：配置模型供应商
+## 第五步：配置模型供应商
 
 在 Dify UI 中：
 
@@ -169,19 +178,28 @@ docker compose up -d
 
 ---
 
-## 第七步：初始化知识库
+## 第六步：初始化知识库（首次或补同步）
 
-运行 Go 脚本，自动登录 Dify、创建知识库、上传照片描述：
+server 启动时的自动同步需要 `dify.api_key` 和 `dify.dataset_id`。首次部署时知识库尚未创建，需要运行 init_dify 脚本初始化：
 
 ```bash
 ./bin/init_dify -c backend/configs/server.toml
 ```
 
-脚本执行完成后输出知识库 ID，后续步骤需要用到。
+脚本会自动：
+
+- 登录 Dify Console
+- 查找或创建知识库（按 `dify.dataset_name` 匹配）
+- 获取知识库 API Key
+- 从 SQLite 读取照片描述并批量上传到知识库
+
+执行完成后输出知识库 ID，将其写入配置文件 `dify.dataset_id` 字段。后续 server 重启时会自动使用该配置同步增量数据。
+
+**非首次**：如已配置 `dataset_id` 且 server 已自动同步，此步骤可跳过。仅用于知识库重建或批量补同步。
 
 ---
 
-## 第八步：导入自定义工具
+## 第七步：导入自定义工具
 
 自定义工具是工作空间级别的配置，需在导入 DSL 之前完成：
 
@@ -201,20 +219,20 @@ docker compose up -d
 
 ---
 
-## 第九步：导入 Agent DSL
+## 第八步：导入 Agent DSL
 
 1. Studio → 创建空白应用 → 导入 DSL
 2. 选择 `dify/dsl/photo-agent.yml`
 
 导入后补充操作：
 
-- 在"上下文"区域绑定知识库（选择第七步创建的知识库）
+- 在"上下文"区域绑定知识库（选择第六步创建的知识库）
 - 检查"工具"区域是否已启用全部 6 个自定义工具
-- 如工具绑定丢失，先在第八步确认工具已导入，再重新绑定
+- 如工具绑定丢失，先在第七步确认工具已导入，再重新绑定
 
 ---
 
-## 第十步：发布并开始聊天
+## 第九步：发布并开始聊天
 
 1. 点击右上角"发布"
 2. 选择"运行"

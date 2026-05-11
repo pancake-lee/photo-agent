@@ -1,0 +1,239 @@
+package service
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/pancake-lee/photo-agent/internal/config"
+	"github.com/pancake-lee/photo-agent/internal/model"
+	"github.com/pancake-lee/photo-agent/internal/vlm"
+	"github.com/pancake-lee/pgo/pkg/plogger"
+)
+
+// AutoSync 自动同步照片数据到 SQLite 和 Dify。
+// 扫描 photo_path 下所有图片，读取 descriptions.json，对比 SQLite 执行增量导入：
+//   - 新照片：执行完整导入流程（EXIF、时间线、描述、Dify 同步）
+//   - 已有照片：如 description 变化则更新并同步 Dify
+//   - 无变化：跳过
+// 此函数在 server 启动时由后台 goroutine 调用，不阻塞启动流程。
+func AutoSync() error {
+	cfg := config.Get()
+
+	// 1. 清空缓存，强制重新加载最新文件
+	// （batch_vlm 可能已更新 descriptions.json，时间线文件也可能已修改）
+	ClearDescCache()
+	ClearTimelineCache()
+	preDesc, _ := LoadDescriptions()
+
+	// 2. 扫描 photo_path 下所有图片
+	images, err := scanImagesInPhotoPath(cfg.Storage.PhotoPath)
+	if err != nil {
+		return fmt.Errorf("scan photo path failed: %w", err)
+	}
+	if len(images) == 0 {
+		plogger.Info("AutoSync: no images found in photo_path")
+		return nil
+	}
+
+	// 3. 加载现有照片到内存 map（key 为 file_path）
+	var existingPhotos []model.Photo
+	if err := db.Find(&existingPhotos).Error; err != nil {
+		return fmt.Errorf("query existing photos failed: %w", err)
+	}
+	existingMap := make(map[string]model.Photo, len(existingPhotos))
+	for _, p := range existingPhotos {
+		existingMap[p.FilePath] = p
+	}
+
+	plogger.Infof("AutoSync: %d images scanned, %d existing in DB", len(images), len(existingMap))
+
+	// 4. 并发处理（复用配置的并发数）
+	concurrency := cfg.VLM.Concurrency
+	if concurrency <= 0 {
+		concurrency = 3
+	}
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+
+	var newCount, updateCount, skipCount int
+	var mu sync.Mutex
+
+	for _, img := range images {
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func(img imageEntry) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			// 从 descriptions.json 获取描述和拍摄时间
+			description, shotAt := resolvePhotoData(img.relPath, img.absPath, preDesc)
+
+			if existing, found := existingMap[img.relPath]; found {
+				// 已存在：优先用 json 中的 shot_at 重新计算 timeline
+				newTimeline := ""
+				if shotAt != nil {
+					newTimeline = FindEventByTime(*shotAt)
+				} else if existing.ShotAt != nil {
+					newTimeline = FindEventByTime(*existing.ShotAt)
+				}
+
+				// description 或 timeline 任一变化都触发更新
+				if existing.Description != description || existing.Timeline != newTimeline {
+					if err := updatePhoto(existing.ID, description, newTimeline); err != nil {
+						plogger.Warnf("AutoSync update failed %s: %v", img.relPath, err)
+						return
+					}
+					syncPhotoToDify(existing.ID, description, newTimeline)
+					mu.Lock()
+					updateCount++
+					mu.Unlock()
+				} else {
+					mu.Lock()
+					skipCount++
+					mu.Unlock()
+				}
+				return
+			}
+
+			// 新照片，执行完整导入
+			photo, err := importNewPhoto(img.absPath, img.relPath, description, shotAt)
+			if err != nil {
+				plogger.Warnf("AutoSync import failed %s: %v", img.relPath, err)
+				return
+			}
+
+			syncPhotoToDify(photo.ID, description, photo.Timeline)
+
+			mu.Lock()
+			newCount++
+			mu.Unlock()
+		}(img)
+	}
+
+	wg.Wait()
+
+	plogger.Infof("AutoSync done: new=%d, updated=%d, skipped=%d", newCount, updateCount, skipCount)
+	return nil
+}
+
+// imageEntry 扫描到的图片条目
+type imageEntry struct {
+	absPath  string // 绝对路径
+	relPath  string // 相对于 photo_path 的路径（正斜杠）
+	filename string
+}
+
+// scanImagesInPhotoPath 递归扫描 photo_path 目录下的所有图片文件。
+// 返回的 relPath 使用正斜杠，与 descriptions.json 的 key 格式保持一致。
+func scanImagesInPhotoPath(root string) ([]imageEntry, error) {
+	var images []imageEntry
+
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		images = append(images, imageEntry{
+			absPath:  path,
+			relPath:  relPath,
+			filename: info.Name(),
+		})
+		return nil
+	})
+
+	return images, err
+}
+
+// importNewPhoto 导入单张新照片到 SQLite。
+// shotAt 优先来自 descriptions.json，为空时 fallback 到文件 EXIF。
+func importNewPhoto(absPath, relPath, description string, shotAt *time.Time) (*model.Photo, error) {
+	// 获取图片尺寸
+	width, height := GetImageSize(absPath)
+
+	// 根据拍摄时间匹配活动
+	timeline := ""
+	if shotAt != nil {
+		timeline = FindEventByTime(*shotAt)
+	}
+
+	// 保存到数据库
+	photo, err := SavePhoto(filepath.Base(absPath), relPath, timeline, "", description, width, height, shotAt)
+	if err != nil {
+		return nil, fmt.Errorf("save photo failed: %w", err)
+	}
+
+	plogger.Infof("Photo imported: %s, id=%s", relPath, photo.ID)
+	return photo, nil
+}
+
+// resolvePhotoData 从 descriptions.json 和文件 EXIF 解析照片描述与拍摄时间。
+// 优先级：descriptions.json 中的 shot_at > 文件 EXIF。
+func resolvePhotoData(relPath, absPath string, preDesc DescriptionMap) (string, *time.Time) {
+	description := ""
+	var shotAt *time.Time
+
+	if preDesc != nil {
+		if entry, ok := GetDescriptionEntry(relPath); ok {
+			description = entry.Description
+			if entry.ShotAt != "" {
+				if t, err := time.Parse(time.RFC3339, entry.ShotAt); err == nil {
+					shotAt = &t
+				}
+			}
+		}
+	}
+
+	// json 中无 shot_at 时，fallback 到读取文件 EXIF
+	if shotAt == nil {
+		shotAt = GetExifShotAt(absPath)
+	}
+
+	return description, shotAt
+}
+
+// updatePhoto 更新已有照片的描述和时间线字段。
+func updatePhoto(photoID, description, timeline string) error {
+	updates := map[string]any{
+		"description": description,
+		"timeline":    timeline,
+	}
+	if err := db.Model(&model.Photo{}).Where("id = ?", photoID).Updates(updates).Error; err != nil {
+		return fmt.Errorf("update photo failed: %w", err)
+	}
+	plogger.Infof("Photo updated: %s, timeline=%q", photoID, timeline)
+	return nil
+}
+
+// syncPhotoToDify 将照片描述同步到 Dify 知识库。
+// 仅在 Dify APIKey 和 DatasetID 都已配置且描述非空时执行。
+func syncPhotoToDify(photoID, description, timeline string) {
+	cfg := config.Get().Dify
+	if cfg.APIKey == "" || cfg.DatasetID == "" {
+		return
+	}
+	if description == "" {
+		return
+	}
+	if err := vlm.WriteToKnowledgeBase(photoID, description, timeline); err != nil {
+		plogger.Warnf("Dify sync failed photo_%s: %v", photoID, err)
+	}
+}
