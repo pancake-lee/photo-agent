@@ -70,7 +70,39 @@
 - [dify/SKILL.md](dify/SKILL.md) — Dify 自动化工作流技能。AI 主导 DSL 生成与 API 调用，但在环境依赖和副作用操作时必须停下来向用户汇报。
 - [.claude/EXCALIDRAW_NOTES.md](.claude/EXCALIDRAW_NOTES.md) — Excalidraw 文件维护经验。index 格式安全范围、shape-text 双向绑定、boundElements 引用有效性等踩坑记录。
 
-## 开发进度
+## 文档职责与冲突裁决
+
+### 核心原则
+
+- 按一下文档层级，优先以高层文档为准，向下修改内容
+- 当冲突发生时，判断修改时间，以新修改的内容为准
+- 处理冲突后需要向我报告冲突
+
+### 文档层级（从高到低）
+
+1. **本文件（README.md）**
+   - 职责：项目定位、全局协作规则、文档索引、AI 行为约定
+   - 当其他文档与 README 的协作规则/全局约定冲突时，以 README 为准
+
+2. **docs/PRD.md — 产品需求**
+   - 职责：定义产品"做什么"，包括功能范围、用户故事、验收标准、优先级（P0/P1/P2）
+   - 不包含：具体 API 参数、CLI 命令、部署命令（这些属于技术/操作文档）
+   - 当 TECH_SPEC 的技术方案无法满足 PRD 的功能需求时，优先满足 PRD，调整技术方案
+
+3. **docs/TECH_SPEC.md — 技术方案**
+   - 职责：定义"怎么做"，包括架构设计、API 契约、数据模型、技术选型
+   - 不包含：执行进度、具体部署步骤（这些分别属于 TASKS 和 DIFY_SETUP）
+   - 当代码实现与 TECH_SPEC 的 API 设计冲突时，以代码为准，更新 TECH_SPEC
+
+4. **docs/TASKS.md — 任务拆分与进度**
+   - 职责：开发计划、每日里程碑、完成情况、人工执行记录
+   - 当任务执行结果与 PRD/TECH_SPEC 的设计有偏差时，在 TASKS 中记录实际执行情况，并视情况同步更新上游文档
+
+5. 实际的代码实现
+
+6. **docs/USAGE.md — 部署操作手册**
+   - 职责：从零到可聊天的完整操作步骤
+   - 当操作步骤与代码实际参数冲突时，以代码为准（例如 init_dify 的启动参数）
 
 开发任务拆分和进度记录在 [docs/TASKS.md](docs/TASKS.md)。Day 1（Go 后端核心）和 Day 2（查询 API + Dify 配置）已完成，Day 3（联调 + Docker Compose + 交付）进行中。
 
