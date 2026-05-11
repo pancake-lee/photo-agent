@@ -436,7 +436,7 @@
       "baseline": 19,
       "version": 1,
       "versionNonce": 11,
-      "index": "aA",
+      "index": "000",
       "isDeleted": false,
       "seed": 11,
       "autoResize": true,
@@ -470,7 +470,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 12,
-      "index": "aB",
+      "index": "001",
       "isDeleted": false,
       "seed": 12,
       "hasTextLink": false
@@ -508,7 +508,7 @@
       "baseline": 14,
       "version": 1,
       "versionNonce": 13,
-      "index": "aC",
+      "index": "002",
       "isDeleted": false,
       "seed": 13,
       "autoResize": true,
@@ -547,7 +547,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 14,
-      "index": "aD",
+      "index": "003",
       "isDeleted": false,
       "seed": 14,
       "customData": {
@@ -588,7 +588,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 15,
-      "index": "aE",
+      "index": "004",
       "isDeleted": false,
       "seed": 15,
       "autoResize": true,
@@ -627,7 +627,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 16,
-      "index": "aF",
+      "index": "005",
       "isDeleted": false,
       "seed": 16,
       "customData": {
@@ -668,7 +668,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 17,
-      "index": "aG",
+      "index": "006",
       "isDeleted": false,
       "seed": 17,
       "autoResize": true,
@@ -707,7 +707,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 18,
-      "index": "aH",
+      "index": "007",
       "isDeleted": false,
       "seed": 18,
       "customData": {
@@ -748,7 +748,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 19,
-      "index": "aI",
+      "index": "008",
       "isDeleted": false,
       "seed": 19,
       "autoResize": true,
@@ -787,7 +787,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 20,
-      "index": "aJ",
+      "index": "009",
       "isDeleted": false,
       "seed": 20,
       "customData": {
@@ -828,7 +828,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 21,
-      "index": "aK",
+      "index": "010",
       "isDeleted": false,
       "seed": 21,
       "autoResize": true,
@@ -871,7 +871,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 22,
-      "index": "aL",
+      "index": "011",
       "isDeleted": false,
       "seed": 22,
       "customData": {
@@ -912,7 +912,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 23,
-      "index": "aM",
+      "index": "012",
       "isDeleted": false,
       "seed": 23,
       "autoResize": true,
@@ -946,7 +946,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 24,
-      "index": "aN",
+      "index": "013",
       "isDeleted": false,
       "seed": 24,
       "hasTextLink": false
@@ -984,7 +984,7 @@
       "baseline": 14,
       "version": 1,
       "versionNonce": 25,
-      "index": "aO",
+      "index": "014",
       "isDeleted": false,
       "seed": 25,
       "autoResize": true,
@@ -1027,7 +1027,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 26,
-      "index": "aP",
+      "index": "015",
       "isDeleted": false,
       "seed": 26,
       "customData": {
@@ -1068,7 +1068,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 27,
-      "index": "aQ",
+      "index": "016",
       "isDeleted": false,
       "seed": 27,
       "autoResize": true,
@@ -1119,7 +1119,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 28,
-      "index": "aR",
+      "index": "017",
       "isDeleted": false,
       "seed": 28,
       "customData": {
@@ -1160,7 +1160,7 @@
       "baseline": 12,
       "version": 1,
       "versionNonce": 29,
-      "index": "aS",
+      "index": "018",
       "isDeleted": false,
       "seed": 29,
       "autoResize": true,
@@ -1194,7 +1194,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 34,
-      "index": "aX",
+      "index": "019",
       "isDeleted": false,
       "seed": 34,
       "hasTextLink": false
@@ -1232,7 +1232,7 @@
       "baseline": 14,
       "version": 1,
       "versionNonce": 35,
-      "index": "aY",
+      "index": "020",
       "isDeleted": false,
       "seed": 35,
       "autoResize": true,
@@ -1283,7 +1283,7 @@
       "locked": false,
       "version": 1,
       "versionNonce": 36,
-      "index": "aZ",
+      "index": "021",
       "isDeleted": false,
       "seed": 36,
       "customData": {
@@ -2390,7 +2390,7 @@
       ],
       "version": 1,
       "versionNonce": 62,
-      "index": "az",
+      "index": "022",
       "isDeleted": false,
       "seed": 62,
       "hasTextLink": false,
@@ -2451,7 +2451,7 @@
       ],
       "version": 1,
       "versionNonce": 64,
-      "index": "b1",
+      "index": "023",
       "isDeleted": false,
       "seed": 64,
       "hasTextLink": false,
@@ -2490,7 +2490,7 @@
       "baseline": 13,
       "version": 1,
       "versionNonce": 65,
-      "index": "b2",
+      "index": "024",
       "isDeleted": false,
       "seed": 65,
       "autoResize": true,
@@ -2530,7 +2530,7 @@
       "baseline": 14,
       "version": 1,
       "versionNonce": 66,
-      "index": "b3",
+      "index": "025",
       "isDeleted": false,
       "seed": 66,
       "autoResize": true,
@@ -2570,7 +2570,7 @@
       "baseline": 14,
       "version": 1,
       "versionNonce": 67,
-      "index": "b4",
+      "index": "026",
       "isDeleted": false,
       "seed": 67,
       "autoResize": true,
@@ -2615,7 +2615,7 @@
         "legacyTextWrap": true
       },
       "hasTextLink": false,
-      "index": "b5"
+      "index": "027"
     },
     {
       "type": "text",
@@ -2655,7 +2655,7 @@
       "autoResize": true,
       "hasTextLink": false,
       "rawText": "",
-      "index": "b6"
+      "index": "028"
     },
     {
       "type": "arrow",
@@ -2716,7 +2716,7 @@
       "seed": 99997,
       "hasTextLink": false,
       "moveMidPointsWithElement": false,
-      "index": "b7"
+      "index": "029"
     },
     {
       "type": "rectangle",
@@ -2756,7 +2756,7 @@
         "legacyTextWrap": true
       },
       "hasTextLink": false,
-      "index": "b8"
+      "index": "030"
     },
     {
       "type": "text",
@@ -2796,7 +2796,7 @@
       "autoResize": true,
       "hasTextLink": false,
       "rawText": "",
-      "index": "b9"
+      "index": "031"
     }
   ],
   "appState": {

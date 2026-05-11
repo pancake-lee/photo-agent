@@ -110,9 +110,19 @@
    - 职责：从零到可聊天的完整操作步骤
    - 当操作步骤与代码实际参数冲突时，以代码为准（例如 init_dify 的启动参数）
 
-开发任务拆分和进度记录在 [docs/TASKS.md](docs/TASKS.md)。Day 1（Go 后端核心）、Day 2（查询 API + Dify 配置）、Day 3（联调 + Docker Compose + 交付）已完成。当前为迭代优化阶段，主要工作包括：server 启动自动同步、`descriptions.json` 嵌入 EXIF 拍摄时间、时间线日期解析与匹配优化。
+开发任务拆分和进度记录在 [docs/TASKS.md](docs/TASKS.md)。Day 1（Go 后端核心）、Day 2（查询 API + Dify 配置）、Day 3（联调 + Docker Compose + 交付）已完成。当前为迭代优化阶段，主要工作包括：server 启动自动同步、`descriptions.json` 嵌入 EXIF 拍摄时间、时间线日期解析与匹配优化、E2E 测试程序。
 
-**构建命令**：
+**构建与测试**：
 
 - `make backend` — 编译全部二进制到 `bin/`
 - `make clean` — 清理构建输出
+- `./bin/backendTest -l` — 后端 E2E 测试（Group 1 基础 API + Group 2 AutoSync 无需外部依赖）
+- `./bin/backendTest -l -c .local/pancake.yaml` — 完整 E2E 测试（含 Group 3 真实 VLM 调用，需配置文件中包含 `vlm` 段）
+
+## TODO
+
+- [ ] **修复 `diagram-excalidraw` skill 的 index 生成规则**
+  - 问题：skill 生成的 excalidraw index 值（如 `b1`、`aZ`、`az`）超出 Excalidraw 安全范围（首字符仅限 `0-9`/`a`，次字符仅限 `0-9`/`a-y`），导致 VS Code 插件中无法添加新元素
+  - 原因：skill 的 `SKILL.md` 和 `references/validation.md` 均未引用 `.claude/EXCALIDRAW_NOTES.md` 中的 index 安全规则，也未内置 index 校验逻辑
+  - 方案：在 skill 的 validation 中加入 index 格式检查，或统一使用纯数字 index 避免 base62 编码陷阱
+  - 优先级：低（当前已手动修复 `photo_agent.excalidraw`，不影响主流程）
