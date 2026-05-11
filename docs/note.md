@@ -49,6 +49,16 @@
 
 ---
 
+## config.go 中 dify.base_url 的 default 值与文档不一致
+
+**问题**：`backend/internal/config/config.go` 中 `DifyConfig.BaseURL` 的 default 值为 `"http://localhost/v1"`，但文档和实际 init_dify 代码都要求**不带** `/v1` 的 Dify 根地址。
+
+**影响**：如果用户不手动覆盖配置，init_dify 会构造出错误的 Console API 路径（`http://localhost/v1/console/api/login`），导致登录失败。
+
+**待修复**：将 `config.go` 中 `DifyConfig.BaseURL` 的 default 改为 `"http://localhost"`。
+
+---
+
 ## 1. 技术栈变更记录
 
 ### 1.1 纯 Python 单栈 → Go + Python 双栈（重新启用）
@@ -72,6 +82,23 @@
 **否定原因**：用户要求"尽情简化"，MinIO/MySQL/Kratos 对单机 demo 没必要。
 
 **最终架构**：Go（Gin + GORM + SQLite）+ Python（FastAPI + Chroma + 本地文件）。
+
+### 1.3 Go + Python 双栈 → Dify + Go 双栈（零 Python）
+
+**变更时间（2026-05-09）**：在 Day 1 开发过程中，Python AI 服务侧的工作量被 Dify 完全覆盖。
+
+**变更原因**：
+
+1. **Agent 编排**：Dify 提供图形化工作流可观测 + 自带聊天 UI，无需手写 Python Agent 代码
+2. **知识库 RAG**：Dify 内置向量检索（Weaviate）和 Embedding，无需自建 Chroma
+3. **模型管理**：Dify 统一管理 LLM / Embedding / Rerank 的 API Key 和参数，无需在 Python 中维护多套配置
+4. **开发效率**：零前端框架 + 零 Python，技术栈收缩为纯 Go + Docker，维护成本显著降低
+
+**最终架构**：Dify（Docker 本地部署）+ Go（Gin + GORM + SQLite）。
+
+- **Dify**：Agent 编排、知识库 RAG、聊天 UI、模型管理、工作流可视化
+- **Go 后端**：照片元数据 CRUD、文件管理、导入任务调度、VLM HTTP 代理
+- **零 Python**：VLM 视觉描述、Embedding 均通过云端 API 由 Go 直接 HTTP 调用
 
 ---
 

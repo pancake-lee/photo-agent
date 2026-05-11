@@ -1,12 +1,13 @@
-# Media Agent - 产品需求文档
+# Photo Agent - 产品需求文档
 
 ## 1. 产品概述
 
 ### 1.1 产品定位
 
-Media Agent 是一个面向**个人摄影爱好者**的 AI 媒体资产助手。它通过对摄影作品进行 AI 视觉描述、建立时间线与标签知识库、构建向量检索系统，让用户可以用**自然语言**与自己的照片库对话，实现智能检索、摄影档案问答和创作辅助。
+Photo Agent 是一个面向**个人摄影爱好者**的 AI 媒体资产助手。它通过对摄影作品进行 AI 视觉描述、建立时间线与标签知识库、构建向量检索系统，让用户可以用**自然语言**与自己的照片库对话，实现智能检索、摄影档案问答和创作辅助。
 
 > **一句话定义**：让你的摄影照片库"会说话"的 AI Agent。
+
 
 ### 1.2 目标用户
 
@@ -16,7 +17,7 @@ Media Agent 是一个面向**个人摄影爱好者**的 AI 媒体资产助手。
 
 ### 1.3 核心价值主张
 
-| 痛点         | 传统方式             | Media Agent 方案           |
+| 痛点         | 传统方式             | Photo Agent 方案           |
 | ------------ | -------------------- | -------------------------- |
 | 找照片困难   | 翻文件夹、靠记忆命名 | 自然语言描述即可检索       |
 | 作品信息分散 | 拍摄时间、地点、主题散落在各文件夹 | 统一知识库，随时问答   |
@@ -215,66 +216,7 @@ P2 (加分项): 个人摄影风格知识库 + 时间线关联分析
 
 ## 5. 交互设计
 
-### 5.1 CLI 交互流程
-
-```bash
-# 1. 预处理：生成描述与压缩图
-$ ./batch_vlm -input /root/project/photos/ -output ./data/descriptions.json
-> 发现 312 张照片
-> 正在处理（1/312）...
-> 全部完成，descriptions.json 已生成
-
-# 2. 配置时间线与启动 server
-# 编辑 config.yaml：指定 storage.timeline_path
-$ ./server -config config.yaml
-> Server starting on :8080
-
-# 3. 调用导入 API（扫描照片目录入库）
-$ curl -X POST http://localhost:8080/api/import \
-  -d '{"source_path":"/root/project/photos/","recursive":true}'
-
-# 4. 启动 Agent 对话（通过 Dify 聊天界面）
-$ media-agent chat
-
-🤖 Media Agent > 你好！我是你的摄影助手。今天想找什么照片？
-
-🙋 你 > 帮我找云南的雪山照片
-
-🤖 Media Agent > 找到 3 张匹配照片：
-   1. [IMG_0234.jpg] 雪山前景，人物背影，蓝天，光线明亮
-   2. [IMG_0241.jpg] 雪山全景，云雾缭绕，清晨光线
-   3. [IMG_0256.jpg] 雪山脚下森林，侧光，色彩丰富
-
-   需要我详细描述某张照片吗？
-
-🙋 你 > 第2张的光线怎么样？适合用作参考吗？
-
-🤖 Media Agent > IMG_0241.jpg 的光线分析：
-   - 清晨侧光，山体有明暗层次
-   - 云雾散射光线，整体柔和
-   - 适合用作"大气风光"场景的参考
-```
-
-### 5.2 API 交互（供 CLI 调用）
-
-```python
-# POST /chat
-{
-  "session_id": "uuid",
-  "message": "帮我找云南的雪山照片",
-  "context": []
-}
-
-# Response
-{
-  "reply": "找到 3 张匹配照片...",
-  "sources": [
-    {"path": "photos/2024-02-云南/IMG_0234.jpg", "score": 0.92, "description": "..."},
-    {"path": "photos/2024-02-云南/IMG_0241.jpg", "score": 0.88, "description": "..."}
-  ],
-  "tools_used": ["vector_search"]
-}
-```
+交互通过 Dify Web UI 完成。用户输入自然语言描述需求，Agent 自动选择知识库检索或调用工具查询，返回照片列表和文字说明。详细操作流程见 [DIFY_SETUP.md](DIFY_SETUP.md)。
 
 ---
 

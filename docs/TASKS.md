@@ -66,6 +66,15 @@ $ curl -X POST http://localhost:8080/api/import \
 # 导入任务直接读取预生成描述，不再调用 VLM
 ```
 
+### 完成情况
+
+- [x] 1.1-1.12 全部完成，后端模块编译通过，服务可启动，健康检查可访问
+- [x] 批量 VLM 预处理已完成，共计 977 张图片
+  - 第一批（250 张）：Doubao-Seed-1.6-vision，约 400,000 tokens（含前期测试，统计不精确）
+  - 第二批（727 张）：Doubao-1.5-vision-pro-32k，剩 91,828 / 共 500,000 tokens
+  - Batch VLM done: success=727, failed=0, skipped=250, total=977, elapsed=21m39s
+- [ ] `photo_path` 配置问题：代码中 `projectPrefix` 写死为 `proto-agent`，需修正路径计算逻辑
+
 ### 风险与应对
 
 | 风险                         | 应对                                          |
@@ -128,6 +137,16 @@ $ curl http://localhost:8080/api/photos/photo_001/image > test.jpg
   ```
 - **缩略图生成**：Go 调用开源库（如 `github.com/disintegration/imaging`）生成 300px 宽缩略图，避免每次返回原图
 
+### 完成情况
+
+- [x] 2.1-2.6 Go 查询 API 全部实现，支持 curl 测试
+- [x] 2.7-2.9 Dify 配置完成（知识库、Agent、工具）
+  - `init_dify` 脚本通过 Console API 自动登录、创建知识库、上传描述、轮询索引
+  - Dify v1.14.0 登录兼容：密码 Base64 编码，cookie + CSRF token 校验
+  - dify 部署从简化版升级为官方完整 docker-compose（12 服务），自包含于本仓库
+  - dify DSL 导入遇到自定义 tool 的 provider_id UUID 问题，解决后经验浓缩到 `dify/dsl/SKILL.md` 和 `dify/SKILL.md`
+- [ ] pgo swagger：建议后续使用 pgo 的 proto 定义导出 swagger，避免 AI 输出不稳定导致文档不同步
+
 ---
 
 ## Day 3：联调 + Docker Compose + 交付
@@ -178,21 +197,21 @@ $ docker-compose logs -f backend
 
 ### Day 1 检查点
 
-- [ ] `go run` 能启动，健康检查可访问
-- [ ] `test_vlm.go` 能成功调用 VLM API 返回描述
-- [ ] SQLite 初始化无报错，表结构正确
-- [ ] 导入任务能创建并完成，SQLite 中有照片记录
-- [ ] Dify 知识库中有对应数量的文档（调用 API 确认）
-- [ ] 批量 VLM 脚本能独立运行，生成 `descriptions.json`
+- [x] `go run` 能启动，健康检查可访问
+- [x] `batch_vlm` 能成功调用 VLM API 返回描述
+- [x] SQLite 初始化无报错，表结构正确
+- [x] 导入任务能创建并完成，SQLite 中有照片记录
+- [x] Dify 知识库中有对应数量的文档（通过 `init_dify` 脚本确认）
+- [x] 批量 VLM 脚本能独立运行，生成 `descriptions.json`
 
 ### Day 2 检查点
 
-- [ ] 所有查询 API 可用 curl 测试
-- [ ] 图片文件服务端点能返回正确图片（含缩略图）
-- [ ] Dify 知识库配置完成，检索模式正确
-- [ ] Dify Agent 配置完成，系统提示词已保存
-- [ ] Dify 工具配置完成，至少 3 个工具可成功调用
-- [ ] Dify 聊天中"列出时间线"能返回正确结果
+- [x] 所有查询 API 可用 curl 测试
+- [x] 图片文件服务端点能返回正确图片（含缩略图）
+- [x] Dify 知识库配置完成，检索模式正确
+- [x] Dify Agent 配置完成，系统提示词已保存
+- [x] Dify 工具配置完成，至少 3 个工具可成功调用
+- [x] Dify 聊天中"列出时间线"能返回正确结果
 
 ### Day 3 检查点
 

@@ -143,12 +143,12 @@ VLM 调用耗时较长（单张 2-5 秒，300 张约 15-30 分钟），且费用
 **脚本执行流程**
 
 1. 递归扫描输入文件夹，收集所有图片文件（jpg / png / jpeg）
-2. 对每个图片调用 VLM API（火山引擎 / OpenAI / Qwen），使用固定提示词
+2. 对每个图片调用 VLM API（火山引擎 / OpenAI / Qwen），使用默认提示词
 3. 并发控制：默认 3 并发，失败自动重试 3 次
 4. 逐步写入 `descriptions.json`（避免中途崩溃丢失全部进度）
 5. 输出处理统计（成功 / 失败 / 总耗时）
 
-**固定提示词**（与导入流水线实时模式使用同一 Prompt）
+**默认提示词**（可在配置文件中通过 `vlm.prompt` 自定义，空时回退到此默认值）
 
 ```
 请详细描述这张照片的内容。包括：
@@ -176,7 +176,7 @@ go run main.go -input /root/project/photos/ -output ../../data/descriptions.json
 GET    /api/health                  健康检查
 
 # 照片管理
-GET    /api/photos                 照片列表 (分页, query: timeline, tags, keyword)
+GET    /api/photos                 照片列表 (分页, query: timeline, tag, keyword)
 GET    /api/photos/:id             单张照片详情
 GET    /api/photos/:id/image       获取图片文件 (支持缩略图参数 ?size=thumb)
 
@@ -189,12 +189,12 @@ GET    /api/tags                   所有标签列表
 GET    /api/tags/:name/photos      某标签下的照片
 
 # 导入任务
-POST   /api/import/jobs            创建导入任务 (body: {sourcePath, recursive})
+POST   /api/import/jobs            创建导入任务 (body: {source_path, recursive})
 GET    /api/import/jobs/:id        查询导入进度
 GET    /api/import/jobs/:id/logs   导入日志
 
-# VLM 代理 (内部使用，也可供 Dify 直接调用)
-POST   /internal/vlm/describe      单张图片描述 (body: multipart/form-data 图片)
+# TODO: VLM 代理端点（当前未注册路由，如有需要后续补充）
+# POST   /internal/vlm/describe      单张图片描述 (body: multipart/form-data 图片)
 ```
 
 ### 4.2 Dify 自定义工具配置
@@ -205,7 +205,7 @@ Dify 通过 OpenAPI Schema 配置外部工具，指向 Go Backend：
 |--------|------|--------|------|
 | `list_timelines` | GET | `/api/timelines` | 列出所有时间线 |
 | `get_photos_by_timeline` | GET | `/api/timelines/{name}/photos` | 按时间线查照片 |
-| `get_photos_by_tags` | GET | `/api/photos?tags={tags}` | 按标签查照片 |
+| `get_photos_by_tags` | GET | `/api/photos?tag={tag}` | 按标签查照片 |
 | `get_photo_detail` | GET | `/api/photos/{id}` | 获取单张照片详情 |
 | `import_photos` | POST | `/api/import/jobs` | 创建照片导入任务 |
 | `get_import_status` | GET | `/api/import/jobs/{id}` | 查询导入任务进度 |
@@ -316,23 +316,26 @@ type ImportJob struct {
 ```
 photo-agent/
 ├── backend/                      # Go 业务后端
-│   ├── cmd/server/
-│   │   └── main.go
+│   ├── cmd/
+│   │   ├── server/               # Server 入口
+│   │   │   └── main.go
+│   │   ├── batch_vlm/            # 批量 VLM 预处理脚本
+│   │   │   └── main.go
+│   │   └── init_dify/            # Dify 知识库初始化脚本
+│   │       └── main.go
 │   ├── internal/
 │   │   ├── api/                  # HTTP handlers
 │   │   ├── model/                # GORM 模型
 │   │   ├── service/              # 业务逻辑
 │   │   ├── config/               # 配置管理
 │   │   └── vlm/                  # VLM HTTP 客户端
+│   ├── test/
+│   │   └── backendTest.go        # E2E 测试程序
 │   └── go.mod
-├── backend/
-│   ├── cmd/
-│   │   ├── server/
-│   │   │   └── main.go           # Server 入口
-│   │   └── batch_vlm/
-│   │       └── main.go           # 批量 VLM 预处理脚本
 ├── dify/
-│   └── docker-compose.yaml       # Dify 本地部署配置
+│   ├── docker-compose.yaml       # Dify 本地部署配置
+│   ├── dsl/                      # Agent DSL 文件
+│   └── ...                       # 配套配置
 ├── data/
 │   ├── photos/                   # 照片文件存储
 │   ├── sqlite/                   # SQLite 数据库文件
@@ -362,27 +365,38 @@ go run cmd/server/main.go
 # 默认端口 :8080
 ```
 
-### 8.3 环境变量
+### 8.3 配置文件
 
-**Go (`backend/.env`)**：
-```
-PORT=8080
-DB_PATH=./data/sqlite/photo_agent.db
-PHOTO_STORAGE_PATH=./data/photos
-DESCRIPTIONS_PATH=./data/descriptions.json  # 预描述文件路径
-TIMELINE_PATH=./data/timeline.md            # 时间线描述文件路径（md 表格格式）
+**Go (`backend/configs/server.toml`)**：
 
-# VLM 配置（三选一）
-VLM_PROVIDER=volcengine  # 或 openai / qwen
-VLM_API_KEY=your-api-key
-VLM_MODEL=doubao-vision-pro  # 或 gpt-4o-mini / qwen-vl-max
-VLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3  # 火山引擎 endpoint
-# VLM_BASE_URL=https://api.openai.com/v1               # OpenAI endpoint
-# VLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1  # Qwen endpoint
+```toml
+[server]
+addr = ":8080"
 
-DIFY_API_KEY=your-dify-api-key
-DIFY_BASE_URL=http://localhost/v1
-DIFY_KNOWLEDGE_BASE_ID=your-dataset-id
+[db]
+sqlite_path = "./data/sqlite/photo_agent.db"
+
+[storage]
+photo_path = "./data/photos"
+descriptions_path = "./data/descriptions.json"
+timeline_path = "./data/timeline.md"
+
+[vlm]
+provider = "volcengine"          # 或 openai / qwen
+api_key = "your-api-key"
+model = "doubao-vision-pro"      # 或 gpt-4o-mini / qwen-vl-max
+base_url = "https://ark.cn-beijing.volces.com/api/v3"
+concurrency = 3
+retry = 3
+max_image_size_mb = 1
+
+[dify]
+base_url = "http://localhost"    # Dify 根地址，不带 /v1
+api_key = "your-dify-api-key"
+dataset_id = "your-dataset-id"
+email = "your-dify-email"
+password = "your-dify-password"
+dataset_name = "照片描述库"
 ```
 
 ---
