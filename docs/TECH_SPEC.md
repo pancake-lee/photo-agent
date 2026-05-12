@@ -112,7 +112,28 @@ Dify: 整合工具结果 + RAG 结果 → 生成回复
 Dify Web UI 渲染回复（文本 + Markdown 图片链接）
 ```
 
-**图片在回复中的展示**：Agent 回复中包含 Markdown 图片链接 `![描述](http://localhost:8080/api/photos/{id}/image)`，Dify 的 Markdown 渲染器会自动展示图片。用户点击可查看原图。
+**图片在回复中的展示**：Agent 回复中包含 Markdown 图片链接 `![描述](http://192.168.3.159:10000/api/photos/{id}/image)`，Dify 的 Markdown 渲染器会自动展示图片。用户点击可查看原图。
+
+**设计决策：图片 URL 放在 pre_prompt 中而非工具返回**
+
+为什么不通过 `get_photo_detail` 工具让后端返回 `image_url`，而是由 Agent 按 prompt 规则直接拼接？
+
+| 方案 | 说明 | 当前选择 |
+|------|------|---------|
+| **pre_prompt 硬编码 URL** | RAG 片段中提取 photo_id 后直接拼 URL，无需额外工具调用 | ✅ 采用 |
+| **工具返回 image_url** | 每次展示图片都调用 `get_photo_detail`，后端动态生成 URL | 备选 |
+
+选择 pre_prompt 硬编码的原因：
+1. **图片 URL 是确定性的**（固定 host + 固定路径模板 `/api/photos/{id}/image`），后端无需动态计算
+2. **减少一次工具调用**，响应链路更短，延迟更低
+3. Dify 前端原生支持 Markdown 图片语法渲染，无需特殊处理
+
+备选方案（工具返回 image_url）适用于以下场景：
+- URL 需要动态生成（如带签名临时链接、CDN 域名分发）
+- 需要返回缩略图 vs 原图的选择（`?size=thumb`）
+- 多环境部署时 host 频繁变化，不便在 prompt 中维护
+
+当前为本地固定部署，IP:Port 稳定，采用 pre_prompt 硬编码。若后续有上述需求，可迁移为工具返回方案。
 
 ### 3.3 批量 VLM 预处理脚本
 
@@ -206,7 +227,7 @@ Dify 通过 OpenAPI Schema 配置外部工具，指向 Go Backend：
 | `get_photos_by_timeline` | GET | `/api/timelines/{name}/photos` | 按时间线查照片 |
 | `get_photos_by_tags` | GET | `/api/photos?tag={tag}` | 按标签查照片 |
 | `get_photo_detail` | GET | `/api/photos/{id}` | 获取单张照片详情 |
-| `import_photos` | POST | `/api/import/jobs` | 创建照片导入任务 |
+| `import_photos` | POST | `/api/import/jobs` | 刷新照片库数据 |
 | `get_import_status` | GET | `/api/import/jobs/{id}` | 查询导入任务进度 |
 
 **知识库检索**无需配置为外部工具，Dify 内部知识库直接通过 RAG 查询。
@@ -252,10 +273,10 @@ Dify 通过 OpenAPI Schema 配置外部工具，指向 Go Backend：
   4. 通过工具导入本地照片文件夹
 
   回答时：
-  - 如果提到具体照片，使用 Markdown 图片语法展示照片，格式：![描述](http://localhost:8080/api/photos/{photo_id}/image)
+  - 如果提到具体照片，使用 Markdown 图片语法展示照片，格式：![描述](http://192.168.3.159:10000/api/photos/{photo_id}/image)
   - 时间线查询使用 list_timelines / get_photos_by_timeline 工具
   - 标签查询使用 get_photos_by_tags 工具
-  - 导入照片使用 import_photos 工具
+  - 刷新照片库数据使用 import_photos 工具
   - 模糊描述检索使用知识库 RAG（自动）
   ```
 

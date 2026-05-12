@@ -4,8 +4,8 @@ info:
   description: Photo Agent 自定义工具，提供照片库查询、导入等功能
   version: "1.0.0"
 servers:
-  - url: http://host.docker.internal:8080
-    description: Go Backend（宿主机通过 docker 内部网络访问）
+  - url: http://192.168.3.159:10000
+    description: Go Backend
 
 paths:
   /api/timelines:
@@ -106,8 +106,8 @@ paths:
   /api/import/jobs:
     post:
       operationId: import_photos
-      summary: 创建照片导入任务
-      description: 扫描指定目录，将照片导入照片库
+      summary: 刷新照片库数据
+      description: 扫描本地照片目录，同步照片元数据到数据库（非上传新照片，而是刷新已有照片的元数据）
       requestBody:
         required: true
         content:

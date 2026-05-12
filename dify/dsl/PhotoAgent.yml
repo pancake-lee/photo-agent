@@ -10,7 +10,7 @@ dependencies:
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/openai:0.3.8@592c8252795b5f75807de2d609a03196ed02596b409f7642b4a07548c7ff57ef
+    marketplace_plugin_unique_identifier: langgenius/volcengine:0.0.5@d8da06d778d3cecdb2be116169d9845f9d8bc553f71f739740f12c1955d76b31
     version: null
 kind: app
 model_config:
@@ -18,9 +18,10 @@ model_config:
     enabled: true
     max_iteration: 5
     prompt: null
-    strategy: react
+    strategy: function_call
     tools:
     - enabled: true
+      isDeleted: false
       notAuthor: false
       provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
       provider_name: photo_agent
@@ -30,6 +31,7 @@ model_config:
       tool_parameters: {}
       type: api
     - enabled: true
+      isDeleted: false
       notAuthor: false
       provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
       provider_name: photo_agent
@@ -40,6 +42,7 @@ model_config:
         name: null
       type: api
     - enabled: true
+      isDeleted: false
       notAuthor: false
       provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
       provider_name: photo_agent
@@ -50,6 +53,7 @@ model_config:
         tag: null
       type: api
     - enabled: true
+      isDeleted: false
       notAuthor: false
       provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
       provider_name: photo_agent
@@ -60,6 +64,7 @@ model_config:
         id: null
       type: api
     - enabled: true
+      isDeleted: false
       notAuthor: false
       provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
       provider_name: photo_agent
@@ -71,6 +76,7 @@ model_config:
         source_path: null
       type: api
     - enabled: true
+      isDeleted: false
       notAuthor: false
       provider_id: 6549e9fe-4b0d-45bb-992d-5c6d45fe7007
       provider_name: photo_agent
@@ -94,9 +100,25 @@ model_config:
       text: ''
   dataset_configs:
     datasets:
-      datasets: []
+      datasets:
+      - dataset:
+          enabled: true
+          id: ce23fdc7-46de-4a9a-895f-fe1b0c2c4da5
+    reranking_enable: false
+    reranking_mode: weighted_score
+    reranking_model:
+      reranking_model_name: ''
+      reranking_provider_name: ''
     retrieval_model: multiple
     top_k: 4
+    weights:
+      keyword_setting:
+        keyword_weight: 0
+      vector_setting:
+        embedding_model_name: doubao-embedding-vision-251215
+        embedding_provider_name: langgenius/openai_api_compatible/openai_api_compatible
+        vector_weight: 1
+      weight_type: customized
   dataset_query_variable: ''
   external_data_tools: []
   file_upload:
@@ -126,43 +148,38 @@ model_config:
     number_limits: 3
   model:
     completion_params:
-      max_tokens: 2048
       stop: []
-      temperature: 0.7
-      top_p: 1
     mode: chat
-    name: gpt-4o
-    provider: langgenius/openai/openai
+    name: doubao-seed-1-6-250615
+    provider: langgenius/volcengine/volcengine
   more_like_this:
     enabled: false
   opening_statement: ''
-  pre_prompt: '你是 Photo Agent，一位个人摄影资产助手。你帮助用户通过自然语言检索照片、回顾拍摄经历、分析摄影主题。
-
+  pre_prompt: |
+    你是 Photo Agent，一位个人摄影资产助手。你帮助用户通过自然语言检索照片、回顾拍摄经历、分析摄影主题。
 
     可用能力：
 
     1. 通过知识库检索照片描述（语义搜索）
-
     2. 通过工具查询时间线和标签
-
     3. 基于历史作品提供创作建议
-
     4. 通过工具导入本地照片文件夹
 
+    工作流——当用户用自然语言查找照片时：
 
-    回答时：
+    步骤1：知识库 RAG 会自动检索并返回相关照片描述文档。
+    步骤2：每篇文档都包含明确的 "照片ID: {UUID}" 字段，你必须从返回内容中提取所有 photo_id。
+    步骤3：对每个提取到的 photo_id，使用 Markdown 图片语法展示实际照片：
+      ![描述](http://192.168.3.159:10000/api/photos/{photo_id}/image)
+    步骤4：向用户说明照片的时间线、标签和描述内容。
 
-    - 如果提到具体照片，使用 Markdown 图片语法展示照片，格式：![描述](http://host.docker.internal:8080/api/photos/{photo_id}/image)
+    重要规则：
 
+    - 只要知识库返回了引用，就说明有匹配的照片。不要回答"未能找到"。
+    - 不要只给文字描述，必须同时展示图片和文字说明。
     - 时间线查询使用 list_timelines / get_photos_by_timeline 工具
-
     - 标签查询使用 get_photos_by_tags 工具
-
-    - 导入照片使用 import_photos 工具
-
-    - 模糊描述检索使用知识库 RAG（自动）
-
-    '
+    - 刷新照片库数据使用 import_photos 工具
   prompt_type: simple
   retriever_resource:
     enabled: true

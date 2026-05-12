@@ -87,7 +87,7 @@ func (c *DifyClient) doConsole(method, rawURL string, body any) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody))
 	}
 	return respBody, nil
@@ -104,24 +104,31 @@ type DatasetListResponse struct {
 	Data []Dataset `json:"data"`
 }
 
-// CreateDatasetResponse 创建数据集响应
-type CreateDatasetResponse struct {
-	Data Dataset `json:"data"`
-}
+// CreateDatasetResponse 创建数据集响应（Dify 返回扁平对象，无 data 包装）
+type CreateDatasetResponse = Dataset
 
 // DocumentResponse 文档响应
 type DocumentResponse struct {
-	Data struct {
+	Document struct {
 		ID             string `json:"id"`
 		IndexingStatus string `json:"indexing_status"`
-	} `json:"data"`
+	} `json:"document"`
 }
 
-// IndexingStatusResponse 索引状态响应
-type IndexingStatusResponse struct {
-	Data struct {
-		IndexingStatus string `json:"indexing_status"`
-	} `json:"data"`
+// Document 知识库中的文档
+type Document struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	IndexingStatus string `json:"indexing_status"`
+}
+
+// DocumentListResponse 文档列表响应
+type DocumentListResponse struct {
+	Data    []Document `json:"data"`
+	HasMore bool       `json:"has_more"`
+	Limit   int        `json:"limit"`
+	Total   int        `json:"total"`
+	Page    int        `json:"page"`
 }
 
 var (
@@ -171,11 +178,16 @@ func main() {
 	client.DatasetID = dataset.ID
 	plogger.Infof("知识库 ID: %s", client.DatasetID)
 
-	// 3. 获取数据集的 API key
-	plogger.Info("获取知识库 API key...")
-	if err := client.fetchDatasetAPIKey(); err != nil {
-		plogger.Warnf("获取知识库 API key 失败: %v", err)
-		plogger.Warn("请手动在 Dify UI 中进入知识库 → API 页面，获取 API Key 后设置到配置中")
+	// 3. 获取数据集的 API key（优先使用配置的 api_key）
+	if cfg.Dify.APIKey != "" {
+		client.DatasetKey = cfg.Dify.APIKey
+		plogger.Info("使用配置的 Dify API key")
+	} else {
+		plogger.Info("获取知识库 API key...")
+		if err := client.fetchDatasetAPIKey(); err != nil {
+			plogger.Warnf("获取知识库 API key 失败: %v", err)
+			plogger.Warn("请手动在 Dify UI 中进入知识库 → API 页面，获取 API Key 后设置到配置中")
+		}
 	}
 
 	// 4. 读取 SQLite 照片数据
@@ -193,20 +205,27 @@ func main() {
 	}
 	plogger.Infof("从数据库读取 %d 张照片", len(photos))
 
-	// 5. 批量上传照片描述到知识库
+	// 5. 获取知识库已有文档（用于幂等）
+	plogger.Info("检查知识库已有文档...")
+	existing, _, err := client.listDocuments()
+	if err != nil {
+		plogger.Warnf("获取已有文档失败: %v", err)
+		existing = make(map[string]string)
+	}
+	plogger.Infof("知识库中已有 %d 篇文档", len(existing))
+
+	// 6. 批量上传照片描述到知识库（幂等：跳过已存在）
 	plogger.Info("开始上传照片描述到知识库...")
-	docIDs, err := client.uploadPhotos(photos)
+	docIDs, err := client.uploadPhotos(photos, existing)
 	if err != nil {
 		plogger.Fatalf("上传文档失败: %v", err)
 	}
-	plogger.Infof("已上传 %d 篇文档", len(docIDs))
+	plogger.Infof("知识库中共有 %d 篇文档", len(docIDs))
 
-	// 6. 轮询索引状态
-	if len(docIDs) > 0 {
-		plogger.Info("等待文档索引完成...")
-		if err := client.waitForIndexing(docIDs); err != nil {
-			plogger.Warnf("索引等待出错: %v", err)
-		}
+	// 7. 轮询索引状态
+	plogger.Info("等待文档索引完成...")
+	if err := client.waitForIndexing(); err != nil {
+		plogger.Warnf("索引等待出错: %v", err)
 	}
 
 	// 7. 输出配置摘要
@@ -302,12 +321,12 @@ func (c *DifyClient) findOrCreateDataset(name string) (*Dataset, error) {
 		return nil, fmt.Errorf("解析创建响应失败: %w, body=%s", err, string(respBody))
 	}
 
-	if result.Data.ID == "" {
+	if result.ID == "" {
 		return nil, fmt.Errorf("创建数据集响应中未找到 ID, body=%s", string(respBody))
 	}
 
-	plogger.Infof("创建新知识库: %s", result.Data.ID)
-	return &result.Data, nil
+	plogger.Infof("创建新知识库: %s", result.ID)
+	return &result, nil
 }
 
 // fetchDatasetAPIKey 获取数据集的 Service API key
@@ -350,38 +369,57 @@ func (c *DifyClient) fetchDatasetAPIKey() error {
 	return nil
 }
 
-// uploadPhotos 批量上传照片描述到知识库
-func (c *DifyClient) uploadPhotos(photos []model.Photo) ([]string, error) {
+// uploadPhotos 批量上传照片描述到知识库（幂等：跳过已存在的文档）
+func (c *DifyClient) uploadPhotos(photos []model.Photo, existing map[string]string) ([]string, error) {
 	var docIDs []string
 
-	for i, photo := range photos {
-		// 构建文档内容
-		content := photo.Description
-		if content == "" {
-			content = "暂无描述"
+	// 先加入已有文档
+	for _, photo := range photos {
+		if docID, ok := existing[photo.ID]; ok {
+			docIDs = append(docIDs, docID)
 		}
+	}
 
-		// 元数据
-		metaData := map[string]string{}
-		if photo.Timeline != "" {
-			metaData["timeline"] = photo.Timeline
+	// 过滤出需要上传的照片
+	var toUpload []model.Photo
+	for _, photo := range photos {
+		if _, ok := existing[photo.ID]; !ok {
+			toUpload = append(toUpload, photo)
 		}
-		if photo.Tags != "" {
-			metaData["tags"] = photo.Tags
+	}
+
+	if len(toUpload) == 0 {
+		plogger.Infof("所有 %d 张照片已在知识库中，无需上传", len(photos))
+		return docIDs, nil
+	}
+
+	plogger.Infof("需要上传 %d 张照片（已有 %d 张）", len(toUpload), len(photos)-len(toUpload))
+
+	for i, photo := range toUpload {
+		// 构建文档内容：结构化格式，确保 RAG 返回的片段中包含可提取的 photo_id
+		content := fmt.Sprintf(
+			"照片ID: %s\n时间线: %s\n标签: %s\n描述: %s",
+			photo.ID,
+			photo.Timeline,
+			photo.Tags,
+			photo.Description,
+		)
+		if photo.Description == "" {
+			content = fmt.Sprintf(
+				"照片ID: %s\n时间线: %s\n标签: %s\n描述: 暂无描述",
+				photo.ID,
+				photo.Timeline,
+				photo.Tags,
+			)
 		}
 
 		body := map[string]any{
-			"name":               fmt.Sprintf("照片 %s", photo.ID),
+			"name":               fmt.Sprintf("照片ID_%s", photo.ID),
 			"text":               content,
 			"indexing_technique": "high_quality",
 			"process_rule": map[string]any{
 				"mode": "automatic",
 			},
-		}
-
-		// 如果有元数据，添加到 body
-		if len(metaData) > 0 {
-			body["doc_metadata"] = metaData
 		}
 
 		// 上传文档（优先使用 Dataset API key）
@@ -414,13 +452,13 @@ func (c *DifyClient) uploadPhotos(photos []model.Photo) ([]string, error) {
 			continue
 		}
 
-		if result.Data.ID != "" {
-			docIDs = append(docIDs, result.Data.ID)
-			if (i+1)%10 == 0 || i == len(photos)-1 {
-				plogger.Infof("[%d/%d] 已上传 %d 篇文档", i+1, len(photos), len(docIDs))
+		if result.Document.ID != "" {
+			docIDs = append(docIDs, result.Document.ID)
+			if (i+1)%10 == 0 || i == len(toUpload)-1 {
+				plogger.Infof("[%d/%d] 已上传 %d 篇文档", i+1, len(toUpload), len(docIDs)-len(photos)+len(toUpload))
 			}
 		} else {
-			plogger.Warnf("[%d/%d] 上传返回空文档 ID %s", i+1, len(photos), photo.ID)
+			plogger.Warnf("[%d/%d] 上传返回空文档 ID %s, resp=%s", i+1, len(toUpload), photo.ID, string(respBody))
 		}
 
 		// 短暂间隔，避免触发速率限制
@@ -430,41 +468,72 @@ func (c *DifyClient) uploadPhotos(photos []model.Photo) ([]string, error) {
 	return docIDs, nil
 }
 
-// waitForIndexing 轮询等待文档索引完成
-func (c *DifyClient) waitForIndexing(docIDs []string) error {
+// listDocuments 获取知识库中所有文档，返回 photo_id -> doc_id 映射
+func (c *DifyClient) listDocuments() (map[string]string, []Document, error) {
+	existing := make(map[string]string)
+	var allDocs []Document
+
+	page := 1
+	for {
+		url := fmt.Sprintf("%s/v1/datasets/%s/documents?page=%d&limit=100", c.BaseURL, c.DatasetID, page)
+		req, err := putil.NewHttpRequest("GET", url, map[string]string{
+			"Authorization": "Bearer " + c.DatasetKey,
+		}, nil, "")
+		if err != nil {
+			return nil, nil, err
+		}
+
+		respBody, err := putil.HttpDo(req)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		var result DocumentListResponse
+		if err := json.Unmarshal(respBody, &result); err != nil {
+			return nil, nil, fmt.Errorf("解析文档列表失败: %w, body=%s", err, string(respBody))
+		}
+
+		for _, doc := range result.Data {
+			allDocs = append(allDocs, doc)
+			if strings.HasPrefix(doc.Name, "照片ID_") {
+				photoID := strings.TrimPrefix(doc.Name, "照片ID_")
+				existing[photoID] = doc.ID
+			}
+		}
+
+		if !result.HasMore {
+			break
+		}
+		page++
+	}
+
+	return existing, allDocs, nil
+}
+
+// waitForIndexing 轮询等待文档索引完成（使用文档列表接口）
+func (c *DifyClient) waitForIndexing() error {
 	maxWait := 300 // 最多等待 300 秒
 	interval := 5
 
 	for sec := 0; sec < maxWait; sec += interval {
 		time.Sleep(time.Duration(interval) * time.Second)
 
+		_, docs, err := c.listDocuments()
+		if err != nil {
+			plogger.Warnf("获取文档列表失败: %v", err)
+			continue
+		}
+
 		completed := 0
-		for _, docID := range docIDs {
-			req, err := putil.NewHttpRequest("GET", c.BaseURL+"/v1/datasets/"+c.DatasetID+"/documents/"+docID+"/indexing-status", map[string]string{
-				"Authorization": "Bearer " + c.DatasetKey,
-			}, nil, "")
-			if err != nil {
-				continue
-			}
-
-			respBody, err := putil.HttpDo(req)
-			if err != nil {
-				continue
-			}
-
-			var result IndexingStatusResponse
-			if err := json.Unmarshal(respBody, &result); err != nil {
-				continue
-			}
-
-			if result.Data.IndexingStatus == "completed" {
+		for _, doc := range docs {
+			if doc.IndexingStatus == "completed" {
 				completed++
 			}
 		}
 
-		plogger.Infof("索引进度: %d/%d 完成", completed, len(docIDs))
+		plogger.Infof("索引进度: %d/%d 完成", completed, len(docs))
 
-		if completed == len(docIDs) {
+		if completed == len(docs) && len(docs) > 0 {
 			plogger.Info("所有文档索引完成")
 			return nil
 		}
