@@ -26,15 +26,15 @@ Dify Web UI (Agent 编排 + 知识库 RAG + 聊天 UI)
 
 ## 一、总体时间规划（7 天）
 
-| 阶段 | 天数 | 目标 |
-| --- | --- | --- |
+| 阶段                                  | 天数  | 目标                                                              |
+| ------------------------------------- | ----- | ----------------------------------------------------------------- |
 | 第 1 阶段：Go 工具扩展（EXIF + 统计） | Day 1 | 扩展 Go 后端 Photo 模型与导入流水线，增加 EXIF 字段，新增统计 API |
-| 第 2 阶段：LangChain + Chroma 向量库 | Day 2 | 跑通 LangChain 核心链路，Chroma 向量检索接入 |
-| 第 3 阶段：文档分块 + Text-to-SQL | Day 3 | 实现分块策略，NL2SQL 链路落地 |
-| 第 4 阶段：SSE + Function Calling | Day 4 | 流式对话接口，LLM 自主调用照片工具 |
-| 第 5 阶段：LangGraph 查询路由 | Day 5 | 用 StateGraph 实现 SQL / RAG 条件路由工作流 |
-| 第 6 阶段：评估指标 + AI 工程保障 | Day 6 | 检索效果评估，重试 / 降级 / Token 成本追踪 |
-| 第 7 阶段：联调 + 文档 | Day 7 | 全链路联调，整理文档，确保可演示 |
+| 第 2 阶段：LangChain + Chroma 向量库  | Day 2 | 跑通 LangChain 核心链路，Chroma 向量检索接入                      |
+| 第 3 阶段：文档分块 + Text-to-SQL     | Day 3 | 实现分块策略，NL2SQL 链路落地                                     |
+| 第 4 阶段：SSE + Function Calling     | Day 4 | 流式对话接口，LLM 自主调用照片工具                                |
+| 第 5 阶段：LangGraph 查询路由         | Day 5 | 用 StateGraph 实现 SQL / RAG 条件路由工作流                       |
+| 第 6 阶段：评估指标 + AI 工程保障     | Day 6 | 检索效果评估，重试 / 降级 / Token 成本追踪                        |
+| 第 7 阶段：联调 + 文档                | Day 7 | 全链路联调，整理文档，确保可演示                                  |
 
 ---
 
@@ -73,11 +73,28 @@ Dify Web UI (Agent 编排 + 知识库 RAG + 聊天 UI)
 
 ### Day 2：LangChain + Chroma 向量库
 
-- 理解 LangChain 核心组件：Prompt Template、LLM/ChatModel、Chain、Tool、Retriever
-- 用兼容 OpenAI 的代理封装 Doubao 模型，跑通 LLMChain
-- 实现照片问答 Chain：Chroma 检索相关照片描述 → LLM 生成回答
-- 搭建 Chroma 向量数据库，定义照片描述 Collection，实现基础 CRUD
-- 将现有 VLM 生成的照片描述导入 Chroma，测试检索效果
+#### 🔧 前置准备
+
+- `mkdir -p agent/{chain,embedding,vectorstore,scripts}` — 创建 Python 项目目录结构
+- `python3 -m venv venv` — 创建虚拟环境
+- `pip install langchain langchain-openai chromadb requests python-dotenv httpx` — 安装核心依赖
+- `pip install pysqlite3-binary` — 解决系统 sqlite3 版本过低导致 ChromaDB 无法启动的问题
+
+编码文件：
+
+- `agent/pyproject.toml` — Python 项目依赖定义
+  - `pip install .` 或 `pip install -e .`
+  - `requirements.txt`只是描述这个目录下py代码的依赖包列表，`pyproject.toml`则可以描述整个项目的情况
+  - pip install -r requirements.txt
+
+- `agent/config.py`
+  - 提供 `Config` 类统一管理所有配置（LLM、Embedding、Go 后端地址）
+  - `load_config()` 从 `-c`指定配置文件 读取 `llm `/`embedding `/`server` 配置
+- `agent/chain/chat_agent.py`
+  - V1 聊天循环，跑通LLM调用
+    - 用上ChatPromptTemplate构造输入
+    - 输入分为System/Human/AI
+    - 用上`|`管道符“串联”处理方法
 
 ---
 

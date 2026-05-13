@@ -39,6 +39,11 @@
   - 先读取最小必要代码，分析并解决当前问题，再继续下一个
   - 不要同时加载多个不相关的问题，避免反复读取大量文件导致上下文压缩循环
   - 每个问题处理完后，用简短总结标记进度，再进入下一个
+- Python 编码规范（Agent 目录）
+  - 使用显式包名导入：`import langchain_openai as lco`，调用时 `lco.ChatOpenAI(...)`
+  - 禁止 `from xxx import ClassName` 的直接类导入，确保代码中一眼能看出类的来源包
+  - 包名过长时允许简写别名，如 `import langchain.schema as lc_schema`、`import langchain.prompts as lc_prompts`
+  - 项目内部模块（如 `config`）不受此限制，按现有风格即可
 - 环境路径映射规则
   - `/root/project/` 是只读挂载（宿主机项目目录映射到容器）
   - `batch_vlm` 压缩 `/root/project/` 下图片时，输出到 `storage.photo_path` 对应路径（默认 `./data/photos/`），保持原始目录结构
