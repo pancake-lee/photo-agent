@@ -74,10 +74,8 @@
 - [docs/TASK_1.md](docs/TASK_1.md) — 第一轮：MVP v1.0.0，3 天完成 Go 后端核心 + Dify Agent 联调（已完成）
 - [docs/TASK_2.md](docs/TASK_2.md) — 第二轮：AI 服务层（LangChain + Chroma + Text-to-SQL + LangGraph），7 天计划，Go 后端扩展 + Python 推理层双栈
 - [docs/note.md](docs/note.md) — 决策备忘。记录被否定/推翻的技术栈和数据集方案，以及前期讨论归档。
-- [docs/learn.md](docs/learn.md) — 技术学习笔记。
 - [docs/DIFY_SETUP.md](docs/DIFY_SETUP.md) — Dify 部署与配置指南。包含 docker-compose 启动、模型配置、Agent 创建、工具导入步骤。
-- [docs/dify_tools_openapi.yaml](docs/dify_tools_openapi.yaml) — Dify 自定义工具 OpenAPI Schema，6 个工具指向 Go Backend API。
-- [dify/dsl/photo-agent.yml](dify/dsl/photo-agent.yml) — Dify Agent DSL 文件。包含系统提示词、模型配置、工具绑定、知识库引用，可导入复现 Agent 配置。
+- [dify/dsl/PhotoAgent.yml](dify/dsl/PhotoAgent.yml) — Dify Agent DSL 文件。包含系统提示词、模型配置、工具绑定、知识库引用，可导入复现 Agent 配置。
 - [dify/dsl/SKILL.md](dify/dsl/SKILL.md) — DSL 开发技能。涵盖 DSL 结构差异、Agent 工具配置、导入陷阱（InFailedSqlTransaction）与标准工作流程，含人工介入节点。
 - [dify/SKILL.md](dify/SKILL.md) — Dify 自动化工作流技能。AI 主导 DSL 生成与 API 调用，但在环境依赖和副作用操作时必须停下来向用户汇报。
 - [.claude/EXCALIDRAW_NOTES.md](.claude/EXCALIDRAW_NOTES.md) — Excalidraw 文件维护经验。index 格式安全范围、shape-text 双向绑定、boundElements 引用有效性等踩坑记录。
@@ -115,8 +113,6 @@
 6. **docs/USAGE.md — 部署操作手册**
    - 职责：从零到可聊天的完整操作步骤
    - 当操作步骤与代码实际参数冲突时，以代码为准（例如 init_dify 的启动参数）
-
-**当前进度**：MVP v1.0.0 已完成（[docs/TASK_1.md](docs/TASK_1.md) Day 1-3）。第二轮计划 [docs/TASK_2.md](docs/TASK_2.md) 进行中 — Day 1 Go 后端 EXIF 扩展 + 统计 API 已完成，正在推进 Day 2 LangChain + Chroma 向量库。
 
 **构建与测试**：
 

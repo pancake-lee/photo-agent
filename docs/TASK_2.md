@@ -95,6 +95,20 @@ Dify Web UI (Agent 编排 + 知识库 RAG + 聊天 UI)
     - 用上ChatPromptTemplate构造输入
     - 输入分为System/Human/AI
     - 用上`|`管道符“串联”处理方法
+- Embedding
+  - `agent/embedding/chunking.py`
+    - 原文分片的实现，可以扩展多种分片方法
+  - `agent/embedding/embedder.py`
+    - 调用go-server `/v1/embeddings` 代理，标准 OpenAI 格式
+    - 未使用 `langchain_openai.OpenAIEmbeddings`，原因是其默认启用 tiktoken 会将文本预编码为 token ID 数组传给 API，而 go-server 代理只接受原始字符串 input。禁用 tiktoken 后又依赖 transformers tokenizer，不在当前依赖中，故直接使用 httpx 发送标准 OpenAI 格式请求。
+    - `agent/embedding/demo_embedding.py` — 演示脚本，从 JSON 取头尾各 1 条 → 分片 → Embedding → 输出结果
+-`agent/vectorstore/chroma_client.py`
+  - 提供 `add` / `delete` / `query` / `get` / `peek` / `count` 方法
+  - `query` 接受预计算 `query_embeddings`，返回扁平化结果列表（含 `id` / `document` / `metadata` / `distance`）
+  - `get` 支持按 ID 或元数据条件精确查询
+  - 内置 `_format_results` / `_format_get_results` 统一格式化 Chroma 原始返回结构
+  - 演示函数 `_demo` 使用内存 Collection 验证增删查流程
+  - 自动处理低版本 sqlite3 兼容（`pysqlite3` 替代注入）
 
 ---
 
