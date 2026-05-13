@@ -25,6 +25,19 @@ Thumbs.db
 *.out
 vendor/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
 backend/init_dify
 
 # Dify volumes: ignore all runtime data, but keep sandbox config
@@ -37,3 +50,4 @@ dify/volumes/sandbox/conf/*
 
 .local
 .env
+

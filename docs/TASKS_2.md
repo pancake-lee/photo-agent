@@ -5,29 +5,92 @@
 
 ---
 
+## 架构定位
+
+```
+用户浏览器
+    ↓ HTTP
+Dify Web UI (Agent 编排 + 知识库 RAG + 聊天 UI)
+    ↓ Function Calling
+    ├─→ Go Backend (:10000)  ← 工具层（数据读写 + 文件服务）
+    └─→ Python AI Service    ← 推理层（LangChain/LangGraph/Chroma）
+            ↓ HTTP 调用工具
+            Go Backend API
+```
+
+- **Go Backend**：工具层。照片元数据 CRUD、EXIF 提取、文件服务、统计查询 — 所有数据类接口都在 Go 中实现
+- **Python AI Service**：推理层。LangChain Chain、Chroma 向量检索、Text-to-SQL、LangGraph 工作流 — 只做 AI 编排，通过 HTTP 调用 Go 工具获取数据
+- **Python 不自己管理数据库、不重复实现 CRUD**，需要新工具时扩展 Go server
+
+---
+
 ## 一、总体时间规划（7 天）
 
-| 阶段                                 | 天数  | 目标                                                 |
-| ------------------------------------ | ----- | ---------------------------------------------------- |
-| 第 1 阶段：Python + FastAPI + Pandas | Day 1 | 搭建 Python 服务框架，读写 API，处理照片 EXIF 元数据 |
-| 第 2 阶段：LangChain + Chroma 向量库 | Day 2 | 跑通 LangChain 核心链路，Chroma 向量检索接入         |
-| 第 3 阶段：文档分块 + Text-to-SQL    | Day 3 | 实现分块策略，NL2SQL 链路落地                        |
-| 第 4 阶段：SSE + Function Calling    | Day 4 | 流式对话接口，LLM 自主调用照片工具                   |
-| 第 5 阶段：LangGraph 查询路由        | Day 5 | 用 StateGraph 实现 SQL / RAG 条件路由工作流          |
-| 第 6 阶段：评估指标 + AI 工程保障    | Day 6 | 检索效果评估，重试 / 降级 / Token 成本追踪           |
-| 第 7 阶段：联调 + 文档               | Day 7 | 全链路联调，整理文档，确保可演示                     |
+| 阶段 | 天数 | 目标 |
+| --- | --- | --- |
+| 第 1 阶段：Go 工具扩展（EXIF + 统计） | Day 1 | 扩展 Go 后端 Photo 模型与导入流水线，增加 EXIF 字段，新增统计 API |
+| 第 2 阶段：LangChain + Chroma 向量库 | Day 2 | 跑通 LangChain 核心链路，Chroma 向量检索接入 |
+| 第 3 阶段：文档分块 + Text-to-SQL | Day 3 | 实现分块策略，NL2SQL 链路落地 |
+| 第 4 阶段：SSE + Function Calling | Day 4 | 流式对话接口，LLM 自主调用照片工具 |
+| 第 5 阶段：LangGraph 查询路由 | Day 5 | 用 StateGraph 实现 SQL / RAG 条件路由工作流 |
+| 第 6 阶段：评估指标 + AI 工程保障 | Day 6 | 检索效果评估，重试 / 降级 / Token 成本追踪 |
+| 第 7 阶段：联调 + 文档 | Day 7 | 全链路联调，整理文档，确保可演示 |
 
 ---
 
 ## 二、每日任务
 
-### Day 1：Python + FastAPI + Pandas
+### Day 1：Go 后端扩展 — EXIF 元数据 + 统计工具 API
 
-- 搭建 Python 虚拟环境，初始化 `python-service` 服务目录
-- 完成 FastAPI 基础接口（路由、Pydantic 模型校验、依赖注入）
-- 用 Pandas 读取照片 EXIF 信息，处理多品牌字段差异、GPS 转换、时间规范化
-- 输出清洗后的 DataFrame 到 SQLite `photos` 表
-- 编写照片分布统计脚本（按品牌、镜头、地点、时段）
+> 为后续 Python Agent 准备数据工具接口。所有变更在 Go 后端完成，不涉及 Python 代码。
+
+#### 1.1 扩展 Photo 模型
+
+在现有 `photos` 表新增 EXIF 字段：
+
+```
+brand         TEXT    — 品牌（统一大写简称：NIKON/CANON/SONY/...）
+model         TEXT    — 相机型号
+lens          TEXT    — 镜头型号
+focal_length  TEXT    — 焦距，如 "35mm"
+aperture      TEXT    — 光圈，如 "f/3.2"
+iso           INTEGER — ISO 感光度
+exposure_time TEXT    — 快门速度，如 "1/125"
+latitude      REAL    — GPS 纬度（十进制）
+longitude     REAL    — GPS 经度（十进制）
+altitude      REAL    — GPS 海拔
+```
+
+涉及文件：
+- `internal/model/photo.go`：新增上述字段，GORM AutoMigrate 自动添加列
+- descriptions.json 中的 `shot_at` 改为直接从源文件 EXIF 读取，不再依赖 json 传递
+
+#### 1.2 改造 EXIF 读取
+
+将现有的 `GetExifShotAt` 扩展为 `GetExifInfo`，返回完整 EXIF 结构体：
+
+- 当前只读了 `DateTimeOriginal` 一个 tag
+- 扩展读取：Make、Model、LensModel、FocalLength、FNumber、ISOSpeedRatings、ExposureTime、GPSInfo
+- 品牌规范化：NIKON CORPORATION → NIKON，Canon Inc. → CANON 等
+- GPS DMS → 十进制转换
+- 评估 `rwcarlsen/goexif` 对 Nikon/Canon MakerNote 的兼容性，必要时切换到 `dsoprea/go-exif`
+
+涉及文件：
+- `internal/service/processor.go`：`GetExifShotAt` → `GetExifInfo`
+- `internal/service/sync.go`：`importNewPhoto` / `resolvePhotoData` 适配新字段
+- `internal/service/photo.go`：`SavePhoto` 适配新字段
+
+#### 1.3 新增统计 API
+
+在 Go 路由中新增：
+
+- `GET /api/photos/stats` — 综合统计（品牌/镜头/焦距段/GPS/月份/时段分布）
+- `GET /api/photos` — 扩展筛选参数：`brand`、`lens`、`focal_min`/`focal_max`、`iso_min`/`iso_max`
+
+涉及文件：
+- `internal/api/routes.go`：注册新路由
+- `internal/api/photo.go`：新增 stats handler
+- `internal/service/photo.go`：新增统计查询方法
 
 ---
 
