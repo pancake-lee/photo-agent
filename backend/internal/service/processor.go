@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,34 +103,29 @@ func (p *ImportProcessor) processSingleImage(jobID string, img ImageInfo, curren
 	// 获取图片尺寸
 	width, height := GetImageSize(img.SourcePath)
 
-	// 获取描述和拍摄时间（优先从预描述文件读取）
+	// 获取描述（优先从预描述文件读取）
 	description := ""
-	var shotAt *time.Time
 	if entry, ok := GetDescriptionEntry(relPath); ok {
 		description = entry.Description
-		if entry.ShotAt != "" {
-			if t, err := time.Parse(time.RFC3339, entry.ShotAt); err == nil {
-				shotAt = &t
-			}
-		}
 		plogger.Infof("Using pre-description for %s", img.Filename)
 	} else {
 		plogger.Infof("No pre-description for %s, importing with empty description", img.Filename)
 	}
 
-	// 预描述中无 shot_at 时，fallback 到读取原始文件 EXIF
-	if shotAt == nil {
-		shotAt = GetExifShotAt(img.SourcePath)
+	// 读取完整 EXIF 信息（shot_at 直接从源文件 EXIF 读取）
+	exifInfo := GetExifInfo(img.SourcePath)
+	if exifInfo == nil {
+		exifInfo = &ExifInfo{}
 	}
 
 	// 根据拍摄时间匹配活动
 	timeline := ""
-	if shotAt != nil {
-		timeline = FindEventByTime(*shotAt)
+	if exifInfo.ShotAt != nil {
+		timeline = FindEventByTime(*exifInfo.ShotAt)
 	}
 
 	// 保存到数据库
-	photo, err := SavePhoto(img.Filename, relPath, timeline, "", description, width, height, shotAt)
+	photo, err := SavePhoto(img.Filename, relPath, timeline, "", description, width, height, exifInfo)
 	if err != nil {
 		p.appendJobLog(jobID, fmt.Sprintf("save db failed %s: %v", img.Filename, err))
 		p.incFailed(jobID)
@@ -253,8 +249,23 @@ func GetImageSize(path string) (int, int) {
 	return config.Width, config.Height
 }
 
-// GetExifShotAt 读取 EXIF 拍摄时间（DateTimeOriginal）
-func GetExifShotAt(path string) *time.Time {
+// ExifInfo 完整 EXIF 信息
+type ExifInfo struct {
+	ShotAt       *time.Time
+	Brand        string
+	Model        string
+	Lens         string
+	FocalLength  string
+	Aperture     string
+	ISO          int
+	ExposureTime string
+	Latitude     *float64
+	Longitude    *float64
+	Altitude     *float64
+}
+
+// GetExifInfo 读取完整 EXIF 信息
+func GetExifInfo(path string) *ExifInfo {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -266,9 +277,101 @@ func GetExifShotAt(path string) *time.Time {
 		return nil
 	}
 
-	tm, err := x.DateTime()
-	if err != nil {
+	info := &ExifInfo{}
+
+	// 拍摄时间
+	if tm, err := x.DateTime(); err == nil {
+		info.ShotAt = &tm
+	}
+
+	// 品牌 / 型号 / 镜头
+	if tag, err := x.Get(exif.Make); err == nil {
+		if s, err := tag.StringVal(); err == nil {
+			info.Brand = normalizeBrand(s)
+		}
+	}
+	if tag, err := x.Get(exif.Model); err == nil {
+		if s, err := tag.StringVal(); err == nil {
+			info.Model = strings.TrimRight(s, "\x00")
+		}
+	}
+	if tag, err := x.Get(exif.LensModel); err == nil {
+		if s, err := tag.StringVal(); err == nil {
+			info.Lens = strings.TrimRight(s, "\x00")
+		}
+	}
+
+	// 焦距 (35mm → "35mm")
+	if tag, err := x.Get(exif.FocalLength); err == nil {
+		if rat, err := tag.Rat(0); err == nil {
+			mm := float64(rat.Num().Int64()) / float64(rat.Denom().Int64())
+			info.FocalLength = fmt.Sprintf("%.0fmm", mm)
+		}
+	}
+
+	// 光圈 (2.8 → "f/2.8")
+	if tag, err := x.Get(exif.FNumber); err == nil {
+		if rat, err := tag.Rat(0); err == nil {
+			f := float64(rat.Num().Int64()) / float64(rat.Denom().Int64())
+			info.Aperture = fmt.Sprintf("f/%.1f", f)
+		}
+	}
+
+	// ISO
+	if tag, err := x.Get(exif.ISOSpeedRatings); err == nil {
+		if v, err := tag.Int(0); err == nil {
+			info.ISO = v
+		}
+	}
+
+	// 快门速度 (1/125 或 2.0)
+	if tag, err := x.Get(exif.ExposureTime); err == nil {
+		if rat, err := tag.Rat(0); err == nil {
+			num, den := rat.Num(), rat.Denom()
+			if num.Cmp(den) < 0 {
+				info.ExposureTime = fmt.Sprintf("%d/%d", num, den)
+			} else {
+				info.ExposureTime = fmt.Sprintf("%.1f", float64(num.Int64())/float64(den.Int64()))
+			}
+		}
+	}
+
+	// GPS
+	if lat, lon, err := x.LatLong(); err == nil {
+		info.Latitude = &lat
+		info.Longitude = &lon
+	}
+	if tag, err := x.Get(exif.GPSAltitude); err == nil {
+		if rat, err := tag.Rat(0); err == nil {
+			alt := float64(rat.Num().Int64()) / float64(rat.Denom().Int64())
+			info.Altitude = &alt
+		}
+	}
+
+	return info
+}
+
+// normalizeBrand 品牌名规范化：NIKON CORPORATION → NIKON, Canon Inc. → CANON 等
+func normalizeBrand(make string) string {
+	upper := strings.ToUpper(strings.TrimRight(make, "\x00"))
+	brands := []string{
+		"NIKON", "CANON", "SONY", "FUJIFILM", "OLYMPUS", "PANASONIC",
+		"LEICA", "RICOH", "PENTAX", "SIGMA", "HASSELBLAD", "PHASE ONE",
+		"DJI", "APPLE", "SAMSUNG", "GOOGLE", "HUAWEI", "XIAOMI",
+	}
+	for _, brand := range brands {
+		if strings.Contains(upper, brand) {
+			return brand
+		}
+	}
+	return upper
+}
+
+// GetExifShotAt 读取 EXIF 拍摄时间（DateTimeOriginal），兼容旧调用方
+func GetExifShotAt(path string) *time.Time {
+	info := GetExifInfo(path)
+	if info == nil {
 		return nil
 	}
-	return &tm
+	return info.ShotAt
 }

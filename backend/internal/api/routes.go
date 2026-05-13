@@ -12,6 +12,7 @@ func SetupRoutes(r *gin.Engine) {
 
 		// 照片管理
 		api.GET("/photos", ListPhotos)
+		api.GET("/photos/stats", GetPhotoStats)
 		api.GET("/photos/:id", GetPhoto)
 		api.GET("/photos/:id/image", GetPhotoImage)
 

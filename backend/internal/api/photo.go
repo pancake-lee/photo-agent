@@ -14,6 +14,8 @@ import (
 func ListPhotos(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
 	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	isoMin, _ := strconv.Atoi(c.Query("iso_min"))
+	isoMax, _ := strconv.Atoi(c.Query("iso_max"))
 	if page < 1 {
 		page = 1
 	}
@@ -27,6 +29,12 @@ func ListPhotos(c *gin.Context) {
 		Timeline: c.Query("timeline"),
 		Tag:      c.Query("tag"),
 		Keyword:  c.Query("keyword"),
+		Brand:    c.Query("brand"),
+		Lens:     c.Query("lens"),
+		FocalMin: c.Query("focal_min"),
+		FocalMax: c.Query("focal_max"),
+		ISOMin:   isoMin,
+		ISOMax:   isoMax,
 	}
 
 	photos, total, err := service.ListPhotos(params)
@@ -42,6 +50,17 @@ func ListPhotos(c *gin.Context) {
 		"page_size":   pageSize,
 		"total_pages": (int(total) + pageSize - 1) / pageSize,
 	})
+}
+
+// GetPhotoStats 照片综合统计
+func GetPhotoStats(c *gin.Context) {
+	stats, err := service.GetPhotoStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
 }
 
 // GetPhoto 单张照片详情

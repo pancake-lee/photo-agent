@@ -11,7 +11,7 @@ import (
 )
 
 // SavePhoto 保存照片元数据到数据库
-func SavePhoto(filename, filePath, timeline, tags, description string, width, height int, shotAt *time.Time) (*model.Photo, error) {
+func SavePhoto(filename, filePath, timeline, tags, description string, width, height int, exifInfo *ExifInfo) (*model.Photo, error) {
 	photo := &model.Photo{
 		ID:          uuid.NewV4().String(),
 		Filename:    filename,
@@ -19,10 +19,23 @@ func SavePhoto(filename, filePath, timeline, tags, description string, width, he
 		Timeline:    timeline,
 		Tags:        tags,
 		Description: description,
-		ShotAt:      shotAt,
 		Width:       width,
 		Height:      height,
 		ImportedAt:  time.Now(),
+	}
+
+	if exifInfo != nil {
+		photo.ShotAt = exifInfo.ShotAt
+		photo.Brand = exifInfo.Brand
+		photo.Model = exifInfo.Model
+		photo.Lens = exifInfo.Lens
+		photo.FocalLength = exifInfo.FocalLength
+		photo.Aperture = exifInfo.Aperture
+		photo.ISO = exifInfo.ISO
+		photo.ExposureTime = exifInfo.ExposureTime
+		photo.Latitude = exifInfo.Latitude
+		photo.Longitude = exifInfo.Longitude
+		photo.Altitude = exifInfo.Altitude
 	}
 
 	if err := db.Create(photo).Error; err != nil {
@@ -49,6 +62,12 @@ type ListPhotosParams struct {
 	Timeline string // 按时间线过滤
 	Tag      string // 按标签过滤
 	Keyword  string // 按关键词过滤（description LIKE）
+	Brand    string // 按品牌过滤
+	Lens     string // 按镜头过滤（LIKE）
+	FocalMin string // 焦距下限（mm）
+	FocalMax string // 焦距上限（mm）
+	ISOMin   int    // ISO 下限
+	ISOMax   int    // ISO 上限
 }
 
 // ListPhotos 查询照片列表（分页、过滤）
@@ -73,6 +92,24 @@ func ListPhotos(params ListPhotosParams) ([]model.Photo, int64, error) {
 	}
 	if params.Keyword != "" {
 		q = q.Where("description LIKE ?", "%"+params.Keyword+"%")
+	}
+	if params.Brand != "" {
+		q = q.Where("brand = ?", params.Brand)
+	}
+	if params.Lens != "" {
+		q = q.Where("lens LIKE ?", "%"+params.Lens+"%")
+	}
+	if params.FocalMin != "" {
+		q = q.Where("CAST(REPLACE(focal_length, 'mm', '') AS REAL) >= ?", params.FocalMin)
+	}
+	if params.FocalMax != "" {
+		q = q.Where("CAST(REPLACE(focal_length, 'mm', '') AS REAL) <= ?", params.FocalMax)
+	}
+	if params.ISOMin > 0 {
+		q = q.Where("iso >= ?", params.ISOMin)
+	}
+	if params.ISOMax > 0 {
+		q = q.Where("iso <= ?", params.ISOMax)
 	}
 
 	var total int64
@@ -123,6 +160,193 @@ func ListDistinctTimelines() ([]string, error) {
 		return nil, fmt.Errorf("query timelines failed: %w", err)
 	}
 	return timelines, nil
+}
+
+// StatItem 单项统计
+type StatItem struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+// FocalRangeStat 焦距段统计
+type FocalRangeStat struct {
+	Range string `json:"range"`
+	Label string `json:"label"`
+	Count int64  `json:"count"`
+}
+
+// GPSStat GPS 统计
+type GPSStat struct {
+	WithGPS    int64 `json:"with_gps"`
+	WithoutGPS int64 `json:"without_gps"`
+}
+
+// MonthlyStat 月度统计
+type MonthlyStat struct {
+	Month string `json:"month"`
+	Count int64  `json:"count"`
+}
+
+// HourlyStat 时段统计
+type HourlyStat struct {
+	Hour  int   `json:"hour"`
+	Count int64 `json:"count"`
+}
+
+// PhotoStats 综合统计
+type PhotoStats struct {
+	Total       int64            `json:"total"`
+	Brands      []StatItem       `json:"brands"`
+	Lens        []StatItem       `json:"lens"`
+	FocalRanges []FocalRangeStat `json:"focal_ranges"`
+	GPS         GPSStat          `json:"gps"`
+	Monthly     []MonthlyStat    `json:"monthly"`
+	Hourly      []HourlyStat     `json:"hourly"`
+}
+
+// GetPhotoStats 获取综合统计信息
+func GetPhotoStats() (*PhotoStats, error) {
+	stats := &PhotoStats{}
+
+	// 总数
+	if err := db.Model(&model.Photo{}).Count(&stats.Total).Error; err != nil {
+		return nil, fmt.Errorf("count photos failed: %w", err)
+	}
+
+	// 品牌分布
+	if err := db.Model(&model.Photo{}).
+		Select("brand as name, COUNT(*) as count").
+		Where("brand != ''").
+		Group("brand").
+		Order("count DESC").
+		Scan(&stats.Brands).Error; err != nil {
+		return nil, fmt.Errorf("stats brands failed: %w", err)
+	}
+
+	// 镜头分布
+	if err := db.Model(&model.Photo{}).
+		Select("lens as name, COUNT(*) as count").
+		Where("lens != ''").
+		Group("lens").
+		Order("count DESC").
+		Scan(&stats.Lens).Error; err != nil {
+		return nil, fmt.Errorf("stats lens failed: %w", err)
+	}
+
+	// GPS 统计
+	if err := db.Model(&model.Photo{}).
+		Select("COUNT(CASE WHEN latitude IS NOT NULL THEN 1 END) as with_gps, COUNT(CASE WHEN latitude IS NULL THEN 1 END) as without_gps").
+		Scan(&stats.GPS).Error; err != nil {
+		return nil, fmt.Errorf("stats gps failed: %w", err)
+	}
+
+	// 月度分布
+	if err := db.Model(&model.Photo{}).
+		Select("strftime('%Y-%m', shot_at) as month, COUNT(*) as count").
+		Where("shot_at IS NOT NULL").
+		Group("month").
+		Order("month").
+		Scan(&stats.Monthly).Error; err != nil {
+		return nil, fmt.Errorf("stats monthly failed: %w", err)
+	}
+
+	// 时段分布
+	if err := db.Model(&model.Photo{}).
+		Select("CAST(strftime('%H', shot_at) AS INTEGER) as hour, COUNT(*) as count").
+		Where("shot_at IS NOT NULL").
+		Group("hour").
+		Order("hour").
+		Scan(&stats.Hourly).Error; err != nil {
+		return nil, fmt.Errorf("stats hourly failed: %w", err)
+	}
+
+	// 焦距段分布（在 Go 中完成分桶）
+	focalRanges, err := computeFocalRangeStats()
+	if err != nil {
+		return nil, fmt.Errorf("stats focal ranges failed: %w", err)
+	}
+	stats.FocalRanges = focalRanges
+
+	return stats, nil
+}
+
+// computeFocalRangeStats 统计焦距段分布
+// 焦距存储为 "35mm" 格式，需要在 Go 中解析数值并分桶。
+func computeFocalRangeStats() ([]FocalRangeStat, error) {
+	var rows []struct {
+		FocalLength string
+	}
+	if err := db.Model(&model.Photo{}).
+		Select("focal_length").
+		Where("focal_length != ''").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	// 焦距段分桶定义
+	buckets := []struct {
+		key   string
+		label string
+		min   float64
+		max   float64
+	}{
+		{"ultra_wide", "< 24mm", 0, 24},
+		{"wide", "24-35mm", 24, 35},
+		{"normal", "35-70mm", 35, 70},
+		{"telephoto", "70-200mm", 70, 200},
+		{"super_telephoto", "> 200mm", 200, 1e9},
+	}
+	counts := make(map[string]int64)
+	unknown := int64(0)
+
+	for _, r := range rows {
+		mm := parseFocalLength(r.FocalLength)
+		if mm < 0 {
+			unknown++
+			continue
+		}
+		found := false
+		for _, b := range buckets {
+			if mm >= b.min && mm < b.max {
+				counts[b.key]++
+				found = true
+				break
+			}
+		}
+		if !found {
+			unknown++
+		}
+	}
+
+	result := make([]FocalRangeStat, 0, len(buckets))
+	for _, b := range buckets {
+		result = append(result, FocalRangeStat{
+			Range: b.key,
+			Label: b.label,
+			Count: counts[b.key],
+		})
+	}
+	if unknown > 0 {
+		result = append(result, FocalRangeStat{
+			Range: "unknown",
+			Label: "未知",
+			Count: unknown,
+		})
+	}
+	return result, nil
+}
+
+// parseFocalLength 解析 "35mm" 格式的焦距字符串，返回数值（mm）。
+// 无法解析时返回 -1。
+func parseFocalLength(s string) float64 {
+	var val float64
+	if n, err := fmt.Sscanf(s, "%fmm", &val); n == 1 && err == nil {
+		return val
+	}
+	if n, err := fmt.Sscanf(s, "%f", &val); n == 1 && err == nil {
+		return val
+	}
+	return -1
 }
 
 // ListDistinctTags 查询所有不重复的标签

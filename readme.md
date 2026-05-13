@@ -66,7 +66,8 @@
 
 - [docs/PRD.md](docs/PRD.md) — 产品需求。一句话：让摄影照片库"会说话"的 AI Agent。面向摄影爱好者，核心能力是用自然语言检索照片、基于历史作品问答和激发创作思路。
 - [docs/TECH_SPEC.md](docs/TECH_SPEC.md) — 技术方案。Dify + Go 双栈。照片数据流：`batch_vlm` 预处理（生成 `descriptions.json`）→ `server` 启动自动同步到 SQLite + Dify 知识库，无需手动触发导入。
-- [docs/TASKS.md](docs/TASKS.md) — 3 天开发任务拆分。每天结束交付一个可运行的里程碑，Dify + Go 双栈。
+- [docs/TASK_1.md](docs/TASK_1.md) — 第一轮：MVP v1.0.0，3 天完成 Go 后端核心 + Dify Agent 联调（已完成）
+- [docs/TASK_2.md](docs/TASK_2.md) — 第二轮：AI 服务层（LangChain + Chroma + Text-to-SQL + LangGraph），7 天计划，Go 后端扩展 + Python 推理层双栈
 - [docs/note.md](docs/note.md) — 决策备忘。记录被否定/推翻的技术栈和数据集方案，以及前期讨论归档。
 - [docs/learn.md](docs/learn.md) — 技术学习笔记。
 - [docs/DIFY_SETUP.md](docs/DIFY_SETUP.md) — Dify 部署与配置指南。包含 docker-compose 启动、模型配置、Agent 创建、工具导入步骤。
@@ -102,7 +103,7 @@
 
 4. **docs/TASKS.md — 任务拆分与进度**
    - 职责：开发计划、每日里程碑、完成情况、人工执行记录
-   - 当任务执行结果与 PRD/TECH_SPEC 的设计有偏差时，在 TASKS 中记录实际执行情况，并视情况同步更新上游文档
+   - 当任务执行结果与 PRD/TECH_SPEC 的设计有偏差时，在 TASK 中记录实际执行情况，并视情况同步更新上游文档
 
 5. 实际的代码实现
 
@@ -110,7 +111,7 @@
    - 职责：从零到可聊天的完整操作步骤
    - 当操作步骤与代码实际参数冲突时，以代码为准（例如 init_dify 的启动参数）
 
-开发任务拆分和进度记录在 [docs/TASKS.md](docs/TASKS.md)。Day 1（Go 后端核心）、Day 2（查询 API + Dify 配置）、Day 3（联调 + Docker Compose + 交付）已完成。当前为迭代优化阶段，主要工作包括：server 启动自动同步、`descriptions.json` 嵌入 EXIF 拍摄时间、时间线日期解析与匹配优化、E2E 测试程序。
+**当前进度**：MVP v1.0.0 已完成（[docs/TASK_1.md](docs/TASK_1.md) Day 1-3）。第二轮计划 [docs/TASK_2.md](docs/TASK_2.md) 进行中 — Day 1 Go 后端 EXIF 扩展 + 统计 API 已完成，正在推进 Day 2 LangChain + Chroma 向量库。
 
 **构建与测试**：
 

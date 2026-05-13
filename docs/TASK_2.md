@@ -40,57 +40,34 @@ Dify Web UI (Agent 编排 + 知识库 RAG + 聊天 UI)
 
 ## 二、每日任务
 
-### Day 1：Go 后端扩展 — EXIF 元数据 + 统计工具 API
+### ✅ Day 1（已完成）：Go 后端扩展 — EXIF 元数据 + 统计工具 API
 
-> 为后续 Python Agent 准备数据工具接口。所有变更在 Go 后端完成，不涉及 Python 代码。
+> 所有变更在 Go 后端完成，不涉及 Python 代码。`go build ./...` + `go vet ./...` 通过。
 
 #### 1.1 扩展 Photo 模型
 
-在现有 `photos` 表新增 EXIF 字段：
-
-```
-brand         TEXT    — 品牌（统一大写简称：NIKON/CANON/SONY/...）
-model         TEXT    — 相机型号
-lens          TEXT    — 镜头型号
-focal_length  TEXT    — 焦距，如 "35mm"
-aperture      TEXT    — 光圈，如 "f/3.2"
-iso           INTEGER — ISO 感光度
-exposure_time TEXT    — 快门速度，如 "1/125"
-latitude      REAL    — GPS 纬度（十进制）
-longitude     REAL    — GPS 经度（十进制）
-altitude      REAL    — GPS 海拔
-```
-
-涉及文件：
-- `internal/model/photo.go`：新增上述字段，GORM AutoMigrate 自动添加列
-- descriptions.json 中的 `shot_at` 改为直接从源文件 EXIF 读取，不再依赖 json 传递
+`internal/model/photo.go` — `Photo` 结构体新增 10 个 EXIF 字段：`Brand`, `Model`, `Lens`, `FocalLength`, `Aperture`, `ISO`, `ExposureTime`, `Latitude`, `Longitude`, `Altitude`。GPS 字段用 `*float64` 指针，缺失时存 NULL。GORM AutoMigrate 自动添加列。
 
 #### 1.2 改造 EXIF 读取
 
-将现有的 `GetExifShotAt` 扩展为 `GetExifInfo`，返回完整 EXIF 结构体：
-
-- 当前只读了 `DateTimeOriginal` 一个 tag
-- 扩展读取：Make、Model、LensModel、FocalLength、FNumber、ISOSpeedRatings、ExposureTime、GPSInfo
-- 品牌规范化：NIKON CORPORATION → NIKON，Canon Inc. → CANON 等
-- GPS DMS → 十进制转换
-- 评估 `rwcarlsen/goexif` 对 Nikon/Canon MakerNote 的兼容性，必要时切换到 `dsoprea/go-exif`
-
-涉及文件：
-- `internal/service/processor.go`：`GetExifShotAt` → `GetExifInfo`
-- `internal/service/sync.go`：`importNewPhoto` / `resolvePhotoData` 适配新字段
-- `internal/service/photo.go`：`SavePhoto` 适配新字段
+- `internal/service/processor.go:252` — 新增 `ExifInfo` 结构体和 `GetExifInfo(path)`，一次性读取 DateTimeOriginal / Make / Model / LensModel / FocalLength / FNumber / ISOSpeedRatings / ExposureTime / GPS 全部 tag
+- `internal/service/processor.go:354` — `normalizeBrand(make)` 品牌规范化，子串匹配 18 个主流品牌（NIKON CORPORATION → NIKON 等）
+- `internal/service/processor.go:374` — `GetExifShotAt` 改为委托 `GetExifInfo` 的薄封装，`cmd/batch_vlm` 向后兼容
+- `internal/service/processor.go:91` — `processSingleImage` 改用 `GetExifInfo`，shot_at 直接从源文件 EXIF 读取
+- `internal/service/sync.go:190` — `resolvePhotoData` 返回 `*ExifInfo`（含完整 EXIF）
+- `internal/service/sync.go:166` — `importNewPhoto` 接受 `*ExifInfo`
+- `internal/service/sync.go:213` — 新增 `updatePhotoWithExif`，AutoSync 对已有照片回填缺失的 EXIF
+- `internal/service/photo.go:14` — `SavePhoto` 签名改为接收 `*ExifInfo`，自动填充 10 个新字段
 
 #### 1.3 新增统计 API
 
-在 Go 路由中新增：
+`GET /api/photos/stats` — 返回 `total`、`brands`、`lens`、`focal_ranges`（5 段分桶）、`gps`、`monthly`、`hourly` 七维度统计。
 
-- `GET /api/photos/stats` — 综合统计（品牌/镜头/焦距段/GPS/月份/时段分布）
-- `GET /api/photos` — 扩展筛选参数：`brand`、`lens`、`focal_min`/`focal_max`、`iso_min`/`iso_max`
+`GET /api/photos` 新增筛选参数：`brand`、`lens`、`focal_min`/`focal_max`、`iso_min`/`iso_max`。
 
-涉及文件：
-- `internal/api/routes.go`：注册新路由
-- `internal/api/photo.go`：新增 stats handler
-- `internal/service/photo.go`：新增统计查询方法
+- `internal/api/routes.go:15` — 注册 `GET /photos/stats`（放在 `:id` 之前）
+- `internal/api/photo.go:55` — 新增 `GetPhotoStats` handler；`ListPhotos` 解析新增 query params
+- `internal/service/photo.go:171` — 新增 `GetPhotoStats`、`computeFocalRangeStats`、`parseFocalLength`；扩展 `ListPhotosParams` 和 `ListPhotos`
 
 ---
 

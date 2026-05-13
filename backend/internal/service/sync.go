@@ -70,21 +70,22 @@ func AutoSync() error {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			// 从 descriptions.json 获取描述和拍摄时间
-			description, shotAt := resolvePhotoData(img.relPath, img.absPath, preDesc)
+			// 从 descriptions.json 获取描述，从 EXIF 获取完整元数据
+			description, exifInfo := resolvePhotoData(img.relPath, img.absPath, preDesc)
 
 			if existing, found := existingMap[img.relPath]; found {
-				// 已存在：优先用 json 中的 shot_at 重新计算 timeline
+				// 已存在：优先用 EXIF 的 shot_at 重新计算 timeline
 				newTimeline := ""
-				if shotAt != nil {
-					newTimeline = FindEventByTime(*shotAt)
+				if exifInfo.ShotAt != nil {
+					newTimeline = FindEventByTime(*exifInfo.ShotAt)
 				} else if existing.ShotAt != nil {
 					newTimeline = FindEventByTime(*existing.ShotAt)
 				}
 
-				// description 或 timeline 任一变化都触发更新
-				if existing.Description != description || existing.Timeline != newTimeline {
-					if err := updatePhoto(existing.ID, description, newTimeline); err != nil {
+				// description 或 timeline 任一变化都触发更新，同时回填 EXIF
+				if existing.Description != description || existing.Timeline != newTimeline ||
+					existing.Brand == "" && exifInfo.Brand != "" {
+					if err := updatePhotoWithExif(existing.ID, description, newTimeline, exifInfo); err != nil {
 						plogger.Warnf("AutoSync update failed %s: %v", img.relPath, err)
 						return
 					}
@@ -101,7 +102,7 @@ func AutoSync() error {
 			}
 
 			// 新照片，执行完整导入
-			photo, err := importNewPhoto(img.absPath, img.relPath, description, shotAt)
+			photo, err := importNewPhoto(img.absPath, img.relPath, description, exifInfo)
 			if err != nil {
 				plogger.Warnf("AutoSync import failed %s: %v", img.relPath, err)
 				return
@@ -164,19 +165,19 @@ func scanImagesInPhotoPath(root string) ([]imageEntry, error) {
 }
 
 // importNewPhoto 导入单张新照片到 SQLite。
-// shotAt 优先来自 descriptions.json，为空时 fallback 到文件 EXIF。
-func importNewPhoto(absPath, relPath, description string, shotAt *time.Time) (*model.Photo, error) {
+// exifInfo 包含完整 EXIF 元数据（shot_at 优先来自 descriptions.json）。
+func importNewPhoto(absPath, relPath, description string, exifInfo *ExifInfo) (*model.Photo, error) {
 	// 获取图片尺寸
 	width, height := GetImageSize(absPath)
 
 	// 根据拍摄时间匹配活动
 	timeline := ""
-	if shotAt != nil {
-		timeline = FindEventByTime(*shotAt)
+	if exifInfo != nil && exifInfo.ShotAt != nil {
+		timeline = FindEventByTime(*exifInfo.ShotAt)
 	}
 
 	// 保存到数据库
-	photo, err := SavePhoto(filepath.Base(absPath), relPath, timeline, "", description, width, height, shotAt)
+	photo, err := SavePhoto(filepath.Base(absPath), relPath, timeline, "", description, width, height, exifInfo)
 	if err != nil {
 		return nil, fmt.Errorf("save photo failed: %w", err)
 	}
@@ -187,34 +188,72 @@ func importNewPhoto(absPath, relPath, description string, shotAt *time.Time) (*m
 
 // resolvePhotoData 从 descriptions.json 和文件 EXIF 解析照片描述与拍摄时间。
 // 优先级：descriptions.json 中的 shot_at > 文件 EXIF。
-func resolvePhotoData(relPath, absPath string, preDesc DescriptionMap) (string, *time.Time) {
+func resolvePhotoData(relPath, absPath string, preDesc DescriptionMap) (string, *ExifInfo) {
 	description := ""
-	var shotAt *time.Time
 
 	if preDesc != nil {
 		if entry, ok := GetDescriptionEntry(relPath); ok {
 			description = entry.Description
+		}
+	}
+
+	// 读取完整 EXIF 信息
+	exifInfo := GetExifInfo(absPath)
+	if exifInfo == nil {
+		exifInfo = &ExifInfo{}
+	}
+
+	// descriptions.json 中的 shot_at 优先级高于 EXIF
+	if preDesc != nil {
+		if entry, ok := GetDescriptionEntry(relPath); ok {
 			if entry.ShotAt != "" {
 				if t, err := time.Parse(time.RFC3339, entry.ShotAt); err == nil {
-					shotAt = &t
+					exifInfo.ShotAt = &t
 				}
 			}
 		}
 	}
 
-	// json 中无 shot_at 时，fallback 到读取文件 EXIF
-	if shotAt == nil {
-		shotAt = GetExifShotAt(absPath)
-	}
-
-	return description, shotAt
+	return description, exifInfo
 }
 
-// updatePhoto 更新已有照片的描述和时间线字段。
-func updatePhoto(photoID, description, timeline string) error {
+// updatePhotoWithExif 更新已有照片的描述、时间线和 EXIF 字段。
+func updatePhotoWithExif(photoID, description, timeline string, exifInfo *ExifInfo) error {
 	updates := map[string]any{
 		"description": description,
 		"timeline":    timeline,
+	}
+	if exifInfo != nil {
+		if exifInfo.Brand != "" {
+			updates["brand"] = exifInfo.Brand
+		}
+		if exifInfo.Model != "" {
+			updates["model"] = exifInfo.Model
+		}
+		if exifInfo.Lens != "" {
+			updates["lens"] = exifInfo.Lens
+		}
+		if exifInfo.FocalLength != "" {
+			updates["focal_length"] = exifInfo.FocalLength
+		}
+		if exifInfo.Aperture != "" {
+			updates["aperture"] = exifInfo.Aperture
+		}
+		if exifInfo.ISO != 0 {
+			updates["iso"] = exifInfo.ISO
+		}
+		if exifInfo.ExposureTime != "" {
+			updates["exposure_time"] = exifInfo.ExposureTime
+		}
+		if exifInfo.Latitude != nil {
+			updates["latitude"] = exifInfo.Latitude
+		}
+		if exifInfo.Longitude != nil {
+			updates["longitude"] = exifInfo.Longitude
+		}
+		if exifInfo.Altitude != nil {
+			updates["altitude"] = exifInfo.Altitude
+		}
 	}
 	if err := db.Model(&model.Photo{}).Where("id = ?", photoID).Updates(updates).Error; err != nil {
 		return fmt.Errorf("update photo failed: %w", err)
