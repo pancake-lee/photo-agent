@@ -112,6 +112,7 @@ GORM AutoMigrate 自动添加列。
 #### 3.1 RAG 检索结果聚合到照片级别
 
 `agent/chain/photo_rag.py`：
+
 - 新增 `_aggregate_by_photo`：按 `photo_id` 聚合 chunk 级检索结果，同一照片仅保留相似度最高（距离最小）的一条
 - `answer_question` 新增 `aggregate` 参数（默认 `True`），内部先检索 `n_results * 3` 个 chunk，聚合后再返回 `n_results` 张照片
 - `chat_loop` 默认使用聚合模式，避免同一照片的多 chunk 在回答中重复出现
@@ -119,6 +120,7 @@ GORM AutoMigrate 自动添加列。
 #### 3.2 Text-to-SQL 链路
 
 `agent/chain/text_to_sql.py`：
+
 - **Schema 提示**：运行时从 Go 后端 `/api/schema/photos` 获取表结构，`_format_schema` 将 JSON schema 格式化为 LLM 可用的文本（字段名、SQL 类型、JSON tag、可空性 + 注意事项）
 - **Few-shot 示例**：6 个典型查询样例（计数、品牌筛选、时间范围、ISO 范围、GPS 统计、焦距数值比较）
 - **LLM 生成**：`ChatPromptTemplate` 构建 System + Few-shot + Human 消息链，temperature=0 保证确定性
@@ -127,11 +129,13 @@ GORM AutoMigrate 自动添加列。
 - **执行与格式化**：`answer_with_sql` 提供完整链路，通过 Go 后端 `/api/query/sql` 接口执行查询，`format_results` 将结果集转为自然语言摘要
 
 Go 后端：
+
 - `internal/api/query.go`：新增 `POST /api/query/sql` 接口，接收 `{ "sql": "..." }`，返回 `{ "columns": [...], "rows": [...], "count": N }`
 - `internal/api/schema.go`：新增 `GET /api/schema/photos` 接口，通过反射从 `model.Photo` 动态提取字段信息（Go 类型、SQL 类型、JSON/GORM tag、可空性），返回结构化 JSON
 - `internal/service/query.go`：`ValidateSelectOnly` + `ExecuteSelectSQL`，服务端 SQL 安全校验，默认 limit=100、最大 1000
 
 `agent/db/sqlite_client.py`：
+
 - `QueryClient`：通过 HTTP 调用 Go 后端 `/api/query/sql` 接口执行查询，Python 层不直连 SQLite
 - `validate_select_only`：客户端双重保险，仅允许 SELECT，禁止危险关键字
 - `safe_execute`：带校验的安全执行入口
@@ -139,6 +143,7 @@ Go 后端：
 #### 3.3 测试
 
 `agent/tests/test_text_to_sql.py`（36 个用例）：
+
 - SQL 安全校验：覆盖合法 SELECT、多行、注释，以及 10+ 种非法注入场景
 - SQL 提取：Markdown 代码块、纯文本、含解释文本
 - Schema 格式化：字段列表渲染、可空性标记、注意事项渲染
@@ -149,7 +154,7 @@ Go 后端：
 
 ---
 
-### Day 4：Streaming + Function Calling
+### ✅ Day 4：Streaming + Function Calling
 
 - Streaming
   - `agent/chain/chat_agent.py` 与 `agent/chain/photo_rag.py`
@@ -161,11 +166,25 @@ Go 后端：
   - 完整回复拼接后存入对话历史，不影响多轮上下文
 
 - Function Calling
-  - Go后端提供自解释的接口`/v1/openapi.json`，则自己提供接口获取自己所有接口的OpenAPI文档（swagger）
-    - 有些接口现在没有`v1`的版本前缀，顺便加上
-  - Py侧配置访问`/v1/openapi.json`然后自动解析出对应的接口，做合适的解析转换后传给LLM
-  - 实现 Function Calling：LLM 根据用户意图自动选择并调用工具
-  - 跑通"找照片"→触发搜索，"归档照片"→触发归档的完整链路
+  - Go后端提供自解释的接口`/v1/openapi.json`，获取自己所有接口的OpenAPI文档
+    - PS: 顺便，路由统一添加 `v1` 前缀
+  - Py侧自动解析 OpenAPI 并转换为 LLM 工具
+    - `agent/tools/openapi_client.py` — `OpenAPIClient` 类：
+      - `_fetch_doc` 从 `/v1/openapi.json` 拉取文档
+      - `_parse_tools` 将 paths → OpenAI function definitions
+      - `_build_request` 根据参数构建 HTTP 请求
+      - `execute` 发送实际请求并返回结果
+    - 工具名生成规则：`{method}_{path_segments}`，如 `get_photos`、`post_photos_id_archive`
+  - Function Calling 聊天循环
+    - `agent/chain/function_agent.py` — 完整多轮对话 Agent：
+      - `llm.bind_tools(function_defs)` 绑定所有可用工具
+      - 第一轮llm请求，处理llm的回复
+        - 提取 `tool_calls`
+        - 执行工具：`tool_client.execute` 发送 HTTP
+      - 第二轮llm请求：、
+        - 基于工具结果生成最终回答，控制台实时输出
+  - 测试 `agent/tests/test_function_calling.py`
+    - 12 个用例覆盖工具名生成、参数解析、请求构建、body 拼接、未知工具处理
 
 ---
 

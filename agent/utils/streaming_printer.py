@@ -183,6 +183,7 @@ class StreamingPrinter:
         self._buffer = ""
         self._lock = threading.Lock()
         self._running = True
+        self._closing = False
         self._has_data = threading.Event()
         self._thread = threading.Thread(target=self._print_loop, daemon=True)
         self._thread.start()
@@ -216,7 +217,7 @@ class StreamingPrinter:
 
     def _print_loop(self) -> None:
         """后台打印线程：按当前速度从缓冲区逐字输出。"""
-        while self._running:
+        while True:
             self._has_data.wait(timeout=0.05)
             self._has_data.clear()
 
@@ -225,10 +226,13 @@ class StreamingPrinter:
                 self._buffer = ""
 
             for ch in text:
-                if not self._running:
-                    break
                 print(ch, end="", flush=True)
                 time.sleep(1.0 / self.current_cps)
+
+            # 关闭信号且缓冲区已空时才真正退出，防止末尾字符丢失
+            with self._lock:
+                if self._closing and not self._buffer:
+                    break
 
     def feed(self, text: str) -> None:
         """
@@ -252,7 +256,7 @@ class StreamingPrinter:
 
     def close(self) -> None:
         """关闭打印机，等待后台线程完成剩余内容。"""
-        self._running = False
+        self._closing = True
         self._has_data.set()
         self._thread.join(timeout=2.0)
 
