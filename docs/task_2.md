@@ -149,13 +149,23 @@ Go 后端：
 
 ---
 
-### Day 4：SSE + Function Calling
+### Day 4：Streaming + Function Calling
 
-- 理解 SSE（Server-Sent Events）原理，在 FastAPI 实现流式输出接口
-- 对接 Go 后端 SSE 代理，前端展示打字机效果
-- 定义照片工具函数：`search_photos`、`archive_photos`
-- 实现 Function Calling：LLM 根据用户意图自动选择并调用工具
-- 跑通"找照片"→触发搜索，"归档照片"→触发归档的完整链路
+- Streaming
+  - `agent/chain/chat_agent.py` 与 `agent/chain/photo_rag.py`
+    - LLM 实例均开启 `streaming=True`，用 `chain.stream()` 执行
+  - `agent/utils/streaming_printer.py`
+    - 后台线程按当前速度逐字输出，主循环不被阻塞
+    - 速度控制用微分先行的PID算法，速度平滑又自动追上LLM实际输出
+      - 单纯是学生时代用过，拿来玩玩而已
+  - 完整回复拼接后存入对话历史，不影响多轮上下文
+
+- Function Calling
+  - Go后端提供自解释的接口`/v1/openapi.json`，则自己提供接口获取自己所有接口的OpenAPI文档（swagger）
+    - 有些接口现在没有`v1`的版本前缀，顺便加上
+  - Py侧配置访问`/v1/openapi.json`然后自动解析出对应的接口，做合适的解析转换后传给LLM
+  - 实现 Function Calling：LLM 根据用户意图自动选择并调用工具
+  - 跑通"找照片"→触发搜索，"归档照片"→触发归档的完整链路
 
 ---
 
@@ -196,3 +206,8 @@ Go 后端：
 - 验证 AI 工程保障：重试触发、降级切换、Token 追踪落库
 - 整理 README，说明 Python 服务层架构、模块职责、启动方式
 - 确保所有代码可运行、可演示
+
+## TODO
+
+- 对接LLM的 SSE（Server-Sent Events）原理，WEB前端展示打字机效果
+  - 当前还是py写的cli应用，还没有上WEB页面

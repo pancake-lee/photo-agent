@@ -15,6 +15,7 @@ import langchain.schema as lc_schema
 import langchain_openai as lc_openai
 
 import config
+import utils.streaming_printer as streaming_printer
 
 
 SYSTEM_PROMPT = (
@@ -31,6 +32,7 @@ def chat_loop(cfg: config.Config) -> None:
         api_key=cfg.llm_api_key,  # type: ignore[arg-type]
         base_url=cfg.llm_base_url,
         temperature=0.7,
+        streaming=True,
     )
 
     # Prompt 模板：system 指令 + 动态历史 + 当前用户输入
@@ -65,11 +67,17 @@ def chat_loop(cfg: config.Config) -> None:
         if not user_input.strip():  # 去掉两端空格
             continue
 
-        print("⏳ 等待回复...")
-        response = chain.invoke({"history": history, "input": user_input})
+        print(f"AI: ", end="")
 
-        reply = str(response.content)
-        print(f"AI: {reply}")
+        reply_parts: list[str] = []
+        with streaming_printer.StreamingPrinter() as printer:
+            for chunk in chain.stream({"history": history, "input": user_input}):
+                text = str(chunk.content)
+                if text:
+                    printer.feed(text)
+                    reply_parts.append(text)
+        reply = "".join(reply_parts)
+        print()
         print()
 
         # 追加到历史

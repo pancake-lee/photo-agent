@@ -17,6 +17,7 @@ import langchain_openai as lc_openai
 
 import config
 import embedding.embedder as embedder
+import utils.streaming_printer as streaming_printer
 import vectorstore.chroma_client as chroma_client
 
 
@@ -157,6 +158,7 @@ def _build_rag_chain(cfg: config.Config):
         api_key=cfg.llm_api_key,  # type: ignore[arg-type]
         base_url=cfg.llm_base_url,
         temperature=0.5,
+        streaming=True,
     )
 
     prompt = lc_prompts.ChatPromptTemplate.from_messages([
@@ -227,12 +229,16 @@ def chat_loop(cfg: config.Config) -> None:
         aggregated = _aggregate_by_photo(results, top_n=5)
         context = _build_context(aggregated)
 
-        print("⏳ 生成回答...")
         chain = _build_rag_chain(cfg)
-        response = chain.invoke({"context": context, "question": user_input})
-
-        reply = str(response.content)
-        print(f"AI: {reply}")
+        reply_parts: list[str] = []
+        with streaming_printer.StreamingPrinter() as printer:
+            for chunk in chain.stream({"context": context, "question": user_input}):
+                text = str(chunk.content)
+                if text:
+                    printer.feed(text)
+                    reply_parts.append(text)
+        reply = "".join(reply_parts)
+        print()
         print()
 
         if aggregated:

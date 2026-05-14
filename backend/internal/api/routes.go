@@ -31,6 +31,11 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/tags/:name/photos", GetPhotosByTag)
 
 		// 导入任务
+		// TODO 这个“导入”，其实是指定一个目录，然后做一遍batch_vlm的事情
+		// 但这是重复的代码，而且这里的版本有些问题
+		// 又考虑到这个“batch_vlm”放在service也合适，
+		// 可以编程在聊天中去触发这个工作，也可以配套一个Cli或者管理后台来处理
+		// 所以先留下接口，但是后面和batch_vlm的逻辑代码肯定是要合并的
 		api.POST("/import/jobs", CreateImportJob)
 		api.GET("/import/jobs/:id", GetImportJob)
 		api.GET("/import/jobs/:id/logs", GetImportJobLogs)
