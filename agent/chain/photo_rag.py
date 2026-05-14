@@ -60,6 +60,51 @@ def _build_context(results: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+def _aggregate_by_photo(
+    results: list[dict],
+    top_n: int = 5,
+) -> list[dict]:
+    """
+    将 chunk 级别的检索结果按照片聚合。
+
+    同一照片的多个 chunk 只保留相似度最高（距离最小）的一条，
+    避免同一照片在上下文中重复出现。
+
+    参数:
+        results: Chroma 检索结果列表（chunk 级别）
+        top_n:   聚合后返回的最大照片数
+
+    返回:
+        按 photo_id 聚合后的结果列表，按距离升序排列
+    """
+    if not results:
+        return []
+
+    # photo_id -> 最佳结果（距离最小）
+    best_by_photo: dict[str, dict] = {}
+
+    for r in results:
+        meta = r.get("metadata") or {}
+        photo_id = meta.get("photo_id")
+        if not photo_id:
+            continue
+
+        distance = r.get("distance")
+        if distance is None:
+            distance = float("inf")
+
+        existing = best_by_photo.get(photo_id)
+        if existing is None or distance < existing.get("distance", float("inf")):
+            best_by_photo[photo_id] = r
+
+    # 按距离排序，取 top_n
+    aggregated = sorted(
+        best_by_photo.values(),
+        key=lambda x: x.get("distance") if x.get("distance") is not None else float("inf"),
+    )
+    return aggregated[:top_n]
+
+
 def _retrieve(
     cfg: config.Config,
     question: str,
@@ -126,6 +171,7 @@ def answer_question(
     cfg: config.Config,
     question: str,
     n_results: int = 5,
+    aggregate: bool = True,
 ) -> str:
     """
     执行完整 RAG 链路，返回答案字符串。
@@ -133,12 +179,19 @@ def answer_question(
     参数:
         cfg:        配置对象
         question:   用户问题
-        n_results:  检索结果数量
+        n_results:  检索结果数量（聚合模式下为返回的照片数）
+        aggregate:  是否按照片聚合（默认 True），避免同一照片多 chunk 重复
 
     返回:
         LLM 生成的回答文本
     """
-    results = _retrieve(cfg, question, n_results=n_results)
+    # 聚合模式下先检索更多 chunk，再聚合到照片级别
+    retrieve_n = n_results * 3 if aggregate else n_results
+    results = _retrieve(cfg, question, n_results=retrieve_n)
+
+    if aggregate:
+        results = _aggregate_by_photo(results, top_n=n_results)
+
     context = _build_context(results)
 
     chain = _build_rag_chain(cfg)
@@ -170,8 +223,9 @@ def chat_loop(cfg: config.Config) -> None:
             continue
 
         print("🔍 检索相关照片...")
-        results = _retrieve(cfg, user_input, n_results=5)
-        context = _build_context(results)
+        results = _retrieve(cfg, user_input, n_results=15)
+        aggregated = _aggregate_by_photo(results, top_n=5)
+        context = _build_context(aggregated)
 
         print("⏳ 生成回答...")
         chain = _build_rag_chain(cfg)
@@ -181,9 +235,9 @@ def chat_loop(cfg: config.Config) -> None:
         print(f"AI: {reply}")
         print()
 
-        if results:
+        if aggregated:
             print("📎 参考照片:")
-            for r in results:
+            for r in aggregated:
                 meta = r.get("metadata") or {}
                 photo_id = meta.get("photo_id", "unknown")
                 distance = r.get("distance")

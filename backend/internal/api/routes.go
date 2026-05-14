@@ -16,6 +16,12 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/photos/:id", GetPhoto)
 		api.GET("/photos/:id/image", GetPhotoImage)
 
+		// 通用 SQL 查询
+		api.POST("/query/sql", ExecuteSQL)
+
+		// 表结构
+		api.GET("/schema/photos", GetPhotoSchema)
+
 		// 时间线
 		api.GET("/timelines", ListTimelines)
 		api.GET("/timelines/:name/photos", GetPhotosByTimeline)

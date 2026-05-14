@@ -52,7 +52,7 @@ GORM AutoMigrate 自动添加列。
 
 `GET /api/photos` 新增筛选参数：`brand`、`lens`、`focal_min`/`focal_max`、`iso_min`/`iso_max`。
 
-### Day 2：LangChain + Chroma 向量库
+### ✅ Day 2：LangChain + Chroma 向量库
 
 #### 🔧 前置准备
 
@@ -65,7 +65,7 @@ GORM AutoMigrate 自动添加列。
 - 解决系统 sqlite3 版本过低导致 ChromaDB 无法启动的问题
   - `pip install pysqlite3-binary`
 
-编码文件：
+### 编码文件
 
 - `agent/pyproject.toml` — Python 项目依赖定义
   - `pip install .` 或 `pip install -e .`
@@ -83,7 +83,13 @@ GORM AutoMigrate 自动添加列。
 
 - Embedding
   - `agent/embedding/chunking.py`
-    - 原文分片的实现，可以扩展多种分片方法
+    - 三种分片策略已实现，通过 `chunk_text` 统一入口分发
+      - `none`：不分块，整块存储（默认，适用于短文档）
+      - `fixed_size`：按固定字数分片，带重叠窗口（`chunk_size`/`chunk_overlap` 可配置，`chunk_size` 默认值优先取配置，无配置时按 `context_size * 50%` 计算，兜底 500）
+      - `markdown_heading`：按 Markdown 标题分片（默认二级标题 `##`，`heading_level` 可配置 1-6）
+    - `chunk_text` 统一调用入口，用枚举值指定分块策略，用户自己做策略的配置或者选择，然后调用该接口进行分块
+    - `chunk_test_auto` 内部实现了一个根据输入内容做简单识别的自动策略，短文本不分块，长文本如果是md格式则尝试分块，否则按长度分块
+    - `agent/scripts/index_photos.py` 增量索引脚本已接入配置驱动的分块策略，`_strategy_label` 记录策略参数用于变更检测
   - `agent/embedding/embedder.py`
     - 调用go-server `/v1/embeddings` 代理，标准 OpenAI 格式
     - 未使用 `langchain_openai.OpenAIEmbeddings`，原因是其默认启用 tiktoken 会将文本预编码为 token ID 数组传给 API，而 go-server 代理只接受原始字符串 input。禁用 tiktoken 后又依赖 transformers tokenizer，不在当前依赖中，故直接使用 httpx 发送标准 OpenAI 格式请求。
@@ -101,14 +107,45 @@ GORM AutoMigrate 自动添加列。
   - index_photos.py已经处理好向量数据入库
   - 用户问题 → Embedding → Chroma 检索 Top-K → 拼接上下文 → LLM 生成
 
-### Day 3：文档分块 + Text-to-SQL
+### ✅ Day 3（已完成）：Text-to-SQL + RAG 照片级聚合
 
-- 实现文档分块策略：短描述（<500 字）整块存储，长描述用递归分块 + 重叠窗口，每块带照片 ID 前缀
-- 检索时按块查询，返回时聚合到照片级别
-- 理解 Text-to-SQL 原理：Schema 提示 + Few-shot 示例 → LLM 生成 SQL
-- 定义 `photos` 表 Schema，实现 NL2SQL 链路
-- SQL 安全校验：只允许 SELECT 语句，执行前解析校验
-- 在 FastAPI 暴露自然语言查询接口
+#### 3.1 RAG 检索结果聚合到照片级别
+
+`agent/chain/photo_rag.py`：
+- 新增 `_aggregate_by_photo`：按 `photo_id` 聚合 chunk 级检索结果，同一照片仅保留相似度最高（距离最小）的一条
+- `answer_question` 新增 `aggregate` 参数（默认 `True`），内部先检索 `n_results * 3` 个 chunk，聚合后再返回 `n_results` 张照片
+- `chat_loop` 默认使用聚合模式，避免同一照片的多 chunk 在回答中重复出现
+
+#### 3.2 Text-to-SQL 链路
+
+`agent/chain/text_to_sql.py`：
+- **Schema 提示**：运行时从 Go 后端 `/api/schema/photos` 获取表结构，`_format_schema` 将 JSON schema 格式化为 LLM 可用的文本（字段名、SQL 类型、JSON tag、可空性 + 注意事项）
+- **Few-shot 示例**：6 个典型查询样例（计数、品牌筛选、时间范围、ISO 范围、GPS 统计、焦距数值比较）
+- **LLM 生成**：`ChatPromptTemplate` 构建 System + Few-shot + Human 消息链，temperature=0 保证确定性
+- **SQL 提取**：`_extract_sql_from_response` 支持 Markdown 代码块和纯文本两种输出格式
+- **安全校验**：`validate_select_only` 双保险——首词必须是 `SELECT`，且全文正则扫描禁止 INSERT/UPDATE/DELETE/DROP/CREATE/ALTER/TRUNCATE/REPLACE/ATTACH/DETACH/PRAGMA
+- **执行与格式化**：`answer_with_sql` 提供完整链路，通过 Go 后端 `/api/query/sql` 接口执行查询，`format_results` 将结果集转为自然语言摘要
+
+Go 后端：
+- `internal/api/query.go`：新增 `POST /api/query/sql` 接口，接收 `{ "sql": "..." }`，返回 `{ "columns": [...], "rows": [...], "count": N }`
+- `internal/api/schema.go`：新增 `GET /api/schema/photos` 接口，通过反射从 `model.Photo` 动态提取字段信息（Go 类型、SQL 类型、JSON/GORM tag、可空性），返回结构化 JSON
+- `internal/service/query.go`：`ValidateSelectOnly` + `ExecuteSelectSQL`，服务端 SQL 安全校验，默认 limit=100、最大 1000
+
+`agent/db/sqlite_client.py`：
+- `QueryClient`：通过 HTTP 调用 Go 后端 `/api/query/sql` 接口执行查询，Python 层不直连 SQLite
+- `validate_select_only`：客户端双重保险，仅允许 SELECT，禁止危险关键字
+- `safe_execute`：带校验的安全执行入口
+
+#### 3.3 测试
+
+`agent/tests/test_text_to_sql.py`（36 个用例）：
+- SQL 安全校验：覆盖合法 SELECT、多行、注释，以及 10+ 种非法注入场景
+- SQL 提取：Markdown 代码块、纯文本、含解释文本
+- Schema 格式化：字段列表渲染、可空性标记、注意事项渲染
+- 结果格式化：空结果、单行、多行、截断
+- RAG 聚合：空结果、单 chunk、同照片多 chunk 取最佳、多照片排序、`photo_id` 缺失跳过
+- Few-shot 消息构建
+- QueryClient：客户端校验拦截、safe_query 异常封装
 
 ---
 

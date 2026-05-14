@@ -30,6 +30,12 @@ class Config:
         self.embedding_api_key: str = ""
         self.embedding_model: str = ""
         self.embedding_base_url: str = ""
+        self.embedding_context_size: int = 0
+
+        self.chunk_strategy: str = "none"
+        self.chunk_size: int = 500
+        self.chunk_overlap: int = 50
+        self.heading_level: int = 2
 
         self.go_backend_url: str = ""
 
@@ -88,6 +94,21 @@ class Config:
         emb_key = self._optional(data, "embedding", "api_key", "")
         self.embedding_api_key = emb_key if emb_key else self.llm_api_key
 
+        # embedding 分块配置（可选）
+        self.embedding_context_size = self._optional(data, "embedding", "context_size", 0)
+        self.chunk_strategy = self._optional(data, "embedding", "chunk_strategy", "none")
+        self.chunk_overlap = self._optional(data, "embedding", "chunk_overlap", 50)
+        self.heading_level = self._optional(data, "embedding", "heading_level", 2)
+
+        # chunk_size 默认逻辑：优先配置值，无配置时取 context_size 的 50%，兜底 500
+        configured_chunk_size = self._optional(data, "embedding", "chunk_size", None)
+        if configured_chunk_size is not None:
+            self.chunk_size = int(configured_chunk_size)
+        elif self.embedding_context_size > 0:
+            self.chunk_size = int(self.embedding_context_size * 0.5)
+        else:
+            self.chunk_size = 500
+
         # server 配置（必填）
         server_addr = self._require(data, "server", "addr")
         self.go_backend_url = f"http://localhost{server_addr}"
@@ -128,17 +149,20 @@ class Config:
 
 def load_config(config_path: typing.Optional[str] = None) -> Config:
     """加载配置，从 config_path 指定的 YAML 文件读取。"""
-    # 解析命令行参数
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-c", "--config",
-        dest="config", required=True,
-        help="YAML 配置文件路径（如 ../.local/config.yaml）",
-    )
-    args = parser.parse_args()
+
+    if not config_path:
+        # 解析命令行参数
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "-c", "--config",
+            dest="config", required=True,
+            help="YAML 配置文件路径（如 ../.local/config.yaml）",
+        )
+        args = parser.parse_args()
+        config_path = args.config
 
     # 加载配置
-    cfg = Config(config_path=args.config)
+    cfg = Config(config_path) # type: ignore
     cfg.check_api_key()
     print(f"✅ 配置加载成功: {cfg}")
     print()
