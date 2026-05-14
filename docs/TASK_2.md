@@ -18,8 +18,8 @@ Chat CLI (Agent 编排 + 知识库 RAG + 聊天 CLI)
 - Day 2 LangChain + Chroma 向量库
   - 跑通 LangChain 核心链路，Chroma 向量检索接入
 
-- Day 3 文档分块 + Text-to-SQL
-  - 实现分块策略，NL2SQL 链路落地
+- Day 3 Text-to-SQL + RAG 照片级聚合
+  - 实现 NL2SQL 链路，RAG 检索结果按照片聚合去重
 
 - Day 4 SSE + Function Calling
   - 流式对话接口，LLM 自主调用照片工具
