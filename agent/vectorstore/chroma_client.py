@@ -87,8 +87,8 @@ class ChromaPhotoStore:
         self.collection.add(
             ids=ids,
             documents=documents,
-            metadatas=metadatas,
-            embeddings=embeddings,
+            metadatas=metadatas,# type: ignore[arg-type] 
+            embeddings=embeddings,# type: ignore[arg-type] 
         )
 
     def delete(
@@ -133,13 +133,13 @@ class ChromaPhotoStore:
             - distance: 向量距离（越小越相似）
         """
         raw = self.collection.query(
-            query_embeddings=query_embeddings,
+            query_embeddings=query_embeddings, # type: ignore[arg-type]
             n_results=n_results,
             where=where,
             where_document=where_document,
             include=["metadatas", "documents", "distances"],
         )
-        return self._format_results(raw)
+        return self._format_results(raw) # type: ignore[arg-type] 
 
     def get(
         self,
@@ -161,12 +161,12 @@ class ChromaPhotoStore:
             where=where,
             include=["metadatas", "documents"],
         )
-        return self._format_get_results(raw)
+        return self._format_get_results(raw) # type: ignore[arg-type] 
 
     def peek(self, n: int = 5) -> list[dict]:
         """查看集合中的前 n 条数据（调试用）。"""
         raw = self.collection.peek(limit=n)
-        return self._format_get_results(raw)
+        return self._format_get_results(raw) # type: ignore[arg-type] 
 
     def count(self) -> int:
         """返回集合中的文档总数。"""

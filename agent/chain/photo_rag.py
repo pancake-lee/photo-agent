@@ -1,0 +1,197 @@
+"""
+    完整链路：用户问题 → Embedding → Chroma 检索 Top-K → 拼接上下文 → LLM 生成
+
+    用法：
+        cd agent
+        python chain/photo_rag.py -c ../.local/pancake.yaml
+"""
+
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
+import langchain.prompts as lc_prompts
+import langchain.schema as lc_schema
+import langchain_openai as lc_openai
+
+import config
+import embedding.embedder as embedder
+import vectorstore.chroma_client as chroma_client
+
+
+RAG_SYSTEM_PROMPT = (
+    "你是一位摄影档案助手，专门帮助用户从照片库中查找和回顾照片。"
+    "你会根据下面提供的照片描述信息回答用户的问题。"
+    "如果上下文中有相关照片，请简要描述它们的内容并提及文件名；"
+    "如果没有找到相关照片，请诚实告知。"
+    "回答简洁，控制在 150 字以内。"
+)
+
+CONTEXT_PROMPT = (
+    "以下是从照片库中检索到的相关照片描述，请基于这些信息回答问题。\n\n"
+    "{context}\n\n"
+    "用户问题：{question}"
+)
+
+
+def _build_context(results: list[dict]) -> str:
+    """
+    将 Chroma 检索结果格式化为上下文文本。
+
+    参数:
+        results: ChromaPhotoStore.query 返回的扁平结果列表
+
+    返回:
+        拼接后的上下文字符串，每条结果包含文件名、描述和距离
+    """
+    if not results:
+        return "未找到相关照片。"
+
+    lines: list[str] = []
+    for i, r in enumerate(results, 1):
+        meta = r.get("metadata") or {}
+        photo_id = meta.get("photo_id", "unknown")
+        doc = r.get("document") or ""
+        distance = r.get("distance")
+        dist_str = f" (相似度距离: {distance:.4f})" if distance is not None else ""
+        lines.append(f"[{i}] 照片: {photo_id}{dist_str}\n描述: {doc}")
+
+    return "\n\n".join(lines)
+
+
+def _retrieve(
+    cfg: config.Config,
+    question: str,
+    n_results: int = 5,
+) -> list[dict]:
+    """
+    对用户问题进行 Embedding 并在 Chroma 中检索 Top-K 结果。
+
+    参数:
+        cfg:        配置对象
+        question:   用户问题
+        n_results:  返回的最相似结果数量
+
+    返回:
+        扁平化的检索结果列表
+    """
+    emb = embedder.Embedder(
+        base_url=cfg.go_backend_url,
+        model=cfg.embedding_model,
+    )
+
+    store = chroma_client.ChromaPhotoStore(
+        persist_dir=str(cfg.resolve_path("./data/chroma")),
+        collection_name="photos",
+    )
+
+    vectors = emb.embed_texts([question])
+    query_embedding = vectors[0].tolist()
+
+    results = store.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results,
+    )
+
+    return results
+
+
+def _build_rag_chain(cfg: config.Config):
+    """
+    构建 RAG 问答 Chain。
+
+    参数:
+        cfg: 配置对象
+
+    返回:
+        可 invoke 的 LangChain Chain
+    """
+    llm = lc_openai.ChatOpenAI(
+        model=cfg.llm_model,
+        api_key=cfg.llm_api_key,  # type: ignore[arg-type]
+        base_url=cfg.llm_base_url,
+        temperature=0.5,
+    )
+
+    prompt = lc_prompts.ChatPromptTemplate.from_messages([
+        ("system", RAG_SYSTEM_PROMPT),
+        ("human", CONTEXT_PROMPT),
+    ])
+
+    return prompt | llm
+
+
+def answer_question(
+    cfg: config.Config,
+    question: str,
+    n_results: int = 5,
+) -> str:
+    """
+    执行完整 RAG 链路，返回答案字符串。
+
+    参数:
+        cfg:        配置对象
+        question:   用户问题
+        n_results:  检索结果数量
+
+    返回:
+        LLM 生成的回答文本
+    """
+    results = _retrieve(cfg, question, n_results=n_results)
+    context = _build_context(results)
+
+    chain = _build_rag_chain(cfg)
+    response = chain.invoke({"context": context, "question": question})
+
+    return str(response.content)
+
+
+def chat_loop(cfg: config.Config) -> None:
+    """RAG 问答交互式主循环。"""
+
+    print("=" * 50)
+    print("📷 照片库 RAG 问答已启动")
+    print("   输入 exit 或按 Ctrl+C 退出")
+    print("=" * 50)
+    print()
+
+    while True:
+        try:
+            user_input = input("你: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if user_input.lower() == "exit":
+            break
+
+        if not user_input.strip():
+            continue
+
+        print("🔍 检索相关照片...")
+        results = _retrieve(cfg, user_input, n_results=5)
+        context = _build_context(results)
+
+        print("⏳ 生成回答...")
+        chain = _build_rag_chain(cfg)
+        response = chain.invoke({"context": context, "question": user_input})
+
+        reply = str(response.content)
+        print(f"AI: {reply}")
+        print()
+
+        if results:
+            print("📎 参考照片:")
+            for r in results:
+                meta = r.get("metadata") or {}
+                photo_id = meta.get("photo_id", "unknown")
+                distance = r.get("distance")
+                dist_str = f" (距离: {distance:.4f})" if distance is not None else ""
+                print(f"   - {photo_id}{dist_str}")
+            print()
+
+if __name__ == "__main__":
+    cfg = config.load_config()
+    chat_loop(cfg)
+    print("👋 再见！")

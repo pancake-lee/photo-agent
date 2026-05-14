@@ -15,8 +15,8 @@ import json
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import config
-from embedding.chunking import chunk_text, Strategy
-from embedding.embedder import Embedder
+import embedding.chunking as chunking
+import embedding.embedder as embedder
 
 
 def load_descriptions(descriptions_path: str) -> dict[str, dict]:
@@ -70,7 +70,7 @@ def main(cfg: config.Config) -> None:
     print()
 
     # 3. 初始化 Embedder（通过 go-server 代理）
-    embedder = Embedder(
+    embedder_instance = embedder.Embedder(
         base_url=cfg.go_backend_url,
         model=cfg.embedding_model,
     )
@@ -89,7 +89,9 @@ def main(cfg: config.Config) -> None:
         print(f"     原始文本长度: {text_len} 字符")
 
         # 分片
-        chunks = chunk_text(text, strategy=Strategy.CHARS, max_chars=500, overlap=50)
+        chunks = chunking.chunk_text(
+            text, strategy=chunking.Strategy.CHARS, max_chars=500, overlap=50
+        )
         chunk_counts.append(len(chunks))
         print(f"     分片数量: {len(chunks)}")
 
@@ -102,7 +104,7 @@ def main(cfg: config.Config) -> None:
     # 5. 批量 Embedding
     print("🔄 正在调用 Embedding API...")
     texts_to_embed = [chunk for _, chunk in all_chunks]
-    vectors = embedder.embed_texts(texts_to_embed)
+    vectors = embedder_instance.embed_texts(texts_to_embed)
     print(f"✅ 完成！共生成 {len(vectors)} 个向量")
     print()
 
