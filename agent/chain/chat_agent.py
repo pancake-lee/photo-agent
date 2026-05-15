@@ -10,8 +10,8 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-import langchain.prompts as lc_prompts
-import langchain.schema as lc_schema
+import langchain_core.prompts as lc_prompts
+import langchain_core.messages as lc_messages
 import langchain_openai as lc_openai
 
 import config
@@ -46,7 +46,7 @@ def chat_loop(cfg: config.Config) -> None:
     chain = prompt | llm
 
     # 聊天历史：只存 HumanMessage 和 AIMessage
-    history: list[lc_schema.BaseMessage] = []
+    history: list[lc_messages.BaseMessage] = []
 
     print("=" * 50)
     print("🤖 摄影专家 Agent 已启动")
@@ -81,8 +81,8 @@ def chat_loop(cfg: config.Config) -> None:
         print()
 
         # 追加到历史
-        history.append(lc_schema.HumanMessage(content=user_input))
-        history.append(lc_schema.AIMessage(content=reply))
+        history.append(lc_messages.HumanMessage(content=user_input))
+        history.append(lc_messages.AIMessage(content=reply))
 
 
 if __name__ == "__main__":

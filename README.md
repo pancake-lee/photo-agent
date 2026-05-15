@@ -118,8 +118,6 @@ source .venv/bin/activate
 uv pip install langchain langchain-openai chromadb requests python-dotenv httpx langgraph
 ```
 
-> 系统 Python（3.9）保持不动，避免影响系统其他软件。
-
 ### 1. 克隆仓库
 
 ```bash

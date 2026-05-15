@@ -22,8 +22,7 @@ import typing
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-import langchain.prompts as lc_prompts
-import langchain.schema as lc_schema
+import langchain_core.prompts as lc_prompts
 import langchain_openai as lc_openai
 
 import config
@@ -95,7 +94,7 @@ def _build_few_shot_prompt() -> lc_prompts.FewShotChatMessagePromptTemplate:
     ])
 
     # 扩展点：未来可替换为 example_selector 实现动态筛选
-    # from langchain.prompts import SemanticSimilarityExampleSelector
+    # from langchain_core.prompts import SemanticSimilarityExampleSelector
     # selector = SemanticSimilarityExampleSelector.from_examples(
     #     examples=FEW_SHOT_EXAMPLES,
     #     embeddings=embedder,

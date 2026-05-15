@@ -18,7 +18,7 @@ import typing
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import langchain_openai as lc_openai
-import langchain.schema as lc_schema
+import langchain_core.messages as lc_messages
 
 import config
 import tools.openapi_client as openapi_client
@@ -179,9 +179,9 @@ class ReActMaxStepsError(Exception):
 
 def _run_react_step(
     llm: lc_openai.ChatOpenAI,
-    messages: list[lc_schema.BaseMessage],
+    messages: list[lc_messages.BaseMessage],
     tool_client: openapi_client.OpenAPIClient,
-) -> typing.Tuple[str, list[lc_schema.BaseMessage]]:
+) -> typing.Tuple[str, list[lc_messages.BaseMessage]]:
     """
     执行一轮 ReAct：调用 LLM → 解析 → 执行工具（如有）→ 返回结果。
 
@@ -205,7 +205,7 @@ def _run_react_step(
         raise ReActError(f"LLM 调用失败: {e}") from e
 
     content = "".join(content_parts)
-    response = lc_schema.AIMessage(content=content)
+    response = lc_messages.AIMessage(content=content)
 
     thought, action, final_answer = _parse_response(content)
 
@@ -232,7 +232,7 @@ def _run_react_step(
         print(f"📊 Observation: {result[:200]}{'...' if len(result) > 200 else ''}")
 
         # 构造观测消息
-        observation_msg = lc_schema.HumanMessage(
+        observation_msg = lc_messages.HumanMessage(
             content=f"Observation: {result}\n\n请继续思考下一步。"
         )
         return "", messages + [response, observation_msg]
@@ -264,7 +264,7 @@ def chat_loop(cfg: config.Config) -> None:
     )
 
     # 聊天历史：保留 HumanMessage + AIMessage，不保留中间 Observation
-    history: list[lc_schema.BaseMessage] = []
+    history: list[lc_messages.BaseMessage] = []
 
     print("=" * 50)
     print("🤖 ReAct Agent 已启动")
@@ -286,11 +286,11 @@ def chat_loop(cfg: config.Config) -> None:
             continue
 
         # 每轮对话的 ReAct 上下文：system + 历史 + 当前问题
-        messages: list[lc_schema.BaseMessage] = [
-            lc_schema.SystemMessage(content=system_prompt),
+        messages: list[lc_messages.BaseMessage] = [
+            lc_messages.SystemMessage(content=system_prompt),
         ]
         messages.extend(history)
-        messages.append(lc_schema.HumanMessage(content=f"问题: {user_input}"))
+        messages.append(lc_messages.HumanMessage(content=f"问题: {user_input}"))
 
         print("⏳ 开始 ReAct 循环...")
 
@@ -332,8 +332,8 @@ def chat_loop(cfg: config.Config) -> None:
             print()
 
         # 追加到跨轮历史
-        history.append(lc_schema.HumanMessage(content=user_input))
-        history.append(lc_schema.AIMessage(content=final_reply))
+        history.append(lc_messages.HumanMessage(content=user_input))
+        history.append(lc_messages.AIMessage(content=final_reply))
 
         # 限制历史长度
         max_history = 20

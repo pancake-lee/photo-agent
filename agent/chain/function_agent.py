@@ -17,8 +17,8 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-import langchain.prompts as lc_prompts
-import langchain.schema as lc_schema
+import langchain_core.prompts as lc_prompts
+import langchain_core.messages as lc_messages
 import langchain_openai as lc_openai
 from langchain_core.messages import ToolMessage
 
@@ -81,7 +81,7 @@ def chat_loop(cfg: config.Config) -> None:
     ])
 
     # 聊天历史
-    history: list[lc_schema.BaseMessage] = []
+    history: list[lc_messages.BaseMessage] = []
 
     print("=" * 50)
     print("🤖 Function Calling Agent 已启动")
@@ -145,8 +145,8 @@ def chat_loop(cfg: config.Config) -> None:
         print()
 
         # 追加到历史（只保留 HumanMessage 和 AIMessage，不保留 ToolMessage）
-        history.append(lc_schema.HumanMessage(content=user_input))
-        history.append(lc_schema.AIMessage(content=reply))
+        history.append(lc_messages.HumanMessage(content=user_input))
+        history.append(lc_messages.AIMessage(content=reply))
 
         # 限制历史长度，防止上下文过长
         max_history = 20

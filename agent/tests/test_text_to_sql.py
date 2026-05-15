@@ -14,7 +14,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 import db.sqlite_client as sqlite_client
 import chain.text_to_sql as text_to_sql
 import chain.photo_rag as photo_rag
-import langchain.prompts as lc_prompts
+import langchain_core.prompts as lc_prompts
 
 
 # --------------------------------------------------------------------------- #
