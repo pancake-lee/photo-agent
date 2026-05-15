@@ -230,3 +230,5 @@ Go 后端：
 
 - 对接LLM的 SSE（Server-Sent Events）原理，WEB前端展示打字机效果
   - 当前还是py写的cli应用，还没有上WEB页面
+- 流式输出，和，print直接打印，发生交叉了
+  - 进入LLM循环后，所有打印都要走流式输出

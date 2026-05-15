@@ -8,38 +8,17 @@
 
 ### 1. 准备配置文件
 
-复制 `backend/configs/` 下的示例配置，按需修改：
+复制公共配置模板到个人目录并编辑：
 
-```toml
-[server]
-addr = ":8080"
-
-[db]
-sqlite_path = "./data/sqlite/photo_agent.db"
-
-[storage]
-photo_path = "./data/photos"
-descriptions_path = "./data/descriptions.json"
-timeline_path = "./data/timeline.md"
-
-[vlm]
-provider = "volcengine"
-api_key = "your-vlm-api-key"
-model = "doubao-vision-pro"
-base_url = "https://ark.cn-beijing.volces.com/api/v3"
-concurrency = 3
-retry = 3
-max_image_size_mb = 1
-
-[dify]
-base_url = "http://localhost"
-email = "your-dify-email"
-password = "your-dify-password"
-dataset_name = "照片描述库"
+```bash
+cp ./configs/config.yaml .local/my-config.yaml
+# 编辑 .local/my-config.yaml，填入你的 API Key、照片路径等
 ```
 
 **说明**：
 
+- `./configs/config.yaml` 是脱密的公共模板，**不要直接编辑**，避免敏感信息意外提交到 Git
+- 复制到 `.local/`（已加入 `.gitignore`）后按需修改
 - `storage.timeline_path` 指向一个 Markdown 表格文件，记录活动时间线（见下方格式）
 - `vlm.*` 配置三选一：volcengine / openai / qwen
 
@@ -65,7 +44,7 @@ dataset_name = "照片描述库"
 ## 第一步：编译后端
 
 ```bash
-cd /root/code/photo-agnet
+cd /root/code/photo-agent
 make backend
 ```
 
@@ -83,9 +62,9 @@ make backend
 所有照片必须先经此步骤生成描述，server 导入时不再实时调用 VLM。
 
 ```bash
-cd /root/code/photo-agnet
+cd /root/code/photo-agent
 ./bin/batch_vlm \
-  -c backend/configs/server.toml \
+  -c ./configs/config.yaml \
   -input /root/project/photos/
 ```
 
@@ -109,7 +88,7 @@ cd /root/code/photo-agnet
 ## 第三步：启动 Go 后端
 
 ```bash
-./bin/server -c backend/configs/server.toml
+./bin/server -c ./configs/config.yaml
 ```
 
 server 启动后会**自动执行一次同步**：
@@ -134,7 +113,7 @@ AutoSync done: new=45, updated=0, skipped=0
 **手动触发同步**：如需立即重新同步（不重启 server），可调用 import API：
 
 ```bash
-curl -X POST http://localhost:8080/api/import/jobs \
+curl -X POST http://localhost:10000/api/import/jobs \
   -H "Content-Type: application/json" \
   -d '{"source_path":"/your/photo/path","recursive":true}'
 ```
@@ -142,7 +121,7 @@ curl -X POST http://localhost:8080/api/import/jobs \
 验证健康检查：
 
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:10000/api/health
 # {"status":"ok"}
 ```
 
@@ -169,12 +148,8 @@ docker compose up -d
 2. 添加你使用的 LLM（如火山引擎 Doubao / OpenAI GPT-4o-mini）
 3. 配置 API Key 和模型参数
 4. 设置系统推理模型和 Embedding 模型
-   1. 火山的embedding要用openai的兼容api
-   2. 还要写一个代理 `http//127.0.0.1:10000/v1`
-   3. openai-api-compatible插件会帮你在加上 `/embeddings`
-      1. 也正因如此，所以火山的url `https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal`无法直接配置，需要代理
-   4. doubao-embedding-vision-251215
-      1. doubao-embedding文档没有接入指引，url也不知道，模型id对不对也不知道，只能用vision版本
+   - 系统推理模型：选择你添加的 LLM（如 Doubao-seed-1.6）
+   - Embedding 模型：如需使用火山引擎多模态 Embedding，需通过 Go 后端代理（地址为 `http://host.docker.internal:10000/v1`），选择 openai-api-compatible 插件配置
 
 ---
 
@@ -183,7 +158,7 @@ docker compose up -d
 server 启动时的自动同步需要 `dify.api_key` 和 `dify.dataset_id`。首次部署时知识库尚未创建，需要运行 init_dify 脚本初始化：
 
 ```bash
-./bin/init_dify -c backend/configs/server.toml
+./bin/init_dify -c ./configs/config.yaml
 ```
 
 脚本会自动：
@@ -205,7 +180,7 @@ server 启动时的自动同步需要 `dify.api_key` 和 `dify.dataset_id`。首
 
 1. Dify UI → 工具 → 自定义 → 创建自定义工具
 2. 上传文件：`docs/dify_tools_openapi.yaml`
-3. 服务器地址：`http://host.docker.internal:8080`
+3. 服务器地址：`http://host.docker.internal:10000`
 4. 保存
 
 工具列表：
@@ -261,11 +236,11 @@ Git diff 审查变更
 
 ## 常见问题
 
-**Q: Go Backend 的地址为什么是 `host.docker.internal:8080`？**
+**Q: Go Backend 的地址为什么是 `host.docker.internal:10000`？**
 A: Dify 运行在 Docker 容器内，需要通过 `host.docker.internal` 访问宿主机的 Go 后端。如果部署在不同机器上，请替换为实际可访问的 IP 地址。
 
 **Q: 图片在 Dify 聊天中无法显示？**
-A: 确保图片 URL 可被 Dify 容器访问。宿主机部署时使用 `host.docker.internal:8080`，远程部署时替换为公网地址。
+A: 确保图片 URL 可被 Dify 容器访问。宿主机部署时使用 `host.docker.internal:10000`，远程部署时替换为公网地址。
 
 **Q: 知识库检索结果不准确？**
 A: 检查 VLM 生成的描述质量。描述越详细，检索效果越好。可在 Dify 知识库设置中调整检索参数（Top-K、分数阈值）。

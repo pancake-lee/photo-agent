@@ -258,7 +258,7 @@ class StreamingPrinter:
         """关闭打印机，等待后台线程完成剩余内容。"""
         self._closing = True
         self._has_data.set()
-        self._thread.join(timeout=2.0)
+        self._thread.join()
 
     def __enter__(self):
         return self

@@ -2,7 +2,7 @@
     最简单的多轮对话 Agent。
 
     用法：
-        venv/bin/python chain/chat_agent.py -c ../.local/pancake.yaml
+        venv/bin/python chain/chat_agent.py -c ../.local/my-config.yaml
 """
 
 import sys

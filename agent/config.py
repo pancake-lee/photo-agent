@@ -136,7 +136,7 @@ class Config:
             raise ValueError(
                 "❌ LLM API Key 未配置！\n"
                 "   请通过 -c 参数指定 YAML 配置文件:\n"
-                "   python script.py -c ../.local/pancake.yaml"
+                "   python script.py -c ../.local/my-config.yaml"
             )
 
     def __repr__(self):

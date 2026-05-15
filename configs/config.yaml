@@ -1,0 +1,55 @@
+# Photo Agent 公共配置模板
+# 复制此文件并根据实际情况修改后使用
+# 建议复制到 .local/ 目录下并重命名（如 .local/my-config.yaml），避免将个人配置提交到 Git
+
+server:
+  addr: ":10000"                    # Go 后端监听地址
+
+db:
+  sqlite_path: "./data/sqlite/photo_agent.db"
+
+storage:
+  project_root: "."                  # 项目根目录，建议保持为 "."
+  photo_src: "./data/photos"         # 原始照片源目录（batch_vlm 输入）
+  photo_path: "./data/photos"        # 照片服务目录（server 对外提供文件服务）
+  descriptions_path: "./data/descriptions.json"
+  timeline_path: "./data/timeline.md"  # 时间线 Markdown 文件路径
+
+llm:
+  api_key: "your-llm-api-key"        # LLM API Key
+  model: "gpt-4o-mini"               # 或 doubao-seed-1-6-251015 / qwen-turbo
+  base_url: "https://api.openai.com/v1"  # 或火山引擎 / 通义千问地址
+
+vlm:
+  api_key: "your-vlm-api-key"        # VLM API Key（可与 LLM 共用同一 Key）
+  model: "gpt-4o-mini"               # 或 doubao-1-5-vision-pro / qwen-vl
+  base_url: "https://api.openai.com/v1"
+  concurrency: 3                     # VLM 并发数（控制费用和速率）
+  retry: 3                           # 失败重试次数
+  max_image_size_mb: 0.2             # 单张图片最大尺寸（超过自动压缩）
+  prompt: |                          # VLM 描述提示词，可自定义
+    请详细描述这张照片的内容。包括：
+    - 主体内容（人/物/风景）
+    - 场景环境（室内/室外、自然/城市）
+    - 光线氛围（明亮/昏暗、自然光/人工光）
+    - 色彩风格（鲜艳/柔和、冷暖倾向）
+    - 构图特点（前景/背景、对称/非对称）
+
+embedding:
+  api_key: "your-embedding-api-key"  # Embedding API Key
+  model: "text-embedding-3-small"    # 或 doubao-embedding-vision
+  base_url: "https://api.openai.com/v1"
+  context_size: 128000               # 模型上下文窗口大小
+  chunk_strategy: "none"             # 分块策略: none | fixed_size | markdown_heading
+  chunk_size: 500                    # fixed_size 策略：每块字数
+  chunk_overlap: 50                  # fixed_size 策略：块间重叠字数
+  heading_level: 2                   # markdown_heading 策略：按 H2 切分
+
+dify:
+  api_key: "your-dify-api-key"       # Dify 知识库 API Key（首次由 init_dify 自动生成）
+  base_url: "http://localhost"       # Dify 根地址，不带 /v1
+  dataset_id: ""                     # 知识库 ID（首次运行 init_dify 后自动填入）
+  email: "your-dify-email"           # Dify 管理员邮箱
+  password: "your-dify-password"     # Dify 管理员密码
+  dataset_name: "photo-agent-descriptions"
+  db_path: "./data/sqlite/photo_agent.db"

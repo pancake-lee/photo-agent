@@ -20,7 +20,7 @@ import (
 
 var (
 	inputFlag  = flag.String("input", "", "input photo directory")
-	configFlag = flag.String("c", "", "config file path (e.g. pancake.yaml)")
+	configFlag = flag.String("c", "", "config file path (e.g. ./configs/config.yaml)")
 	dryRun     = flag.Bool("dry-run", false, "dry run, test config only")
 	logConsole = flag.Bool("l", false, "log to console; false for file only")
 	force      = flag.Bool("force", false, "force reprocess all images")

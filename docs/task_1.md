@@ -25,7 +25,7 @@
 ### 当日验收标准
 
 由 `backend/test/backendTest.go` 端到端测试覆盖：
-`make backend && ./bin/backendTest -l -c .local/pancake.yaml`
+`make backend && ./bin/backendTest -l -c .local/my-config.yaml`
 
 - 健康检查接口
 - 导入任务创建、执行、查询、日志
@@ -63,7 +63,7 @@
 ### 当日验收标准
 
 由 `backend/test/backendTest.go` 端到端测试覆盖：
-`make backend && ./bin/backendTest -l -c .local/pancake.yaml`
+`make backend && ./bin/backendTest -l -c ./configs/config.yaml`
 
 - 时间线列表 GET `/api/timelines` 返回正确列表
 - 按时间线查照片 GET `/api/timelines/{name}/photos` 返回关联照片
@@ -115,7 +115,7 @@
 - [X] 3.1-3.7 全部完成，完整端到端流程已跑通
 - [X] server 启动自动同步（AutoSync）已上线，无需手动触发导入
 - [X] E2E 测试 `backendTest -l` 覆盖 Group 1（基础 API）+ Group 2（AutoSync）
-- [X] E2E 测试 `backendTest -l -c .local/pancake.yaml` 覆盖 Group 3（真实 VLM）
+- [X] E2E 测试 `backendTest -l -c ./configs/config.yaml` 覆盖 Group 3（真实 VLM）
 - [X] 火山引擎 multimodal embedding 代理已完成，兼容 OpenAI API 格式
 - [X] Dify Agent 已跑通，支持自然语言检索照片、时间线查询、标签查询
 

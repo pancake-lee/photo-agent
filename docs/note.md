@@ -59,6 +59,25 @@
 
 ---
 
+## 火山引擎多模态 Embedding 在 Dify 中的配置踩坑
+
+**背景**：Dify 知识库需要使用 Embedding 模型将照片描述向量化。选用火山引擎的 `doubao-embedding-vision-251215`。
+
+**问题 1：Dify 无法直接配置火山 Embedding URL**
+
+- 火山的 Embedding URL 为 `https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal`，但 Dify 的 openai-api-compatible 插件会自动在配置的 base_url 后追加 `/embeddings`
+- 如果直接在 Dify 中配置火山 URL，会被追加为 `/embeddings/multimodal/embeddings`，导致请求失败
+- **解决**：通过 Go 后端提供 `/v1/embeddings` 代理，Dify 中配置 `http://host.docker.internal:10000/v1`，由 Go 后端转发到火山真实 URL
+
+**问题 2：火山 Embedding 文档不完善**
+
+- `doubao-embedding` 文档缺少接入指引，正确的模型 ID 和 URL 不明确
+- 当前使用 `doubao-embedding-vision-251215` 作为确认可用的版本
+
+**状态**：已通过 Go 后端 Embedding 代理解决，Dify 中配置代理地址即可。
+
+---
+
 ## 1. 技术栈变更记录
 
 ### 1.1 纯 Python 单栈 → Go + Python 双栈（重新启用）
@@ -84,6 +103,26 @@
 **最终架构**：Go（Gin + GORM + SQLite）+ Python（FastAPI + Chroma + 本地文件）。
 
 ### 1.3 Go + Python 双栈 → Dify + Go 双栈（零 Python）
+
+**变更时间（2026-05-09）**：Day 1 开发中，Python AI 服务侧工作量被 Dify 覆盖。
+
+**最终架构**：Dify（Docker）+ Go（Gin + GORM + SQLite），零 Python。
+
+### 1.4 Dify + Go 双栈 → Dify + Go + Python 三栈（重新引入 Python AI 服务层）
+
+**变更时间（2026-05-12 起）**：第二轮开发中，重新引入 Python AI 服务层。
+
+**变更原因**：
+
+1. **学习目的**：LangChain / LangGraph / Chroma / Text-to-SQL / Function Calling 等 AI 工程概念需要通过代码实践掌握
+2. **深度优化**：Dify 的图形化编排适合快速出效果，但 Python 层可实现更精细的 Agent 流程控制（查询路由、流式输出、工具绑定）
+3. **技术债务可控**：Python 层完全通过 HTTP 调用 Go 后端，不直接访问数据库或文件系统，边界清晰
+
+**最终架构**：
+
+- **Dify**：Agent 图形化编排、知识库 RAG、自带聊天 UI（作为另一条实现路径）
+- **Go 后端**：照片元数据 CRUD、文件服务、导入流水线、VLM 预处理、Embedding HTTP 代理、统计 API
+- **Python AI 服务层**：LangChain 编排、Chroma 向量检索、Text-to-SQL、LangGraph 查询路由、Function Calling 工具调用、流式输出
 
 **变更时间（2026-05-09）**：在 Day 1 开发过程中，Python AI 服务侧的工作量被 Dify 完全覆盖。
 

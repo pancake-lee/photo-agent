@@ -3,7 +3,7 @@
 
     用法:
         cd agent
-        python chain/text_to_sql.py -c ../.local/pancake.yaml
+        python chain/text_to_sql.py -c ../.local/my-config.yaml
 
     架构:
         1. Schema 提示: 定义 photos 表结构、字段类型、可查询维度

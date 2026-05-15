@@ -3,7 +3,7 @@
 
     用法：
         cd agent
-        python chain/photo_rag.py -c ../.local/pancake.yaml
+        python chain/photo_rag.py -c ../.local/my-config.yaml
 """
 
 import sys

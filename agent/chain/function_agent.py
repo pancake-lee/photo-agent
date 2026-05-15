@@ -3,7 +3,7 @@
 
     用法：
         cd agent
-        venv/bin/python chain/function_agent.py -c ../.local/pancake.yaml
+        venv/bin/python chain/function_agent.py -c ../.local/my-config.yaml
 
     流程：
         1. 从 Go 后端 /v1/openapi.json 自动解析可用工具
@@ -12,10 +12,8 @@
         4. 最终回答支持 Streaming，控制台实时输出
 """
 
-import json
 import pathlib
 import sys
-import typing
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 

@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	configFlag = flag.String("c", "", "config file path (e.g. pancake.yaml)")
+	configFlag = flag.String("c", "", "config file path (e.g. ./configs/config.yaml)")
 	logConsole = flag.Bool("l", false, "log to console; false for file only")
 )
 

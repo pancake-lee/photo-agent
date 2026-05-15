@@ -5,7 +5,7 @@
     经过分片处理后调用 Embedding API，输出向量维度和示例值。
 
     用法：
-        venv/bin/python embedding/demo_embedding.py -c ../.local/pancake.yaml
+        venv/bin/python embedding/demo_embedding.py -c ../.local/my-config.yaml
 """
 
 import sys

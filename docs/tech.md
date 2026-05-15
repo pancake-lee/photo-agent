@@ -1,49 +1,62 @@
 # Photo Agent - 技术方案文档
 
-> 设计约束：Dify 本地部署作为 Agent 核心（图形化工作流可观测 + 自带聊天 UI），Go 负责业务后端，零 Python、零前端框架。
+> 设计约束：Dify 本地部署作为 Agent 编排入口之一（图形化工作流可观测 + 自带聊天 UI），Go 负责业务后端与 API 网关，Python AI 服务层负责智能推理（LangChain / LangGraph / Chroma / Text-to-SQL），零前端框架。
 
 ## 1. 架构设计
 
 ### 1.1 核心原则
 
-- **Dify 作为唯一交互入口**：用户通过 Dify 的 Web UI 进行所有对话，Dify 负责 Agent 编排、知识库 RAG、工作流可视化、模型管理
-- **Go 作为业务后端**：照片元数据 CRUD、文件管理、导入任务调度、VLM 调用
-- **零 Python、零前端框架**：VLM 视觉描述、Embedding 均通过云端 API 由 Go 直接 HTTP 调用；不引入 Next.js/React/Vue 等前端框架，聊天界面直接使用 Dify 自带 UI
+- **双入口**：Dify Web UI 提供图形化 Agent 交互（适合快速演示），Python CLI 提供深度定制的 Agent 体验（适合学习和技术迭代）
+- **Go 作为业务后端与 API 网关**：照片元数据 CRUD、文件管理、导入任务调度、VLM 调用、Embedding HTTP 代理、统计 API
+- **Python AI 服务层作为推理层**：LangChain 编排、Chroma 向量检索、Text-to-SQL、LangGraph 查询路由、Function Calling 工具调用、流式输出
+- **零前端框架**：不引入 Next.js/React/Vue 等前端框架，聊天界面使用 Dify 自带 UI 或 Python CLI
 
 ### 1.2 整体架构
 
 ```
-用户浏览器
-    ↓ HTTP
-Dify Web UI (:80, Docker)
-    ├── Agent 意图识别
-    ├── 知识库向量检索 (RAG)
-    ├── 工具调用 → Go API
-    └── 模型管理 (LLM / Embedding)
-    ↓ HTTP (OpenAPI Schema 工具)
-Go Backend (:8080)
+用户浏览器 / 用户终端
+    ↓ HTTP                    ↓ CLI
+Dify Web UI (:80, Docker)    Python AI Service
+    ├── Agent 意图识别         ├── LangChain 聊天编排
+    ├── 知识库向量检索 (RAG)   ├── Chroma 向量检索
+    ├── 工具调用 → Go API      ├── Text-to-SQL
+    └── 模型管理               ├── LangGraph 查询路由
+    ↓ HTTP (OpenAPI)           └── Function Calling → Go API
+Go Backend (:10000)
     ├── 照片元数据管理 (GORM + SQLite)
     ├── 文件服务 (本地文件系统)
     ├── 导入流水线 (并发控制、重试)
-    └── VLM HTTP 代理 (云端 API)
+    ├── VLM / Embedding HTTP 代理
+    └── 统计 API (EXIF 聚合分析)
 ```
 
 ### 1.3 职责边界
 
-- **Dify 负责**：Agent 意图识别、工具路由、知识库向量检索、工作流可视化、模型管理、聊天 UI 渲染
-- **Dify 不负责**：文件存储、业务数据持久化、批量导入调度、VLM 直接调用
-- **Go 负责**：照片元数据管理、文件服务、导入流水线、时间线/标签查询、VLM HTTP 代理、图片文件服务端点
-- **Go 不负责**：Agent 编排、向量检索、对话管理、UI 渲染
+- **Dify 负责**：图形化 Agent 编排、知识库向量检索（Weaviate）、工作流可视化、模型管理、Web 聊天 UI
+- **Dify 不负责**：文件存储、业务数据持久化、批量导入调度、VLM 直接调用、Python 推理层
+- **Go 负责**：照片元数据管理、文件服务、导入流水线、时间线/标签查询、VLM HTTP 代理、Embedding HTTP 代理、图片文件服务端点、统计 API、OpenAPI 文档自描述
+- **Go 不负责**：Agent 编排（由 Dify 或 Python 层负责）、向量检索（由 Chroma 或 Dify 负责）、对话管理、UI 渲染
+- **Python AI 服务层负责**：LangChain 聊天编排、Chroma 向量检索、Text-to-SQL（NL 转 SQL）、LangGraph 查询路由、Function Calling 工具调用、流式输出打印
+- **Python AI 服务层不负责**：直接访问数据库或文件系统（所有数据操作通过 Go API）
 
 ---
 
 ## 2. 技术选型
 
-### 2.1 Agent 层
+### 2.1 Agent 层（双入口）
 
+**Dify 侧（图形化入口）**：
 - **Dify 社区版**：Docker 本地部署，Agent 编排 + 知识库 + 工作流可视化 + 自带聊天 UI
 - **Agent 模式**：Function Calling（工具调用稳定，可观测）
-- **知识库检索**：语义搜索 + 全文搜索混合
+- **知识库检索**：语义搜索 + 全文搜索混合（Dify 内置 Weaviate）
+
+**Python AI 服务侧（深度定制入口）**：
+- **LangChain**：聊天提示模板、链式调用、流式输出
+- **LangGraph**：StateGraph 查询路由（结构化查询走 SQL 分支，语义查询走 RAG 分支）
+- **Function Calling**：`llm.bind_tools()` 绑定 Go 后端 OpenAPI 工具，LLM 自主决策调用
+- **Chroma**：本地向量数据库，存储照片描述 Embedding，支持语义检索
+- **Text-to-SQL**：自然语言转 SQL，查询 EXIF 元数据
+- **流式输出**：SSE 流式对话，PID 速度控制平滑打印
 
 ### 2.2 业务后端
 
@@ -55,9 +68,13 @@ Go Backend (:8080)
 
 ### 2.3 AI 模型（云端 API）
 
-- **LLM 对话**：GPT-4o-mini / Qwen-Turbo / Kimi — Dify 内部配置
-- **VLM 图片描述**：GPT-4o-mini / Qwen-VL / 火山引擎 Doubao-vision — Go Backend 直接 HTTP 调用
-- **Embedding**：text-embedding-3-small / Qwen-Embedding — Dify 内部配置
+- **LLM 对话**：GPT-4o-mini / Qwen-Turbo / 火山引擎 Doubao — Dify 或 Python 层配置
+- **VLM 图片描述**：GPT-4o-mini / Qwen-VL / 火山引擎 Doubao-vision — Go Backend `batch_vlm` 直接 HTTP 调用
+- **Embedding**：text-embedding-3-small / 火山引擎 Doubao-embedding-vision — **Go Backend `/v1/embeddings` 代理**（兼容 OpenAI 格式，转发至火山多模态 Embedding API）
+
+**为什么 Embedding 走 Go 代理**：
+
+火山引擎的多模态 Embedding URL 格式（`/embeddings/multimodal`）与 OpenAI 标准格式（`/embeddings`）不兼容，Dify 的 openai-api-compatible 插件会自动追加 `/embeddings` 到配置的 base_url 后，导致请求路径错误。Go 后端提供 `/v1/embeddings` 代理，内部转发到火山真实 URL，对上层（Dify 和 Python）暴露标准 OpenAI 格式。
 
 ---
 
@@ -82,7 +99,9 @@ Go: 新照片：读取 EXIF → 匹配时间线 → 写入 SQLite → 同步 Dif
 Go: 已有照片：如 description 变化 → 更新 SQLite → 同步 Dify
 Go: 无变化 → 跳过
     ↓
-Dify: 自动 Embedding → 存入向量库
+Dify: 自动 Embedding → 存入 Dify 向量库 (Weaviate)
+    ↓
+Python: 运行 index_photos.py → 生成 Embedding → 存入 Chroma (本地向量库)
 ```
 
 **工作流约束**：
@@ -112,7 +131,40 @@ Dify: 整合工具结果 + RAG 结果 → 生成回复
 Dify Web UI 渲染回复（文本 + Markdown 图片链接）
 ```
 
-**图片在回复中的展示**：Agent 回复中包含 Markdown 图片链接 `![描述](http://192.168.3.159:10000/api/photos/{id}/image)`，Dify 的 Markdown 渲染器会自动展示图片。用户点击可查看原图。
+#### Python CLI 聊天对话流程
+
+```
+用户在终端输入自然语言
+    ↓
+LangGraph 查询路由 (StateGraph)
+    ├─ 结构化统计查询（如"我有多少张照片"）→ SQL 分支
+    │     ↓
+    │   Text-to-SQL：LLM 根据 Schema 生成 SELECT 语句
+    │     ↓
+    │   安全校验 → Go 后端 /api/query/sql 执行
+    │     ↓
+    │   结果格式化为自然语言
+    │
+    ├─ 语义检索查询（如"找雪山照片"）→ RAG 分支
+    │     ↓
+    │   Embedding → Chroma 向量检索 Top-K
+    │     ↓
+    │   按 photo_id 聚合去重
+    │     ↓
+    │   拼接上下文 → LLM 生成回答
+    │
+    └─ 工具调用查询（如"列出所有时间线"）→ Function Calling 分支
+          ↓
+        LLM 自主决策调用工具
+          ↓
+        OpenAPI 工具解析 → Go API 执行
+          ↓
+        工具结果返回 LLM → 生成回答
+    ↓
+流式输出（SSE + PID 速度控制平滑打印）
+```
+
+**图片在回复中的展示**：Agent 回复中包含 Markdown 图片链接 `![描述](http://192.168.3.159:10000/api/photos/{id}/image)`，Dify 的 Markdown 渲染器会自动展示图片，Python CLI 中终端支持 Markdown 渲染时也会展示。用户点击可查看原图。
 
 **设计决策：图片 URL 放在 pre_prompt 中而非工具返回**
 
@@ -182,6 +234,10 @@ VLM 调用耗时较长（单张 2-5 秒，300 张约 15-30 分钟），且费用
 **脚本使用方式**
 
 ```bash
+# 编译后使用
+./bin/batch_vlm -c .local/my-config.yaml -input /root/project/photos/
+
+# 或开发时直接运行
 cd backend/cmd/batch_vlm
 go run main.go -input /root/project/photos/ -output ../../data/descriptions.json
 ```
@@ -196,7 +252,8 @@ go run main.go -input /root/project/photos/ -output ../../data/descriptions.json
 GET    /api/health                  健康检查
 
 # 照片管理
-GET    /api/photos                 照片列表 (分页, query: timeline, tag, keyword)
+GET    /api/photos                 照片列表 (分页, query: timeline, tag, keyword, brand, lens, focal_min/max, iso_min/max)
+GET    /api/photos/stats           照片统计（七维度：total/brands/lens/focal_ranges/gps/monthly/hourly）
 GET    /api/photos/:id             单张照片详情
 GET    /api/photos/:id/image       获取图片文件 (支持缩略图参数 ?size=thumb)
 
@@ -213,8 +270,15 @@ POST   /api/import/jobs            创建导入任务 (body: {source_path, recur
 GET    /api/import/jobs/:id        查询导入进度
 GET    /api/import/jobs/:id/logs   导入日志
 
-# TODO: VLM 代理端点（当前未注册路由，如有需要后续补充）
-# POST   /internal/vlm/describe      单张图片描述 (body: multipart/form-data 图片)
+# SQL 查询（供 Python AI 服务层 Text-to-SQL 使用）
+GET    /api/schema/photos          动态获取 Photo 表的 Schema（字段名、类型、可空性）
+POST   /api/query/sql              执行安全 SQL（仅 SELECT，服务端+客户端双重校验）
+
+# OpenAPI 工具自描述（供 Python AI 服务层 Function Calling 使用）
+GET    /v1/openapi.json            Go 后端 OpenAPI 文档，Python 层自动解析为 LLM 工具
+
+# Embedding 代理
+POST   /v1/embeddings              Embedding 代理（兼容 OpenAI 格式，转发至火山引擎多模态 Embedding）
 ```
 
 ### 4.2 Dify 自定义工具配置
@@ -298,26 +362,37 @@ Dify Agent 的 Function Calling 过程在对话界面中可看到：
 
 ```go
 type Photo struct {
-    ID          string    `gorm:"primaryKey" json:"id"`
-    Filename    string    `json:"filename"`
-    FilePath    string    `json:"file_path"`
-    Timeline    string    `json:"timeline"`          // e.g. "2024-02-云南"
-    Tags        string    `json:"tags"`              // JSON array string
-    Description string    `json:"description"`       // VLM generated
-    ShotAt      *time.Time `json:"shot_at"`          // EXIF DateTimeOriginal
-    Width       int       `json:"width"`
-    Height      int       `json:"height"`
-    ImportedAt  time.Time `json:"imported_at"`
+    ID           string     `gorm:"primaryKey" json:"id"`
+    Filename     string     `json:"filename"`
+    FilePath     string     `json:"file_path"`
+    Timeline     string     `json:"timeline"`          // e.g. "2024-02-云南"
+    Tags         string     `json:"tags"`              // JSON array string
+    Description  string     `json:"description"`       // VLM generated
+    ShotAt       *time.Time `json:"shot_at"`           // EXIF DateTimeOriginal
+    Width        int        `json:"width"`
+    Height       int        `json:"height"`
+    ImportedAt   time.Time  `json:"imported_at"`
+    // EXIF 元数据（第二轮新增）
+    Brand        string     `json:"brand"`             // 相机品牌，如 "Canon"
+    Model        string     `json:"model"`             // 相机型号，如 "EOS R5"
+    Lens         string     `json:"lens"`              // 镜头型号
+    FocalLength  float64    `json:"focal_length"`      // 焦距（mm）
+    Aperture     float64    `json:"aperture"`          // 光圈值，如 2.8
+    ISO          int        `json:"iso"`               // ISO 感光度
+    ExposureTime string     `json:"exposure_time"`     // 曝光时间，如 "1/200"
+    Latitude     *float64   `json:"latitude"`          // GPS 纬度，nullable
+    Longitude    *float64   `json:"longitude"`         // GPS 经度，nullable
+    Altitude     *float64   `json:"altitude"`          // GPS 海拔，nullable
 }
 
 type ImportJob struct {
-    ID              string    `gorm:"primaryKey" json:"id"`
-    Status          string    `json:"status"`           // pending / processing / completed / failed
-    SourcePath      string    `json:"source_path"`
-    TotalPhotos     int       `json:"total_photos"`
-    ProcessedPhotos int       `json:"processed_photos"`
-    FailedPhotos    int       `json:"failed_photos"`
-    CreatedAt       time.Time `json:"created_at"`
+    ID              string     `gorm:"primaryKey" json:"id"`
+    Status          string     `json:"status"`           // pending / processing / completed / failed
+    SourcePath      string     `json:"source_path"`
+    TotalPhotos     int        `json:"total_photos"`
+    ProcessedPhotos int        `json:"processed_photos"`
+    FailedPhotos    int        `json:"failed_photos"`
+    CreatedAt       time.Time  `json:"created_at"`
     CompletedAt     *time.Time `json:"completed_at"`
 }
 ```
@@ -352,6 +427,20 @@ photo-agent/
 │   ├── test/
 │   │   └── backendTest.go        # E2E 测试程序
 │   └── go.mod
+├── agent/                        # Python AI 服务层
+│   ├── chain/                    # LangChain / LangGraph 编排
+│   │   ├── chat_agent.py         # 基础聊天 Agent
+│   │   ├── function_agent.py     # Function Calling Agent
+│   │   ├── react_agent.py        # ReAct 循环 Agent
+│   │   ├── photo_rag.py          # RAG 检索 + 照片级聚合
+│   │   └── text_to_sql.py        # 自然语言转 SQL
+│   ├── embedding/                # 分块策略 + Embedding 客户端
+│   ├── vectorstore/              # ChromaDB 封装
+│   ├── db/                       # SQLite 查询客户端（HTTP 调用 Go 后端）
+│   ├── tools/                    # OpenAPI 工具解析与执行
+│   ├── utils/                    # 流式打印等工具
+│   ├── scripts/                  # 索引脚本（descriptions.json → Chroma）
+│   └── tests/                    # 单元测试
 ├── dify/
 │   ├── docker-compose.yaml       # Dify 本地部署配置
 │   ├── dsl/                      # Agent DSL 文件
@@ -359,6 +448,7 @@ photo-agent/
 ├── data/
 │   ├── photos/                   # 照片文件存储
 │   ├── sqlite/                   # SQLite 数据库文件
+│   ├── chroma/                   # Chroma 向量数据库
 │   └── descriptions.json         # 预生成的照片描述（由脚本生成）
 └── docs/
 ```
@@ -381,43 +471,38 @@ docker-compose up -d
 ```bash
 cd backend
 go mod download
-go run cmd/server/main.go
-# 默认端口 :8080
+go run cmd/server/main.go -c ./configs/config.yaml
+# 默认端口 :10000
 ```
 
 ### 8.3 配置文件
 
-**Go (`backend/configs/server.toml`)**：
+**公共配置模板 (`./configs/config.yaml`)**：
 
-```toml
-[server]
-addr = ":8080"
+Go 后端和 Python AI 服务层共用同一配置文件，通过 `-c` 参数指定路径。
 
-[db]
-sqlite_path = "./data/sqlite/photo_agent.db"
+使用方式：
 
-[storage]
-photo_path = "./data/photos"
-descriptions_path = "./data/descriptions.json"
-timeline_path = "./data/timeline.md"
+```bash
+# 1. 复制模板到个人目录（避免将敏感信息提交到 Git）
+cp ./configs/config.yaml .local/my-config.yaml
 
-[vlm]
-provider = "volcengine"          # 或 openai / qwen
-api_key = "your-api-key"
-model = "doubao-vision-pro"      # 或 gpt-4o-mini / qwen-vl-max
-base_url = "https://ark.cn-beijing.volces.com/api/v3"
-concurrency = 3
-retry = 3
-max_image_size_mb = 1
+# 2. 编辑 .local/my-config.yaml，填入你的 API Key、路径等
 
-[dify]
-base_url = "http://localhost"    # Dify 根地址，不带 /v1
-api_key = "your-dify-api-key"
-dataset_id = "your-dataset-id"
-email = "your-dify-email"
-password = "your-dify-password"
-dataset_name = "照片描述库"
+# 3. 启动时指定配置文件
+./bin/server -c .local/my-config.yaml
+./bin/batch_vlm -c .local/my-config.yaml -input /path/to/photos/
 ```
+
+配置项说明见 `./configs/config.yaml` 头部注释。主要段：
+
+- `server` — Go 后端监听地址
+- `db` — SQLite 数据库路径
+- `storage` — 照片目录、描述文件、时间线文件路径
+- `llm` — LLM API Key、模型、base_url
+- `vlm` — VLM API Key、模型、并发控制、压缩阈值、提示词
+- `embedding` — Embedding API Key、模型、分块策略
+- `dify` — Dify 地址、知识库配置、管理员账号
 
 ---
 
@@ -425,14 +510,24 @@ dataset_name = "照片描述库"
 
 | 功能 | 实现方式 | 理由 |
 |------|---------|------|
-| Agent 对话编排 | Dify | 图形化可观测，自带聊天 UI |
-| 知识库向量检索 | Dify | 内置 RAG，无需自建向量库 |
-| 聊天界面 | Dify | 自带 Web UI，无需前端开发 |
-| 照片批量导入 | Go 代码 | 需要异步调度、并发控制、重试机制 |
-| 照片元数据管理 | Go 代码 | 业务数据，需要事务和关系查询 |
+| **Dify 侧** |||
+| Agent 对话编排 | Dify | 图形化可观测，自带聊天 UI，快速出效果 |
+| 知识库向量检索 | Dify（Weaviate） | 内置 RAG，无需自建向量库 |
+| 聊天界面 | Dify Web UI | 自带 Web UI，无需前端开发 |
+| **Python AI 服务层** |||
+| Agent 对话编排 | LangChain + Function Calling | 深度定制 Agent 流程，学习 AI 工程概念 |
+| 知识库向量检索 | Chroma | 本地向量库，可控性强，学习 Embedding + 检索原理 |
+| Text-to-SQL | LangChain + Go API | NL 转 SQL 查询 EXIF 元数据，结构化查询能力 |
+| 查询路由 | LangGraph StateGraph | 自动判断走 SQL 分支还是 RAG 分支 |
+| 流式输出 | LangChain SSE + PID 打印 | 实时打字机效果，学习流式 API 调用 |
+| **Go 后端** |||
+| 照片批量导入 | Go 独立脚本 `batch_vlm` | 耗时长、费用高，独立运行避免开发阶段重复调用 |
+| 照片元数据管理 | Go 代码（Gin + GORM） | 业务数据，需要事务和关系查询 |
 | 文件服务 | Go 代码 | 本地文件读写，Go 标准库高效 |
-| VLM 批量预处理 | Go 独立脚本 | 耗时长、费用高，独立运行避免开发阶段重复调用 |
-| 图片在聊天中展示 | Dify Markdown | Agent 回复包含图片 URL，Dify 自动渲染 |
+| Embedding 代理 | Go `/v1/embeddings` | 兼容 OpenAI 格式，屏蔽火山引擎 URL 差异 |
+| 统计 API | Go 代码 | EXIF 聚合分析，多维统计 |
+| **通用** |||
+| 图片在聊天中展示 | Markdown 图片语法 | Agent 回复包含图片 URL，Dify / CLI 均可渲染 |
 
 ---
 
