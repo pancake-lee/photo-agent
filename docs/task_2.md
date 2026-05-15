@@ -188,15 +188,14 @@ Go 后端：
 
 ---
 
-### Day 5：LangGraph 查询路由
+### ✅ Day 5（已完成）：LangGraph 查询路由
 
-- 理解 LangGraph 与 LangChain 的区别：显式 State + 条件分支 vs 线性 Chain
-- 掌握 StateGraph 核心概念：State（TypedDict）、Node、Edge、Conditional Edge
-- 实现查询路由 StateGraph：
-  - 入口节点 `classify`：判断查询类型（结构化统计 / 语义检索）
-  - 条件分支：`sql` 分支走 Text-to-SQL，`rag` 分支走 Chroma 检索 + LLM 生成
-  - 汇聚节点 `answer`：格式化最终回答
-- 跑通两类查询：统计型走 SQL 分支，语义型走 RAG 分支
+- `agent/chain/query_router.py` — LangGraph StateGraph 查询路由
+  - `classify` 节点：LLM 分类器，temperature=0，根据问题语义判别 sql/rag，无法判别时兜底 rag
+  - `sql_query` 节点：复用 `text_to_sql.answer_with_sql()`，异常时返回错误文本
+  - `rag_query` 节点：复用 `photo_rag.answer_question()`，异常时返回错误文本
+  - `answer` 节点：从 `sql_result.answer` 或 `rag_answer` 提取最终回答，空值时兜底提示
+  - `_build_graph()` 构建 StateGraph：START → classify(llm) → 条件边 → sql_query(llm)/rag_query(llm) → answer → END
 
 ---
 
