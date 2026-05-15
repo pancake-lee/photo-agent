@@ -98,6 +98,28 @@ server 启动 → AutoSync 自动同步
 
 ## 快速开始
 
+### 0. Python 环境
+
+本项目 Python AI 服务层使用 **Python 3.12**，通过 uv 管理版本，项目 venv 位于 `agent/.venv/`。
+
+```bash
+# 安装 uv（如未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 安装 Python 3.12
+uv python install 3.12
+
+# 创建项目 venv
+cd agent
+uv venv .venv --python 3.12
+
+# 安装依赖
+source .venv/bin/activate
+uv pip install langchain langchain-openai chromadb requests python-dotenv httpx langgraph
+```
+
+> 系统 Python（3.9）保持不动，避免影响系统其他软件。
+
 ### 1. 克隆仓库
 
 ```bash

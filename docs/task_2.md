@@ -196,7 +196,6 @@ Go 后端：
   - 入口节点 `classify`：判断查询类型（结构化统计 / 语义检索）
   - 条件分支：`sql` 分支走 Text-to-SQL，`rag` 分支走 Chroma 检索 + LLM 生成
   - 汇聚节点 `answer`：格式化最终回答
-- 在 FastAPI 暴露 `/workflow/query` 接口，替换直接链路调用
 - 跑通两类查询：统计型走 SQL 分支，语义型走 RAG 分支
 
 ---

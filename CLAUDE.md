@@ -24,6 +24,7 @@ Python AI 服务层（LangChain/LangGraph + Chroma + Text-to-SQL + Function Call
 
 - **Go 后端**：Gin + GORM + SQLite，负责照片元数据 CRUD、文件服务、导入流水线、VLM预处理照片、Embedding HTTP 代理
 - **Python AI 服务层**：LangChain 编排、Chroma 向量检索、Text-to-SQL、LangGraph 查询路由、Function Calling 工具调用、流式输出
+- **Python 环境**：Python 3.12（uv 管理），项目 venv 位于 `agent/.venv/`，通过 `uv venv agent/.venv --python 3.12` 创建。系统 Python（3.9）不动，避免影响其他系统软件
 - **Dify**：Docker 本地部署，Agent 图形化编排、知识库 RAG、自带聊天 UI
 - **核心能力**：智能检索（P0）/ 摄影档案问答（P0）/ 主题分析与创作建议（P1）/ 时间线关联分析（P2）
 
