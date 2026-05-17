@@ -10,7 +10,7 @@
         2. Few-shot 示例: 3~5 个典型 NL→SQL 样例，引导 LLM 生成正确 SQL
         3. LLM 生成: ChatPromptTemplate (System + Few-shot Human/AI + 用户问题)
         4. SQL 安全校验: validate_select_only 确保仅 SELECT（客户端双重保险）
-        5. 执行查询: 通过 Go 后端 /api/query/sql 接口执行（Python 不直连 SQLite）
+        5. 执行查询: 通过 Go 后端 /api/v1/query/sql 接口执行（Python 不直连 SQLite）
         6. 格式化回答: 将结果集转为自然语言摘要
 """
 
@@ -148,7 +148,7 @@ def _format_schema(schema_data: dict) -> str:
     将 API 返回的 JSON schema 格式化为 LLM 可用的文本。
 
     参数:
-        schema_data: Go 后端 /api/schema/photos 返回的 JSON
+        schema_data: Go 后端 /api/v1/schema/photos 返回的 JSON
 
     返回:
         格式化后的 schema 文本
@@ -290,7 +290,7 @@ def execute_sql(
         查询结果列表（result["rows"]）
     """
     result = sqlite_client.safe_execute(base_url, sql, limit=limit)
-    return result.get("rows", [])
+    return result.get("rows") or []
 
 
 # --------------------------------------------------------------------------- #

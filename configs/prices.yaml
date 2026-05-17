@@ -1,0 +1,7 @@
+models:
+  model-name-1:
+    input: 0.0008    # 每 1K token 价格（元）
+    output: 0.002
+  model-name-2:
+    input: 0.0003
+    output: 0.0006

@@ -11,7 +11,12 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "httpx>=0.28.0",
     "langgraph>=1.2.0",
+    "tenacity>=9.0.0",
+    "pyyaml>=6.0.0",
 ]
+
+[tool.pyright]
+reportPrivateImportUsage = false
 
 [project.optional-dependencies]
 dev = [

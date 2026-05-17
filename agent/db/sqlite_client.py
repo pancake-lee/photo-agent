@@ -1,7 +1,7 @@
 """
     SQLite 查询客户端（通过 Go 后端 API 代理）。
 
-    不直接连接 SQLite 数据库，而是通过 HTTP 调用 Go 后端 /api/query/sql 接口，
+    不直接连接 SQLite 数据库，而是通过 HTTP 调用 Go 后端 /api/v1/query/sql 接口，
     由 Go 后端统一执行查询并返回结果。Python 层保留 SQL 安全校验作为客户端双重保险。
 
     用法:
@@ -13,7 +13,6 @@
 """
 
 import re
-import typing
 
 import httpx
 
@@ -61,7 +60,7 @@ class QueryClient:
         if not validate_select_only(sql):
             raise ValueError(f"SQL 校验失败: 仅允许 SELECT 查询。SQL: {sql[:100]}")
 
-        url = f"{self.base_url}/api/query/sql"
+        url = f"{self.base_url}/api/v1/query/sql"
         payload = {"sql": sql}
         params = {"limit": limit}
 
@@ -113,7 +112,7 @@ class QueryClient:
         异常:
             httpx.HTTPError: HTTP 请求失败
         """
-        url = f"{self.base_url}/api/schema/photos"
+        url = f"{self.base_url}/api/v1/schema/photos"
         with httpx.Client(timeout=self.timeout) as client:
             response = client.get(url)
             response.raise_for_status()

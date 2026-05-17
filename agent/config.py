@@ -39,6 +39,11 @@ class Config:
 
         self.go_backend_url: str = ""
 
+        self.llm_fallback_model: str = ""
+        self.prices_path: str = ""
+        self.retry_enabled: bool = True
+        self.retry_max_attempts: int = 3
+
         self.project_root: pathlib.Path = pathlib.Path(".")
         self.descriptions_path: str = ""
 
@@ -109,9 +114,17 @@ class Config:
         else:
             self.chunk_size = 500
 
+        # llm fallback 配置（可选）
+        self.llm_fallback_model = self._optional(data, "llm", "fallback_model", "")
+        self.retry_enabled = self._optional(data, "llm", "retry_enabled", True)
+        self.retry_max_attempts = self._optional(data, "llm", "retry_max_attempts", 3)
+
         # server 配置（必填）
         server_addr = self._require(data, "server", "addr")
         self.go_backend_url = f"http://localhost{server_addr}"
+
+        # prices 配置（可选）
+        self.prices_path = self._optional(data, "prices", "path", "")
 
         # storage 配置（必填）
         self.project_root = pathlib.Path(

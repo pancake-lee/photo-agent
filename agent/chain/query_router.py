@@ -72,7 +72,7 @@ CLASSIFY_SYSTEM = (
 # Node 函数
 # --------------------------------------------------------------------------- #
 
-def _get_cfg(config: lg_types.RunnableConfig) -> config.Config:
+def _get_cfg(config: lg_types.RunnableConfig) -> config.Config:  # type: ignore
     """从 RunnableConfig 中提取 Config 对象。"""
     cfg = config.get("configurable", {}).get("cfg")
     if cfg is None:
@@ -80,7 +80,7 @@ def _get_cfg(config: lg_types.RunnableConfig) -> config.Config:
     return cfg
 
 
-def classify(state: RouterState, config: lg_types.RunnableConfig) -> dict:
+def classify(state: RouterState, config: lg_types.RunnableConfig) -> dict:  # type: ignore
     """分类节点：用 LLM 判断问题是 SQL 型还是 RAG 型。"""
     cfg = _get_cfg(config)
 
@@ -105,7 +105,7 @@ def classify(state: RouterState, config: lg_types.RunnableConfig) -> dict:
     return {"query_type": query_type}
 
 
-def sql_query(state: RouterState, config: lg_types.RunnableConfig) -> dict:
+def sql_query(state: RouterState, config: lg_types.RunnableConfig) -> dict:  # type: ignore
     """SQL 节点：调用 Text-to-SQL 链路生成并执行查询。"""
     cfg = _get_cfg(config)
 
@@ -122,7 +122,7 @@ def sql_query(state: RouterState, config: lg_types.RunnableConfig) -> dict:
     return {"sql_result": result}
 
 
-def rag_query(state: RouterState, config: lg_types.RunnableConfig) -> dict:
+def rag_query(state: RouterState, config: lg_types.RunnableConfig) -> dict:  # type: ignore
     """RAG 节点：Chroma 向量检索 + LLM 生成回答。"""
     cfg = _get_cfg(config)
 

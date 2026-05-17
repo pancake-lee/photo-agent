@@ -16,9 +16,12 @@ storage:
   timeline_path: "./data/timeline.md"  # 时间线 Markdown 文件路径
 
 llm:
+  base_url: "https://api.openai.com/v1"  # 或火山引擎 / 通义千问地址
   api_key: "your-llm-api-key"        # LLM API Key
   model: "gpt-4o-mini"               # 或 doubao-seed-1-6-251015 / qwen-turbo
-  base_url: "https://api.openai.com/v1"  # 或火山引擎 / 通义千问地址
+  fallback_model: ""                # 可选备用模型（如主模型调用失败时使用）
+  retry_enabled: true                   # 是否启用失败重试机制
+  retry_max_attempts: 3                   # 最大重试次数
 
 vlm:
   api_key: "your-vlm-api-key"        # VLM API Key（可与 LLM 共用同一 Key）
@@ -53,3 +56,6 @@ dify:
   password: "your-dify-password"     # Dify 管理员密码
   dataset_name: "photo-agent-descriptions"
   db_path: "./data/sqlite/photo_agent.db"
+
+prices:
+  path: ./configs/prices.yaml

@@ -199,34 +199,75 @@ Go 后端：
 
 ---
 
-### Day 6：检索评估 + AI 工程保障
+### ✅ Day 6（已完成）：检索评估 + AI 工程保障
 
-#### 检索评估
+> 实现文件拆分如下，`photo_agent.py` 为主入口。
 
-- 理解 RAG 评估指标：Precision@K、Recall@K、MRR
-- 构建测试集：人工标注 20~50 个查询-相关照片对
-- 编写评估脚本，对比不同分块策略的表现，记录基线数据
+#### 6.1 检索评估
 
-#### AI 工程保障三件套
+`agent/chain/evaluation.py`：
 
-- **重试**：所有 LLM/VLM/Embedding 调用接入 `tenacity` 指数退避重试（约 2s/4s/8s），仅对超时和连接异常重试
-- **降级**：LangChain Chain 接入 `with_fallbacks`，主模型（Doubao-pro）失败时自动降级到备用模型（Doubao-lite）
-- **Token 成本追踪**：SQLite 建 `token_usage` 表，配置 `prices.yaml` 模型单价，调用封装层记录 input/output token 用量并计算成本
-- 提供 `/admin/usage` 按天 / 按模型聚合统计接口
+- 三项标准指标：`precision_at_k` / `recall_at_k` / `mrr`
+- `run_evaluation(cfg, test_queries, k=5)` 完整评估流程：
+  - Embedding → Chroma 检索 → photo_rag 聚合 → 指标计算
+  - 每条查询输出 P@K / R@K / MRR + 汇总
+- `DEFAULT_EVAL_QUERIES` 内置 10 条模板查询（`relevant_photos` 为空，待人工标注）
+
+#### 6.2 AI 工程保障三件套
+
+**重试** — `agent/utils/llm_factory.py`：
+
+- `create_llm(cfg, ...)` 统一 LLM 工厂，自动注入 tenacity 指数退避
+- 退避策略：2s → 4s → 8s，最多 `retry_max_attempts` 次（默认 3）
+- 仅对网络异常重试（`TimeoutException` / `ConnectError` / `RemoteProtocolError` / `NetworkError`）
+- `cfg.retry_enabled = False` 可关闭
+
+**降级** — 同上文件：
+
+- 配置 `llm.fallback_model` 后，`create_llm()` 自动调用 `llm.with_fallbacks([fallback_llm])`
+- 主模型失败 → LangChain 自动切到备用模型
+- 降级配置失败不阻塞启动
+
+**Token 成本追踪** — `agent/utils/token_tracker.py`：
+
+- `TokenTracker(db_path, prices)`：SQLite 本地存储
+  - 表 `token_usage`：model / input_tokens / output_tokens / cost / created_at
+  - `record(model, input, output)` → 返回成本
+  - `summary(days=7)` → 按模型聚合
+  - `daily_breakdown(days=7)` → 按天+模型聚合
+- `TokenCallback(tracker)`：LangChain `BaseCallbackHandler`，自动捕获每次 LLM 调用的 token 用量
+- `load_prices(path)`：从 YAML 加载模型单价
+- CLI 命令 `python chain/photo_agent.py -c config.yaml --usage [N]` 查看用量
+
+**配置扩展** — `agent/config.py` 新增可选字段：
+
+| 字段                   | 类型 | 默认值  | YAML 路径              |
+|------------------------|------|---------|------------------------|
+| `llm_fallback_model`   | str  | `""`    | `llm.fallback_model`   |
+| `retry_enabled`        | bool | `True`  | `llm.retry_enabled`    |
+| `retry_max_attempts`   | int  | `3`     | `llm.retry_max_attempts` |
+| `prices_path`          | str  | `""`    | `prices.path`          |
 
 ---
 
-### Day 7：联调 + 文档
+### ✅ Day 7（已完成）：联调 + 文档
 
-- 全链路端到端联调：Go 后端 ↔ Python 服务 ↔ Chroma ↔ LLM 代理
-- 覆盖场景测试：向量检索、Text-to-SQL、SSE 流式对话、Function Calling 工具调用、LangGraph 查询路由
-- 验证 AI 工程保障：重试触发、降级切换、Token 追踪落库
-- 整理 README，说明 Python 服务层架构、模块职责、启动方式
-- 确保所有代码可运行、可演示
+`agent/chain/photo_agent.py` — 391 行，项目主入口：
 
-## TODO
+- LangGraph 查询路由（Day 5 逻辑完整保留）：`classify → SQL/RAG → answer`
+- `PhotoAgent` 类：初始化时自动完成 LLM 工厂、Token 追踪、回调注册
+- CLI 四种模式：
 
-- 对接LLM的 SSE（Server-Sent Events）原理，WEB前端展示打字机效果
-  - 当前还是py写的cli应用，还没有上WEB页面
-- 流式输出，和，print直接打印，发生交叉了
-  - 进入LLM循环后，所有打印都要走流式输出
+```bash
+python chain/photo_agent.py -c config.yaml              # 默认：交互式聊天
+python chain/photo_agent.py -c config.yaml --eval       # 评估模式
+python chain/photo_agent.py -c config.yaml --demo       # 场景演示（8 个覆盖用例）
+python chain/photo_agent.py -c config.yaml --usage      # Token 用量（默认 7 天）
+python chain/photo_agent.py -c config.yaml --usage 30   # 最近 30 天
+```
+
+`agent/chain/demo.py`：
+
+- 8 个覆盖场景（4 SQL + 4 RAG），自动对比预期路由 vs 实际路由
+- 每场景输出：路由结果、SQL（如有）、回答摘要
+- 演示结束后打印本次 Token 用量
