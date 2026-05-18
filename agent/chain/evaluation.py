@@ -109,10 +109,12 @@ def run_evaluation(
     test_queries: list[dict] | None = None,
     precision_k: int = 10,
     verbose: bool = True,
+    tracker=None,
 ) -> dict:
     """运行 RAG 检索评估，返回 Precision@K / Recall@K / MRR 等指标。
 
     Precision 使用固定 K=precision_k，Recall 按每条查询的标注总量动态计算。
+    tracker 为可选 TokenTracker，用于持久化 embedding token 用量。
     """
     queries = test_queries or DEFAULT_EVAL_QUERIES
     if not queries:
@@ -121,6 +123,7 @@ def run_evaluation(
     emb = embedder.Embedder(
         base_url=cfg.go_backend_url,
         model=cfg.embedding_model,
+        tracker=tracker,
     )
     store = chroma_client.ChromaPhotoStore(
         persist_dir=str(cfg.resolve_path("./data/chroma")),
@@ -208,5 +211,6 @@ def run_evaluation(
         print(f"   Precision@{precision_k}: {result['precision@k']:.4f}")
         print(f"   Recall(动态):           {result['recall@k']:.4f}")
         print(f"   MRR:                    {result['mrr']:.4f}")
+        print(f"   Embedding Tokens:       {emb.total_tokens}")
 
     return result

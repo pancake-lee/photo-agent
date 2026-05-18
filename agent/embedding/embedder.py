@@ -29,6 +29,7 @@ class Embedder:
         self,
         base_url: str,
         model: str,
+        tracker=None,
     ):
         """
         初始化 Embedder。
@@ -36,10 +37,13 @@ class Embedder:
         参数:
             base_url: go-server 地址，如 http://localhost:10000
             model:    模型名称，由服务端配置决定
+            tracker:  可选 TokenTracker，用于持久化 token 用量
         """
         self.base_url = base_url.rstrip("/")
         self.model = model
         self._client = httpx.Client(timeout=60.0)
+        self._tracker = tracker
+        self.total_tokens = 0
 
     def embed_texts(self, texts: list[str]) -> list[np.ndarray]:
         """
@@ -66,6 +70,13 @@ class Embedder:
         resp.raise_for_status()
 
         data = resp.json()
+
+        # 累计并持久化 token 用量
+        usage = data.get("usage", {})
+        tokens = usage.get("total_tokens", 0)
+        self.total_tokens += tokens
+        if self._tracker and tokens > 0:
+            self._tracker.record_embedding(self.model, tokens)
 
         # 按 index 排序，保证与输入顺序一致
         items = sorted(data.get("data", []), key=lambda x: x.get("index", 0))

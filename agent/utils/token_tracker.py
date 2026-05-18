@@ -67,6 +67,21 @@ class TokenTracker:
             conn.commit()
         return cost
 
+    def record_embedding(self, model: str, tokens: int) -> float:
+        """记录一次 embedding 调用（仅有 total_tokens，无 output）。"""
+        price = self._prices.get(model, {})
+        input_price = price.get("input", 0.0)
+        cost = (tokens / 1000.0) * input_price
+
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                "INSERT INTO token_usage (model, input_tokens, output_tokens, cost) "
+                "VALUES (?, ?, ?, ?)",
+                (model, tokens, 0, cost),
+            )
+            conn.commit()
+        return cost
+
     def summary(self, days: int = 7) -> list[dict]:
         """按模型聚合最近 N 天用量。"""
         with sqlite3.connect(self._db_path) as conn:

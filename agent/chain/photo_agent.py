@@ -364,7 +364,7 @@ def main() -> None:
         if args.eval_mode:
             print("RAG 检索评估...")
             print()
-            evaluation.run_evaluation(cfg, verbose=True)
+            evaluation.run_evaluation(cfg, verbose=True, tracker=agent.tracker)
 
         elif args.demo_mode:
             demo.run_demo(cfg, _get_graph(), agent.tracker)

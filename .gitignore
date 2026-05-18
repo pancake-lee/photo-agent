@@ -40,14 +40,6 @@ build/
 
 backend/init_dify
 
-# Dify volumes: ignore all runtime data, but keep sandbox config
-dify/volumes/*
-!dify/volumes/sandbox/
-dify/volumes/sandbox/*
-!dify/volumes/sandbox/conf/
-dify/volumes/sandbox/conf/*
-!dify/volumes/sandbox/conf/config.yaml
-
 .local
 .env
 
