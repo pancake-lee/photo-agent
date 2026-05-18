@@ -1,9 +1,7 @@
 """
     Text-to-SQL 链路：自然语言 → Schema 提示 + Few-shot → LLM 生成 SQL → 安全校验 → 执行 → 格式化回答
 
-    用法:
-        cd agent
-        python chain/text_to_sql.py -c ../.local/my-config.yaml
+    核心功能供 photo_agent 复用，独立演示见 demo/text_to_sql_demo.py。
 
     架构:
         1. Schema 提示: 定义 photos 表结构、字段类型、可查询维度
@@ -365,55 +363,3 @@ def answer_with_sql(
         "answer": answer,
     }
 
-
-# --------------------------------------------------------------------------- #
-# 交互式演示
-# --------------------------------------------------------------------------- #
-
-def _chat_loop(cfg: config.Config) -> None:
-    """Text-to-SQL 交互式演示循环。"""
-    print("=" * 50)
-    print("📊 Text-to-SQL 问答已启动")
-    print(f"   Go 后端: {cfg.go_backend_url}")
-    print("   输入 exit 或按 Ctrl+C 退出")
-    print("=" * 50)
-    print()
-
-    while True:
-        try:
-            user_input = input("你: ")
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-
-        if user_input.lower() == "exit":
-            break
-
-        if not user_input.strip():
-            continue
-
-        try:
-            print("🧠 生成 SQL...")
-            sql = generate_sql(cfg, user_input)
-            print(f"📋 SQL: {sql}")
-
-            print("📊 执行查询...")
-            results = execute_sql(cfg.go_backend_url, sql)
-            print(f"✅ 返回 {len(results)} 条结果")
-
-            answer = format_results(user_input, sql, results)
-            print(f"AI: {answer}")
-            print()
-
-        except ValueError as e:
-            print(f"❌ 错误: {e}")
-            print()
-        except Exception as e:
-            print(f"❌ 执行失败: {e}")
-            print()
-
-
-if __name__ == "__main__":
-    cfg = config.load_config()
-    _chat_loop(cfg)
-    print("👋 再见！")

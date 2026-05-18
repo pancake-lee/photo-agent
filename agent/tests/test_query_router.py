@@ -15,7 +15,7 @@ import unittest.mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-import chain.query_router as router
+import demo.query_router as router
 
 
 # ------------------------------------------------------------------ #
@@ -170,7 +170,7 @@ def test_classify_returns_sql_when_llm_says_sql():
     """LLM 返回 "sql" 时分类为 sql。"""
     fake_cfg = unittest.mock.MagicMock()
     with unittest.mock.patch(
-        "chain.query_router.lc_openai.ChatOpenAI",
+        "demo.query_router.lc_openai.ChatOpenAI",
         return_value=_FakeLLM("sql"),
     ):
         result = router.classify(
@@ -184,7 +184,7 @@ def test_classify_returns_rag_when_llm_says_rag():
     """LLM 返回 "rag" 时分类为 rag。"""
     fake_cfg = unittest.mock.MagicMock()
     with unittest.mock.patch(
-        "chain.query_router.lc_openai.ChatOpenAI",
+        "demo.query_router.lc_openai.ChatOpenAI",
         return_value=_FakeLLM("rag"),
     ):
         result = router.classify(
@@ -198,7 +198,7 @@ def test_classify_defaults_to_rag_on_unknown():
     """LLM 返回非预期内容时默认 fallback 到 rag。"""
     fake_cfg = unittest.mock.MagicMock()
     with unittest.mock.patch(
-        "chain.query_router.lc_openai.ChatOpenAI",
+        "demo.query_router.lc_openai.ChatOpenAI",
         return_value=_FakeLLM("something weird"),
     ):
         result = router.classify(
@@ -212,7 +212,7 @@ def test_classify_uses_temperature_zero():
     """classify 节点使用 temperature=0 保证确定性。"""
     fake_cfg = unittest.mock.MagicMock()
     mock_llm_cls = unittest.mock.patch(
-        "chain.query_router.lc_openai.ChatOpenAI",
+        "demo.query_router.lc_openai.ChatOpenAI",
         return_value=_FakeLLM("sql"),
     )
     with mock_llm_cls as mock_cls:
@@ -247,10 +247,10 @@ def test_compile_and_invoke_sql_route():
     fake_cfg = unittest.mock.MagicMock()
 
     with unittest.mock.patch(
-        "chain.query_router.lc_openai.ChatOpenAI",
+        "demo.query_router.lc_openai.ChatOpenAI",
         return_value=_FakeLLM("sql"),
     ), unittest.mock.patch(
-        "chain.query_router.text_to_sql.answer_with_sql",
+        "demo.query_router.text_to_sql.answer_with_sql",
         return_value={
             "question": "how many",
             "sql": "SELECT COUNT(*) FROM photos",
@@ -270,10 +270,10 @@ def test_compile_and_invoke_rag_route():
     fake_cfg = unittest.mock.MagicMock()
 
     with unittest.mock.patch(
-        "chain.query_router.lc_openai.ChatOpenAI",
+        "demo.query_router.lc_openai.ChatOpenAI",
         return_value=_FakeLLM("rag"),
     ), unittest.mock.patch(
-        "chain.query_router.photo_rag.answer_question",
+        "demo.query_router.photo_rag.answer_question",
         return_value="找到 2 张猫咪照片。",
     ):
         result = router.route_query(fake_cfg, "有猫咪的照片吗")

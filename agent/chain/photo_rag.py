@@ -1,9 +1,7 @@
 """
     完整链路：用户问题 → Embedding → Chroma 检索 Top-K → 拼接上下文 → LLM 生成
 
-    用法：
-        cd agent
-        python chain/photo_rag.py -c ../.local/my-config.yaml
+    核心功能供 photo_agent 复用，独立演示见 demo/photo_rag_demo.py。
 """
 
 import sys
@@ -100,8 +98,8 @@ def _aggregate_by_photo(
     # 按距离排序，取 top_n
     aggregated = sorted(
         best_by_photo.values(),
-        key=lambda x: x.get("distance") if x.get("distance") is not None else float("inf"),
-    )
+        key=lambda x: x.get("distance") if x.get("distance") is not None else float("inf"), # type: ignore
+    ) # type: ignore
     return aggregated[:top_n]
 
 
@@ -201,56 +199,3 @@ def answer_question(
     return str(response.content)
 
 
-def chat_loop(cfg: config.Config) -> None:
-    """RAG 问答交互式主循环。"""
-
-    print("=" * 50)
-    print("📷 照片库 RAG 问答已启动")
-    print("   输入 exit 或按 Ctrl+C 退出")
-    print("=" * 50)
-    print()
-
-    while True:
-        try:
-            user_input = input("你: ")
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-
-        if user_input.lower() == "exit":
-            break
-
-        if not user_input.strip():
-            continue
-
-        print("🔍 检索相关照片...")
-        results = _retrieve(cfg, user_input, n_results=15)
-        aggregated = _aggregate_by_photo(results, top_n=5)
-        context = _build_context(aggregated)
-
-        chain = _build_rag_chain(cfg)
-        reply_parts: list[str] = []
-        with streaming_printer.StreamingPrinter() as printer:
-            for chunk in chain.stream({"context": context, "question": user_input}):
-                text = str(chunk.content)
-                if text:
-                    printer.feed(text)
-                    reply_parts.append(text)
-        reply = "".join(reply_parts)
-        print()
-        print()
-
-        if aggregated:
-            print("📎 参考照片:")
-            for r in aggregated:
-                meta = r.get("metadata") or {}
-                photo_id = meta.get("photo_id", "unknown")
-                distance = r.get("distance")
-                dist_str = f" (距离: {distance:.4f})" if distance is not None else ""
-                print(f"   - {photo_id}{dist_str}")
-            print()
-
-if __name__ == "__main__":
-    cfg = config.load_config()
-    chat_loop(cfg)
-    print("👋 再见！")
