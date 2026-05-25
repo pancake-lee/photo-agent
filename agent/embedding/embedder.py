@@ -60,7 +60,8 @@ class Embedder:
         if not texts:
             return []
 
-        url = f"{self.base_url}/v1/embeddings"
+        # TODO 即使要用go代理的embedding，哪也是来自配置文件，我手动配置代理的url啊，写死那配置有啥意义？
+        url = f"{self.base_url}/v1/embeddings" 
         payload = {
             "model": self.model,
             "input": texts,
