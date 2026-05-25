@@ -107,6 +107,7 @@ def _retrieve(
     cfg: config.Config,
     question: str,
     n_results: int = 5,
+    where: dict | None = None,
 ) -> list[dict]:
     """
     对用户问题进行 Embedding 并在 Chroma 中检索 Top-K 结果。
@@ -115,6 +116,8 @@ def _retrieve(
         cfg:        配置对象
         question:   用户问题
         n_results:  返回的最相似结果数量
+        where:      元数据过滤条件，如 {"brand": "Canon"}、
+                    {"shot_at": {"$gte": "2024-01-01"}}，支持 Chroma 原生语法
 
     返回:
         扁平化的检索结果列表
@@ -135,6 +138,7 @@ def _retrieve(
     results = store.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
+        where=where,
     )
 
     return results
@@ -171,6 +175,7 @@ def answer_question(
     question: str,
     n_results: int = 5,
     aggregate: bool = True,
+    where: dict | None = None,
 ) -> str:
     """
     执行完整 RAG 链路，返回答案字符串。
@@ -180,13 +185,14 @@ def answer_question(
         question:   用户问题
         n_results:  检索结果数量（聚合模式下为返回的照片数）
         aggregate:  是否按照片聚合（默认 True），避免同一照片多 chunk 重复
+        where:      元数据过滤条件，透传给 Chroma 检索
 
     返回:
         LLM 生成的回答文本
     """
     # 聚合模式下先检索更多 chunk，再聚合到照片级别
     retrieve_n = n_results * 3 if aggregate else n_results
-    results = _retrieve(cfg, question, n_results=retrieve_n)
+    results = _retrieve(cfg, question, n_results=retrieve_n, where=where)
 
     if aggregate:
         results = _aggregate_by_photo(results, top_n=n_results)

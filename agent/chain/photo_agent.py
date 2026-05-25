@@ -22,6 +22,7 @@ import typing
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import langchain_core.callbacks as lc_callbacks
+import langchain_core.messages as lc_messages
 import langchain_core.prompts as lc_prompts
 import langchain_core.runnables as lc_runnables
 import langgraph.graph as lg_graph
@@ -31,6 +32,7 @@ import chain.evaluation as evaluation
 import chain.photo_rag as photo_rag
 import chain.text_to_sql as text_to_sql
 import config
+import tools.openapi_client as openapi_client
 import utils.llm_factory as llm_factory
 import utils.token_tracker as token_tracker
 
@@ -45,13 +47,17 @@ class RouterState(typing.TypedDict):
     query_type: str
     sql_result: dict
     rag_answer: str
+    tool_answer: str
     answer: str
 
 
 CLASSIFY_SYSTEM = (
-    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql 或 rag，不要解释。\n\n"
-    "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、数量聚合的结构化查询\n"
-    "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的语义检索\n\n"
+    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag 或 tool，不要解释。\n\n"
+    "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、"
+    "数量聚合的结构化查询\n"
+    "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的语义检索\n"
+    "tool: 涉及照片列表、时间线查看、标签筛选、单张照片详情、归档操作等"
+    "需要调用 API 的查询\n\n"
     "示例:\n"
     "- \"我有多少张照片？\" → sql\n"
     "- \"用 Nikon 拍的照片有哪些？\" → sql\n"
@@ -60,7 +66,10 @@ CLASSIFY_SYSTEM = (
     "- \"有猫咪的照片吗？\" → rag\n"
     "- \"ISO 大于 1600 的照片\" → sql\n"
     "- \"红墙前的照片\" → rag\n"
-    "- \"湖边的风景照\" → rag\n\n"
+    "- \"湖边的风景照\" → rag\n"
+    "- \"列出所有时间线\" → tool\n"
+    "- \"查看某张照片详情\" → tool\n"
+    "- \"按标签筛选照片\" → tool\n\n"
     "用户问题: {question}\n"
     "分类:"
 )
@@ -80,7 +89,12 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     chain = prompt | llm
     response = chain.invoke({"question": state["question"]})
     raw = str(response.content).strip().lower()
-    query_type = "sql" if "sql" in raw else "rag"
+    if "sql" in raw:
+        query_type = "sql"
+    elif "tool" in raw:
+        query_type = "tool"
+    else:
+        query_type = "rag"
     return {"query_type": query_type}
 
 
@@ -107,10 +121,65 @@ def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     return {"rag_answer": answer_text}
 
 
+def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
+    """工具调用节点：使用 llm.bind_tools() 让 LLM 自主调用 Go API。"""
+    cfg = _get_cfg(config)
+
+    # 获取或创建工具客户端
+    tool_client = _get_tool_client(cfg.go_backend_url)
+    tools = tool_client.get_tools()
+
+    llm = llm_factory.create_llm(cfg, temperature=0.3, callbacks=_get_callbacks())
+    llm_with_tools = llm.bind_tools(tools)
+
+    messages: list[lc_messages.BaseMessage] = [
+        lc_messages.SystemMessage(content=_TOOL_SYSTEM_PROMPT),
+        lc_messages.HumanMessage(content=state["question"]),
+    ]
+
+    try:
+        response = llm_with_tools.invoke(messages)
+
+        # 处理工具调用
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            tool_messages: list[lc_messages.BaseMessage] = []
+            for tc in response.tool_calls:
+                result = tool_client.execute(
+                    tc.get("name", ""), tc.get("args", {})
+                )
+                # 截断过长结果，避免超出上下文
+                max_len = 4000
+                if len(result) > max_len:
+                    result = result[:max_len] + f"\n...（结果已截断，原始长度 {len(result)}）"
+                tool_messages.append(
+                    lc_messages.ToolMessage(
+                        content=result,
+                        tool_call_id=tc.get("id", ""),
+                    )
+                )
+
+            # 将工具结果再次传给 LLM 生成最终回答
+            final_response = llm_with_tools.invoke(messages + [response] + tool_messages)
+            return {"tool_answer": str(final_response.content)}
+
+        return {"tool_answer": str(response.content)}
+    except Exception as exc:
+        return {"tool_answer": f"工具调用失败: {exc}"}
+
+
+_TOOL_SYSTEM_PROMPT = (
+    "你是一位摄影档案助手，可以调用后端 API 帮助用户管理照片库。"
+    "根据用户的需求选择合适的工具，回答简洁，控制在 150 字以内。"
+)
+
+
 def _answer_node(state: RouterState) -> dict:
-    if state["query_type"] == "sql":
+    query_type = state["query_type"]
+    if query_type == "sql":
         result = state.get("sql_result", {})
         text = result.get("answer") or "SQL 查询未返回结果。"
+    elif query_type == "tool":
+        text = state.get("tool_answer") or "工具调用未返回结果。"
     else:
         text = state.get("rag_answer") or "RAG 检索未返回结果。"
     return {"answer": text}
@@ -118,6 +187,17 @@ def _answer_node(state: RouterState) -> dict:
 
 def _route_by_type(state: RouterState) -> str:
     return state["query_type"]
+
+
+# 工具客户端单例（按 base_url 缓存）
+_tool_clients: dict[str, openapi_client.OpenAPIClient] = {}
+
+
+def _get_tool_client(base_url: str) -> openapi_client.OpenAPIClient:
+    """获取或创建 OpenAPI 工具客户端（按 base_url 缓存）。"""
+    if base_url not in _tool_clients:
+        _tool_clients[base_url] = openapi_client.OpenAPIClient(base_url)
+    return _tool_clients[base_url]
 
 
 # LangGraph app 单例
@@ -131,14 +211,16 @@ def _get_graph():
         g.add_node("classify", _classify_node)
         g.add_node("sql_query", _sql_node)
         g.add_node("rag_query", _rag_node)
+        g.add_node("tool_query", _tool_node)
         g.add_node("answer", _answer_node)
         g.add_edge(lg_graph.START, "classify")
         g.add_conditional_edges(
             "classify", _route_by_type,
-            {"sql": "sql_query", "rag": "rag_query"},
+            {"sql": "sql_query", "rag": "rag_query", "tool": "tool_query"},
         )
         g.add_edge("sql_query", "answer")
         g.add_edge("rag_query", "answer")
+        g.add_edge("tool_query", "answer")
         g.add_edge("answer", lg_graph.END)
         _graph_app = g.compile()
     return _graph_app
@@ -205,12 +287,13 @@ class PhotoAgent:
         print()
 
     def route(self, question: str) -> RouterState:
-        """路由单次查询，自动分发到 SQL 或 RAG 分支。"""
+        """路由单次查询，自动分发到 SQL / RAG / Tool 分支。"""
         initial: RouterState = {
             "question": question,
             "query_type": "",
             "sql_result": {},
             "rag_answer": "",
+            "tool_answer": "",
             "answer": "",
         }
         result = self._app.invoke(initial, {"configurable": {"cfg": self._cfg}})
@@ -230,9 +313,9 @@ class PhotoAgent:
 # ============================================================================
 
 def _chat_loop(agent: PhotoAgent) -> None:
-    """交互式聊天循环，LangGraph 自动路由 SQL / RAG。"""
+    """交互式聊天循环，LangGraph 自动路由 SQL / RAG / Tool。"""
     print("=" * 60)
-    print("PhotoAgent 聊天已启动（LangGraph 路由: SQL / RAG）")
+    print("PhotoAgent 聊天已启动（LangGraph 路由: SQL / RAG / Tool）")
     print(f"   Go 后端: {agent.cfg.go_backend_url}")
     print("   输入 exit 或按 Ctrl+C 退出")
     print("=" * 60)
@@ -253,7 +336,12 @@ def _chat_loop(agent: PhotoAgent) -> None:
         result = agent.route(user_input)
         query_type = result["query_type"]
 
-        print(f"路由: {'SQL 统计查询' if query_type == 'sql' else 'RAG 语义检索'}")
+        route_name = {
+            "sql": "SQL 统计查询",
+            "rag": "RAG 语义检索",
+            "tool": "Tool API 调用",
+        }.get(query_type, "未知路由")
+        print(f"路由: {route_name}")
         print()
 
         if query_type == "sql":

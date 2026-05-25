@@ -19,15 +19,17 @@
 
 ## 高优先级
 
-- [ ] Chroma 元数据过滤利用
+- [x] Chroma 元数据过滤利用
   - `photo_rag.py` 的 `_retrieve()` 增加 `where` 参数透传
-  - 支持按 timeline / brand 等元数据过滤后再做向量检索
+  - `index_photos.py` metadata 增加 `shot_at` 字段，支持按时间线过滤
+  - `answer_question()` 同步支持 `where` 参数，上层可直接调用
   - 为混合检索铺路，工作量约 0.5 天
 
-- [ ] LangGraph 路由融合 Function Calling
+- [x] LangGraph 路由融合 Function Calling
   - 路由从 sql/rag 二分类扩展为三分类（sql / rag / tool）
-  - `tool` 分支使用 `llm.bind_tools()` 让 LLM 自主调用 Go API
-  - 补齐"列出时间线""按标签查照片"等查询的短板，工作量约 1-2 天
+  - `tool` 分支使用 `llm.bind_tools()` + OpenAPIClient 执行 Go API
+  - `_tool_node` 支持多轮 tool_call → 结果回传 → LLM 总结
+  - 补齐"列出时间线""按标签查照片""照片详情"等查询的短板，工作量约 1-2 天
 
 - [ ] 数据一致性保障（Chroma / Dify / SQLite）
   - description 更新后 Chroma 不会自动同步（需手动重跑 `index_photos.py`）

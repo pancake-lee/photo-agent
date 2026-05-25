@@ -89,7 +89,7 @@ def _save_manifest(manifest_path: pathlib.Path, data: dict) -> None:
 # --------------------------------------------------------------------------- #
 
 def _prepare_chunks(
-    photo_id: str, description: str, cfg: config.Config
+    photo_id: str, description: str, cfg: config.Config, shot_at: str = ""
 ) -> tuple[list[str], list[dict]]:
     """
     对单条照片描述进行分片，返回 chunk 文本列表和对应的 metadata 列表。
@@ -98,6 +98,7 @@ def _prepare_chunks(
         photo_id:    照片文件名
         description: 照片描述文本
         cfg:         配置对象，包含分块策略和参数
+        shot_at:     照片拍摄时间（ISO 格式），用于元数据过滤
 
     返回:
         (chunks, metadatas) 两个等长列表
@@ -127,11 +128,14 @@ def _prepare_chunks(
 
     metadatas = []
     for idx, _ in enumerate(chunks):
-        metadatas.append({
+        meta: dict = {
             "photo_id": photo_id,
             "file_path": f"/photos/{photo_id}",
             "chunk_index": idx,
-        })
+        }
+        if shot_at:
+            meta["shot_at"] = shot_at
+        metadatas.append(meta)
 
     return chunks, metadatas
 
@@ -240,7 +244,8 @@ def _index_photos(
     for photo_id in photo_ids:
         info = data[photo_id]
         description = info.get("description", "") if isinstance(info, dict) else str(info)
-        chunks, metadatas = _prepare_chunks(photo_id, description, cfg)
+        shot_at = info.get("shot_at", "") if isinstance(info, dict) else ""
+        chunks, metadatas = _prepare_chunks(photo_id, description, cfg, shot_at=shot_at)
         photo_id_to_chunk_count[photo_id] = len(chunks)
 
         for idx, chunk in enumerate(chunks):
