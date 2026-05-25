@@ -29,6 +29,10 @@ func AutoSync() error {
 	ClearTimelineCache()
 	preDesc, _ := LoadDescriptions()
 
+	// 加载 MD5 去重注册表
+	dedupPath := filepath.Join(filepath.Dir(cfg.Storage.DescriptionsPath), "dedup_hashes.json")
+	dedupReg := LoadDedupRegistry(dedupPath)
+
 	// 2. 扫描 photo_path 下所有图片
 	images, err := scanImagesInPhotoPath(cfg.Storage.PhotoPath)
 	if err != nil {
@@ -73,6 +77,36 @@ func AutoSync() error {
 			// 从 descriptions.json 获取描述，从 EXIF 获取完整元数据
 			description, exifInfo := resolvePhotoData(img.relPath, img.absPath, preDesc)
 
+			// MD5 去重检查（仅新照片）：避免相同内容以不同路径重复导入
+				if _, found := existingMap[img.relPath]; !found {
+					if fileMD5, err := ComputeFileMD5(img.absPath); err == nil {
+						if firstPath, exists := dedupReg.Exists(fileMD5); exists {
+							plogger.Warnf("AutoSync dedup skip (same as %s): %s", firstPath, img.relPath)
+							mu.Lock()
+							skipCount++
+							mu.Unlock()
+							return
+						}
+					} else {
+						plogger.Warnf("MD5 compute failed %s: %v", img.relPath, err)
+					}
+				}
+
+			// MD5 去重检查（仅新照片）：避免相同内容以不同路径重复导入
+			if _, found := existingMap[img.relPath]; !found {
+				if fileMD5, err := ComputeFileMD5(img.absPath); err == nil {
+					if firstPath, exists := dedupReg.Exists(fileMD5); exists {
+						plogger.Warnf("AutoSync dedup skip (same as %s): %s", firstPath, img.relPath)
+						mu.Lock()
+						skipCount++
+						mu.Unlock()
+						return
+					}
+				} else {
+					plogger.Warnf("MD5 compute failed %s: %v", img.relPath, err)
+				}
+			}
+
 			if existing, found := existingMap[img.relPath]; found {
 				// 已存在：优先用 EXIF 的 shot_at 重新计算 timeline
 				newTimeline := ""
@@ -108,6 +142,11 @@ func AutoSync() error {
 				return
 			}
 
+
+			// 注册 MD5 去重
+			if fileMD5, err := ComputeFileMD5(img.absPath); err == nil {
+				dedupReg.Register(fileMD5, img.relPath)
+			}
 			syncPhotoToDify(photo.ID, description, photo.Timeline)
 
 			mu.Lock()
@@ -117,6 +156,12 @@ func AutoSync() error {
 	}
 
 	wg.Wait()
+
+
+	// 保存去重注册表
+	if err := dedupReg.Save(); err != nil {
+		plogger.Warnf("Dedup registry save failed: %v", err)
+	}
 
 	plogger.Infof("AutoSync done: new=%d, updated=%d, skipped=%d", newCount, updateCount, skipCount)
 	return nil

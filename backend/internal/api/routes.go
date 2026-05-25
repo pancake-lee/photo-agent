@@ -22,6 +22,7 @@ func setupV1Routes(api *gin.RouterGroup) {
 	api.GET("/photos/stats", GetPhotoStats)
 	api.GET("/photos/:id", GetPhoto)
 	api.GET("/photos/:id/image", GetPhotoImage)
+	api.PUT("/photos/:id/tags", UpdatePhotoTags)
 
 	// 通用 SQL 查询
 	api.POST("/query/sql", ExecuteSQL)

@@ -24,6 +24,7 @@ var (
 	dryRun     = flag.Bool("dry-run", false, "dry run, test config only")
 	logConsole = flag.Bool("l", false, "log to console; false for file only")
 	force      = flag.Bool("force", false, "force reprocess all images")
+	noDedup    = flag.Bool("no-dedup", false, "disable MD5 dedup check")
 )
 
 func main() {
@@ -90,6 +91,14 @@ func main() {
 		_ = json.Unmarshal(data, &result)
 	}
 
+	// MD5 去重
+	var dedupReg *service.DedupRegistry
+	if !*noDedup {
+		dedupPath := filepath.Join(filepath.Dir(outputPath), "dedup_hashes.json")
+		dedupReg = service.LoadDedupRegistry(dedupPath)
+		plogger.Infof("Dedup registry: %d hashes loaded", dedupReg.Count())
+	}
+
 	// force 模式：清理已有压缩文件和描述条目
 	if *force {
 		for _, img := range images {
@@ -130,6 +139,22 @@ func main() {
 				relPath = filepath.Base(imgPath)
 			}
 			relPath = filepath.ToSlash(relPath)
+
+				// MD5 去重检查
+				if dedupReg != nil {
+					fileMD5, err := service.ComputeFileMD5(imgPath)
+					if err == nil {
+						if firstPath, exists := dedupReg.Exists(fileMD5); exists {
+							plogger.Infof("[%d/%d] Dedup skip (same as %s): %s", idx+1, len(images), firstPath, relPath)
+							countMu.Lock()
+							skippedCount++
+							countMu.Unlock()
+							return
+						}
+					} else {
+						plogger.Warnf("MD5 compute failed %s: %v", relPath, err)
+					}
+				}
 
 			// 检查是否已有描述
 			if !*force {
@@ -199,6 +224,13 @@ func main() {
 			}
 			mu.Unlock()
 
+				// 注册 MD5 去重
+				if dedupReg != nil {
+					if fileMD5, err := service.ComputeFileMD5(imgPath); err == nil {
+						dedupReg.Register(fileMD5, relPath)
+					}
+				}
+
 			countMu.Lock()
 			successCount++
 			countMu.Unlock()
@@ -217,6 +249,13 @@ func main() {
 	}
 
 	wg.Wait()
+
+	// 保存去重注册表
+	if dedupReg != nil {
+		if err := dedupReg.Save(); err != nil {
+			plogger.Warnf("Dedup registry save failed: %v", err)
+		}
+	}
 
 	// 最终保存
 	if err := saveResult(outputPath, result); err != nil {

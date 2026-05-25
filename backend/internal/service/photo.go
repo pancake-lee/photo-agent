@@ -55,6 +55,11 @@ func GetPhotoByID(id string) (*model.Photo, error) {
 	return &photo, nil
 }
 
+// UpdatePhotoTags 更新照片的结构化标签（JSON 字符串）
+func UpdatePhotoTags(photoID, tags string) error {
+	return db.Model(&model.Photo{}).Where("id = ?", photoID).Update("tags", tags).Error
+}
+
 // ListPhotosParams 照片列表查询参数
 type ListPhotosParams struct {
 	Page     int    // 页码，从 1 开始

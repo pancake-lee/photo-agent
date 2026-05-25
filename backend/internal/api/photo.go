@@ -75,6 +75,25 @@ func GetPhoto(c *gin.Context) {
 	c.JSON(http.StatusOK, photo)
 }
 
+// UpdatePhotoTags 更新照片结构化标签
+func UpdatePhotoTags(c *gin.Context) {
+	id := c.Param("id")
+	var body struct {
+		Tags string `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if err := service.UpdatePhotoTags(id, body.Tags); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 // GetPhotoImage 获取图片文件（支持缩略图）
 func GetPhotoImage(c *gin.Context) {
 	id := c.Param("id")

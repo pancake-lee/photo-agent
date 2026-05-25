@@ -89,7 +89,8 @@ def _save_manifest(manifest_path: pathlib.Path, data: dict) -> None:
 # --------------------------------------------------------------------------- #
 
 def _prepare_chunks(
-    photo_id: str, description: str, cfg: config.Config, shot_at: str = ""
+    photo_id: str, description: str, cfg: config.Config, shot_at: str = "",
+    attrs: dict | None = None,
 ) -> tuple[list[str], list[dict]]:
     """
     对单条照片描述进行分片，返回 chunk 文本列表和对应的 metadata 列表。
@@ -99,6 +100,7 @@ def _prepare_chunks(
         description: 照片描述文本
         cfg:         配置对象，包含分块策略和参数
         shot_at:     照片拍摄时间（ISO 格式），用于元数据过滤
+        attrs:       结构化属性（objects/colors/scene/lighting/mood/composition）
 
     返回:
         (chunks, metadatas) 两个等长列表
@@ -135,6 +137,11 @@ def _prepare_chunks(
         }
         if shot_at:
             meta["shot_at"] = shot_at
+        # 结构化属性写入 metadata，支持 where 过滤
+        if attrs:
+            for key in ("scene", "lighting", "mood", "colors", "objects", "composition"):
+                if attrs.get(key):
+                    meta[key] = attrs[key]
         metadatas.append(meta)
 
     return chunks, metadatas
@@ -229,9 +236,13 @@ def _index_photos(
     data: dict,
     photo_ids: list[str],
     cfg: config.Config,
+    attrs_data: dict | None = None,
 ) -> dict:
     """
     对指定照片列表执行索引：分块 → Embedding → 入库。
+
+    参数:
+        attrs_data: 结构化属性字典（key 为 photo_id）
 
     返回:
         更新后的 manifest 记录字典，key 为 photo_id
@@ -245,7 +256,8 @@ def _index_photos(
         info = data[photo_id]
         description = info.get("description", "") if isinstance(info, dict) else str(info)
         shot_at = info.get("shot_at", "") if isinstance(info, dict) else ""
-        chunks, metadatas = _prepare_chunks(photo_id, description, cfg, shot_at=shot_at)
+        attrs = attrs_data.get(photo_id) if attrs_data else None
+        chunks, metadatas = _prepare_chunks(photo_id, description, cfg, shot_at=shot_at, attrs=attrs)
         photo_id_to_chunk_count[photo_id] = len(chunks)
 
         for idx, chunk in enumerate(chunks):
@@ -308,6 +320,14 @@ def main() -> None:
 
     total_photos = len(data)
     print(f"📸 共 {total_photos} 张照片")
+
+    # 加载结构化属性（可选）
+    attrs_path = cfg.resolve_path("./data/attributes.json")
+    attrs_data: dict = {}
+    if attrs_path.exists():
+        with open(attrs_path, "r", encoding="utf-8") as f:
+            attrs_data = json.load(f)
+        print(f"🏷️  已加载 {len(attrs_data)} 张照片的结构化属性")
     print()
 
     persist_dir = cfg.resolve_path("./data/chroma")
@@ -369,7 +389,8 @@ def main() -> None:
         for i in range(0, len(update_ids), PHOTO_BATCH):
             batch_ids = update_ids[i : i + PHOTO_BATCH]
             new_records = _index_photos(
-                store, embedder_instance, data, batch_ids, cfg
+                store, embedder_instance, data, batch_ids, cfg,
+                attrs_data=attrs_data,
             )
             manifest.update(new_records)
             # 这里分批处理的重点是manifest的及时更新，_index_photos本来就及时写入了 Chroma
