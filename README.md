@@ -212,7 +212,7 @@ photo-agent/
 
 ## TODO
 
-[docs/todo.md](./docs/todo.md)
+[todo.md](./todo.md)
 
 ---
 
