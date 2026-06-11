@@ -139,7 +139,7 @@ server 启动 → AutoSync 自动同步到 SQLite + Dify 知识库
 4. **信息冲突**：同一事实在不同文档中描述矛盾
 5. **过时残留**：已变更的决策或架构仍在文档中作为当前状态描述
 
-**审阅顺序**：CLAUDE.md → README.md → PRD → TECH → TASK → note → upgrade → USAGE
+**审阅顺序**：CLAUDE.md → README.md → PRD → TECH → TASK → note → backlog → USAGE
 （先审高层，低层服从高层约束）
 
 **审阅后输出**：
@@ -209,6 +209,6 @@ server 启动 → AutoSync 自动同步到 SQLite + Dify 知识库
 | 4    | `docs/tech.md`    | 定义"怎么做"：架构设计、API 契约、数据模型、技术选型     | 任务拆分、估时、执行进度（代码与 TECH 冲突时，以代码为准更新 TECH） |
 | 5    | `docs/task_*.md`  | 开发计划、每日里程碑、完成情况                           | 产品需求定义、技术架构设计、详细 API 规范                           |
 | 6    | `docs/note.md`    | 被否定的方案、踩坑记录、决策变更历史                     | 当前生效的方案、待执行的任务                                        |
-| 7    | `docs/upgrade.md` | 未来技术改进方向、决策思考                               | 已实现的代码、当前架构描述                                          |
+| 7    | `docs/backlog.md` | 产品演进路线图、Phase 规划、拒绝清单                     | API 设计、数据模型、部署细节、详细任务拆分                          |
 | 8    | `dify/USAGE.md`   | 部署步骤、操作命令、常见问题                             | 技术方案论证、需求描述、API 设计                                    |
 | 9    | 代码实现            | 最终事实来源                                             | —                                                                  |

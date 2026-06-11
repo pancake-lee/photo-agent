@@ -231,3 +231,4 @@ Phase 4（账号级策略）←──────── 依赖 P3 积累数据
 ## 决策历史
 
 - **2026-06-05**：产品定位从"摄影资产助手"收敛为"AI 选题助手"，废弃 25 项优化点，按 roadmap 四阶段重建 backlog。原有 task_3.md 技术点已吸收或明确拒绝。
+- **2026-06-11**：合并 `docs/upgrade.md` 到本文档。upgrade.md 为旧产品定位下的技术升级规划，其中 Prometheus 监控、异步后台同步、proto-first 迁移已被新定位明确拒绝；SQLite WAL 已纳入工程小改进；其余优化项（以图搜图、EXIF/GPS、多模态 Embedding 等）与新定位"主动不做的事"一致，不再单独维护。upgrade.md 已删除，CLAUDE.md 文档层级以 backlog.md 替代。
