@@ -115,7 +115,14 @@ def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
 def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
     try:
-        answer_text = photo_rag.answer_question(cfg, state["question"])
+        # 自动提取结构化过滤条件，显式传入避免 answer_question 内部重复提取
+        filters = photo_rag.extract_filters_from_question(cfg, state["question"])
+        answer_text = photo_rag.answer_question(
+            cfg, state["question"], where=filters
+        )
+        # 如果有提取到过滤条件，在答案前附加调试信息
+        if filters:
+            answer_text = f"[过滤条件: {filters}]\n{answer_text}"
     except Exception as exc:
         answer_text = f"RAG 检索失败: {exc}"
     return {"rag_answer": answer_text}

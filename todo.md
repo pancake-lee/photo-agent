@@ -1,12 +1,11 @@
 | 状态 | 排名 | 类别 | 优化点 |
 |------|------|------|--------|
-| ⬚ | 1 | 检索 | VLM 描述结构化提取（P1-核心） |
-| ⬚ | 2 | 检索 | Chroma 元数据过滤利用（P1-检索） |
+| ✔ | 1 | 检索 | VLM 描述结构化提取（P1-核心） |
+| ✔ | 2 | 检索 | Chroma 元数据过滤利用（P1-检索） |
 | ⬚ | 3 | 质量 | 评估基线建立 |
 | ⬚ | 4 | 检索 | GPS 反向地理编码 |
 | ⬚ | 5 | 工程 | SQLite WAL 模式 |
 | ⬚ | 6 | 工程 | 日志轮转与分级 |
-| ✔ | - | 检索 | Chroma 元数据过滤利用（已有基础） |
 
 ---
 
@@ -14,22 +13,74 @@
 
 > 当前周期。目标：可以按色调/光线/构图/情绪/主体筛选照片，为选题提供素材维度。
 
-### VLM 描述结构化提取
+### ✅ VLM 描述结构化提取（已完成）
 
-- description 是纯文本，Tags 字段空置，无法按维度精确检索
-- 新建 `extract_attributes.py`：LLM 提取 objects/colors/scene/lighting/mood/composition
-- 属性存入 `attributes.json`，`index_photos.py` 同步写入 Chroma metadata（配合 where 过滤）
-- Go 新增 `PUT /api/v1/photos/:id/tags` API，支持将结构化标签回写 SQLite
-- **期望**：用户可用多维度精确查询，如"找蓝色调、室外、有人物的照片"
-- 工作量约 2-3 天，**提升**：检索精度从文本模糊匹配到结构化匹配
+- `agent/scripts/extract_attributes.py`：LLM 提取 objects/colors/scene/lighting/mood/composition → `attributes.json`
+- `agent/scripts/index_photos.py`：增量索引时自动读取 `attributes.json`，写入 Chroma metadata（scene/lighting/mood/colors/objects/composition）
 
-### Chroma 元数据过滤利用
+### ✅ Chroma 元数据过滤利用 — 自动 where 提取（已完成）
 
-- `photo_rag.py` 已有 `where` 参数支持
-- 补全 `index_photos.py` 写入的 metadata 字段（shot_at, colors, lighting, mood, subject）
-- `answer_question()` 支持从用户查询中自动提取过滤条件
-- 示例："蓝调时刻的街拍" → `where={"lighting": "blue_hour"}` + RAG 检索
-- **提升**：从纯语义模糊匹配升级为语义+结构化联合过滤
+- `agent/chain/photo_rag.py`：
+  - 新增 `METADATA_SCHEMA`：定义 scene/lighting/mood 三个维度的允许值
+  - 新增 `FILTER_PROMPT`：LLM prompt，将自然语言映射为预定义值
+  - 新增 `extract_filters_from_question()`：从用户问题自动提取 Chroma `where` 过滤条件
+  - 扩展 `answer_question()`：新增 `auto_filter` 参数
+- `agent/chain/photo_agent.py`：`_rag_node` 调用 `extract_filters_from_question()` 提取过滤条件，传给 RAG 检索
+- **效果**："蓝调时刻的街拍" → `where={"lighting": "dim", "scene": "street"}` + RAG 语义检索
+
+---
+
+### 🧪 阶段 1 测试指引
+
+> 以下在新环境重新部署后执行。
+
+#### 部署步骤
+
+```bash
+# ===== 1. Go 后端 =====
+cd /root/code/photo-agent/backend
+# 确保 .local/pancake.yaml 中 server.addr、db.sqlite_path、storage.* 路径正确
+# 确保照片源目录存在（storage.photo_src）
+./server &
+# 验证：curl http://localhost:10000/api/v1/health
+
+# ===== 2. VLM 批量预处理（生成 descriptions.json） =====
+# 如果已有 descriptions.json 可跳过
+cd /root/code/photo-agent/backend
+./batch_vlm
+
+# ===== 3. 结构化属性提取 =====
+cd /root/code/photo-agent/agent
+.venv/bin/python scripts/extract_attributes.py -c ../.local/pancake.yaml
+# 输出：data/attributes.json（按 photo_id 索引，每个含 objects/colors/scene/lighting/mood/composition）
+
+# ===== 4. 照片描述入库 Chroma =====
+.venv/bin/python scripts/index_photos.py -c ../.local/pancake.yaml
+# 如重新索引：加 --clear 全量重建
+# 验证：查看输出中 metadata 是否包含 scene/lighting/mood 等字段
+
+# ===== 5. 启动聊天测试 =====
+.venv/bin/python chain/photo_agent.py -c ../.local/pancake.yaml
+```
+
+#### 测试用例
+
+在聊天中输入以下查询，观察 `[过滤条件: {...}]` 和检索结果：
+
+| 测试查询 | 预期过滤条件 | 说明 |
+|----------|-------------|------|
+| `"蓝调时刻的街拍"` | `{"lighting": "dim", "scene": "street"}` | 光线+场景联合过滤 |
+| `"日落时分的风景照"` | `{"lighting": "golden_hour", "scene": "nature"}` | 光线+场景联合过滤 |
+| `"室内温馨的家庭照"` | `{"scene": "indoor", "mood": "warm"}` | 场景+情绪联合过滤 |
+| `"找蓝色调、室外、有人物的照片"` | `{"scene": "outdoor"}` | 仅有 scene 能映射到允许值 |
+| `"有猫咪的照片吗？"` | （无过滤条件） | 纯语义查询，不受影响 |
+| `"夜景照片"` | `{"scene": "night"}` | 单维度过滤 |
+
+**判断标准**：
+- ✅ 过滤条件提取正确 → 检索结果范围缩小、相关度提升
+- ✅ 纯语义查询不提取过滤条件 → 原有能力不受影响
+- ❌ 过滤条件映射错误 → 调整 `FILTER_PROMPT` 中的映射示例
+- ❌ 有明确结构化信息但输出空过滤 → 补充 prompt 映射规则
 
 ### 评估基线建立
 
