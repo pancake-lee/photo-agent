@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,12 +20,13 @@ import (
 )
 
 var (
-	inputFlag  = flag.String("input", "", "input photo directory")
+	inputFlag  = flag.String("input", "", "input photo directory or single image file")
 	configFlag = flag.String("c", "", "config file path (e.g. ./configs/config.yaml)")
 	dryRun     = flag.Bool("dry-run", false, "dry run, test config only")
 	logConsole = flag.Bool("l", false, "log to console; false for file only")
 	force      = flag.Bool("force", false, "force reprocess all images")
 	noDedup    = flag.Bool("no-dedup", false, "disable MD5 dedup check")
+	limitFlag  = flag.Int("n", 0, "max images to process (0 = no limit)")
 )
 
 func main() {
@@ -81,6 +83,16 @@ func main() {
 		return
 	}
 
+	// 判断输入是单文件还是目录（影响 relPath 计算方式）
+	inputInfo, _ := os.Stat(*inputFlag)
+	inputIsFile := inputInfo != nil && !inputInfo.IsDir()
+
+	// -n 限制处理数量（对目录输入有意义，单文件忽略）
+	if *limitFlag > 0 && len(images) > *limitFlag {
+		images = images[:*limitFlag]
+		plogger.Infof("Limited to %d images by -n flag", *limitFlag)
+	}
+
 	plogger.Infof("Found %d images, concurrency=%d, retry=%d", len(images), concurrency, retry)
 
 	result := make(map[string]vlmDescEntry)
@@ -106,11 +118,7 @@ func main() {
 		}
 		mu.Lock()
 		for _, img := range images {
-			relPath, _ := filepath.Rel(*inputFlag, img)
-			if relPath == "" {
-				relPath = filepath.Base(img)
-			}
-			relPath = filepath.ToSlash(relPath)
+			relPath := computeRelPath(*inputFlag, img, inputIsFile)
 			delete(result, relPath)
 		}
 		mu.Unlock()
@@ -134,11 +142,7 @@ func main() {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			relPath, _ := filepath.Rel(*inputFlag, imgPath)
-			if relPath == "" {
-				relPath = filepath.Base(imgPath)
-			}
-			relPath = filepath.ToSlash(relPath)
+			relPath := computeRelPath(*inputFlag, imgPath, inputIsFile)
 
 				// MD5 去重检查
 				if dedupReg != nil {
@@ -268,19 +272,45 @@ func main() {
 	plogger.Infof("Output: %s", outputPath)
 }
 
-func scanImages(root string) ([]string, error) {
+// computeRelPath 计算相对路径。单文件输入时返回文件名，目录输入时返回相对于 inputPath 的路径。
+func computeRelPath(inputPath, imgPath string, inputIsFile bool) string {
+	if inputIsFile {
+		return filepath.Base(imgPath)
+	}
+	relPath, _ := filepath.Rel(inputPath, imgPath)
+	if relPath == "" {
+		relPath = filepath.Base(imgPath)
+	}
+	return filepath.ToSlash(relPath)
+}
+
+func scanImages(path string) ([]string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if !info.IsDir() {
+		// 单文件输入：校验扩展名
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
+			return []string{path}, nil
+		}
+		return nil, fmt.Errorf("unsupported image format: %s", ext)
+	}
+
+	// 目录输入：递归扫描
 	var images []string
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
 		if info.IsDir() {
 			return nil
 		}
-		ext := filepath.Ext(path)
-		ext = strings.ToLower(ext)
+		ext := strings.ToLower(filepath.Ext(p))
 		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
-			images = append(images, path)
+			images = append(images, p)
 		}
 		return nil
 	})

@@ -7,20 +7,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
+	"github.com/pancake-lee/photo-agent/internal/config"
 )
 
 // ErrQuotaExceeded 表示 VLM API 额度已耗尽，重试无意义，应停止程序
 var ErrQuotaExceeded = errors.New("VLM API quota exceeded")
-
-const defaultVlmPrompt = `请详细描述这张照片的内容。包括：
-- 主体内容（人/物/风景）
-- 场景环境（室内/室外、自然/城市）
-- 光线氛围（明亮/昏暗、自然光/人工光）
-- 色彩风格（鲜艳/柔和、冷暖倾向）
-- 构图特点（前景/背景、对称/非对称）`
 
 // DescribeImage 对单张图片进行 VLM 描述
 func DescribeImage(imagePath string) (string, string, error) {
@@ -34,9 +27,18 @@ func DescribeImage(imagePath string) (string, string, error) {
 		defer cleanup()
 	}
 
-	prompt := cfg.Prompt
+	if cfg.Prompt == "" {
+		return "", "", fmt.Errorf("VLM prompt file path not configured (vlm.prompt in config.yaml)")
+	}
+
+	promptBytes, err := os.ReadFile(cfg.Prompt)
+	if err != nil {
+		return "", "", fmt.Errorf("read VLM prompt file %q failed: %w", cfg.Prompt, err)
+	}
+
+	prompt := string(promptBytes)
 	if prompt == "" {
-		prompt = defaultVlmPrompt
+		return "", "", fmt.Errorf("VLM prompt file %q is empty", cfg.Prompt)
 	}
 
 	switch cfg.Provider {
@@ -228,4 +230,3 @@ func wrapAPIError(bodyBytes []byte) error {
 		return fmt.Errorf("api error: code=%s type=%s msg=%s", apiErr.Error.Code, apiErr.Error.Type, apiErr.Error.Message)
 	}
 }
-

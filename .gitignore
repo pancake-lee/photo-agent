@@ -43,3 +43,6 @@ backend/init_dify
 .local
 .env
 
+logs
+backend/go.work
+backend/go.work.sum

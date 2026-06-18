@@ -205,6 +205,8 @@ photo-agent/
 - [docs/tech.md](docs/tech.md) — 技术方案文档。架构设计、API 契约、数据模型、Dify 配置
 - [docs/task_1.md](docs/task_1.md) — 第一轮开发记录：MVP v1.0.0，Go 后端核心 + Dify Agent 联调（已完成）
 - [docs/task_2.md](docs/task_2.md) — 第二轮开发记录：AI 服务层（LangChain + Chroma + Text-to-SQL + LangGraph），Go 后端扩展 + Python 推理层
+- [docs/deploy.md](docs/deploy.md) — 部署指南。从零部署全流程：环境准备、VLM 预处理、RAG 建库、启动服务
+- [docs/backlog.md](docs/backlog.md) — 产品演进路线图。Phase 规划、拒绝清单、决策历史
 - [docs/note.md](docs/note.md) — 决策备忘。被否定的技术方案、踩坑记录、前期讨论归档
 - [dify/dsl/PhotoAgent.yml](dify/dsl/PhotoAgent.yml) — Dify Agent DSL 文件，可导入复现 Agent 配置
 
