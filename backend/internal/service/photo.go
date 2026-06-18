@@ -55,6 +55,15 @@ func GetPhotoByID(id string) (*model.Photo, error) {
 	return &photo, nil
 }
 
+// GetPhotoByFilename 根据文件名查询照片
+func GetPhotoByFilename(filename string) (*model.Photo, error) {
+	var photo model.Photo
+	if err := db.Where("filename = ?", filename).First(&photo).Error; err != nil {
+		return nil, err
+	}
+	return &photo, nil
+}
+
 // UpdatePhotoTags 更新照片的结构化标签（JSON 字符串）
 func UpdatePhotoTags(photoID, tags string) error {
 	return db.Model(&model.Photo{}).Where("id = ?", photoID).Update("tags", tags).Error

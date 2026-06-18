@@ -7,8 +7,35 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pancake-lee/photo-agent/internal/config"
+	"github.com/pancake-lee/photo-agent/internal/model"
 	"github.com/pancake-lee/photo-agent/internal/service"
 )
+
+// PhotoListItem 照片列表项（含 has_description 计算字段）
+type PhotoListItem struct {
+	model.Photo
+	HasDescription bool   `json:"has_description"`
+	ThumbnailURL   string `json:"thumbnail_url"`
+}
+
+// photoToListItem 将 Photo 转为列表项
+func photoToListItem(p model.Photo) PhotoListItem {
+	return PhotoListItem{
+		Photo:          p,
+		HasDescription: p.Description != "",
+		ThumbnailURL:   "/api/v1/photos/" + p.ID + "/image?size=thumb",
+	}
+}
+
+// PhotoDetailResponse 照片详情（含 has_description 和 description_model）
+type PhotoDetailResponse struct {
+	model.Photo
+	HasDescription  bool   `json:"has_description"`
+	ThumbnailURL    string `json:"thumbnail_url"`
+	ImageURL        string `json:"image_url"`
+	DescriptionModel string `json:"description_model"`
+	DescriptionTime  string `json:"description_time"`
+}
 
 // ListPhotos 照片列表（分页、过滤）
 func ListPhotos(c *gin.Context) {
@@ -43,8 +70,13 @@ func ListPhotos(c *gin.Context) {
 		return
 	}
 
+	items := make([]PhotoListItem, len(photos))
+	for i, p := range photos {
+		items[i] = photoToListItem(p)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"items":       photos,
+		"items":       items,
 		"total":       total,
 		"page":        page,
 		"page_size":   pageSize,
@@ -72,7 +104,19 @@ func GetPhoto(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, photo)
+	// 从 descriptions.json 获取 VLM 模型和时间
+	descEntry, _ := service.GetDescriptionEntry(photo.FilePath)
+
+	resp := PhotoDetailResponse{
+		Photo:           *photo,
+		HasDescription:  photo.Description != "",
+		ThumbnailURL:    "/api/v1/photos/" + photo.ID + "/image?size=thumb",
+		ImageURL:        "/api/v1/photos/" + photo.ID + "/image",
+		DescriptionModel: descEntry.Model,
+		DescriptionTime:  descEntry.ProcessedAt,
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // UpdatePhotoTags 更新照片结构化标签
