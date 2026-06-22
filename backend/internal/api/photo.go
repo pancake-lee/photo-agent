@@ -51,17 +51,21 @@ func ListPhotos(c *gin.Context) {
 	}
 
 	params := service.ListPhotosParams{
-		Page:     page,
-		PageSize: pageSize,
-		Timeline: c.Query("timeline"),
-		Tag:      c.Query("tag"),
-		Keyword:  c.Query("keyword"),
-		Brand:    c.Query("brand"),
-		Lens:     c.Query("lens"),
-		FocalMin: c.Query("focal_min"),
-		FocalMax: c.Query("focal_max"),
-		ISOMin:   isoMin,
-		ISOMax:   isoMax,
+		Page:        page,
+		PageSize:    pageSize,
+		Timeline:    c.Query("timeline"),
+		Tag:         c.Query("tag"),
+		Keyword:     c.Query("keyword"),
+		Brand:       c.Query("brand"),
+		Lens:        c.Query("lens"),
+		FocalMin:    c.Query("focal_min"),
+		FocalMax:    c.Query("focal_max"),
+		ISOMin:      isoMin,
+		ISOMax:      isoMax,
+		ShotAtStart:  c.Query("shot_at_start"),
+		ShotAtEnd:    c.Query("shot_at_end"),
+		SortBy:       c.Query("sort_by"),
+		SortOrder:    c.Query("sort_order"),
 	}
 
 	photos, total, err := service.ListPhotos(params)

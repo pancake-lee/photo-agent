@@ -13,6 +13,8 @@ const status = ref<VlmQueueStatus>({
 
 const polling = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+// VLM 完成回调（在队列运行结束或中止后触发）
+let onCompleteCallback: (() => void) | null = null
 
 export function useVlmQueue() {
   async function fetchStatus() {
@@ -20,7 +22,13 @@ export function useVlmQueue() {
       const resp = await fetch(`${API_BASE}/vlm/queue/status`)
       if (!resp.ok) return
       const data: VlmQueueStatus = await resp.json()
+      const wasRunning = status.value.running
       status.value = data
+
+      // VLM 结束（从运行中变为未运行）时触发回调
+      if (!data.running && wasRunning && onCompleteCallback) {
+        onCompleteCallback()
+      }
 
       // 自动停止轮询
       if (!data.running) {
@@ -90,6 +98,11 @@ export function useVlmQueue() {
     }
   }
 
+  // 注册 VLM 完成回调（自动清除）
+  function onComplete(fn: (() => void) | null) {
+    onCompleteCallback = fn
+  }
+
   // 组件卸载时自动清理
   onUnmounted(() => {
     stopPolling()
@@ -104,5 +117,6 @@ export function useVlmQueue() {
     startQueue,
     stopQueue,
     enqueuePhoto,
+    onComplete,
   }
 }

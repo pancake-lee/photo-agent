@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { NIcon, NTag, NButton } from 'naive-ui'
-import { CloseOutline, CheckmarkCircle, AlertCircle } from '@vicons/ionicons5'
+import { CloseOutline, ImageOutline } from '@vicons/ionicons5'
 import type { UploadFile } from '../types/upload'
 
 defineProps<{
@@ -16,41 +16,6 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
-
-function compressLabel(file: UploadFile): string {
-  switch (file.compressStatus) {
-    case 'pending':
-      return '等待压缩'
-    case 'compressing':
-      return '压缩中...'
-    case 'done':
-      if (file.compressedSize && file.originalSize) {
-        return `${formatSize(file.originalSize)} → ${formatSize(file.compressedSize)}`
-      }
-      return '已就绪'
-    case 'error':
-      return '压缩失败'
-    default:
-      return ''
-  }
-}
-
-function compressTagType(
-  status: UploadFile['compressStatus']
-): 'default' | 'info' | 'success' | 'warning' | 'error' {
-  switch (status) {
-    case 'pending':
-      return 'default'
-    case 'compressing':
-      return 'info'
-    case 'done':
-      return 'success'
-    case 'error':
-      return 'error'
-    default:
-      return 'default'
-  }
-}
 </script>
 
 <template>
@@ -61,30 +26,21 @@ function compressTagType(
       :key="file.id"
       class="file-item"
     >
-      <div class="file-icon">📷</div>
+      <div class="file-icon">
+        <NIcon size="20"><ImageOutline /></NIcon>
+      </div>
       <div class="file-info">
         <div class="file-name">{{ file.originalName }}</div>
-        <div class="file-tags">
-          <NTag
-            :type="compressTagType(file.compressStatus)"
-            size="small"
-          >
-            <template #icon>
-              <NIcon v-if="file.compressStatus === 'done'">
-                <CheckmarkCircle />
-              </NIcon>
-              <NIcon v-else-if="file.compressStatus === 'error'">
-                <AlertCircle />
-              </NIcon>
-            </template>
-            {{ compressLabel(file) }}
+        <div class="file-meta">
+          <NTag size="small" :bordered="false">
+            {{ formatSize(file.originalSize) }}
           </NTag>
         </div>
       </div>
       <NButton
         text
         size="tiny"
-        @click="$emit('remove', file.id)"
+        @click="emit('remove', file.id)"
       >
         <template #icon>
           <NIcon><CloseOutline /></NIcon>
@@ -113,8 +69,8 @@ function compressTagType(
   margin-bottom: 6px;
 }
 .file-icon {
-  font-size: 20px;
   flex-shrink: 0;
+  color: var(--n-text-color-3);
 }
 .file-info {
   flex: 1;
@@ -127,8 +83,7 @@ function compressTagType(
   white-space: nowrap;
   margin-bottom: 4px;
 }
-.file-tags {
-  display: flex;
-  gap: 4px;
+.file-meta {
+  font-size: 12px;
 }
 </style>

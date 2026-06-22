@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,10 +21,12 @@ import (
 // POST /api/v1/photos/upload
 // 表单字段：
 //
-//	file                压缩后的 JPEG（multipart）
+//	file                原图文件（multipart）
 //	original_name        原始文件名
 //	original_shot_at     前端读取的 EXIF 拍摄时间（RFC 3339，可选）
 //	conflict_resolution  冲突处理策略（可选，"overwrite"|"skip"|"keep_both"）
+//
+// 流程：原图 → photo_src → ImageMagick 压缩（保留 EXIF）→ photo_path → 入库
 func UploadPhoto(c *gin.Context) {
 	cfg := config.Get()
 
@@ -66,13 +69,21 @@ func UploadPhoto(c *gin.Context) {
 		// 已有冲突处理策略
 		switch resolution {
 		case "overwrite":
-			// 删除旧文件，使用原名存储
-			oldPath := filepath.Join(cfg.Storage.PhotoPath, existingPhoto.FilePath)
-			_ = os.Remove(oldPath)
-			// 更新已有照片记录
-			if err := saveUploadedFile(file, targetFilename, cfg); err != nil {
+			// 保存原图到 photo_src
+			if err := saveUploadedFile(file, targetFilename, cfg.Storage.PhotoSrc); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
+			}
+			// 压缩到 photo_path
+			srcPath := filepath.Join(cfg.Storage.PhotoSrc, targetFilename)
+			if err := processToPhotoPath(srcPath, targetFilename); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			// 删除 photo_path 旧文件（与 compress 输出路径一致）
+			oldPath := filepath.Join(cfg.Storage.PhotoPath, existingPhoto.FilePath)
+			if oldPath != filepath.Join(cfg.Storage.PhotoPath, targetFilename) {
+				_ = os.Remove(oldPath)
 			}
 			updatePhotoAfterOverwrite(existingPhoto.ID, targetFilename, newShotAt)
 			c.JSON(http.StatusOK, gin.H{"status": "stored", "photo_id": existingPhoto.ID})
@@ -82,7 +93,12 @@ func UploadPhoto(c *gin.Context) {
 
 		case "keep_both":
 			newFilename := addSuffix(targetFilename)
-			if err := saveUploadedFile(file, newFilename, cfg); err != nil {
+			if err := saveUploadedFile(file, newFilename, cfg.Storage.PhotoSrc); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			srcPath := filepath.Join(cfg.Storage.PhotoSrc, newFilename)
+			if err := processToPhotoPath(srcPath, newFilename); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
@@ -95,8 +111,14 @@ func UploadPhoto(c *gin.Context) {
 		return
 	}
 
-	// 无冲突：直接存储
-	if err := saveUploadedFile(file, targetFilename, cfg); err != nil {
+	// 无冲突：保存原图到 photo_src，压缩到 photo_path，入库
+	if err := saveUploadedFile(file, targetFilename, cfg.Storage.PhotoSrc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	srcPath := filepath.Join(cfg.Storage.PhotoSrc, targetFilename)
+	if err := processToPhotoPath(srcPath, targetFilename); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -147,11 +169,10 @@ func parseShotAt(s string) *time.Time {
 	return &t
 }
 
-// saveUploadedFile 将上传的文件内容写入 photo_path。
-func saveUploadedFile(src io.Reader, filename string, cfg *config.Config) error {
-	targetDir := cfg.Storage.PhotoPath
+// saveUploadedFile 将上传的文件内容写入指定目录。
+func saveUploadedFile(src io.Reader, filename string, targetDir string) error {
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return fmt.Errorf("create photo dir failed: %w", err)
+		return fmt.Errorf("create target dir failed: %w", err)
 	}
 
 	targetPath := filepath.Join(targetDir, filename)
@@ -168,6 +189,79 @@ func saveUploadedFile(src io.Reader, filename string, cfg *config.Config) error 
 	return nil
 }
 
+// processToPhotoPath 从 photo_src 复制到 photo_path，超过限制时用 ImageMagick 压缩。
+// ImageMagick convert 默认保留 EXIF，因此后续 GetExifInfo 可获取完整元数据。
+func processToPhotoPath(srcPath, filename string) error {
+	cfg := config.Get()
+	targetPath := filepath.Join(cfg.Storage.PhotoPath, filename)
+
+	// 确保 photo_path 目录存在
+	if err := os.MkdirAll(cfg.Storage.PhotoPath, 0755); err != nil {
+		return fmt.Errorf("create photo_path dir failed: %w", err)
+	}
+
+	// 先复制原图到 photo_path
+	if err := copyFileContents(srcPath, targetPath); err != nil {
+		return fmt.Errorf("copy to photo_path failed: %w", err)
+	}
+
+	// 检查是否需要压缩
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return fmt.Errorf("stat target failed: %w", err)
+	}
+
+	maxBytes := int64(cfg.VLM.MaxImageSizeMB * 1024 * 1024)
+	if maxBytes > 0 && info.Size() > maxBytes {
+		// 用 ImageMagick 压缩（与 CLI 保持一致，保留 EXIF）
+		return compressInPlace(targetPath)
+	}
+
+	return nil
+}
+
+// compressInPlace 用 ImageMagick 原地压缩 JPEG（保留 EXIF）。
+func compressInPlace(path string) error {
+	tmpPath := path + ".tmp"
+	cmd := exec.Command("convert", path,
+		"-resize", "512x512>",
+		"-quality", "85",
+		"-format", "jpg",
+		tmpPath,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("imagemagick compress failed: %w, output: %s", err, string(out))
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename compressed failed: %w", err)
+	}
+
+	return nil
+}
+
+// copyFileContents 复制文件内容（不保留权限位）。
+func copyFileContents(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+	return dstFile.Sync()
+}
+
 // createPhotoFromUpload 为上传的文件创建数据库记录。
 // has_description 默认为 false，后续通过 VLM 队列生成。
 func createPhotoFromUpload(filename, originalName string, shotAt *time.Time) string {
@@ -175,7 +269,7 @@ func createPhotoFromUpload(filename, originalName string, shotAt *time.Time) str
 		originalName = filename
 	}
 
-	// 读取 EXIF（从已存储的文件中）
+	// 读取 EXIF（从 photo_path 中的文件，ImageMagick 压缩后保留完整 EXIF）
 	cfg := config.Get()
 	fullPath := filepath.Join(cfg.Storage.PhotoPath, filename)
 	exifInfo := service.GetExifInfo(fullPath)
@@ -259,11 +353,11 @@ func buildConflictInfo(existing *photoInfo, _ string, newShotAt *time.Time) gin.
 	}
 
 	return gin.H{
-		"existing_photo_id":      existing.ID,
-		"existing_filename":      existing.Filename,
-		"existing_image_url": fmt.Sprintf("/api/v1/photos/%s/image", existing.ID),
-		"existing_shot_at":       existingShotAt,
-		"new_shot_at":            newShotAtStr,
+		"existing_photo_id":    existing.ID,
+		"existing_filename":    existing.Filename,
+		"existing_image_url":   fmt.Sprintf("/api/v1/photos/%s/image", existing.ID),
+		"existing_shot_at":     existingShotAt,
+		"new_shot_at":          newShotAtStr,
 	}
 }
 

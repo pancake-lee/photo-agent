@@ -19,7 +19,7 @@ var ErrQuotaExceeded = errors.New("VLM API quota exceeded")
 func DescribeImage(imagePath string) (string, string, error) {
 	cfg := config.Get().VLM
 
-	imagePath, cleanup, err := maybeCompressImage(imagePath, cfg.MaxImageSizeMB)
+	imagePath, cleanup, err := MaybeCompressImage(imagePath, cfg.MaxImageSizeMB)
 	if err != nil {
 		return "", "", fmt.Errorf("compress image failed: %w", err)
 	}

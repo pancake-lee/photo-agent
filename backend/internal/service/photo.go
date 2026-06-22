@@ -77,17 +77,21 @@ func UpdatePhotoTags(photoID, tags string) error {
 
 // ListPhotosParams 照片列表查询参数
 type ListPhotosParams struct {
-	Page     int    // 页码，从 1 开始
-	PageSize int    // 每页数量
-	Timeline string // 按时间线过滤
-	Tag      string // 按标签过滤
-	Keyword  string // 按关键词过滤（description LIKE）
-	Brand    string // 按品牌过滤
-	Lens     string // 按镜头过滤（LIKE）
-	FocalMin string // 焦距下限（mm）
-	FocalMax string // 焦距上限（mm）
-	ISOMin   int    // ISO 下限
-	ISOMax   int    // ISO 上限
+	Page        int    // 页码，从 1 开始
+	PageSize    int    // 每页数量
+	Timeline    string // 按时间线过滤
+	Tag         string // 按标签过滤
+	Keyword     string // 按关键词过滤（description 或 filename LIKE）
+	Brand       string // 按品牌过滤
+	Lens        string // 按镜头过滤（LIKE）
+	FocalMin    string // 焦距下限（mm）
+	FocalMax    string // 焦距上限（mm）
+	ISOMin      int    // ISO 下限
+	ISOMax      int    // ISO 上限
+	ShotAtStart string // 拍摄时间起始（RFC 3339）
+	ShotAtEnd   string // 拍摄时间结束（RFC 3339）
+	SortBy      string // 排序字段：filename | shot_at | imported_at
+	SortOrder   string // 排序方向：asc | desc（默认 desc）
 }
 
 // ListPhotos 查询照片列表（分页、过滤）
@@ -111,7 +115,8 @@ func ListPhotos(params ListPhotosParams) ([]model.Photo, int64, error) {
 		q = q.Where("tags LIKE ?", "%"+params.Tag+"%")
 	}
 	if params.Keyword != "" {
-		q = q.Where("description LIKE ?", "%"+params.Keyword+"%")
+		q = q.Where("(description LIKE ? OR filename LIKE ?)",
+			"%"+params.Keyword+"%", "%"+params.Keyword+"%")
 	}
 	if params.Brand != "" {
 		q = q.Where("brand = ?", params.Brand)
@@ -131,6 +136,12 @@ func ListPhotos(params ListPhotosParams) ([]model.Photo, int64, error) {
 	if params.ISOMax > 0 {
 		q = q.Where("iso <= ?", params.ISOMax)
 	}
+	if params.ShotAtStart != "" {
+		q = q.Where("shot_at >= ?", params.ShotAtStart)
+	}
+	if params.ShotAtEnd != "" {
+		q = q.Where("shot_at <= ?", params.ShotAtEnd)
+	}
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -139,7 +150,11 @@ func ListPhotos(params ListPhotosParams) ([]model.Photo, int64, error) {
 
 	var photos []model.Photo
 	offset := (params.Page - 1) * params.PageSize
-	if err := q.Order("shot_at DESC, imported_at DESC").
+
+	// 动态排序
+	orderClause := buildOrderClause(params.SortBy, params.SortOrder)
+
+	if err := q.Order(orderClause).
 		Limit(params.PageSize).Offset(offset).
 		Find(&photos).Error; err != nil {
 		return nil, 0, fmt.Errorf("query photos failed: %w", err)
@@ -215,13 +230,15 @@ type HourlyStat struct {
 
 // PhotoStats 综合统计
 type PhotoStats struct {
-	Total       int64            `json:"total"`
-	Brands      []StatItem       `json:"brands"`
-	Lens        []StatItem       `json:"lens"`
-	FocalRanges []FocalRangeStat `json:"focal_ranges"`
-	GPS         GPSStat          `json:"gps"`
-	Monthly     []MonthlyStat    `json:"monthly"`
-	Hourly      []HourlyStat     `json:"hourly"`
+	Total            int64            `json:"total"`
+	WithDescription  int64            `json:"with_description"`
+	WithoutDescription int64          `json:"without_description"`
+	Brands           []StatItem       `json:"brands"`
+	Lens             []StatItem       `json:"lens"`
+	FocalRanges      []FocalRangeStat `json:"focal_ranges"`
+	GPS              GPSStat          `json:"gps"`
+	Monthly          []MonthlyStat    `json:"monthly"`
+	Hourly           []HourlyStat     `json:"hourly"`
 }
 
 // GetPhotoStats 获取综合统计信息
@@ -232,6 +249,12 @@ func GetPhotoStats() (*PhotoStats, error) {
 	if err := db.Model(&model.Photo{}).Count(&stats.Total).Error; err != nil {
 		return nil, fmt.Errorf("count photos failed: %w", err)
 	}
+
+	// 描述统计
+	if err := db.Model(&model.Photo{}).Where("description != ''").Count(&stats.WithDescription).Error; err != nil {
+		return nil, fmt.Errorf("stats with_description failed: %w", err)
+	}
+	stats.WithoutDescription = stats.Total - stats.WithDescription
 
 	// 品牌分布
 	if err := db.Model(&model.Photo{}).
@@ -367,6 +390,30 @@ func parseFocalLength(s string) float64 {
 		return val
 	}
 	return -1
+}
+
+// buildOrderClause 根据排序参数构建 SQL ORDER BY 子句。
+func buildOrderClause(sortBy, sortOrder string) string {
+	// 默认排序：拍摄时间倒序 + 导入时间倒序
+	if sortBy == "" {
+		return "shot_at DESC, imported_at DESC"
+	}
+
+	dir := "ASC"
+	if sortOrder == "desc" {
+		dir = "DESC"
+	}
+
+	switch sortBy {
+	case "filename":
+		return fmt.Sprintf("filename %s", dir)
+	case "shot_at":
+		return fmt.Sprintf("shot_at %s, imported_at %s", dir, dir)
+	case "imported_at":
+		return fmt.Sprintf("imported_at %s", dir)
+	default:
+		return "shot_at DESC, imported_at DESC"
+	}
 }
 
 // ListDistinctTags 查询所有不重复的标签

@@ -18,9 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const pendingCount = (files: UploadFile[]) =>
-  files.filter(
-    (f) => f.uploadStatus === 'pending' && f.compressStatus === 'done'
-  ).length
+  files.filter((f) => f.uploadStatus === 'pending').length
 </script>
 
 <template>

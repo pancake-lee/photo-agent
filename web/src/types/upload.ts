@@ -1,6 +1,5 @@
 // 上传相关类型
 
-export type CompressStatus = 'pending' | 'compressing' | 'done' | 'error'
 export type UploadStatus = 'pending' | 'uploading' | 'done' | 'conflict' | 'error'
 
 export interface UploadFile {
@@ -8,9 +7,6 @@ export interface UploadFile {
   originalFile: File
   originalName: string
   originalSize: number
-  compressedBlob: Blob | null
-  compressedSize: number | null
-  compressStatus: CompressStatus
   uploadStatus: UploadStatus
   shotAt: string | null
 }

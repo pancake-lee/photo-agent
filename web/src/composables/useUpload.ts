@@ -38,47 +38,14 @@ export function useUpload() {
         originalFile: f,
         originalName: f.name,
         originalSize: f.size,
-        compressedBlob: null,
-        compressedSize: null,
-        compressStatus: 'pending',
         uploadStatus: 'pending',
         shotAt: null,
       })
-    }
-
-    // 触发压缩
-    for (const uf of files.value) {
-      if (uf.compressStatus === 'pending') {
-        compressFile(uf)
-      }
     }
   }
 
   function removeFile(id: string) {
     files.value = files.value.filter((f) => f.id !== id)
-  }
-
-  async function compressFile(uf: UploadFile) {
-    uf.compressStatus = 'compressing'
-    try {
-      // 动态导入压缩库（按需加载）
-      const imageCompression = await import('browser-image-compression')
-      const compressed = await imageCompression.default(uf.originalFile, {
-        maxSizeMB: 0.5,
-        maxWidthOrHeight: 2048,
-        useWebWorker: true,
-        fileType: 'image/jpeg',
-        initialQuality: 0.85,
-      })
-      uf.compressedBlob = compressed
-      uf.compressedSize = compressed.size
-      uf.compressStatus = 'done'
-    } catch {
-      // 压缩失败：使用原文件上传
-      uf.compressedBlob = uf.originalFile
-      uf.compressedSize = uf.originalSize
-      uf.compressStatus = 'done'
-    }
   }
 
   async function readExif(file: File): Promise<string | null> {
@@ -101,8 +68,8 @@ export function useUpload() {
     uf.uploadStatus = 'uploading'
 
     const formData = new FormData()
-    const blob = uf.compressedBlob || uf.originalFile
-    formData.append('file', blob, uf.originalName)
+    // 原图直接上传，后端用 ImageMagick 压缩（保留 EXIF）
+    formData.append('file', uf.originalFile, uf.originalName)
     formData.append('original_name', uf.originalName)
 
     if (uf.shotAt) {
@@ -127,12 +94,12 @@ export function useUpload() {
   async function startUpload(onConflict: (item: ConflictItem) => Promise<ConflictResolution>) {
     uploading.value = true
     const pending = files.value.filter(
-      (f) => f.uploadStatus === 'pending' && f.compressStatus === 'done'
+      (f) => f.uploadStatus === 'pending'
     )
 
     for (const uf of pending) {
       try {
-        // 读取 EXIF
+        // 读取 EXIF（从原文件读取，完整保留）
         if (!uf.shotAt) {
           uf.shotAt = await readExif(uf.originalFile)
         }

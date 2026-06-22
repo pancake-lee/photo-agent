@@ -47,6 +47,19 @@ export interface PhotoListResponse {
   total_pages: number
 }
 
+// 综合统计
+export interface PhotoStats {
+  total: number
+  with_description: number
+  without_description: number
+  brands: { name: string; count: number }[]
+  lens: { name: string; count: number }[]
+  focal_ranges: { range: string; label: string; count: number }[]
+  gps: { with_gps: number; without_gps: number }
+  monthly: { month: string; count: number }[]
+  hourly: { hour: number; count: number }[]
+}
+
 // VLM 队列状态
 export interface VlmQueueStatus {
   running: boolean

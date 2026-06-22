@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   NLayout,
   NLayoutContent,
@@ -10,9 +10,12 @@ import {
   NPagination,
   NTooltip,
   NIcon,
+  NDatePicker,
+  NSelect,
+  NInput,
   useMessage,
 } from 'naive-ui'
-import { PlayOutline, CloudUploadOutline } from '@vicons/ionicons5'
+import { PlayOutline, CloudUploadOutline, SearchOutline } from '@vicons/ionicons5'
 
 import SideMenu from '../components/SideMenu.vue'
 import PhotoGrid from '../components/PhotoGrid.vue'
@@ -40,10 +43,22 @@ const {
   selectedPhoto,
   showDetail,
   detailLoading,
+  stats,
+  timelines,
+  filterTimeline,
+  filterShotAtStart,
+  filterShotAtEnd,
+  sortBy,
+  sortOrder,
+  searchFilename,
   fetchPhotos,
+  fetchStats,
+  fetchTimelines,
   fetchPhotoDetail,
   closeDetail,
   setPage,
+  applyFilters,
+  resetFilters,
 } = usePhotos()
 
 // ── 上传 ──
@@ -65,6 +80,7 @@ const {
   startQueue,
   stopQueue,
   enqueuePhoto,
+  onComplete,
 } = useVlmQueue()
 
 // ── 处理中的照片 ID ──
@@ -82,6 +98,18 @@ const conflictResolver = ref<((r: ConflictResolution) => void) | null>(null)
 const vlmCompleted = computed(() => vlmStatus.value.completed)
 const vlmTotal = computed(() => vlmStatus.value.total)
 const vlmRunning = computed(() => vlmStatus.value.running)
+
+// 排序选项
+const sortOptions = [
+  { label: '拍摄时间', value: 'shot_at' },
+  { label: '文件名', value: 'filename' },
+  { label: '导入时间', value: 'imported_at' },
+]
+
+// 时间线选项
+const timelineOptions = computed(() =>
+  timelines.value.map((t) => ({ label: t, value: t }))
+)
 
 // ── 方法 ──
 
@@ -101,8 +129,9 @@ async function handleStartVlm() {
 async function handleStopVlm() {
   await stopQueue()
   message.info('VLM 预处理已中止')
-  // 刷新列表（扫尾结果可能已写入）
+  // 刷新列表和统计
   fetchPhotos()
+  fetchStats()
 }
 
 async function handleTriggerDescribe(photoId: string) {
@@ -146,6 +175,7 @@ async function handleUploadStart() {
   closeUploadModal()
   message.success('上传完成')
   fetchPhotos()
+  fetchStats()
 }
 
 function handleConflictResolve(resolution: ConflictResolution) {
@@ -156,9 +186,44 @@ function handleConflictResolve(resolution: ConflictResolution) {
   showConflictModal.value = false
 }
 
+// 日期变化处理（NaiveUI DatePicker v-model 返回时间戳或 null）
+function handleDateStart(v: number | null) {
+  if (v) {
+    const d = new Date(v)
+    filterShotAtStart.value = d.toISOString()
+  } else {
+    filterShotAtStart.value = ''
+  }
+}
+
+function handleDateEnd(v: number | null) {
+  if (v) {
+    // 结束日期设为当天 23:59:59
+    const d = new Date(v)
+    d.setHours(23, 59, 59, 999)
+    filterShotAtEnd.value = d.toISOString()
+  } else {
+    filterShotAtEnd.value = ''
+  }
+}
+
+// 切换排序方向
+function toggleSortOrder() {
+  sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  applyFilters()
+}
+
+// ── VLM 完成回调：自动刷新列表和统计 ──
+onComplete(() => {
+  fetchPhotos()
+  fetchStats()
+})
+
 // ── 初始化 ──
 onMounted(() => {
   fetchPhotos()
+  fetchStats()
+  fetchTimelines()
 })
 </script>
 
@@ -217,19 +282,84 @@ onMounted(() => {
       <!-- 主内容区 -->
       <NLayoutContent>
         <div class="content-wrapper">
-          <!-- 统计摘要 -->
+          <!-- 统计摘要（全库汇总） -->
           <div class="stats-bar">
-            <span>共 {{ total }} 张</span>
+            <span>共 {{ stats?.total ?? total }} 张</span>
             <span class="stats-sep">|</span>
             <span>
               含描述
-              {{ photos.filter((p) => p.has_description).length }} 张
+              {{ stats?.with_description ?? '...' }} 张
             </span>
             <span class="stats-sep">|</span>
             <span>
               待处理
-              {{ photos.filter((p) => !p.has_description).length }} 张
+              {{ stats?.without_description ?? '...' }} 张
             </span>
+          </div>
+
+          <!-- 筛选栏 -->
+          <div class="filter-bar">
+            <NSpace align="center" :wrap="true">
+              <!-- 拍摄日期范围 -->
+              <span class="filter-label">拍摄日期</span>
+              <NDatePicker
+                type="date"
+                clearable
+                placeholder="起始日期"
+                style="width: 140px"
+                @update:value="handleDateStart"
+              />
+              <span>至</span>
+              <NDatePicker
+                type="date"
+                clearable
+                placeholder="结束日期"
+                style="width: 140px"
+                @update:value="handleDateEnd"
+              />
+
+              <!-- 活动筛选 -->
+              <span class="filter-label">活动</span>
+              <NSelect
+                v-model:value="filterTimeline"
+                :options="timelineOptions"
+                placeholder="全部活动"
+                clearable
+                style="width: 160px"
+              />
+
+              <!-- 排序 -->
+              <span class="filter-label">排序</span>
+              <NSelect
+                v-model:value="sortBy"
+                :options="sortOptions"
+                style="width: 110px"
+              />
+              <NButton size="small" @click="toggleSortOrder">
+                {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
+              </NButton>
+
+              <!-- 文件名搜索 -->
+              <NInput
+                v-model:value="searchFilename"
+                placeholder="搜索文件名（如 9421）"
+                clearable
+                style="width: 180px"
+                @keyup.enter="applyFilters"
+              >
+                <template #prefix>
+                  <NIcon><SearchOutline /></NIcon>
+                </template>
+              </NInput>
+
+              <!-- 操作按钮 -->
+              <NButton type="primary" size="small" @click="applyFilters">
+                筛选
+              </NButton>
+              <NButton size="small" @click="resetFilters">
+                重置
+              </NButton>
+            </NSpace>
           </div>
 
           <!-- 照片网格 -->
@@ -321,11 +451,23 @@ onMounted(() => {
 .stats-bar {
   font-size: 13px;
   color: var(--n-text-color-3);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .stats-sep {
   margin: 0 8px;
   color: var(--n-divider-color);
+}
+.filter-bar {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--n-color-embedded);
+  border-radius: 8px;
+  border: 1px solid var(--n-border-color);
+}
+.filter-label {
+  font-size: 13px;
+  color: var(--n-text-color-3);
+  white-space: nowrap;
 }
 .pagination-wrapper {
   display: flex;
