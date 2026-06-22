@@ -14,6 +14,7 @@ import (
 var (
 	configFlag = flag.String("c", "", "config file path (e.g. ./configs/config.yaml)")
 	logConsole = flag.Bool("l", false, "log to console; false for file only")
+	clearDB    = flag.Bool("clearDB", false, "clear all DB data before AutoSync, rebuild from disk")
 )
 
 func main() {
@@ -36,7 +37,7 @@ func main() {
 
 	// 启动时后台自动同步照片数据（不阻塞 server 启动）
 	go func() {
-		if err := service.AutoSync(); err != nil {
+		if err := service.AutoSync(*clearDB); err != nil {
 			plogger.Warnf("auto sync failed: %v", err)
 		}
 	}()

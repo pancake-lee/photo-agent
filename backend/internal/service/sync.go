@@ -19,9 +19,24 @@ import (
 //   - 新照片：执行完整导入流程（EXIF、时间线、描述、Dify 同步）
 //   - 已有照片：如 description 变化则更新并同步 Dify
 //   - 无变化：跳过
+//
+// 当 clearDB 为 true 时，先清空 SQLite 中所有数据，再基于磁盘文件全新构建。
 // 此函数在 server 启动时由后台 goroutine 调用，不阻塞启动流程。
-func AutoSync() error {
+func AutoSync(clearDB bool) error {
 	cfg := config.Get()
+
+	// 0. 如果需要清空数据库（-clearDB 参数），先删除所有旧数据
+	if clearDB {
+		if err := ClearAllData(); err != nil {
+			return fmt.Errorf("clear db failed: %w", err)
+		}
+		// 同时清空 MD5 去重注册表，确保所有磁盘图片都会被重新导入
+		dedupPath := filepath.Join(filepath.Dir(cfg.Storage.DescriptionsPath), "dedup_hashes.json")
+		if err := os.Remove(dedupPath); err != nil && !os.IsNotExist(err) {
+			plogger.Warnf("remove dedup registry failed: %v", err)
+		}
+		plogger.Info("AutoSync: database and dedup registry cleared, rebuilding from disk")
+	}
 
 	// 1. 清空缓存，强制重新加载最新文件
 	// （batch_vlm 可能已更新 descriptions.json，时间线文件也可能已修改）
@@ -29,7 +44,7 @@ func AutoSync() error {
 	ClearTimelineCache()
 	preDesc, _ := LoadDescriptions()
 
-	// 加载 MD5 去重注册表
+	// 加载 MD5 去重注册表（-clearDB 时已被删除，会得到空注册表）
 	dedupPath := filepath.Join(filepath.Dir(cfg.Storage.DescriptionsPath), "dedup_hashes.json")
 	dedupReg := LoadDedupRegistry(dedupPath)
 
@@ -320,4 +335,17 @@ func syncPhotoToDify(photoID, description, timeline string) {
 	if err := vlm.WriteToKnowledgeBase(photoID, description, timeline); err != nil {
 		plogger.Warnf("Dify sync failed photo_%s: %v", photoID, err)
 	}
+}
+
+// ClearAllData 清空 SQLite 中所有数据（photos 和 import_jobs 表）。
+// 在 AutoSync 搭配 -clearDB 参数时调用，用于基于磁盘文件全新重建数据库。
+func ClearAllData() error {
+	if err := db.Where("1 = 1").Delete(&model.Photo{}).Error; err != nil {
+		return fmt.Errorf("delete photos failed: %w", err)
+	}
+	if err := db.Where("1 = 1").Delete(&model.ImportJob{}).Error; err != nil {
+		return fmt.Errorf("delete import_jobs failed: %w", err)
+	}
+	plogger.Info("All data cleared from SQLite")
+	return nil
 }

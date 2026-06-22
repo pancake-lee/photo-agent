@@ -34,8 +34,8 @@ func LoadTimeline() ([]TimelineEntry, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			plogger.Infof("Timeline file not found: %s", path)
-			return nil, nil
+			plogger.Errorf("Timeline file not found: %s", path)
+			panic(fmt.Sprintf("timeline file not found: %s", path))
 		}
 		return nil, fmt.Errorf("open timeline file failed: %w", err)
 	}

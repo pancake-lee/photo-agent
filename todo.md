@@ -13,12 +13,15 @@
 
 > 当前周期。目标：可以按色调/光线/构图/情绪/主体筛选照片，为选题提供素材维度。
 
-### ✅ VLM 描述结构化提取（已完成）
+### VLM 描述结构化提取（已完成）
+
+TODO 刚做好全新的vlm预处理，用了新的提示词，所以后续的结构化，标签字段等都可以丰富一下，重新审视整个流程
+  而且重新搭建了web页面，也需要测试web页面上次图片并且进行vlm处理的流程
 
 - `agent/scripts/extract_attributes.py`：LLM 提取 objects/colors/scene/lighting/mood/composition → `attributes.json`
 - `agent/scripts/index_photos.py`：增量索引时自动读取 `attributes.json`，写入 Chroma metadata（scene/lighting/mood/colors/objects/composition）
 
-### ✅ Chroma 元数据过滤利用 — 自动 where 提取（已完成）
+### Chroma 元数据过滤利用 — 自动 where 提取（已完成）
 
 - `agent/chain/photo_rag.py`：
   - 新增 `METADATA_SCHEMA`：定义 scene/lighting/mood 三个维度的允许值
