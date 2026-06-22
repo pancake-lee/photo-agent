@@ -21,6 +21,7 @@ type DBConfig struct {
 
 // StorageConfig 存储配置
 type StorageConfig struct {
+	ProjectRoot      string `json:"project_root" toml:"project_root" default:"."`
 	PhotoPath        string `json:"photo_path" toml:"photo_path" default:"./data/photos"`
 	PhotoSrc         string `json:"photo_src" toml:"photo_src"` // 原始照片源目录（batch_vlm 默认输入）
 	DescriptionsPath string `json:"descriptions_path" toml:"descriptions_path" default:"./data/descriptions.json"`
@@ -83,9 +84,16 @@ func Init(paths ...string) error {
 		return fmt.Errorf("scan config failed: %w", err)
 	}
 
+	// 将 project_root 解析为绝对路径（对齐 Python 端 pathlib.Path.resolve() 行为）
+	if globalConfig.Storage.ProjectRoot != "" && !filepath.IsAbs(globalConfig.Storage.ProjectRoot) {
+		if absRoot, err := filepath.Abs(globalConfig.Storage.ProjectRoot); err == nil {
+			globalConfig.Storage.ProjectRoot = absRoot
+		}
+	}
+
 	// 确保数据目录存在
-	ensureDir(globalConfig.DB.SqlitePath)
-	ensureDir(globalConfig.Storage.PhotoPath)
+	ensureDir(globalConfig.ResolvePath(globalConfig.DB.SqlitePath))
+	ensureDir(globalConfig.ResolvePath(globalConfig.Storage.PhotoPath))
 
 	return nil
 }
@@ -93,6 +101,18 @@ func Init(paths ...string) error {
 // Get 获取全局配置
 func Get() *Config {
 	return &globalConfig
+}
+
+// ResolvePath 将相对路径基于 project_root 解析为绝对路径。
+// 如果路径已是绝对路径，直接返回原值。
+func (c *Config) ResolvePath(relPath string) string {
+	if relPath == "" {
+		return relPath
+	}
+	if filepath.IsAbs(relPath) {
+		return relPath
+	}
+	return filepath.Join(c.Storage.ProjectRoot, relPath)
 }
 
 func ensureDir(path string) {

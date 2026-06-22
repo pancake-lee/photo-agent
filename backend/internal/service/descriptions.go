@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/pancake-lee/photo-agent/internal/config"
@@ -30,7 +31,8 @@ func LoadDescriptions() (DescriptionMap, error) {
 		return descCache, nil
 	}
 
-	path := config.Get().Storage.DescriptionsPath
+	cfg := config.Get()
+	path := cfg.ResolvePath(cfg.Storage.DescriptionsPath)
 	if path == "" {
 		return nil, nil
 	}

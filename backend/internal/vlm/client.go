@@ -31,14 +31,15 @@ func DescribeImage(imagePath string) (string, string, error) {
 		return "", "", fmt.Errorf("VLM prompt file path not configured (vlm.prompt in config.yaml)")
 	}
 
-	promptBytes, err := os.ReadFile(cfg.Prompt)
+	promptPath := config.Get().ResolvePath(cfg.Prompt)
+	promptBytes, err := os.ReadFile(promptPath)
 	if err != nil {
-		return "", "", fmt.Errorf("read VLM prompt file %q failed: %w", cfg.Prompt, err)
+		return "", "", fmt.Errorf("read VLM prompt file %q failed: %w", promptPath, err)
 	}
 
 	prompt := string(promptBytes)
 	if prompt == "" {
-		return "", "", fmt.Errorf("VLM prompt file %q is empty", cfg.Prompt)
+		return "", "", fmt.Errorf("VLM prompt file %q is empty", promptPath)
 	}
 
 	switch cfg.Provider {

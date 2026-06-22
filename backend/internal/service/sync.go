@@ -31,7 +31,7 @@ func AutoSync(clearDB bool) error {
 			return fmt.Errorf("clear db failed: %w", err)
 		}
 		// 同时清空 MD5 去重注册表，确保所有磁盘图片都会被重新导入
-		dedupPath := filepath.Join(filepath.Dir(cfg.Storage.DescriptionsPath), "dedup_hashes.json")
+		dedupPath := filepath.Join(filepath.Dir(cfg.ResolvePath(cfg.Storage.DescriptionsPath)), "dedup_hashes.json")
 		if err := os.Remove(dedupPath); err != nil && !os.IsNotExist(err) {
 			plogger.Warnf("remove dedup registry failed: %v", err)
 		}
@@ -45,7 +45,7 @@ func AutoSync(clearDB bool) error {
 	preDesc, _ := LoadDescriptions()
 
 	// 加载 MD5 去重注册表（-clearDB 时已被删除，会得到空注册表）
-	dedupPath := filepath.Join(filepath.Dir(cfg.Storage.DescriptionsPath), "dedup_hashes.json")
+	dedupPath := filepath.Join(filepath.Dir(cfg.ResolvePath(cfg.Storage.DescriptionsPath)), "dedup_hashes.json")
 	dedupReg := LoadDedupRegistry(dedupPath)
 
 	// 2. 扫描 photo_path 下所有图片

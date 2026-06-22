@@ -17,10 +17,11 @@ var db *gorm.DB
 
 // InitDB 初始化 SQLite 数据库
 func InitDB() error {
-	cfg := config.Get().DB
+	cfg := config.Get()
+	sqlitePath := cfg.ResolvePath(cfg.DB.SqlitePath)
 
 	// 确保目录存在
-	dir := filepath.Dir(cfg.SqlitePath)
+	dir := filepath.Dir(sqlitePath)
 	if dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("create sqlite dir failed: %w", err)
@@ -28,7 +29,7 @@ func InitDB() error {
 	}
 
 	var err error
-	db, err = gorm.Open(sqlite.Open(cfg.SqlitePath), &gorm.Config{})
+	db, err = gorm.Open(sqlite.Open(sqlitePath), &gorm.Config{})
 	if err != nil {
 		return fmt.Errorf("open sqlite failed: %w", err)
 	}
@@ -38,7 +39,7 @@ func InitDB() error {
 		return fmt.Errorf("auto migrate failed: %w", err)
 	}
 
-	plogger.Info("SQLite initialized, path: " + cfg.SqlitePath)
+	plogger.Info("SQLite initialized, path: " + sqlitePath)
 	return nil
 }
 

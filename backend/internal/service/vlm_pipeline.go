@@ -69,7 +69,7 @@ func ProcessAndSave(imagePath, photoID, relPath string) (*VlmResult, error) {
 
 // saveToDescriptionsFile 将单条描述写入 descriptions.json（线程安全）。
 func saveToDescriptionsFile(relPath, desc, model, shotAt string) error {
-	outputPath := config.Get().Storage.DescriptionsPath
+	outputPath := config.Get().ResolvePath(config.Get().Storage.DescriptionsPath)
 	if outputPath == "" {
 		return fmt.Errorf("descriptions_path not configured")
 	}
