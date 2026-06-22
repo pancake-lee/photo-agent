@@ -12,31 +12,28 @@
    ↓
 2. 配置文件（.local/my-config.yaml）
    ↓
-3. VLM 预处理（batch_vlm → descriptions.json）
+3. VLM 预处理（batch_vlm → descriptions.json + 压缩图片）
    ↓
-4. 结构化属性提取（extract_attributes → attributes.json）
+4. 启动 Go 后端（server → AutoSync：EXIF + 结构化属性提取 + SQLite + Dify）
    ↓
-5. RAG 索引建库（index_photos → Chroma）
-   ↓
-6. 启动 Go 后端（server → AutoSync → SQLite）
-   ↓
-7. Python Agent 对话（photo_agent.py CLI）
+5. 启动 Python Agent（photo_agent.py → AutoEmbed → Chroma → 对话）
 ```
 
 **三个运行时组件的关系**：
 
 ```
 用户 → photo_agent.py (CLI)
-         ├── RAG 检索: Embedding → Chroma 本地向量库
+         ├── 启动时 AutoEmbed: Go API → Chroma 本地向量库（进度条）
+         ├── RAG 检索: Embedding → Chroma
          ├── SQL 查询: Text-to-SQL → Go API /api/v1/query/sql
          ├── 工具调用: Function Calling → Go API (OpenAPI)
          └── 流式回答: LLM 生成
 
 Go Backend (:10000)
      ├── 照片元数据 CRUD (SQLite)
-     ├── 文件服务 (图片访问)
+     ├── 文件服务（图片访问）
      ├── Embedding 代理 (/v1/embeddings)
-     └── AutoSync 自动导入
+     └── AutoSync 自动导入（EXIF 提取 + 结构化属性解析 + Dify 同步）
 ```
 
 ---
@@ -182,7 +179,7 @@ cd /root/code/photo-agent
 | `-dry-run` | 仅测试配置，不调用 VLM |
 
 运行细节：
-- 并发调用 VLM，每张照片生成一段视觉描述
+- 并发调用 VLM，每张照片生成一段结构化视觉描述（JSON 格式）
 - 自动读取 EXIF 提取拍摄时间
 - 每 10 张自动保存中间结果，支持断点续传
 - MD5 去重：相同内容只处理一次
@@ -192,7 +189,7 @@ cd /root/code/photo-agent
 ```json
 {
   "DSC_0001.JPG": {
-    "description": "画面中一座雪山矗立在蓝天下...",
+    "description": "```json\n{\n  \"subject\": {...},\n  \"scene\": {...},\n  ...\n}\n```",
     "model": "gpt-4o-mini",
     "processed_at": "2026-06-11T10:30:00Z",
     "shot_at": "2025-03-15T07:22:00Z"
@@ -200,85 +197,11 @@ cd /root/code/photo-agent
 }
 ```
 
----
-
-## 4. 结构化属性提取
-
-从 VLM 描述中提取 6 个维度的标签（objects / colors / scene / lighting / mood / composition），写入 Chroma metadata 以支持维度过滤检索。
-
-```bash
-cd /root/code/photo-agent/agent
-source .venv/bin/activate
-
-python scripts/extract_attributes.py -c ../.local/my-config.yaml
-```
-
-参数：
-
-| 参数 | 说明 |
-|------|------|
-| `-c` | 配置文件路径 |
-| `--force` | 强制重新提取全部 |
-
-**输出** `data/attributes.json`：
-
-```json
-{
-  "DSC_0001.JPG": {
-    "objects": "雪山,蓝天,云彩",
-    "colors": "白色,蓝色",
-    "scene": "mountain",
-    "lighting": "bright",
-    "mood": "calm",
-    "composition": "三分法,广角"
-  }
-}
-```
+> VLM 输出为 markdown 包裹的结构化 JSON，包含 subject / scene / lighting / color_palette / composition / mood 等维度。Go 后端 AutoSync 会自动解析这些字段存入数据库。
 
 ---
 
-## 5. RAG 索引建库
-
-将描述文本 Embedding 后写入本地 Chroma 向量库。
-
-```bash
-cd /root/code/photo-agent/agent
-source .venv/bin/activate
-
-python scripts/index_photos.py -c ../.local/my-config.yaml
-```
-
-参数：
-
-| 参数 | 说明 |
-|------|------|
-| `-c` | 配置文件路径 |
-| `--clear` | 清空 Chroma 集合并强制全量重建 |
-
-运行过程：
-- 从 `descriptions.json` 读描述，`attributes.json` 读属性
-- 通过 Go 后端 `/v1/embeddings` 代理生成向量（**因此需先启动 server**）
-- 写入 `data/chroma/`（持久化向量库）
-- 维护 `index_manifest.json`，后续自动增量索引
-
-**Chroma metadata 一览**：
-
-| 字段 | 说明 | 可用于 where 过滤 |
-|------|------|:-:|
-| `photo_id` | 照片文件名 | — |
-| `file_path` | 路径，如 `/photos/DSC_0001.JPG` | — |
-| `chunk_index` | 分片序号 | — |
-| `shot_at` | 拍摄时间（ISO 格式） | ✓ |
-| `scene` | indoor/outdoor/urban/nature 等 | ✓ |
-| `lighting` | bright/dim/golden_hour 等 | ✓ |
-| `mood` | warm/calm/dramatic 等 | ✓ |
-| `colors` | 主色调列表 | — |
-| `objects` | 主体物体 | — |
-| `composition` | 构图特点 | — |
-
----
-
-## 6. 启动 Go 后端
+## 4. 启动 Go 后端
 
 ```bash
 cd /root/code/photo-agent
@@ -286,37 +209,18 @@ cd /root/code/photo-agent
 ```
 
 启动时自动执行：
-1. 初始化 SQLite（`data/sqlite/photo_agent.db`）
+1. 初始化 SQLite（`data/sqlite/photo_agent.db`），自动迁移表结构
 2. AutoSync：扫描 `photo_path`，对比 `descriptions.json`，增量导入到 SQLite
+   - 解析 VLM 描述中的结构化 JSON → objects / colors / scene / lighting / mood / composition
+   - 读取文件 EXIF（品牌、型号、镜头、焦距、光圈、ISO、GPS 等）
+   - 时间线匹配（根据拍摄时间匹配 `timeline.md` 中的活动）
+   - 可选：同步到 Dify 知识库（如已配置凭据）
 
-确认成功：
-
-```text
-[INFO] SQLite initialized, path: ./data/sqlite/photo_agent.db
-[INFO] AutoSync: 300 images scanned, 0 existing in DB
-[INFO] Photo imported: DSC_0001.JPG, id=xxx
-...
-[INFO] AutoSync done: new=300, updated=0, skipped=0
-[INFO] Server starting on :10000
-```
-
-验证 API：
-
-```bash
-curl http://localhost:10000/api/v1/health
-# {"status":"ok"}
-
-curl http://localhost:10000/api/v1/photos/stats
-# {"total":300,"brands":[...],"models":[...],...}
-```
-
-> 注意：步骤 5（RAG 索引）需要通过 server 的 `/v1/embeddings` 代理生成向量，请先启动 server 再执行 `index_photos.py`。
+> **注意**：先启动 Go 后端，Python Agent 启动时需要它提供数据（AutoEmbed）和 Embedding 代理。
 
 ---
 
-## 7. Python Agent 对话
-
-### 7.1 启动
+## 5. 启动 Python Agent
 
 ```bash
 cd /root/code/photo-agent/agent
@@ -325,7 +229,24 @@ source .venv/bin/activate
 python chain/photo_agent.py -c ../.local/my-config.yaml
 ```
 
-### 7.2 路由机制
+### 5.1 启动流程（AutoEmbed）
+
+Agent 启动时自动执行 AutoEmbed，无需手动运行索引脚本：
+
+1. 检查 Go 后端健康状态
+2. 从 Go API 获取全部照片数据（含结构化属性）
+3. 对比本地 Chroma manifest（增量检测）
+4. 如有新增/变更：显示进度条，自动完成 Embedding → Chroma
+5. 完成后进入对话模式
+
+```
+AutoEmbed: Go 后端健康检查通过
+AutoEmbed: 增量同步 15 张照片到 Chroma...
+  Embedding: [██████████████████████████████] 15/15 (100%)
+AutoEmbed: Chroma 同步完成，共 450 条文档
+```
+
+### 5.2 路由机制
 
 LangGraph 自动将用户问题分发到三个分支：
 
@@ -335,7 +256,7 @@ LangGraph 自动将用户问题分发到三个分支：
 | `rag` | 内容描述、场景、情绪 | "找一下日落的照片""有猫咪的吗" |
 | `tool` | 列表、详情、时间线 | "列出所有时间线""看看最近的照片" |
 
-### 7.3 其他模式
+### 5.3 其他模式
 
 ```bash
 # 评估模式
@@ -350,16 +271,16 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --demo
 
 ---
 
-## 8. 验证清单
+## 6. 验证清单
 
 - [ ] `make backend` 编译通过，`bin/` 下有 `server` `batch_vlm`
 - [ ] `.local/my-config.yaml` 中 API Key 有效，`vlm` 模型支持视觉
 - [ ] `./bin/batch_vlm -c .local/my-config.yaml -dry-run` 配置校验通过
 - [ ] `data/descriptions.json` 包含每张照片的描述和拍摄时间
-- [ ] `data/attributes.json` 包含结构化属性标签
 - [ ] `./bin/server -c .local/my-config.yaml` 启动，`/api/v1/health` 返回 OK
-- [ ] `data/chroma/` 向量库建好，`python scripts/index_photos.py` 无报错
-- [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml` 可对话
+- [ ] API 返回的照片数据包含结构化属性字段（objects / colors / scene / lighting / mood / composition）
+- [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml` 启动时 AutoEmbed 正常完成
+- [ ] 对话中 RAG 检索返回相关结果
 
 ---
 
@@ -381,21 +302,25 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --demo
 # 1. VLM 预处理新照片
 ./bin/batch_vlm -c .local/my-config.yaml
 
-# 2. 提取属性
+# 2. 重启 Go 后端触发 AutoSync（自动解析 EXIF + 结构化属性 + 入库）
+# server 启动即完成同步，无需额外步骤
+
+# 3. 重启 Python Agent，AutoEmbed 自动检测变更并增量索引
 cd agent && source .venv/bin/activate
-python scripts/extract_attributes.py -c ../.local/my-config.yaml
-
-# 3. 更新 Chroma 索引（增量，自动识别变更）
-python scripts/index_photos.py -c ../.local/my-config.yaml
-
-# 4. 重启 server 触发 AutoSync 到 SQLite
+python chain/photo_agent.py -c ../.local/my-config.yaml
 ```
+
+> 如果你正在开发中频繁重启，也可以在 agent 对话中直接问新照片相关问题 —— AutoEmbed 每次启动都会检查并同步。
 
 ### Q: Chroma 索引完全重建？
 
+删除 manifest 和数据目录后重启 Agent 即可：
+
 ```bash
+rm -rf ./data/chroma/
 cd agent && source .venv/bin/activate
-python scripts/index_photos.py -c ../.local/my-config.yaml --clear
+python chain/photo_agent.py -c ../.local/my-config.yaml
+# AutoEmbed 检测到无 manifest → 自动全量重建
 ```
 
 ### Q: Go 后端日志？

@@ -10,6 +10,12 @@ type Photo struct {
 	Timeline     string     `json:"timeline"`
 	Tags         string     `json:"tags"`
 	Description  string     `json:"description"`
+	Objects      string     `json:"objects" gorm:"type:text"`     // 主体物体/人物，逗号分隔（VLM 提取）
+	Colors       string     `json:"colors" gorm:"type:text"`      // 主色调，逗号分隔（VLM 提取）
+	Scene        string     `json:"scene"`                        // 场景类型（VLM 提取）
+	Lighting     string     `json:"lighting"`                     // 光线特征（VLM 提取）
+	Mood         string     `json:"mood"`                         // 情感氛围（VLM 提取）
+	Composition  string     `json:"composition" gorm:"type:text"` // 构图特点，逗号分隔（VLM 提取）
 	ShotAt       *time.Time `json:"shot_at"`
 	Width        int        `json:"width"`
 	Height       int        `json:"height"`

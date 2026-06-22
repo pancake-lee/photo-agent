@@ -11,7 +11,7 @@ import (
 )
 
 // SavePhoto 保存照片元数据到数据库
-func SavePhoto(filename, filePath, timeline, tags, description string, width, height int, exifInfo *ExifInfo) (*model.Photo, error) {
+func SavePhoto(filename, filePath, timeline, tags, description string, width, height int, exifInfo *ExifInfo, objects, colors, scene, lighting, mood, composition string) (*model.Photo, error) {
 	photo := &model.Photo{
 		ID:          uuid.NewV4().String(),
 		Filename:    filename,
@@ -19,6 +19,12 @@ func SavePhoto(filename, filePath, timeline, tags, description string, width, he
 		Timeline:    timeline,
 		Tags:        tags,
 		Description: description,
+		Objects:     objects,
+		Colors:      colors,
+		Scene:       scene,
+		Lighting:    lighting,
+		Mood:        mood,
+		Composition: composition,
 		Width:       width,
 		Height:      height,
 		ImportedAt:  time.Now(),

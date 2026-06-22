@@ -33,8 +33,7 @@ func StorePhoto(sourcePath, timeline string) (string, error) {
 	if strings.HasPrefix(absSourcePath, projectPrefix) {
 		rel := strings.TrimPrefix(absSourcePath, projectPrefix)
 		base := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
-		dir := filepath.Dir(rel)
-		compressedPath := filepath.Join(absPhotoPath, dir, base+".jpg")
+		compressedPath := filepath.Join(absPhotoPath, base+".jpg")
 		if _, err := os.Stat(compressedPath); err == nil {
 			relPath, _ := filepath.Rel(absPhotoPath, compressedPath)
 			plogger.Infof("Using compressed photo: %s", relPath)

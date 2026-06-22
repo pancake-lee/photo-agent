@@ -75,8 +75,7 @@ func resolveCompressOutput(inputPath string) (string, func(), error) {
 	if strings.HasPrefix(inputPath, projectPrefix) {
 		rel := strings.TrimPrefix(inputPath, projectPrefix)
 		base := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
-		dir := filepath.Dir(rel)
-		outputPath := filepath.Join(config.Get().Storage.PhotoPath, dir, base+".jpg")
+		outputPath := filepath.Join(config.Get().Storage.PhotoPath, base+".jpg")
 		return outputPath, nil, nil
 	}
 

@@ -89,23 +89,8 @@ func AutoSync(clearDB bool) error {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			// 从 descriptions.json 获取描述，从 EXIF 获取完整元数据
-			description, exifInfo := resolvePhotoData(img.relPath, img.absPath, preDesc)
-
-			// MD5 去重检查（仅新照片）：避免相同内容以不同路径重复导入
-				if _, found := existingMap[img.relPath]; !found {
-					if fileMD5, err := ComputeFileMD5(img.absPath); err == nil {
-						if firstPath, exists := dedupReg.Exists(fileMD5); exists {
-							plogger.Warnf("AutoSync dedup skip (same as %s): %s", firstPath, img.relPath)
-							mu.Lock()
-							skipCount++
-							mu.Unlock()
-							return
-						}
-					} else {
-						plogger.Warnf("MD5 compute failed %s: %v", img.relPath, err)
-					}
-				}
+			// 从 descriptions.json 获取描述、EXIF、结构化属性
+			resolved := resolvePhotoData(img.relPath, img.absPath, preDesc)
 
 			// MD5 去重检查（仅新照片）：避免相同内容以不同路径重复导入
 			if _, found := existingMap[img.relPath]; !found {
@@ -125,20 +110,23 @@ func AutoSync(clearDB bool) error {
 			if existing, found := existingMap[img.relPath]; found {
 				// 已存在：优先用 EXIF 的 shot_at 重新计算 timeline
 				newTimeline := ""
-				if exifInfo.ShotAt != nil {
-					newTimeline = FindEventByTime(*exifInfo.ShotAt)
+				if resolved.ExifInfo.ShotAt != nil {
+					newTimeline = FindEventByTime(*resolved.ExifInfo.ShotAt)
 				} else if existing.ShotAt != nil {
 					newTimeline = FindEventByTime(*existing.ShotAt)
 				}
 
-				// description 或 timeline 任一变化都触发更新，同时回填 EXIF
-				if existing.Description != description || existing.Timeline != newTimeline ||
-					existing.Brand == "" && exifInfo.Brand != "" {
-					if err := updatePhotoWithExif(existing.ID, description, newTimeline, exifInfo); err != nil {
+				// description / timeline / 属性 / EXIF 任一变化都触发更新
+				if existing.Description != resolved.Description || existing.Timeline != newTimeline ||
+					existing.Brand == "" && resolved.ExifInfo.Brand != "" ||
+					existing.Objects != resolved.Objects || existing.Colors != resolved.Colors ||
+					existing.Scene != resolved.Scene || existing.Lighting != resolved.Lighting ||
+					existing.Mood != resolved.Mood || existing.Composition != resolved.Composition {
+					if err := updatePhotoWithExif(existing.ID, newTimeline, resolved); err != nil {
 						plogger.Warnf("AutoSync update failed %s: %v", img.relPath, err)
 						return
 					}
-					syncPhotoToDify(existing.ID, description, newTimeline)
+					syncPhotoToDify(existing.ID, resolved.Description, newTimeline)
 					mu.Lock()
 					updateCount++
 					mu.Unlock()
@@ -151,18 +139,17 @@ func AutoSync(clearDB bool) error {
 			}
 
 			// 新照片，执行完整导入
-			photo, err := importNewPhoto(img.absPath, img.relPath, description, exifInfo)
+			photo, err := importNewPhoto(img.absPath, img.relPath, resolved)
 			if err != nil {
 				plogger.Warnf("AutoSync import failed %s: %v", img.relPath, err)
 				return
 			}
 
-
 			// 注册 MD5 去重
 			if fileMD5, err := ComputeFileMD5(img.absPath); err == nil {
 				dedupReg.Register(fileMD5, img.relPath)
 			}
-			syncPhotoToDify(photo.ID, description, photo.Timeline)
+			syncPhotoToDify(photo.ID, resolved.Description, photo.Timeline)
 
 			mu.Lock()
 			newCount++
@@ -225,19 +212,20 @@ func scanImagesInPhotoPath(root string) ([]imageEntry, error) {
 }
 
 // importNewPhoto 导入单张新照片到 SQLite。
-// exifInfo 包含完整 EXIF 元数据（shot_at 优先来自 descriptions.json）。
-func importNewPhoto(absPath, relPath, description string, exifInfo *ExifInfo) (*model.Photo, error) {
+// resolved 包含从 descriptions.json 解析的完整数据（描述、EXIF、结构化属性）。
+func importNewPhoto(absPath, relPath string, resolved *ResolvedPhotoData) (*model.Photo, error) {
 	// 获取图片尺寸
 	width, height := GetImageSize(absPath)
 
 	// 根据拍摄时间匹配活动
 	timeline := ""
-	if exifInfo != nil && exifInfo.ShotAt != nil {
-		timeline = FindEventByTime(*exifInfo.ShotAt)
+	if resolved.ExifInfo != nil && resolved.ExifInfo.ShotAt != nil {
+		timeline = FindEventByTime(*resolved.ExifInfo.ShotAt)
 	}
 
 	// 保存到数据库
-	photo, err := SavePhoto(filepath.Base(absPath), relPath, timeline, "", description, width, height, exifInfo)
+	photo, err := SavePhoto(filepath.Base(absPath), relPath, timeline, "", resolved.Description, width, height, resolved.ExifInfo,
+		resolved.Objects, resolved.Colors, resolved.Scene, resolved.Lighting, resolved.Mood, resolved.Composition)
 	if err != nil {
 		return nil, fmt.Errorf("save photo failed: %w", err)
 	}
@@ -246,16 +234,32 @@ func importNewPhoto(absPath, relPath, description string, exifInfo *ExifInfo) (*
 	return photo, nil
 }
 
-// resolvePhotoData 从 descriptions.json 和文件 EXIF 解析照片描述与拍摄时间。
+// ResolvedPhotoData resolvePhotoData 的返回结果，包含从 descriptions.json 和文件 EXIF 解析的所有数据。
+type ResolvedPhotoData struct {
+	Description string
+	ExifInfo    *ExifInfo
+	Objects     string
+	Colors      string
+	Scene       string
+	Lighting    string
+	Mood        string
+	Composition string
+}
+
+// resolvePhotoData 从 descriptions.json 和文件 EXIF 解析照片描述、拍摄时间及结构化属性。
 // 优先级：descriptions.json 中的 shot_at > 文件 EXIF。
-func resolvePhotoData(relPath, absPath string, preDesc DescriptionMap) (string, *ExifInfo) {
-	description := ""
+func resolvePhotoData(relPath, absPath string, preDesc DescriptionMap) *ResolvedPhotoData {
+	result := &ResolvedPhotoData{}
 
 	if preDesc != nil {
 		if entry, ok := GetDescriptionEntry(relPath); ok {
-			description = entry.Description
+			result.Description = entry.Description
 		}
 	}
+
+	// 解析结构化属性（从 VLM 输出的 JSON 描述中直接提取）
+	result.Objects, result.Colors, result.Scene, result.Lighting, result.Mood, result.Composition =
+		ParseStructuredAttributes(result.Description)
 
 	// 读取完整 EXIF 信息
 	exifInfo := GetExifInfo(absPath)
@@ -273,46 +277,53 @@ func resolvePhotoData(relPath, absPath string, preDesc DescriptionMap) (string, 
 			}
 		}
 	}
+	result.ExifInfo = exifInfo
 
-	return description, exifInfo
+	return result
 }
 
-// updatePhotoWithExif 更新已有照片的描述、时间线和 EXIF 字段。
-func updatePhotoWithExif(photoID, description, timeline string, exifInfo *ExifInfo) error {
+// updatePhotoWithExif 更新已有照片的描述、时间线、EXIF 和结构化属性字段。
+func updatePhotoWithExif(photoID, timeline string, resolved *ResolvedPhotoData) error {
 	updates := map[string]any{
-		"description": description,
+		"description": resolved.Description,
 		"timeline":    timeline,
+		"objects":     resolved.Objects,
+		"colors":      resolved.Colors,
+		"scene":       resolved.Scene,
+		"lighting":    resolved.Lighting,
+		"mood":        resolved.Mood,
+		"composition": resolved.Composition,
 	}
-	if exifInfo != nil {
-		if exifInfo.Brand != "" {
-			updates["brand"] = exifInfo.Brand
+	if resolved.ExifInfo != nil {
+		if resolved.ExifInfo.Brand != "" {
+			updates["brand"] = resolved.ExifInfo.Brand
 		}
-		if exifInfo.Model != "" {
-			updates["model"] = exifInfo.Model
+		if resolved.ExifInfo.Model != "" {
+			updates["model"] = resolved.ExifInfo.Model
 		}
-		if exifInfo.Lens != "" {
-			updates["lens"] = exifInfo.Lens
+		if resolved.ExifInfo.Lens != "" {
+			updates["lens"] = resolved.ExifInfo.Lens
 		}
-		if exifInfo.FocalLength != "" {
-			updates["focal_length"] = exifInfo.FocalLength
+		if resolved.ExifInfo.FocalLength != "" {
+			updates["focal_length"] = resolved.ExifInfo.FocalLength
 		}
-		if exifInfo.Aperture != "" {
-			updates["aperture"] = exifInfo.Aperture
+		if resolved.ExifInfo.Aperture != "" {
+			updates["aperture"] = resolved.ExifInfo.Aperture
 		}
-		if exifInfo.ISO != 0 {
-			updates["iso"] = exifInfo.ISO
+		if resolved.ExifInfo.ISO != 0 {
+			updates["iso"] = resolved.ExifInfo.ISO
 		}
-		if exifInfo.ExposureTime != "" {
-			updates["exposure_time"] = exifInfo.ExposureTime
+		if resolved.ExifInfo.ExposureTime != "" {
+			updates["exposure_time"] = resolved.ExifInfo.ExposureTime
 		}
-		if exifInfo.Latitude != nil {
-			updates["latitude"] = exifInfo.Latitude
+		if resolved.ExifInfo.Latitude != nil {
+			updates["latitude"] = resolved.ExifInfo.Latitude
 		}
-		if exifInfo.Longitude != nil {
-			updates["longitude"] = exifInfo.Longitude
+		if resolved.ExifInfo.Longitude != nil {
+			updates["longitude"] = resolved.ExifInfo.Longitude
 		}
-		if exifInfo.Altitude != nil {
-			updates["altitude"] = exifInfo.Altitude
+		if resolved.ExifInfo.Altitude != nil {
+			updates["altitude"] = resolved.ExifInfo.Altitude
 		}
 	}
 	if err := db.Model(&model.Photo{}).Where("id = ?", photoID).Updates(updates).Error; err != nil {

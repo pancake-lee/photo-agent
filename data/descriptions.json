@@ -7042,5 +7042,17 @@
     "model": "doubao-seed-2-0-lite-260428",
     "processed_at": "2026-06-18T11:34:47Z",
     "shot_at": "2026-05-04T08:53:50Z"
+  },
+  "photo-agent/pic-like/DSC_0009.jpg": {
+    "description": "```json\n{\n    \"image_type\": \"photograph\",\n    \"subject\": {\n        \"main_objects\": [\"戴钩花针织帽的女性\", \"穿黑色无袖上衣的男性\", \"卡式炉上的大盘热菜\", \"桌面各式餐具\"],\n        \"count\": 4,\n        \"attributes\": {\n            \"color\": \"女性帽子米白、上衣黑色，男性上衣黑色，餐具多为白色，桌面为棕木色，餐食含红色食材\",\n            \"pose/action\": \"女子右手持筷子，左手托腮，面向镜头微笑；男子左手放在桌面上，面向镜头\",\n            \"other\": \"两人均佩戴手表，坐在餐桌旁\"\n        }\n    },\n    \"scene\": {\n        \"environment\": \"室内\",\n        \"setting\": \"临街中式餐馆用餐区\",\n        \"time_of_day\": \"黄昏\",\n        \"weather\": null\n    },\n    \"lighting\": {\n        \"source\": \"混合\",\n        \"brightness\": \"适中\",\n        \"contrast\": \"中等\"\n    },\n    \"color_palette\": {\n        \"dominant_colors\": [\"棕木色\", \"黑色\", \"白色\"],\n        \"overall_tone\": \"中性\"\n    },\n    \"composition\": {\n        \"focus\": \"中心\",\n        \"depth\": \"深景\",\n        \"symmetry\": \"非对称\"\n    },\n    \"background\": {\n        \"description\": \"其他用餐顾客、木质窗框、窗外临街店铺街景\",\n        \"blur\": \"部分模糊\"\n    },\n    \"foreground\": {\n        \"description\": \"棕黄色木质餐桌桌面，摆放餐食、卡式炉和餐具\",\n        \"overlaps_main\": false\n    },\n    \"text_and_symbols\": \"仅可辨识餐桶表面有部分中文，其余文字模糊不清\",\n    \"mood\": \"轻松\",\n    \"overall_summary\": \"一男一女在临街餐馆用餐，面向镜头\"\n}\n```",
+    "model": "doubao-seed-2-0-lite-260428",
+    "processed_at": "2026-06-22T16:00:09Z",
+    "shot_at": "2025-08-14T09:59:27Z"
+  },
+  "photo-agent/pic-like/DSC_0048.jpg": {
+    "description": "```json\n{\n    \"image_type\": \"photograph\",\n    \"subject\": {\n        \"main_objects\": [\"戴钩针帽的长发女子\", \"带渔网的渔船\"],\n        \"count\": 2,\n        \"attributes\": {\n            \"color\": \"米白色钩针帽，黑色无袖上衣，深黑色长发，深蓝色水体\",\n            \"pose/action\": \"女子侧身站立，双手在背后交握，闭眼朝向画面右侧\",\n            \"other\": \"手腕佩戴黑色腕带，数缕浅色调长发垂在身后\"\n        }\n    },\n    \"scene\": {\n        \"environment\": \"室外\",\n        \"setting\": \"河流之上的渔船甲板\",\n        \"time_of_day\": \"黄昏\",\n        \"weather\": null\n    },\n    \"lighting\": {\n        \"source\": \"混合光\",\n        \"brightness\": \"适中\",\n        \"contrast\": \"中等\"\n    },\n    \"color_palette\": {\n        \"dominant_colors\": [\"深蓝色\", \"黑色\", \"米白色\"],\n        \"overall_tone\": \"冷色\"\n    },\n    \"composition\": {\n        \"focus\": \"中心偏右\",\n        \"depth\": \"浅景深\",\n        \"symmetry\": \"非对称\"\n    },\n    \"background\": {\n        \"description\": \"开阔平静水面，远处沿岸林带，多座锥形喀斯特山峰，淡蓝色黄昏天空\",\n        \"blur\": \"模糊\"\n    },\n    \"foreground\": {\n        \"description\": \"渔船局部甲板结构\",\n        \"overlaps_main\": false\n    },\n    \"text_and_symbols\": null,\n    \"mood\": \"沉静\",\n    \"overall_summary\": \"黄昏河畔，戴钩针帽的女子侧身立于船边\"\n}\n```",
+    "model": "doubao-seed-2-0-lite-260428",
+    "processed_at": "2026-06-22T15:59:49Z",
+    "shot_at": "2025-08-14T11:27:33Z"
   }
 }

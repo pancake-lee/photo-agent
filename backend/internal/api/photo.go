@@ -23,7 +23,7 @@ func photoToListItem(p model.Photo) PhotoListItem {
 	return PhotoListItem{
 		Photo:          p,
 		HasDescription: p.Description != "",
-		ThumbnailURL:   "/api/v1/photos/" + p.ID + "/image?size=thumb",
+		ThumbnailURL:   "/api/v1/photos/" + p.ID + "/image",
 	}
 }
 
@@ -110,7 +110,7 @@ func GetPhoto(c *gin.Context) {
 	resp := PhotoDetailResponse{
 		Photo:           *photo,
 		HasDescription:  photo.Description != "",
-		ThumbnailURL:    "/api/v1/photos/" + photo.ID + "/image?size=thumb",
+		ThumbnailURL:    "/api/v1/photos/" + photo.ID + "/image",
 		ImageURL:        "/api/v1/photos/" + photo.ID + "/image",
 		DescriptionModel: descEntry.Model,
 		DescriptionTime:  descEntry.ProcessedAt,
@@ -138,10 +138,10 @@ func UpdatePhotoTags(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// GetPhotoImage 获取图片文件（支持缩略图）
+// GetPhotoImage 获取图片文件。
+// 直接返回 photo_path 中的原图，前端通过 CSS object-fit 实现缩略图裁剪效果。
 func GetPhotoImage(c *gin.Context) {
 	id := c.Param("id")
-	size := c.Query("size")
 
 	photo, err := service.GetPhotoByID(id)
 	if err != nil {
@@ -151,17 +151,6 @@ func GetPhotoImage(c *gin.Context) {
 
 	photoPath := config.Get().Storage.PhotoPath
 	fullPath := filepath.Join(photoPath, photo.FilePath)
-
-	// 缩略图模式
-	if size == "thumb" {
-		thumbPath, err := service.GetThumbnail(fullPath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "generate thumbnail failed: " + err.Error()})
-			return
-		}
-		c.File(thumbPath)
-		return
-	}
 
 	c.File(fullPath)
 }

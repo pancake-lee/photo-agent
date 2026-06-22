@@ -27,6 +27,7 @@ import langchain_core.prompts as lc_prompts
 import langchain_core.runnables as lc_runnables
 import langgraph.graph as lg_graph
 
+import chain.auto_embed as auto_embed
 import chain.demo as demo
 import chain.evaluation as evaluation
 import chain.photo_rag as photo_rag
@@ -452,6 +453,13 @@ def main() -> None:
     cfg.check_api_key()
     print(f"配置加载成功: {cfg}")
     print()
+
+    # AutoEmbed: 启动时自动同步 Go 后端数据到 Chroma 向量库
+    try:
+        auto_embed.AutoEmbed(cfg).run()
+    except Exception as e:
+        print(f'AutoEmbed 异常（将使用现有 Chroma 数据继续）: {e}')
+        print()
 
     agent = PhotoAgent(cfg)
 

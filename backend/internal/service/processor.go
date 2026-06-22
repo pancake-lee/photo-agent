@@ -125,7 +125,7 @@ func (p *ImportProcessor) processSingleImage(jobID string, img ImageInfo, curren
 	}
 
 	// 保存到数据库
-	photo, err := SavePhoto(img.Filename, relPath, timeline, "", description, width, height, exifInfo)
+	photo, err := SavePhoto(img.Filename, relPath, timeline, "", description, width, height, exifInfo, "", "", "", "", "", "")
 	if err != nil {
 		p.appendJobLog(jobID, fmt.Sprintf("save db failed %s: %v", img.Filename, err))
 		p.incFailed(jobID)

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/service"
-	"github.com/pancake-lee/pgo/pkg/plogger"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 // UploadPhoto 上传图片。
@@ -198,7 +198,7 @@ func createPhotoFromUpload(filename, originalName string, shotAt *time.Time) str
 	width, height := service.GetImageSize(fullPath)
 
 	// 存入数据库
-	photo, err := service.SavePhoto(filename, filename, timeline, "", "", width, height, exifInfo)
+	photo, err := service.SavePhoto(filename, filename, timeline, "", "", width, height, exifInfo, "", "", "", "", "", "")
 	if err != nil {
 		plogger.Warnf("Create photo record failed: %v", err)
 		return ""
@@ -261,7 +261,7 @@ func buildConflictInfo(existing *photoInfo, _ string, newShotAt *time.Time) gin.
 	return gin.H{
 		"existing_photo_id":      existing.ID,
 		"existing_filename":      existing.Filename,
-		"existing_thumbnail_url": fmt.Sprintf("/api/v1/photos/%s/image?size=thumb", existing.ID),
+		"existing_image_url": fmt.Sprintf("/api/v1/photos/%s/image", existing.ID),
 		"existing_shot_at":       existingShotAt,
 		"new_shot_at":            newShotAtStr,
 	}
