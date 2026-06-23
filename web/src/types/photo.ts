@@ -68,3 +68,33 @@ export interface VlmQueueStatus {
   failed: number
   current_file?: string
 }
+
+// Embedding 统计（Python Agent 交叉比对 Go 照片列表后返回）
+export interface EmbedStats {
+  with_embedding: number   // Go 中存在且已嵌入的照片数
+  total_documents: number  // 有效文档数（已剔除孤立文档）
+  total_photos: number     // Go 后端照片总数
+  error?: string           // 获取失败时的错误信息
+}
+
+// Embedding 详情（单张照片）
+export interface EmbedInfo {
+  photo_id: string
+  chunks: number
+  model: string | null
+  embedded_at: string | null
+  chunk_info: Array<{
+    id: string
+    chunk_index: number
+    preview: string
+  }>
+}
+
+// Embed 队列状态
+export interface EmbedQueueStatus {
+  running: boolean
+  total: number
+  completed: number
+  failed: number
+  current_file?: string
+}

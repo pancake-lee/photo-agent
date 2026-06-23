@@ -246,7 +246,7 @@ class AutoEmbed:
         """
         对单张照片描述分片，返回 (chunks, metadatas)。
 
-        复用 chunking 模块的分片逻辑，metadata 包含 6 个结构化属性字段。
+        metadata 仅保留 photo_id 和 chunk_index，结构化属性由 Go SQLite 统一管理。
         """
         strategy = self._cfg.chunk_strategy
         if strategy == "none":
@@ -267,27 +267,13 @@ class AutoEmbed:
         else:
             raise ValueError(f"未知的分块策略: {strategy}")
 
-        file_path = photo.get("file_path", "")
-        shot_at = photo.get("shot_at", "")
-        if shot_at:
-            # shot_at 可能是 ISO 格式字符串
-            shot_at = str(shot_at)
-
+        photo_id = photo.get("id", "")
         metadatas: list[dict] = []
         for idx, _ in enumerate(chunks):
-            meta: dict = {
-                "photo_id": photo.get("id", ""),
-                "file_path": f"/photos/{file_path}" if file_path else "",
+            metadatas.append({
+                "photo_id": photo_id,
                 "chunk_index": idx,
-            }
-            if shot_at:
-                meta["shot_at"] = shot_at
-            # 结构化属性写入 metadata，支持 Chroma where 过滤
-            for key in ("objects", "colors", "scene", "lighting", "mood", "composition"):
-                val = photo.get(key)
-                if val:
-                    meta[key] = val
-            metadatas.append(meta)
+            })
 
         return chunks, metadatas
 

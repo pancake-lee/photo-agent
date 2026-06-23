@@ -32,7 +32,6 @@ import langchain_core.prompts as lc_prompts
 import langchain_core.runnables as lc_runnables
 import langgraph.graph as lg_graph
 
-import chain.auto_embed as auto_embed
 import chain.demo as demo
 import chain.evaluation as evaluation
 import chain.photo_rag as photo_rag
@@ -121,14 +120,7 @@ def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
 def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
     try:
-        # 自动提取结构化过滤条件，显式传入避免 answer_question 内部重复提取
-        filters = photo_rag.extract_filters_from_question(cfg, state["question"])
-        answer_text = photo_rag.answer_question(
-            cfg, state["question"], where=filters
-        )
-        # 如果有提取到过滤条件，在答案前附加调试信息
-        if filters:
-            answer_text = f"[过滤条件: {filters}]\n{answer_text}"
+        answer_text = photo_rag.answer_question(cfg, state["question"])
     except Exception as exc:
         answer_text = f"RAG 检索失败: {exc}"
     return {"rag_answer": answer_text}
@@ -591,18 +583,12 @@ def main() -> None:
     print(f"配置加载成功: {cfg}")
     print()
 
-    # --serve 模式：启动 API 服务（AutoEmbed 和 Agent 在 server 内部初始化）
+    # --serve 模式：启动 API 服务（Agent 和 Chroma/EmbedQueue 在 server 内部初始化）
     if args.serve_port is not None:
         import chain.server as server
         server.run_server(cfg, port=args.serve_port)
         return
 
-    # AutoEmbed: 启动时自动同步 Go 后端数据到 Chroma 向量库
-    try:
-        auto_embed.AutoEmbed(cfg).run()
-    except Exception as e:
-        print(f'AutoEmbed 异常（将使用现有 Chroma 数据继续）: {e}')
-        print()
 
     agent = PhotoAgent(cfg)
 

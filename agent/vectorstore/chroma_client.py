@@ -172,6 +172,86 @@ class ChromaPhotoStore:
         """返回集合中的文档总数。"""
         return self.collection.count()
 
+    def get_photo_embedding_info(self, photo_id: str) -> dict | None:
+        """
+        获取单张照片的 embedding 详细信息。
+
+        ChromaDB metadata 仅存 photo_id + chunk_index，不再冗余存储 model/embedded_at。
+        返回的 model 字段来自配置文件（由上层注入），此处固定返回 null。
+
+        返回:
+            {
+                "photo_id": "...",
+                "chunks": 3,
+                "model": null,             # 不再存于 Chroma metadata
+                "embedded_at": null,       # 不再存于 Chroma metadata
+                "chunk_info": [...],       # 各 chunk 的 id/chunk_index/preview
+            }
+            若该 photo_id 无 embedding 数据则返回 None。
+        """
+        raw = self.collection.get(
+            where={"photo_id": photo_id},
+            include=["metadatas", "documents"],
+        )
+        ids = raw.get("ids", [])
+        if not ids:
+            return None
+
+        metas = raw.get("metadatas", [])
+        docs = raw.get("documents", [])
+
+        # 各 chunk 的 id、chunk_index、内容预览
+        chunk_info: list[dict] = []
+        for i, doc_id in enumerate(ids):
+            meta = metas[i] if i < len(metas) else {}
+            doc = docs[i] if i < len(docs) else ""
+            chunk_info.append({
+                "id": doc_id,
+                "chunk_index": (meta or {}).get("chunk_index", 0),
+                "preview": doc[:200] if doc else "",
+            })
+
+        return {
+            "photo_id": photo_id,
+            "chunks": len(ids),
+            "model": None,
+            "embedded_at": None,
+            "chunk_info": chunk_info,
+        }
+
+    def get_embedded_photo_ids(self) -> set[str]:
+        """
+        返回所有已嵌入的 photo_id 集合（从 metadata 中提取去重）。
+
+        用于 API 查询某个 photo_id 是否已有 embedding 数据，
+        也用于 batch_embed CLI 过滤已嵌入的照片。
+
+        注意：此方法直接从 ChromaDB 提取，不校验 photo_id 在 Go 数据库中是否仍存在。
+        调用方如需"有效嵌入数"，应自行与 Go 照片列表交叉比对。
+        """
+        result = self.collection.get(include=["metadatas"])
+        ids: set[str] = set()
+        for meta in (result.get("metadatas") or []):
+            if meta and "photo_id" in meta:
+                ids.add(meta["photo_id"])
+        return ids
+
+    def cleanup_orphans(self, valid_photo_ids: set[str]) -> int:
+        """
+        删除 ChromaDB 中 photo_id 不在 valid_photo_ids 中的孤立文档。
+
+        参数:
+            valid_photo_ids: 合法的 photo_id 集合（通常来自 Go 后端全量照片列表）。
+
+        返回:
+            删除的 photo_id 数量（非文档数）。
+        """
+        all_ids = self.get_embedded_photo_ids()
+        orphan_ids = all_ids - valid_photo_ids
+        for pid in orphan_ids:
+            self.delete(where={"photo_id": pid})
+        return len(orphan_ids)
+
     # ------------------------------------------------------------------ #
     # 内部格式化
     # ------------------------------------------------------------------ #

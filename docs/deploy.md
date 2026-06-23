@@ -34,8 +34,9 @@ Python Agent
   │     ├── POST /api/chat/sessions/{id}/messages  发送消息
   │     └── DELETE /api/chat/sessions/{id}   删除会话
   ├── 会话管理: sessions list | sessions resume <id>
-  ├── 启动时 AutoEmbed: Go API → Chroma 本地向量库
-  ├── RAG 检索: Embedding → Chroma
+  ├── Embed 队列: Web 批量/单张 Embedding（异步处理）
+  ├── Embedding CLI: scripts/batch_embed.py（批量命令行工具）
+  ├── RAG 检索: Embedding → Chroma（纯向量相似度，结构化过滤走 Text-to-SQL）
   ├── SQL 查询: Text-to-SQL → Go API
   ├── 工具调用: Function Calling → Go API (OpenAPI)
   └── 回答生成: LLM
@@ -227,7 +228,7 @@ cd /root/code/photo-agent
    - 时间线匹配（根据拍摄时间匹配 `timeline.md` 中的活动）
    - 可选：同步到 Dify 知识库（如已配置凭据）
 
-> **注意**：先启动 Go 后端，Python Agent 启动时需要它提供数据（AutoEmbed）和 Embedding 代理。
+> **注意**：先启动 Go 后端，Python Agent 的 Embedding 功能需要 Go 提供照片数据和 Embedding 代理。
 
 ---
 
@@ -253,22 +254,21 @@ python chain/photo_agent.py -c ../.local/my-config.yaml sessions list
 python chain/photo_agent.py -c ../.local/my-config.yaml sessions resume <session_id>
 ```
 
-### 5.1 启动流程（AutoEmbed）
+### 5.1 启动流程
 
-Agent 启动时自动执行 AutoEmbed，无需手动运行索引脚本：
+Agent 启动时初始化以下组件：
 
-1. 检查 Go 后端健康状态
-2. 从 Go API 获取全部照片数据（含结构化属性）
-3. 对比本地 Chroma manifest（增量检测）
-4. 如有新增/变更：显示进度条，自动完成 Embedding → Chroma
-5. 完成后进入对话模式
+1. **SessionStore** — SQLite 会话管理
+2. **PhotoAgent** — LangGraph 查询路由（含 Token 追踪）
+3. **ChromaPhotoStore** — ChromaDB 向量库连接（复用已有数据，不做自动索引）
+4. **EmbedQueue** — Embedding 异步队列（等待 Web 或 CLI 触发）
 
-```
-AutoEmbed: Go 后端健康检查通过
-AutoEmbed: 增量同步 15 张照片到 Chroma...
-  Embedding: [██████████████████████████████] 15/15 (100%)
-AutoEmbed: Chroma 同步完成，共 450 条文档
-```
+启动后 **不会自动执行 Embedding**，需要通过以下方式手动触发：
+
+- **Web 界面**：点击"开始批量 Embed"按钮 → 调用 `/api/embed/queue/start`
+- **CLI 工具**：`python scripts/batch_embed.py -c config.yaml`
+
+**ChromaDB 存储设计**：ChromaDB 仅存储描述文本的 Embedding 向量 + 最小标识（`photo_id`、`chunk_index`），不冗余存储 Go SQLite 已有的结构化属性（objects/colors/scene/lighting/mood/composition 等）。结构化查询统一走 Text-to-SQL → Go API。详见 `docs/chroma-metadata-design.md`。
 
 ### 5.2 路由机制
 
@@ -333,7 +333,40 @@ curl -X POST http://localhost:10005/api/chat/sessions/{session_id}/messages \
   -d '{"question": "我有多少张照片？"}'
 ```
 
-### 5.5 Web 前端
+### 5.5 Embedding API
+
+Agent 启动后提供 Embedding 管理 API，Web 界面可进行批量/单张 Embedding。
+
+**端点**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/embed/queue/start` | 启动批量 Embedding（body: `{"force": false}`） |
+| POST | `/api/embed/queue/stop` | 中止批量 Embedding |
+| GET | `/api/embed/queue/status` | 查询队列运行状态 |
+| POST | `/api/embed/photos/{id}` | 单张照片入队 |
+| GET | `/api/embed/photos/{id}` | 单张 embedding 详情 |
+| POST | `/api/embed/photos/status` | 批量查询是否已嵌入 |
+| GET | `/api/embed/stats` | Embedding 统计 |
+| POST | `/api/embed/cleanup` | 清理孤立数据 |
+
+**启动流程**：`/api/embed/queue/start` 在启动处理前会自动清理 ChromaDB 中孤立文档（Go 中已删除的照片），然后从 Go API 获取待嵌入列表并启动后台 worker。
+
+**队列状态**：
+
+```json
+{
+  "running": true,
+  "total": 120,
+  "completed": 45,
+  "failed": 0,
+  "current_file": "DSC_0001.JPG"
+}
+```
+
+Web 前端通过轮询 `/api/embed/queue/status`（间隔 2s）实时更新进度。
+
+### 5.6 Web 前端
 
 ```bash
 cd /root/code/photo-agent/web
@@ -361,7 +394,7 @@ Web 界面提供：
 - [ ] `data/descriptions.json` 包含每张照片的描述和拍摄时间
 - [ ] `./bin/server -c .local/my-config.yaml` 启动，`/api/v1/health` 返回 OK
 - [ ] API 返回的照片数据包含结构化属性字段（objects / colors / scene / lighting / mood / composition）
-- [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml` 启动时 AutoEmbed 正常完成
+- [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml` 正常启动，Agent 初始化成功
 - [ ] 对话中 RAG 检索返回相关结果
 - [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml --serve` Chat API 健康检查通过
 - [ ] `curl http://localhost:10005/api/chat/health` 返回 `{"status":"ok"}`
@@ -390,23 +423,57 @@ Web 界面提供：
 # 2. 重启 Go 后端触发 AutoSync（自动解析 EXIF + 结构化属性 + 入库）
 # server 启动即完成同步，无需额外步骤
 
-# 3. 重启 Python Agent，AutoEmbed 自动检测变更并增量索引
+# 3. 触发 Embedding（二选一）
+# 方式 A: Web 界面点击"开始批量 Embed"
+# 方式 B: CLI 命令行
 cd agent && source .venv/bin/activate
-python chain/photo_agent.py -c ../.local/my-config.yaml
+python scripts/batch_embed.py -c ../.local/my-config.yaml
 ```
 
-> 如果你正在开发中频繁重启，也可以在 agent 对话中直接问新照片相关问题 —— AutoEmbed 每次启动都会检查并同步。
+### Q: Chroma 索引完全重建以及清理旧数据？
 
-### Q: Chroma 索引完全重建？
-
-删除 manifest 和数据目录后重启 Agent 即可：
+如需强制全量重建 ChromaDB 索引：
 
 ```bash
+# 1. 删除旧数据
 rm -rf ./data/chroma/
+
+# 2. 重新索引（二选一）
+# 方式 A: Web 界面点击"开始批量 Embed"
+# 方式 B: CLI
 cd agent && source .venv/bin/activate
-python chain/photo_agent.py -c ../.local/my-config.yaml
-# AutoEmbed 检测到无 manifest → 自动全量重建
+python scripts/batch_embed.py -c ../.local/my-config.yaml
 ```
+
+**清理孤立数据**：Go 中已删除的照片可能在 ChromaDB 中残留 embedding 数据。两种方式清理：
+
+- **自动**：每次批量 Embedding 启动（`POST /api/embed/queue/start`）前自动执行 `cleanup_orphans()`，对比 Go 全量 photo_id 并删除 Chroma 中不存在的
+- **手动**：`POST /api/embed/cleanup`
+
+**旧数据迁移**：如果 ChromaDB 中有旧版本写入的冗余 metadata（file_path、scene 等），全量重建后新写入的 metadata 仅包含 `photo_id` 和 `chunk_index`。增量更新也会逐步自然替换为瘦身版。
+
+### Q: 为什么 Web 上点击"开始批量 Embed"没有立即反应？
+
+批量 Embed 启动时需要从 Go 后端分页拉取全量照片列表以确定待处理范围，数据量越大等待越久。解决思路：
+
+1. 确保 Go 后端正常运行且响应迅速
+2. 尽量减少 ChromaDB 中无效数据（定期清理孤立文档）
+3. 如果照片数量极大（>5000），可考虑先用 CLI 工具做全量索引：
+
+```bash
+cd agent && source .venv/bin/activate
+python scripts/batch_embed.py -c ../.local/my-config.yaml
+```
+
+### Q: ChromeDB 为什么不再存储结构化属性？
+
+ChromaDB 仅做语义向量检索，结构化过滤（场景/光线/情绪/EXIF 参数等）统一走 Text-to-SQL → Go API。这样：
+
+- Go SQLite 是结构化数据的唯一数据源，无需维护 ChromaDB ↔ SQLite 同步
+- ChromaDB metadata 体积最小化，`get_embedded_photo_ids()` 等操作更快
+- 修改结构化查询逻辑只需改 Text-to-SQL prompt，不涉及 ChromaDB schema
+
+详见 `docs/chroma-metadata-design.md`。
 
 ### Q: Go 后端日志？
 

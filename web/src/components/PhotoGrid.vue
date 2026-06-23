@@ -8,11 +8,13 @@ defineProps<{
   loading: boolean
   error: string | null
   processingIds: Set<string>
+  embeddedIds: Set<string>
 }>()
 
 const emit = defineEmits<{
   viewDetail: [photoId: string]
   triggerDescribe: [photoId: string]
+  triggerEmbed: [photoId: string]
   deletePhoto: [photoId: string]
   retry: []
 }>()
@@ -56,8 +58,10 @@ const emit = defineEmits<{
       <PhotoCard
         :photo="photo"
         :processing="processingIds.has(photo.id)"
+        :is-embedded="embeddedIds.has(photo.id)"
         @view-detail="(id) => $emit('viewDetail', id)"
         @trigger-describe="(id) => $emit('triggerDescribe', id)"
+        @trigger-embed="(id) => $emit('triggerEmbed', id)"
         @delete-photo="(id) => $emit('deletePhoto', id)"
       />
     </NGi>

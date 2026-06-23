@@ -4,17 +4,20 @@ import {
   CheckmarkCircle,
   AddCircleOutline,
   TrashOutline,
+  LayersOutline,
 } from '@vicons/ionicons5'
 import type { PhotoListItem } from '../types/photo'
 
 const props = defineProps<{
   photo: PhotoListItem
   processing?: boolean
+  isEmbedded?: boolean
 }>()
 
 const emit = defineEmits<{
   viewDetail: [photoId: string]
   triggerDescribe: [photoId: string]
+  triggerEmbed: [photoId: string]
   deletePhoto: [photoId: string]
 }>()
 
@@ -24,6 +27,14 @@ function handleStatusClick() {
     emit('viewDetail', props.photo.id)
   } else {
     emit('triggerDescribe', props.photo.id)
+  }
+}
+
+function handleEmbedClick() {
+  if (props.processing) return
+  if (props.isEmbedded) return
+  if (props.photo.has_description) {
+    emit('triggerEmbed', props.photo.id)
   }
 }
 
@@ -83,6 +94,42 @@ function formatExifTooltip(): string {
                 </template>
               </NButton>
             </div>
+            <!-- Embed 状态图标（左下角） -->
+            <div class="photo-embed-status">
+              <NButton
+                v-if="isEmbedded"
+                size="tiny"
+                circle
+                type="info"
+                @click.stop
+              >
+                <template #icon>
+                  <NIcon><LayersOutline /></NIcon>
+                </template>
+              </NButton>
+              <NButton
+                v-else-if="photo.has_description"
+                size="tiny"
+                circle
+                dashed
+                type="info"
+                @click.stop="handleEmbedClick"
+              >
+                <template #icon>
+                  <NIcon><LayersOutline /></NIcon>
+                </template>
+              </NButton>
+              <NButton
+                v-else
+                size="tiny"
+                circle
+                disabled
+              >
+                <template #icon>
+                  <NIcon><LayersOutline /></NIcon>
+                </template>
+              </NButton>
+            </div>
             <div class="photo-delete">
               <NPopconfirm
                 @positive-click="$emit('deletePhoto', photo.id)"
@@ -134,6 +181,11 @@ function formatExifTooltip(): string {
   position: absolute;
   bottom: 6px;
   right: 6px;
+}
+.photo-embed-status {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
 }
 .photo-delete {
   position: absolute;

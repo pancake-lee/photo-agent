@@ -95,15 +95,14 @@ def _prepare_chunks(
     """
     对单条照片描述进行分片，返回 chunk 文本列表和对应的 metadata 列表。
 
+    metadata 仅保留 photo_id 和 chunk_index，结构化属性由 Go SQLite 统一管理。
+
     参数:
         photo_id:    照片文件名
         description: 照片描述文本
         cfg:         配置对象，包含分块策略和参数
-        shot_at:     照片拍摄时间（ISO 格式），用于元数据过滤
-        attrs:       结构化属性（objects/colors/scene/lighting/mood/composition）
-
-    返回:
-        (chunks, metadatas) 两个等长列表
+        shot_at:     保留兼容（不再写入 Chroma metadata）
+        attrs:       保留兼容（不再写入 Chroma metadata）
     """
     text = description.strip()
     if not text:
@@ -130,19 +129,10 @@ def _prepare_chunks(
 
     metadatas = []
     for idx, _ in enumerate(chunks):
-        meta: dict = {
+        metadatas.append({
             "photo_id": photo_id,
-            "file_path": f"/photos/{photo_id}",
             "chunk_index": idx,
-        }
-        if shot_at:
-            meta["shot_at"] = shot_at
-        # 结构化属性写入 metadata，支持 where 过滤
-        if attrs:
-            for key in ("scene", "lighting", "mood", "colors", "objects", "composition"):
-                if attrs.get(key):
-                    meta[key] = attrs[key]
-        metadatas.append(meta)
+        })
 
     return chunks, metadatas
 

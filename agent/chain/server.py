@@ -20,6 +20,8 @@ import pydantic
 
 import chain.photo_agent as photo_agent
 import chain.session_store as session_store
+import chain.embed_queue as embed_queue
+import vectorstore.chroma_client as chroma_client
 import config as config_mod
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,17 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     # 将实例挂到 app.state 上，路由中通过 request.app.state 访问
     app.state.store = store
     app.state.agent = agent
+
+    # 初始化 Embedding 相关组件
+    chroma_store = chroma_client.ChromaPhotoStore(
+        persist_dir=str(cfg.resolve_path("./data/chroma")),
+        collection_name="photos",
+    )
+    app.state.chroma_store = chroma_store
+    app.state.cfg = cfg
+
+    embed_q = embed_queue.EmbedQueue(cfg, chroma_store)
+    app.state.embed_queue = embed_q
 
     # ── 注册路由 ──────────────────────────────────────────
 
@@ -189,6 +202,67 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "answer": answer,
             "query_type": query_type,
         }
+
+    # ── Embedding API ─────────────────────────────────────
+
+    @app.get("/api/embed/stats")
+    async def embed_stats(req: fastapi.Request):
+        """Embedding 统计（以 Go 照片为索引源，交叉比对 ChromaDB）。
+
+        与 ChromaDB 原始数据不同，此端点先获取 Go 后端全量照片 ID，
+        再与 ChromaDB 交叉比对，只统计"Go 中存在且已嵌入"的照片数。
+        """
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return q.get_embed_stats()
+
+    @app.post("/api/embed/cleanup")
+    async def embed_cleanup(req: fastapi.Request):
+        """清理 ChromaDB 中孤立文档（Go 中已不存在的照片的 embedding 数据）。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        removed = q.cleanup_orphans()
+        return {"removed": removed}
+
+    @app.post("/api/embed/photos/status")
+    async def embed_photos_status(body: dict, req: fastapi.Request):
+        """批量查询照片是否已嵌入。body: {"ids": ["id1", "id2", ...]}。"""
+        photo_ids = body.get("ids", [])
+        cs = req.app.state.chroma_store
+        embedded_ids = cs.get_embedded_photo_ids()
+        return {pid: (pid in embedded_ids) for pid in photo_ids}
+
+    @app.post("/api/embed/queue/start")
+    async def embed_queue_start(body: dict, req: fastapi.Request):
+        """启动批量 embedding。body: {"force": false}。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        force = body.get("force", False)
+        return q.start(force=force)
+
+    @app.post("/api/embed/queue/stop")
+    async def embed_queue_stop(req: fastapi.Request):
+        """中止批量 embedding。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return q.stop()
+
+    @app.get("/api/embed/queue/status")
+    async def embed_queue_status(req: fastapi.Request):
+        """查询 Embed 队列运行状态。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return q.status()
+
+    @app.post("/api/embed/photos/{photo_id}")
+    async def embed_single_photo(photo_id: str, req: fastapi.Request):
+        """嵌入单张照片到 ChromaDB。由前端单张触发调用。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return q.enqueue_one(photo_id)
+
+    @app.get("/api/embed/photos/{photo_id}")
+    async def embed_photo_info(photo_id: str, req: fastapi.Request):
+        """获取单张照片的 embedding 详情（模型、时间、分块信息等）。"""
+        store = req.app.state.chroma_store
+        info = store.get_photo_embedding_info(photo_id)
+        if info is None:
+            raise fastapi.HTTPException(status_code=404, detail="该照片暂无 embedding 数据")
+        return info
 
     return app
 

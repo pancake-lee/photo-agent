@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import {
   NLayout,
   NLayoutContent,
@@ -15,7 +15,7 @@ import {
   NInput,
   useMessage,
 } from 'naive-ui'
-import { PlayOutline, CloudUploadOutline, SearchOutline } from '@vicons/ionicons5'
+import { PlayOutline, CloudUploadOutline, SearchOutline, LayersOutline } from '@vicons/ionicons5'
 
 import PhotoGrid from '../components/PhotoGrid.vue'
 import PhotoDetail from '../components/PhotoDetail.vue'
@@ -26,6 +26,8 @@ import ConflictModal from '../components/ConflictModal.vue'
 import { usePhotos } from '../composables/usePhotos'
 import { useUpload } from '../composables/useUpload'
 import { useVlmQueue } from '../composables/useVlmQueue'
+import { useEmbedQueue } from '../composables/useEmbedQueue'
+import { useEmbedStatus } from '../composables/useEmbedStatus'
 import type { PhotoDetail as PhotoDetailType } from '../types/photo'
 import type { ConflictResolution } from '../types/upload'
 
@@ -83,6 +85,23 @@ const {
   onComplete,
 } = useVlmQueue()
 
+// ── Embed 队列 ──
+const {
+  status: embedStatus,
+  startQueue: startEmbedQueue,
+  stopQueue: stopEmbedQueue,
+  enqueuePhoto: enqueueEmbedPhoto,
+  onComplete: onEmbedComplete,
+} = useEmbedQueue()
+
+// ── Embed 状态查询 ──
+const {
+  embeddedIds,
+  embedStats,
+  fetchEmbeddedIds,
+  fetchEmbedStats,
+} = useEmbedStatus()
+
 // ── 处理中的照片 ID ──
 const processingIds = ref<Set<string>>(new Set())
 
@@ -98,6 +117,16 @@ const conflictResolver = ref<((r: ConflictResolution) => void) | null>(null)
 const vlmCompleted = computed(() => vlmStatus.value.completed)
 const vlmTotal = computed(() => vlmStatus.value.total)
 const vlmRunning = computed(() => vlmStatus.value.running)
+const embedRunning = computed(() => embedStatus.value.running)
+const embedCompleted = computed(() => embedStatus.value.completed)
+const embedTotal = computed(() => embedStatus.value.total)
+
+// 待 Embed 数量 = 有描述的 - 已嵌入的（避免负数）
+const pendingEmbedCount = computed(() => {
+  const withDesc = stats.value?.with_description ?? 0
+  const withEmb = embedStats.value?.with_embedding ?? 0
+  return Math.max(0, withDesc - withEmb)
+})
 
 // 排序选项
 const sortOptions = [
@@ -142,6 +171,37 @@ async function handleTriggerDescribe(photoId: string) {
   } catch (e) {
     message.error(e instanceof Error ? e.message : '入队失败')
     processingIds.value.delete(photoId)
+  }
+}
+
+async function handleStartEmbed() {
+  try {
+    const result = await startEmbedQueue()
+    if (result.total === 0) {
+      message.info('所有照片已有嵌入，无需处理')
+    } else {
+      message.success(`Embed 已启动，共 ${result.total} 张`)
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '启动失败')
+  }
+}
+
+async function handleStopEmbed() {
+  await stopEmbedQueue()
+  message.info('Embed 已中止')
+  fetchPhotos()
+  fetchStats()
+  fetchEmbedStats()
+}
+
+async function handleTriggerEmbed(photoId: string) {
+  try {
+    await enqueueEmbedPhoto(photoId)
+    message.success('已加入 Embed 处理队列')
+    // embed 完成后通过 onEmbedComplete → fetchEmbeddedIds 刷新图标状态
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '入队失败')
   }
 }
 
@@ -229,11 +289,25 @@ onComplete(() => {
   fetchStats()
 })
 
-// ── 初始化 ──
-onMounted(() => {
+// ── Embed 完成回调 ──
+onEmbedComplete(() => {
   fetchPhotos()
   fetchStats()
+  fetchEmbedStats()
+})
+
+// ── 照片列表变化时自动同步 Embed 状态 ──
+watch(photos, (newPhotos) => {
+  const ids = newPhotos.map((p) => p.id)
+  fetchEmbeddedIds(ids)
+})
+
+// ── 初始化 ──
+onMounted(async () => {
+  await fetchPhotos()
+  fetchStats()
   fetchTimelines()
+  fetchEmbedStats()
 })
 </script>
 
@@ -274,6 +348,35 @@ onMounted(() => {
               开始自动VLM预处理
             </NButton>
 
+            <!-- Embed 全局控制 -->
+            <template v-if="embedRunning">
+              <NTooltip trigger="hover">
+                <template #trigger>
+                  <NTag
+                    type="warning"
+                    size="large"
+                    class="progress-tag"
+                    :style="{ cursor: 'pointer' }"
+                    @click="handleStopEmbed"
+                  >
+                    Embed {{ embedCompleted }}/{{ embedTotal }}
+                  </NTag>
+                </template>
+                点击中止处理
+              </NTooltip>
+            </template>
+
+            <NButton
+              v-if="!embedRunning"
+              type="warning"
+              @click="handleStartEmbed"
+            >
+              <template #icon>
+                <NIcon><LayersOutline /></NIcon>
+              </template>
+              开始批量Embed
+            </NButton>
+
             <!-- 上传按钮 -->
             <NButton @click="openUploadModal">
               <template #icon>
@@ -294,13 +397,18 @@ onMounted(() => {
               <span>共 {{ stats?.total ?? total }} 张</span>
               <span class="stats-sep">|</span>
               <span>
-                含描述
-                {{ stats?.with_description ?? '...' }} 张
+                数据完整
+                {{ embedStats?.with_embedding ?? '...' }} 张
               </span>
               <span class="stats-sep">|</span>
               <span>
-                待处理
+                VLM待处理
                 {{ stats?.without_description ?? '...' }} 张
+              </span>
+              <span class="stats-sep">|</span>
+              <span>
+                Embed待处理
+                {{ pendingEmbedCount }} 张
               </span>
             </div>
 
@@ -382,8 +490,10 @@ onMounted(() => {
             :loading="loading"
             :error="error"
             :processing-ids="processingIds"
+            :embedded-ids="embeddedIds"
             @view-detail="fetchPhotoDetail"
             @trigger-describe="handleTriggerDescribe"
+            @trigger-embed="handleTriggerEmbed"
             @delete-photo="handleDeletePhoto"
             @retry="fetchPhotos"
           />
@@ -407,6 +517,7 @@ onMounted(() => {
     :loading="detailLoading"
     @close="closeDetail"
     @trigger-describe="handleTriggerDescribe"
+    @trigger-embed="handleTriggerEmbed"
     @view-description="handleViewDescription"
   />
 
