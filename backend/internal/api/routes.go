@@ -23,6 +23,7 @@ func setupV1Routes(api *gin.RouterGroup) {
 	api.GET("/photos/:id", GetPhoto)
 	api.GET("/photos/:id/image", GetPhotoImage)
 	api.PUT("/photos/:id/tags", UpdatePhotoTags)
+	api.DELETE("/photos/:id", DeletePhoto)
 
 	// 照片上传
 	api.POST("/photos/upload", UploadPhoto)

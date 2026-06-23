@@ -157,6 +157,24 @@ export function usePhotos() {
     }
   }
 
+  // 删除照片
+  async function deletePhoto(photoId: string): Promise<void> {
+    const resp = await fetch(`${API_BASE}/photos/${photoId}`, {
+      method: 'DELETE',
+    })
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({ error: '删除失败' }))
+      throw new Error(data.error || `HTTP ${resp.status}`)
+    }
+    // 从本地列表移除
+    photos.value = photos.value.filter((p) => p.id !== photoId)
+    total.value = Math.max(0, total.value - 1)
+    // 如果正在查看被删除的照片详情，关闭详情
+    if (selectedPhoto.value?.id === photoId) {
+      closeDetail()
+    }
+  }
+
   return {
     photos,
     total,
@@ -186,5 +204,6 @@ export function usePhotos() {
     resetFilters,
     markPhotoQueued,
     refreshPhoto,
+    deletePhoto,
   }
 }

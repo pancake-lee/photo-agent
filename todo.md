@@ -1,48 +1,18 @@
-## Phase 1 — 让照片「可被多维检索」✅
+# TODO
 
-### VLM 描述结构化提取（已完成 ✅）
-
-- 原 `agent/scripts/extract_attributes.py`（LLM 提取属性）已被 Go 后端 AutoSync 内置的 `ParseStructuredAttributes` 替代
-- VLM 已输出富结构化 JSON，Go 端直接解析（零额外 LLM 成本）
-- 解析结果（objects/colors/scene/lighting/mood/composition）直接存入 SQLite Photo 记录
-
-### Chroma 元数据过滤利用 — 自动 where 提取（已完成 ✅）
-
-- `agent/chain/photo_rag.py`：`METADATA_SCHEMA` + `FILTER_PROMPT` + `extract_filters_from_question()`
-- 结构化属性随 AutoEmbed 写入 Chroma metadata，支持 scene/lighting/mood where 过滤
-
-### AutoEmbed 启动时自动索引（已完成 ✅）
-
-- `agent/chain/auto_embed.py`：Agent 启动时自动对比 Go API 数据与 Chroma manifest，增量 Embedding + 进度条
-- 不再需要手动运行 `index_photos.py`
-
----
-
-## Phase 2 — Web 前端 + 完善
-
-> 当前 Web 页面处于初步开发阶段（参见 `backend/internal/api/` 内 upload/import 相关路由）。
-
-### TODO — Web 阶段
-
-- [ ] **Web UI：照片画廊页** — 分页浏览、缩略图网格、点击查看详情
-- [ ] **Web UI：上传 + VLM 处理** — 上传照片 → 后台 VLM 队列 → 自动生成描述和结构化属性
-- [ ] **Web UI：搜索与过滤** — 按场景/光线/情绪/关键词筛选照片
-- [ ] **Web UI：Embedding 进度展示** — AutoEmbed 进度条在 Web 端可视化（当前仅为 CLI 进度）
-- [ ] **Web UI：结构化属性编辑** — 在线编辑 objects/colors/scene/lighting/mood/composition
-- [ ] **完善 VlmQueue** — 当前 `vlm_queue.go` 已有基础框架，需补全上传→VLM→入库→AutoEmbed 的完整流程
-- [ ] **AutoEmbed Web 集成** — 上传新照片后自动触发增量 Embedding（不依赖 Agent CLI 重启）
-
-### TODO — 质量
-
-- [ ] **评估基线建立** — `evaluation.py` 的 `relevant_photos` 字段需人工标注，建立 RAG 评估基线
-- [ ] **GPS 反向地理编码** — EXIF 中已有经纬度，调用 API 转为地名存入 `location` 字段
-- [ ] **SQLite WAL 模式** — `PRAGMA journal_mode=WAL` 提升并发读写效率
-- [ ] **日志轮转与分级** — 接入 pgo 日志体系，长期运行不占用过多磁盘
-
----
-
-## 遗留事项
-
-- [ ] `agent/embedding/embedder.py:63`：Embedding URL 写死为 `{base_url}/v1/embeddings`，应支持配置灵活指定
-- [ ] `backend/internal/api/routes.go:41-45`：import API 和 batch_vlm 逻辑重复，需合并统一
-- [ ] 匹配时间线的逻辑优化：支持更多日期格式，模糊匹配连续几天到同一活动
+| 阶段    | 序号 | 任务                  | 简述                                                                                                             |
+| ------- | ---- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Phase 0 | 0    | Web 图片管理          | 上传图片 → VLM 描述、目录导入、图片展示/筛选/排序/搜索、删除（同步清理原图+缩略图+DB）                           |
+| Phase 1 | 1.1  | VLM 描述结构化提取    | 用 LLM 从 VLM 纯文本描述中提取结构化属性（主色/光线/构图/情绪/主体），存入 attributes.json 并回写 SQLite         |
+| Phase 1 | 1.2  | Chroma 元数据过滤利用 | 补全 Chroma metadata 字段（shot_at/colors/lighting/mood/subject），实现语义+结构化联合过滤检索                   |
+| Phase 1 | 1.3  | 评估基线建立          | 扩充黄金查询到 ≥20 条，建立 P@10/R@10/MRR 基线，对比分块策略，后续每个 Phase 有量化标准验证                      |
+| Phase 2 | 2.1  | 相似照片聚类          | 基于 Chroma 向量做聚类（HDBSCAN/K-Means），按视觉连贯性排序，AI 推荐照片组合方案                                 |
+| Phase 2 | 2.2  | 主题标签自动生成      | 每个聚类用 LLM 生成主题标签（如"云南雪山系列"），主题为运行时动态生成，不修改 DB schema                          |
+| Phase 3 | 3.1  | 潜在主题识别          | 定期扫描照片库识别潜在主题（高频场景/时间线规律/稀缺性），CLI `--suggest` 输出选题建议列表                       |
+| Phase 3 | 3.2  | 多轮对话上下文感知    | RouterState 扩展 history 字段，支持指代消解/条件追加/否定/扩展 4 类追问                                          |
+| Phase 3 | 3.3  | 摄影报告生成          | 复用 stats API + Chroma 聚类结果，CLI `--report [year]` 输出 Markdown 结构化报告（概览/器材/时间/风格/创作建议） |
+| Phase 4 | 4.1  | 发布历史分析          | 用户标记"已发布"，统计分析主题分布/频率/时间规律，识别缺口并建议补发方向                                         |
+| Phase 4 | 4.2  | 系列感维护            | 跨时间线主题提取，发现"对比/延续/变奏"系列（如雨天 vs 晴天、2023 vs 2024 同一地点）                              |
+| 工程    | E1   | SQLite WAL 模式       | `PRAGMA journal_mode=WAL;` 提升并发写入效率                                                                      |
+| 工程    | E2   | 优雅关闭              | 监听 SIGINT/SIGTERM，停止接受新请求、等待后台任务完成                                                            |
+| 工程    | E3   | 日志轮转              | 长期运行基础保障，接入 pgo 日志体系                                                                              |

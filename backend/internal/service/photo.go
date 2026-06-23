@@ -75,6 +75,23 @@ func UpdatePhotoTags(photoID, tags string) error {
 	return db.Model(&model.Photo{}).Where("id = ?", photoID).Update("tags", tags).Error
 }
 
+// DeletePhoto 删除照片：从数据库删除记录，并删除磁盘上的原图文件。
+// 返回被删除照片的信息（供后续清理使用），若照片不存在则返回 nil。
+func DeletePhoto(photoID string) (*model.Photo, error) {
+	photo, err := GetPhotoByID(photoID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 删除数据库记录
+	if err := db.Delete(&model.Photo{}, "id = ?", photoID).Error; err != nil {
+		return nil, fmt.Errorf("delete photo from db failed: %w", err)
+	}
+
+	plogger.Infof("Photo deleted from db: id=%s, file=%s", photo.ID, photo.FilePath)
+	return photo, nil
+}
+
 // ListPhotosParams 照片列表查询参数
 type ListPhotosParams struct {
 	Page        int    // 页码，从 1 开始

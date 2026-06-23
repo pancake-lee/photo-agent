@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { NCard, NButton, NIcon, NSpin, NTooltip } from 'naive-ui'
+import { NCard, NButton, NIcon, NSpin, NTooltip, NPopconfirm } from 'naive-ui'
 import {
   CheckmarkCircle,
   AddCircleOutline,
+  TrashOutline,
 } from '@vicons/ionicons5'
 import type { PhotoListItem } from '../types/photo'
 
@@ -14,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   viewDetail: [photoId: string]
   triggerDescribe: [photoId: string]
+  deletePhoto: [photoId: string]
 }>()
 
 function handleStatusClick() {
@@ -81,6 +83,25 @@ function formatExifTooltip(): string {
                 </template>
               </NButton>
             </div>
+            <div class="photo-delete">
+              <NPopconfirm
+                @positive-click="$emit('deletePhoto', photo.id)"
+              >
+                <template #trigger>
+                  <NButton
+                    size="tiny"
+                    circle
+                    type="error"
+                    @click.stop
+                  >
+                    <template #icon>
+                      <NIcon><TrashOutline /></NIcon>
+                    </template>
+                  </NButton>
+                </template>
+                确定删除该图片？（原图文件和数据库记录将被永久删除）
+              </NPopconfirm>
+            </div>
           </div>
         </template>
         <div class="photo-name">{{ photo.filename }}</div>
@@ -113,6 +134,16 @@ function formatExifTooltip(): string {
   position: absolute;
   bottom: 6px;
   right: 6px;
+}
+.photo-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.photo-card:hover .photo-delete {
+  opacity: 1;
 }
 .photo-name {
   font-size: 12px;

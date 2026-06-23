@@ -13,6 +13,7 @@ defineProps<{
 const emit = defineEmits<{
   viewDetail: [photoId: string]
   triggerDescribe: [photoId: string]
+  deletePhoto: [photoId: string]
   retry: []
 }>()
 </script>
@@ -57,6 +58,7 @@ const emit = defineEmits<{
         :processing="processingIds.has(photo.id)"
         @view-detail="(id) => $emit('viewDetail', id)"
         @trigger-describe="(id) => $emit('triggerDescribe', id)"
+        @delete-photo="(id) => $emit('deletePhoto', id)"
       />
     </NGi>
   </NGrid>

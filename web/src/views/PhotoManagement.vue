@@ -59,6 +59,7 @@ const {
   setPage,
   applyFilters,
   resetFilters,
+  deletePhoto,
 } = usePhotos()
 
 // ── 上传 ──
@@ -157,6 +158,16 @@ function handleRegenerateDescription() {
     handleTriggerDescribe(descPhoto.value.id)
   }
   showDescModal.value = false
+}
+
+async function handleDeletePhoto(photoId: string) {
+  try {
+    await deletePhoto(photoId)
+    message.success('图片已删除')
+    fetchStats()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '删除失败')
+  }
 }
 
 async function handleUploadStart() {
@@ -282,19 +293,51 @@ onMounted(() => {
       <!-- 主内容区 -->
       <NLayoutContent>
         <div class="content-wrapper">
-          <!-- 统计摘要（全库汇总） -->
+          <!-- 统计摘要 + 排序搜索 -->
           <div class="stats-bar">
-            <span>共 {{ stats?.total ?? total }} 张</span>
-            <span class="stats-sep">|</span>
-            <span>
-              含描述
-              {{ stats?.with_description ?? '...' }} 张
-            </span>
-            <span class="stats-sep">|</span>
-            <span>
-              待处理
-              {{ stats?.without_description ?? '...' }} 张
-            </span>
+            <div class="stats-summary">
+              <span>共 {{ stats?.total ?? total }} 张</span>
+              <span class="stats-sep">|</span>
+              <span>
+                含描述
+                {{ stats?.with_description ?? '...' }} 张
+              </span>
+              <span class="stats-sep">|</span>
+              <span>
+                待处理
+                {{ stats?.without_description ?? '...' }} 张
+              </span>
+            </div>
+
+            <div class="stats-actions">
+              <NSpace align="center">
+                <!-- 排序 -->
+                <span class="filter-label">排序</span>
+                <NSelect
+                  v-model:value="sortBy"
+                  :options="sortOptions"
+                  size="small"
+                  style="width: 100px"
+                />
+                <NButton size="small" @click="toggleSortOrder">
+                  {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
+                </NButton>
+
+                <!-- 文件名搜索 -->
+                <NInput
+                  v-model:value="searchFilename"
+                  placeholder="搜索文件名"
+                  size="small"
+                  clearable
+                  style="width: 180px"
+                  @keyup.enter="applyFilters"
+                >
+                  <template #prefix>
+                    <NIcon><SearchOutline /></NIcon>
+                  </template>
+                </NInput>
+              </NSpace>
+            </div>
           </div>
 
           <!-- 筛选栏 -->
@@ -328,30 +371,6 @@ onMounted(() => {
                 style="width: 160px"
               />
 
-              <!-- 排序 -->
-              <span class="filter-label">排序</span>
-              <NSelect
-                v-model:value="sortBy"
-                :options="sortOptions"
-                style="width: 110px"
-              />
-              <NButton size="small" @click="toggleSortOrder">
-                {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
-              </NButton>
-
-              <!-- 文件名搜索 -->
-              <NInput
-                v-model:value="searchFilename"
-                placeholder="搜索文件名（如 9421）"
-                clearable
-                style="width: 180px"
-                @keyup.enter="applyFilters"
-              >
-                <template #prefix>
-                  <NIcon><SearchOutline /></NIcon>
-                </template>
-              </NInput>
-
               <!-- 操作按钮 -->
               <NButton type="primary" size="small" @click="applyFilters">
                 筛选
@@ -370,6 +389,7 @@ onMounted(() => {
             :processing-ids="processingIds"
             @view-detail="fetchPhotoDetail"
             @trigger-describe="handleTriggerDescribe"
+            @delete-photo="handleDeletePhoto"
             @retry="fetchPhotos"
           />
 
@@ -449,9 +469,17 @@ onMounted(() => {
   padding: 20px 24px;
 }
 .stats-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 13px;
   color: var(--n-text-color-3);
   margin-bottom: 12px;
+}
+.stats-summary {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 .stats-sep {
   margin: 0 8px;

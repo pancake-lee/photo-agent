@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/model"
 	"github.com/pancake-lee/photo-agent/internal/service"
+	"github.com/pancake-lee/pgo/pkg/plogger"
 )
 
 // PhotoListItem 照片列表项（含 has_description 计算字段）
@@ -140,6 +142,26 @@ func UpdatePhotoTags(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// DeletePhoto 删除照片（含原图文件 + 数据库记录）
+func DeletePhoto(c *gin.Context) {
+	id := c.Param("id")
+
+	photo, err := service.DeletePhoto(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "photo not found"})
+		return
+	}
+
+	// 删除磁盘上的原图文件
+	cfg := config.Get().Storage
+	fullPath := filepath.Join(cfg.PhotoPath, photo.FilePath)
+	if err := os.Remove(fullPath); err != nil && !os.IsNotExist(err) {
+		plogger.Warnf("Failed to delete photo file %s: %v", fullPath, err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted", "id": id})
 }
 
 // GetPhotoImage 获取图片文件。
