@@ -120,11 +120,22 @@ class Config:
         self.retry_max_attempts = self._optional(data, "llm", "retry_max_attempts", 3)
 
         # server 配置（必填）
-        server_addr = self._require(data, "server", "addr")
-        self.go_backend_url = f"http://localhost{server_addr}"
+        # server.addr 格式为 "host:port"（如 "0.0.0.0:10004" 或 ":10004"）
+        # 0.0.0.0 是监听地址，客户端连接需替换为 127.0.0.1
+        server_addr: str = self._require(data, "server", "addr")
+        if ":" in server_addr:
+            host, port = server_addr.rsplit(":", 1)
+            if not host or host == "0.0.0.0":
+                host = "127.0.0.1"
+        else:
+            host, port = "127.0.0.1", server_addr
+        self.go_backend_url = f"http://{host}:{port}"
 
         # prices 配置（可选）
         self.prices_path = self._optional(data, "prices", "path", "")
+
+        # chat 配置（可选）
+        self.chat_db_path: str = self._optional(data, "chat", "db_path", "")
 
         # storage 配置（必填）
         self.project_root = pathlib.Path(

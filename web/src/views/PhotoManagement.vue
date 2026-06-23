@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   NLayout,
   NLayoutContent,
@@ -17,7 +17,6 @@ import {
 } from 'naive-ui'
 import { PlayOutline, CloudUploadOutline, SearchOutline } from '@vicons/ionicons5'
 
-import SideMenu from '../components/SideMenu.vue'
 import PhotoGrid from '../components/PhotoGrid.vue'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
@@ -239,13 +238,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <NLayout has-sider position="absolute">
-    <!-- 左侧边栏 -->
-    <SideMenu />
-
-    <NLayout>
-      <!-- 顶部工具栏 -->
-      <NLayoutHeader bordered>
+  <NLayout>
+    <!-- 顶部工具栏 -->
+    <NLayoutHeader bordered>
         <div class="toolbar">
           <h3 class="toolbar-title">图片管理</h3>
 
@@ -403,7 +398,6 @@ onMounted(() => {
           </div>
         </div>
       </NLayoutContent>
-    </NLayout>
   </NLayout>
 
   <!-- 照片详情抽屉 -->

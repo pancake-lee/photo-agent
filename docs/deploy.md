@@ -1,7 +1,8 @@
 # Photo Agent — 从零部署指南
 
 > 本文档描述在新环境中从零部署 Photo Agent 的全部流程。
-> 核心交互方式为 `agent/chain/photo_agent.py` CLI，Go 后端提供照片元数据 API 和 Embedding 代理。
+> 交互方式：CLI（`agent/chain/photo_agent.py`）、Web 对话界面、HTTP API 服务。
+> Go 后端提供照片元数据 API 和 Embedding 代理，Python Agent 提供 AI 对话和会话管理。
 
 ---
 
@@ -16,18 +17,28 @@
    ↓
 4. 启动 Go 后端（server → AutoSync：EXIF + 结构化属性提取 + SQLite + Dify）
    ↓
-5. 启动 Python Agent（photo_agent.py → AutoEmbed → Chroma → 对话）
+5. 启动 Python Agent — CLI 或 API 模式 + Web 前端
 ```
 
-**三个运行时组件的关系**：
+**运行时组件的关系**：
 
 ```
-用户 → photo_agent.py (CLI)
-         ├── 启动时 AutoEmbed: Go API → Chroma 本地向量库（进度条）
-         ├── RAG 检索: Embedding → Chroma
-         ├── SQL 查询: Text-to-SQL → Go API /api/v1/query/sql
-         ├── 工具调用: Function Calling → Go API (OpenAPI)
-         └── 流式回答: LLM 生成
+Web (:10006) ─── /api/v1/* ──→ Go Backend (:10004)  [图片管理]
+     └── /api/chat/* ──→ Python Agent (:10005)       [AI 对话]
+
+Python Agent
+  ├── CLI: stdin/stdout 交互式聊天
+  ├── HTTP Server (:10005, --serve 模式)
+  │     ├── POST /api/chat/sessions          创建会话
+  │     ├── GET  /api/chat/sessions          会话列表
+  │     ├── POST /api/chat/sessions/{id}/messages  发送消息
+  │     └── DELETE /api/chat/sessions/{id}   删除会话
+  ├── 会话管理: sessions list | sessions resume <id>
+  ├── 启动时 AutoEmbed: Go API → Chroma 本地向量库
+  ├── RAG 检索: Embedding → Chroma
+  ├── SQL 查询: Text-to-SQL → Go API
+  ├── 工具调用: Function Calling → Go API (OpenAPI)
+  └── 回答生成: LLM
 
 Go Backend (:10000)
      ├── 照片元数据 CRUD (SQLite)
@@ -222,11 +233,24 @@ cd /root/code/photo-agent
 
 ## 5. 启动 Python Agent
 
+Python Agent 支持三种运行模式，由参数控制（不指定参数时默认为 CLI 聊天模式）。
+
+### 5.0 模式选择
+
 ```bash
 cd /root/code/photo-agent/agent
 source .venv/bin/activate
 
+# CLI 聊天模式（默认）
 python chain/photo_agent.py -c ../.local/my-config.yaml
+
+# HTTP API 服务模式（Web 对话接口）
+python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+python chain/photo_agent.py -c ../.local/my-config.yaml --serve 9999   # 自定义端口
+
+# 会话管理
+python chain/photo_agent.py -c ../.local/my-config.yaml sessions list
+python chain/photo_agent.py -c ../.local/my-config.yaml sessions resume <session_id>
 ```
 
 ### 5.1 启动流程（AutoEmbed）
@@ -269,6 +293,64 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --usage
 python chain/photo_agent.py -c ../.local/my-config.yaml --demo
 ```
 
+### 5.4 Chat API 服务
+
+启动 API 服务后，可通过 HTTP 接口进行对话：
+
+```bash
+python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+# 默认监听 http://0.0.0.0:10005
+# API 文档: http://localhost:10005/docs
+```
+
+API 端点：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/chat/sessions` | 创建会话 |
+| GET | `/api/chat/sessions` | 会话列表（按更新时间倒序） |
+| GET | `/api/chat/sessions/{id}` | 会话详情（含消息历史） |
+| PATCH | `/api/chat/sessions/{id}` | 更新会话标题 |
+| DELETE | `/api/chat/sessions/{id}` | 删除会话 |
+| POST | `/api/chat/sessions/{id}/messages` | 发送消息 |
+| GET | `/api/chat/health` | 健康检查 |
+
+会话标题命名规则：
+- 创建时：`YYMMDD-hh:mm:ss`（如 `250623-14:30:00`）
+- 首条提问后自动更新：取提问前 8 个字符 + `...`
+
+```bash
+# 测试 API
+curl http://localhost:10005/api/chat/health
+
+# 创建会话
+curl -X POST http://localhost:10005/api/chat/sessions \
+  -H 'Content-Type: application/json' -d '{}'
+
+# 发送消息
+curl -X POST http://localhost:10005/api/chat/sessions/{session_id}/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "我有多少张照片？"}'
+```
+
+### 5.5 Web 前端
+
+```bash
+cd /root/code/photo-agent/web
+pnpm dev
+# 开发服务器: http://localhost:10006
+```
+
+Vite 代理配置：
+- `/api/chat/*` → Python Agent (`:10005`)
+- `/api/v1/*` → Go Backend (`:10004`)
+
+Web 界面提供：
+- **图片管理**：照片浏览、筛选排序、上传、VLM 预处理
+- **AI 对话**：新建对话、多轮问答、历史会话管理
+
+需要同时运行 Go Backend、Python Agent（`--serve` 模式）和 Web 前端三个进程。
+
 ---
 
 ## 6. 验证清单
@@ -281,6 +363,9 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --demo
 - [ ] API 返回的照片数据包含结构化属性字段（objects / colors / scene / lighting / mood / composition）
 - [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml` 启动时 AutoEmbed 正常完成
 - [ ] 对话中 RAG 检索返回相关结果
+- [ ] `python chain/photo_agent.py -c ../.local/my-config.yaml --serve` Chat API 健康检查通过
+- [ ] `curl http://localhost:10005/api/chat/health` 返回 `{"status":"ok"}`
+- [ ] Web 前端 `pnpm dev` 正常启动，图片管理和对话界面均可访问
 
 ---
 
@@ -334,3 +419,38 @@ python chain/photo_agent.py -c ../.local/my-config.yaml
 ### Q: 如何更换 LLM 供应商？
 
 修改 `.local/my-config.yaml` 中对应 `base_url` 和 `model`。项目通过 OpenAI 兼容 API 调用，支持火山引擎、通义千问、DeepSeek 等。
+
+### Q: Chat API 端口冲突？
+
+默认端口 10005，可通过 `--serve` 参数指定其他端口：
+
+```bash
+python chain/photo_agent.py -c ../.local/my-config.yaml --serve 9999
+```
+
+同时需要更新 `web/vite.config.ts` 中 `/api/chat` 代理的 target 端口。
+
+### Q: 会话数据存储在哪里？
+
+默认存储在 `data/chat_sessions.db`（SQLite），可在配置文件中自定义：
+
+```yaml
+chat:
+  db_path: ./data/chat_sessions.db
+```
+
+### Q: Web 前端如何联调？
+
+同时启动三个进程：
+```bash
+# 终端 1: Go 后端
+./bin/server -c .local/my-config.yaml
+
+# 终端 2: Python Agent (API 模式)
+cd agent && source .venv/bin/activate
+python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+
+# 终端 3: Web 前端
+cd web && pnpm dev
+# 访问 http://localhost:10006
+```

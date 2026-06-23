@@ -46,4 +46,4 @@ backend/init_dify
 logs
 backend/go.work
 backend/go.work.sum
-web/node_modules
+node_modules

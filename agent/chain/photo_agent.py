@@ -8,13 +8,18 @@
 
     用法:
         cd agent
-        python chain/photo_agent.py -c ../.local/my-config.yaml          # 聊天模式
+        python chain/photo_agent.py -c ../.local/my-config.yaml          # 聊天模式 (CLI)
+        python chain/photo_agent.py -c ../.local/my-config.yaml --serve  # API 服务 (端口 10005)
+        python chain/photo_agent.py -c ../.local/my-config.yaml --serve 9999  # API 自定义端口
         python chain/photo_agent.py -c ../.local/my-config.yaml --eval   # 评估模式
         python chain/photo_agent.py -c ../.local/my-config.yaml --usage  # 用量统计
         python chain/photo_agent.py -c ../.local/my-config.yaml --demo   # 场景演示
+        python chain/photo_agent.py -c ../.local/my-config.yaml sessions list         # 列出会话
+        python chain/photo_agent.py -c ../.local/my-config.yaml sessions resume <id>  # 恢复会话
 """
 
 import argparse
+import logging
 import pathlib
 import sys
 import typing
@@ -133,19 +138,20 @@ def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     """工具调用节点：使用 llm.bind_tools() 让 LLM 自主调用 Go API。"""
     cfg = _get_cfg(config)
 
-    # 获取或创建工具客户端
-    tool_client = _get_tool_client(cfg.go_backend_url)
-    tools = tool_client.get_tools()
-
-    llm = llm_factory.create_llm(cfg, temperature=0.3, callbacks=_get_callbacks())
-    llm_with_tools = llm.bind_tools(tools)
-
-    messages: list[lc_messages.BaseMessage] = [
-        lc_messages.SystemMessage(content=_TOOL_SYSTEM_PROMPT),
-        lc_messages.HumanMessage(content=state["question"]),
-    ]
-
     try:
+        # 获取或创建工具客户端（可能因 Go 后端不可达而失败）
+        tool_client = _get_tool_client(cfg.go_backend_url)
+        tools = tool_client.get_tools()
+
+        llm_with_tools = llm_factory.create_llm(
+            cfg, temperature=0.3, callbacks=_get_callbacks(), tools=tools
+        )
+
+        messages: list[lc_messages.BaseMessage] = [
+            lc_messages.SystemMessage(content=_TOOL_SYSTEM_PROMPT),
+            lc_messages.HumanMessage(content=state["question"]),
+        ]
+
         response = llm_with_tools.invoke(messages)
 
         # 处理工具调用
@@ -172,6 +178,7 @@ def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
 
         return {"tool_answer": str(response.content)}
     except Exception as exc:
+        logging.getLogger(__name__).exception("_tool_node 执行失败")
         return {"tool_answer": f"工具调用失败: {exc}"}
 
 
@@ -282,17 +289,18 @@ class PhotoAgent:
         _tracker = token_tracker.TokenTracker(db_path, prices)
         _callbacks = [token_tracker.TokenCallback(_tracker)]
 
-        print(f"PhotoAgent 初始化完成")
-        print(f"   主模型: {cfg.llm_model}")
+        _log = logging.getLogger(__name__)
+        _log.info("PhotoAgent 初始化完成")
+        _log.info("   主模型: %s", cfg.llm_model)
         if cfg.llm_fallback_model:
-            print(f"   降级模型: {cfg.llm_fallback_model}")
-        print(f"   重试: {'开启' if cfg.retry_enabled else '关闭'}"
-              f"（最多 {cfg.retry_max_attempts} 次）")
+            _log.info("   降级模型: %s", cfg.llm_fallback_model)
+        _log.info("   重试: %s（最多 %d 次）",
+                  "开启" if cfg.retry_enabled else "关闭",
+                  cfg.retry_max_attempts)
         if prices:
-            print(f"   Token 追踪: 已加载 {len(prices)} 个模型单价")
+            _log.info("   Token 追踪: 已加载 %d 个模型单价", len(prices))
         else:
-            print(f"   Token 追踪: 已开启（无单价配置，仅记录 token 数）")
-        print()
+            _log.info("   Token 追踪: 已开启（无单价配置，仅记录 token 数）")
 
     def route(self, question: str) -> RouterState:
         """路由单次查询，自动分发到 SQL / RAG / Tool 分支。"""
@@ -417,11 +425,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python chain/photo_agent.py -c config.yaml              # 交互式聊天
+  python chain/photo_agent.py -c config.yaml              # 交互式聊天 (CLI)
+  python chain/photo_agent.py -c config.yaml --serve      # API 服务 (端口 10005)
+  python chain/photo_agent.py -c config.yaml --serve 9999 # API 自定义端口
   python chain/photo_agent.py -c config.yaml --eval       # 评估模式
   python chain/photo_agent.py -c config.yaml --usage      # 用量统计
   python chain/photo_agent.py -c config.yaml --demo       # 场景演示
   python chain/photo_agent.py -c config.yaml --usage 30   # 最近 30 天用量
+  python chain/photo_agent.py -c config.yaml sessions list        # 列出所有会话
+  python chain/photo_agent.py -c config.yaml sessions resume <id> # 恢复会话
         """,
     )
     parser.add_argument(
@@ -440,7 +452,118 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--usage", dest="usage_days", nargs="?", const=7, type=int, default=None,
         help="查看 Token 用量统计，可选指定天数（默认 7 天）",
     )
+    parser.add_argument(
+        "--serve", dest="serve_port", nargs="?", const=10005, type=int, default=None,
+        metavar="PORT",
+        help="启动 HTTP API 服务（默认端口 10005）",
+    )
+    parser.add_argument(
+        "sessions_command", nargs="*", default=None,
+        help="会话管理: sessions list | sessions resume <session_id>",
+    )
     return parser
+
+
+def _handle_sessions(cfg: config.Config, cmd: list[str]) -> None:
+    """处理 sessions 子命令。"""
+    import chain.session_store as session_store
+
+    db_path = cfg.resolve_path(
+        getattr(cfg, "chat_db_path", "") or "./data/chat_sessions.db"
+    ).as_posix()
+    store = session_store.SessionStore(db_path)
+
+    if not cmd or cmd[0] != "sessions":
+        print("用法: sessions list | sessions resume <session_id>")
+        return
+
+    if len(cmd) < 2:
+        print("用法: sessions list | sessions resume <session_id>")
+        return
+
+    action = cmd[1]
+
+    if action == "list":
+        sessions = store.list_sessions()
+        if not sessions:
+            print("暂无会话记录")
+            return
+        print(f"{'Session ID':<14} {'标题':<24} {'消息数':<8} {'更新时间'}")
+        print("-" * 78)
+        for s in sessions:
+            print(
+                f"{s['session_id']:<14} {s['title']:<24} {s['message_count']:<8} "
+                f"{s['updated_at']}"
+            )
+
+    elif action == "resume":
+        if len(cmd) < 3:
+            print("用法: sessions resume <session_id>")
+            return
+        session_id = cmd[2]
+        session = store.get_session(session_id)
+        if session is None:
+            print(f"会话不存在: {session_id}")
+            return
+
+        print(f"恢复会话: {session['title']} ({session_id})")
+        print(f"历史消息数: {len(session['messages'])}")
+        print()
+
+        # 打印历史消息
+        for msg in session["messages"]:
+            role_label = "你" if msg["role"] == "user" else "AI"
+            print(f"{role_label}: {msg['content']}")
+            print()
+
+        # 启动对话循环（消息追加到此会话）
+        print("=" * 60)
+        print("继续对话（输入 exit 退出）")
+        print("=" * 60)
+        print()
+
+        agent = PhotoAgent(cfg)
+        try:
+            while True:
+                try:
+                    user_input = input("你: ")
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    break
+
+                if user_input.lower() == "exit":
+                    break
+                if not user_input.strip():
+                    continue
+
+                store.add_message(session_id, "user", user_input)
+                result = agent.route(user_input)
+                answer = result.get("answer", "") or "未能获取回答。"
+                query_type = result.get("query_type", "")
+
+                # 首条提问后更新标题
+                user_count = sum(
+                    1 for m in store.get_messages(session_id)
+                    if m["role"] == "user"
+                )
+                if user_count == 1 and len(session["messages"]) == 0:
+                    new_title = session_store._format_question_title(user_input)
+                    store.update_title(session_id, new_title)
+
+                store.add_message(session_id, "assistant", answer, query_type=query_type)
+
+                route_label = {
+                    "sql": "SQL", "rag": "RAG", "tool": "Tool",
+                }.get(query_type, query_type)
+                print(f"[{route_label}] {answer}")
+                print()
+
+        except KeyboardInterrupt:
+            print()
+
+    else:
+        print(f"未知的 sessions 动作: {action}")
+        print("用法: sessions list | sessions resume <session_id>")
 
 
 def main() -> None:
@@ -451,8 +574,28 @@ def main() -> None:
         parser.error("需要 -c/--config 指定配置文件")
     cfg = config.Config(args.config)
     cfg.check_api_key()
+
+    # 日志配置：server 模式静默（uvicorn 自行管理），CLI 模式输出到 stdout
+    if args.serve_port is None:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(message)s",
+            stream=sys.stdout,
+        )
+
+    # sessions 子命令：无需启动 Agent，直接操作数据库
+    if args.sessions_command:
+        _handle_sessions(cfg, args.sessions_command)
+        return
+
     print(f"配置加载成功: {cfg}")
     print()
+
+    # --serve 模式：启动 API 服务（AutoEmbed 和 Agent 在 server 内部初始化）
+    if args.serve_port is not None:
+        import chain.server as server
+        server.run_server(cfg, port=args.serve_port)
+        return
 
     # AutoEmbed: 启动时自动同步 Go 后端数据到 Chroma 向量库
     try:

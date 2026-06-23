@@ -7,10 +7,13 @@
 """
 
 import json
+import logging
 import re
 import typing
 
 import httpx
+
+_logger = logging.getLogger(__name__)
 
 
 class OpenAPIClient:
@@ -28,10 +31,26 @@ class OpenAPIClient:
     def _fetch_doc(self) -> None:
         """从 Go 后端获取 OpenAPI JSON。"""
         url = f"{self.base_url}/v1/openapi.json"
-        with httpx.Client() as client:
-            resp = client.get(url, timeout=10.0)
-            resp.raise_for_status()
-            self.doc = resp.json()
+        _logger.info("正在从 Go 后端拉取 OpenAPI 文档: %s", url)
+        try:
+            with httpx.Client() as client:
+                resp = client.get(url, timeout=10.0)
+                resp.raise_for_status()
+                self.doc = resp.json()
+                _logger.info("OpenAPI 文档加载成功，获取到 %d 个 API 路径",
+                             len(self.doc.get("paths", {})))
+        except httpx.ConnectError as exc:
+            _logger.error("无法连接 Go 后端 (%s): %s", url, exc)
+            raise ConnectionError(
+                f"无法连接 Go 后端 ({self.base_url})，请确认后端服务已启动。"
+                f" 原始错误: {exc}"
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            _logger.error("Go 后端返回错误 (%s): HTTP %d", url, exc.response.status_code)
+            raise
+        except Exception as exc:
+            _logger.error("获取 OpenAPI 文档失败 (%s): %s", url, exc)
+            raise
 
     # ------------------------------------------------------------------ #
     # 解析：OpenAPI → OpenAI function definitions

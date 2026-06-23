@@ -24,11 +24,15 @@ def create_llm(
     temperature: float = 0.0,
     streaming: bool = False,
     callbacks: list[lc_callbacks.BaseCallbackHandler] | None = None,
+    tools: list[typing.Any] | None = None,
 ) -> typing.Any:
     """创建带重试 + 可选降级的 LLM 实例。
 
     重试：LangChain 原生 with_retry，指数退避 + 抖动，3 次尝试。
     降级：主模型失败时自动切换到 fallback_model。
+
+    注意：bind_tools 必须在 with_retry / with_fallbacks 之前调用，
+    因为 RunnableRetry 没有 bind_tools 方法。
     """
     llm = lc_openai.ChatOpenAI(
         model=model or cfg.llm_model,
@@ -38,6 +42,10 @@ def create_llm(
         streaming=streaming,
         callbacks=callbacks,
     )
+
+    # bind_tools 必须在 with_retry 之前，否则 RunnableRetry 没有此方法
+    if tools:
+        llm = llm.bind_tools(tools)
 
     if cfg.retry_enabled:
         try:
@@ -57,6 +65,8 @@ def create_llm(
             streaming=streaming,
             callbacks=callbacks,
         )
+        if tools:
+            fallback_llm = fallback_llm.bind_tools(tools)
         print(f"fallback: {cfg.llm_model} → {cfg.llm_fallback_model}")
         try:
             llm = llm.with_fallbacks([fallback_llm])

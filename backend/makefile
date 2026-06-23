@@ -1,4 +1,4 @@
-.PHONY: all backend backend-test init-dify clean
+.PHONY: all backend dev clean
 
 BIN_DIR := ../bin
 

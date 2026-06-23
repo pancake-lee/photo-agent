@@ -5,14 +5,18 @@ import {
   zhCN,
   NConfigProvider,
   NMessageProvider,
+  NLayout,
 } from 'naive-ui'
-import PhotoManagement from './views/PhotoManagement.vue'
+import SideMenu from './components/SideMenu.vue'
 </script>
 
 <template>
   <NConfigProvider :theme="darkTheme" :locale="zhCN" :date-locale="dateZhCN">
     <NMessageProvider>
-      <PhotoManagement />
+      <NLayout has-sider position="absolute">
+        <SideMenu />
+        <router-view />
+      </NLayout>
     </NMessageProvider>
   </NConfigProvider>
 </template>
