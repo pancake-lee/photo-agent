@@ -5,6 +5,7 @@ import { NLayoutSider, NMenu, NIcon } from 'naive-ui'
 import {
   ImageOutline,
   AddOutline,
+  BookmarkOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
@@ -53,6 +54,11 @@ const menuOptions = computed<MenuOption[]>(() => {
       key: '/photos',
       icon: renderIcon(ImageOutline),
     },
+    {
+      label: '黄金用例',
+      key: '/golden-queries',
+      icon: renderIcon(BookmarkOutline),
+    },
     // 新建对话放在固定功能最后
     {
       label: '新建对话',
@@ -82,6 +88,9 @@ const selectedKey = computed(() => {
   }
   if (path === '/photos') {
     return '/photos'
+  }
+  if (path === '/golden-queries') {
+    return '/golden-queries'
   }
   return '/photos'
 })

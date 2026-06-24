@@ -8,6 +8,10 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 10006,
     proxy: {
+      '/api/golden-queries': {
+        target: 'http://localhost:10005',
+        changeOrigin: true,
+      },
       '/api/chat': {
         target: 'http://localhost:10005',
         changeOrigin: true,

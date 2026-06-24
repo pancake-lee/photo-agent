@@ -20,6 +20,9 @@
 """
 
 import os
+import json
+
+import httpx
 
 import config
 import embedding.embedder as embedder
@@ -32,6 +35,65 @@ def _normalize_id(photo_id: str) -> str:
     if not photo_id:
         return ""
     return os.path.splitext(photo_id)[0]
+
+
+def _build_id_to_filename(go_backend_url: str) -> dict[str, str]:
+    """从 Go 后端获取全部照片，构建 UUID → 文件名(去后缀) 映射。
+
+    ChromaDB 中 photo_id 存的是 Go 后端的 UUID，评估时需要转回文件名
+    才能与黄金用例中的 relevant_photos（文件名）匹配。
+    """
+    mapping: dict[str, str] = {}
+    client = httpx.Client(timeout=30.0)
+    page = 1
+    try:
+        while True:
+            resp = client.get(
+                f"{go_backend_url}/api/v1/photos",
+                params={"page": page, "page_size": 500},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("items", data if isinstance(data, list) else [])
+            if not items:
+                break
+            for p in items:
+                pid = p.get("id", "")
+                fname = p.get("filename", "")
+                if pid and fname:
+                    mapping[pid] = _normalize_id(fname)
+            page += 1
+    finally:
+        client.close()
+    return mapping
+
+
+def _load_golden_queries(cfg: config.Config) -> list[dict]:
+    """从 agent/data/golden_queries.json 加载黄金用例。
+
+    文件不存在或为空时返回空列表；服务启动后需先导入用例。
+    """
+    json_path = cfg.resolve_path("./data/golden_queries.json")
+    if not json_path.exists():
+        return []
+    try:
+        items = json.loads(json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not items:
+        return []
+
+    # 适配 JSON 字段名 → evaluation 期望的字段名
+    # relevant_photos 可能是新格式 [{photo_id, filename}] 或旧格式 [str]
+    result = []
+    for it in items:
+        raw = it.get("relevant_photos", it.get("relevant_photo_ids", []))
+        if raw and isinstance(raw[0], dict):
+            ids = [_normalize_id(p.get("photo_id", "")) for p in raw]
+        else:
+            ids = [_normalize_id(pid) for pid in raw]
+        result.append({"question": it.get("query_text", ""), "relevant_photos": ids})
+    return result
 
 
 def _match_ids(
@@ -53,30 +115,6 @@ def _match_ids(
     return hits, misses, remaining
 
 
-# 黄金评估集模板 — 你需要手动标注 relevant_photos
-# 初次运行时保持 relevant_photos 为空，根据检索结果挑出正确项填入
-DEFAULT_EVAL_QUERIES: list[dict] = [
-    {"question": "有猫咪的照片吗？", "relevant_photos": [
-        "DSC_7391.JPG", "DSC_7386.JPG", "DSC_7385.JPG","DSC_7368","DSC_7355","DSC_0816","DSC_0745","DSC_9768","DSC_9755","DSC_8878","DSC_8876","DSC_8556","DSC_3134","DSC_2874","DSC_2867","DSC_2865","DSC_2858","DSC_2846","DSC_2837","DSC_1621","DSC_1617","DSC_0959","DSC_0928","DSC_0573","DSC_0563","DSC_1589","DSC_9144"
-    ]},
-    {"question": "日落时分的风景照", "relevant_photos": [
-        "DSC_9396","DSC_9406","DSC_9416","DSC_9443","DSC_9467","DSC_9470","DSC_9483","DSC_9486","DSC_9501","DSC_9502","DSC_9540","DSC_5622","DSC_5599","DSC_5585","DSC_5584","DSC_5582","DSC_5580","DSC_5579","DSC_5551","DSC_5549","DSC_5548","DSC_5533","DSC_6141","DSC_7349","DSC_0136","DSC_0114","DSC_0115","DSC_0116","DSC_0118","DSC_0121","DSC_0122","DSC_0123","DSC_0124","DSC_0129","DSC_0131","DSC_0132","DSC_0133","DSC_9533",
-    ]},
-    {"question": "湖边的照片", "relevant_photos": [
-        "DSC_0551","DSC_3122","DSC_3123","DSC_3124","DSC_3126","DSC_3130","DSC_3134","DSC_3170","DSC_7818","DSC_9678","DSC_9687","DSC_9690","DSC_9730","DSC_9738","DSC_0048","DSC_0051","DSC_0054","DSC_0066","DSC_0072","DSC_0079","DSC_0080","DSC_0081","DSC_0082","DSC_0093","DSC_0097","DSC_158","DSC_1148","DSC_1185","DSC_4317","DSC_5400","DSC_5535","DSC_5708","DSC_6084","DSC_6004","DSC_6001","DSC_5970","DSC_5965","DSC_5961","DSC_5959","DSC_5958","DSC_5953","DSC_5940","DSC_5939","DSC_5938","DSC_5933","DSC_5931","DSC_5916","DSC_5900","DSC_5898","DSC_5878","DSC_5857","DSC_5840","DSC_5833","DSC_5804","DSC_5801","DSC_5793","DSC_5790","DSC_5739","DSC_5734","DSC_5730","DSC_5714","DSC_5709","DSC_3298","DSC_3395","DSC_3401","DSC_3404","DSC_3445","DSC_3446","DSC_3449","DSC_3452","DSC_3478","DSC_3567","DSC_3569","DSC_3596","DSC_3616","DSC_3705","DSC_3710","DSC_3711","DSC_3821","DSC_3825","DSC_3831","DSC_3834","DSC_3836","DSC_3907","DSC_3935","DSC_3940","DSC_3942","DSC_3947","DSC_3949","DSC_3971","DSC_3984","DSC_4032","DSC_4038","DSC_4041","DSC_4044","DSC_4046","DSC_4054","DSC_4065","DSC_4083","DSC_4109"
-    ]},
-    {"question": "夜景照片", "relevant_photos": [
-        "DSC_0048","DSC_0051","DSC_0054","DSC_0066","DSC_0072","DSC_0079","DSC_0080","DSC_0081","DSC_0082","DSC_0093","DSC_0097","DSC_4172","DSC_4162","DSC_7850","DSC_2273","DSC_2271","DSC_2190","DSC_6639","DSC_6641","DSC_6643","DSC_6644","DSC_6645","DSC_6646"
-    ]},
-    {"question": "花卉的照片", "relevant_photos": [
-        "DSC_5402","DSC_5217","DSC_4598","DSC_4329","DSC_4396","DSC_4392","DSC_4377","DSC_4371","DSC_4363","DSC_4358","DSC_4355","DSC_4352","DSC_4349","DSC_4344","DSC_4333","DSC_3141","DSC_1435","DSC_1457","DSC_1453","DSC_1450","DSC_1447","DSC_1445","DSC_1442","DSC_1439","DSC_1123","DSC_1125","DSC_1069","DSC_1102","DSC_1095","DSC_1093","DSC_1092","DSC_1087","DSC_1085","DSC_1084","DSC_1083","DSC_1082","DSC_1077","DSC_1070","DSC_1052","DSC_1054","DSC_1482","DSC_1508","DSC_1505","DSC_1499","DSC_1497","DSC_1492","DSC_1491","DSC_1487","DSC_0575","DSC_0469"]},
-    {"question": "有雪山的照片", "relevant_photos": [
-        "DSC_6775","IMG_3436","DSC_6773","DSC_6764","DSC_6761","DSC_6759","DSC_6743","DSC_6735","DSC_6716","DSC_6714","DSC_6713","DSC_6710","DSC_6708","DSC_6700","DSC_6697","DSC_6692","DSC_6690","DSC_6678","DSC_6674","DSC_6668","DSC_6667","DSC_6663","DSC_6661","DSC_6658","DSC_6655","DSC_6652","DSC_6646","DSC_6645","IMG_3434","DSC_6644","DSC_6643","DSC_6641","DSC_6639","DSC_6613","DSC_6606","DSC_6604","DSC_6603","DSC_6598","DSC_6584","DSC_6537","DSC_6517","DSC_6506"
-    ]},
-    {"question": "有孔雀的照片", "relevant_photos": [
-        "DSC_7849","DSC_7845"
-    ]},
-]
 
 
 def precision_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
@@ -119,7 +157,7 @@ def run_evaluation(
     Precision 使用固定 K=precision_k，Recall 按每条查询的标注总量动态计算。
     tracker 为可选 TokenTracker，用于持久化 embedding token 用量。
     """
-    queries = test_queries or DEFAULT_EVAL_QUERIES
+    queries = test_queries or _load_golden_queries(cfg)
     if not queries:
         raise ValueError("未提供测试查询，且无内置评估集")
 
@@ -132,6 +170,15 @@ def run_evaluation(
         persist_dir=str(cfg.resolve_path("./data/chroma")),
         collection_name="photos",
     )
+
+    # 构建 UUID ↔ 文件名 双向映射（ChromaDB 存 UUID，黄金用例标文件名）
+    id_to_file = _build_id_to_filename(cfg.go_backend_url)
+    file_to_id: dict[str, str] = {}
+    for uid, fname in id_to_file.items():
+        # 多个 UUID 可能映射到同一文件名（chunk 分块），取第一个即可
+        file_to_id.setdefault(fname, uid)
+    if verbose:
+        print(f"已加载 {len(id_to_file)} 条 UUID→文件名 映射")
 
     precisions: list[float] = []
     recalls: list[float] = []
@@ -156,6 +203,21 @@ def run_evaluation(
                 for r in aggregated
             ]
             retrieved_ids = [pid for pid in retrieved_ids if pid]
+
+            # 保留原始 UUID 用于构建图片 URL
+            retrieved_uuids = list(retrieved_ids)
+
+            # 将 UUID 转为文件名（去后缀）用于匹配
+            retrieved_ids = [_normalize_id(id_to_file.get(pid, pid)) for pid in retrieved_ids]
+
+            # debug: 打印 ID 匹配详情
+            if verbose:
+                norm_rel = sorted({_normalize_id(pid) for pid in relevant_ids if pid})
+                norm_ret = [_normalize_id(pid) for pid in retrieved_ids[:10]]
+                print(f"  [DEBUG] relevant({len(norm_rel)})[:5]: {norm_rel[:5]}")
+                print(f"  [DEBUG] retrieved({len(norm_ret)})[:5]: {norm_ret[:5]}")
+                common = set(norm_rel) & set(norm_ret)
+                print(f"  [DEBUG] 交集={len(common)}: {sorted(common)[:5]}")
         except Exception as exc:
             if verbose:
                 print(f"[{i+1}/{len(queries)}] err 检索失败: {question[:40]}... — {exc}")
@@ -171,7 +233,9 @@ def run_evaluation(
             mrrs.append(0.0)
             continue
 
-        p = precision_at_k(retrieved_ids, relevant_ids, precision_k)
+        # 当标注的相关照片数 < precision_k 时，用相关数作为有效的 K
+        effective_k = min(precision_k, recall_k) if recall_k > 0 else precision_k
+        p = precision_at_k(retrieved_ids, relevant_ids, effective_k)
         r = recall_at_k(retrieved_ids, relevant_ids, recall_k)
         m = mrr(retrieved_ids, relevant_ids)
         hits, misses, remaining = _match_ids(retrieved_ids, relevant_ids, recall_k)
@@ -179,20 +243,32 @@ def run_evaluation(
         precisions.append(p)
         recalls.append(r)
         mrrs.append(m)
+        # 将 photo_id 列表转为 {filename, uuid} 格式供前端展示
+        def _to_photo_list(ids: list[str]) -> list[dict]:
+            result = []
+            for pid in ids:
+                uid = file_to_id.get(pid, "")
+                result.append({"photo_id": pid, "filename": pid, "uuid": uid})
+            return result
+
         details.append({
             "question": question,
             "relevant_ids": sorted(relevant_ids),
             "retrieved_ids": retrieved_ids,
+            "hit_ids": _to_photo_list(hits),
+            "miss_ids": _to_photo_list(misses),
+            "remaining_ids": _to_photo_list(remaining),
             "hits": hits,
             "misses": misses,
             "remaining": remaining,
             "precision": p,
             "recall": r,
             "mrr": m,
+            "effective_k": effective_k,
         })
 
         if verbose:
-            print(f"[{i+1}/{len(queries)}] P@{precision_k}={p:.2f} R@{recall_k}={r:.2f} MRR={m:.2f} "
+            print(f"[{i+1}/{len(queries)}] P@{effective_k}={p:.2f} R@{recall_k}={r:.2f} MRR={m:.2f} "
                   f"| {question[:50]}")
             print(f"  命中({len(hits)}): {hits}")
             print(f"  未命中({len(misses)}): {misses}")

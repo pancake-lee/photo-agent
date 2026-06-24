@@ -5,6 +5,11 @@ const routes = [
   { path: '/', redirect: '/photos' },
   { path: '/photos', name: 'photos', component: PhotoManagement },
   {
+    path: '/golden-queries',
+    name: 'golden-queries',
+    component: () => import('../views/GoldenQueryManagement.vue'),
+  },
+  {
     path: '/chat/:sessionId?',
     name: 'chat',
     component: () => import('../views/ChatView.vue'),

@@ -15,7 +15,7 @@ import {
   NModal,
   useMessage,
 } from 'naive-ui'
-import { TrashOutline, SendOutline, ImageOutline, DownloadOutline } from '@vicons/ionicons5'
+import { TrashOutline, SendOutline, ImageOutline, DownloadOutline, BookmarkOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
 import type { PhotoRef } from '../types/chat'
@@ -174,6 +174,68 @@ function escapeHtml(text: string): string {
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
+// ── 保存为黄金用例 ──
+
+const goldenModalVisible = ref(false)
+const goldenQueryText = ref('')
+const goldenPhotoIds = ref<{photo_id: string; filename: string}[]>([])
+const goldenCategory = ref('')
+const goldenNotes = ref('')
+const goldenSaving = ref(false)
+
+function openGoldenSave(aiMsgIndex: number) {
+  // 找到该 AI 消息前最近的一条 user 消息作为查询文本
+  let queryText = ''
+  for (let i = aiMsgIndex - 1; i >= 0; i--) {
+    if (messages.value[i]?.role === 'user') {
+      queryText = messages.value[i].content
+      break
+    }
+  }
+  const aiMsg = messages.value[aiMsgIndex]
+  const photoRefs = (aiMsg?.photos || []).map((p: PhotoRef) => {
+    const stripExt = (s: string) => s.replace(/\.[^.]+$/, '')
+    return {
+      photo_id: stripExt(p.photo_id),
+      filename: stripExt(p.filename || p.photo_id),
+    }
+  })
+
+  goldenQueryText.value = queryText
+  goldenPhotoIds.value = photoRefs
+  goldenCategory.value = ''
+  goldenNotes.value = ''
+  goldenModalVisible.value = true
+}
+
+async function handleGoldenSave() {
+  if (!goldenQueryText.value.trim() || goldenPhotoIds.value.length === 0) return
+  goldenSaving.value = true
+  try {
+    const resp = await fetch('/api/golden-queries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query_text: goldenQueryText.value.trim(),
+        relevant_photos: goldenPhotoIds.value.map(p => ({ photo_id: p.photo_id, filename: p.filename })),
+        category: goldenCategory.value.trim(),
+        notes: goldenNotes.value.trim(),
+      }),
+    })
+    if (resp.ok) {
+      message.success('已保存为黄金用例')
+      goldenModalVisible.value = false
+    } else {
+      const err = await resp.json()
+      message.error(err.detail || '保存失败')
+    }
+  } catch {
+    message.error('保存失败')
+  } finally {
+    goldenSaving.value = false
+  }
+}
+
 function previewPhoto(photo: PhotoRef) {
   previewUrl.value = photo.image_url
   previewVisible.value = true
@@ -263,7 +325,7 @@ const hasMessages = computed(() => messages.value.length > 0)
           class="messages-container"
         >
           <div
-            v-for="msg in messages"
+            v-for="(msg, i) in messages"
             :key="msg.id || `${msg.role}-${msg.created_at}`"
             class="message-row"
             :class="msg.role === 'user' ? 'message-row--user' : 'message-row--assistant'"
@@ -283,6 +345,18 @@ const hasMessages = computed(() => messages.value.length > 0)
                 <NTag :bordered="false" size="tiny">
                   {{ routeLabel[msg.query_type] || msg.query_type }}
                 </NTag>
+                <NButton
+                  v-if="msg.photos && msg.photos.length"
+                  size="tiny"
+                  text
+                  @click="openGoldenSave(i)"
+                  title="保存为黄金用例"
+                >
+                  <template #icon>
+                    <NIcon size="14"><BookmarkOutline /></NIcon>
+                  </template>
+                  保存为黄金用例
+                </NButton>
               </div>
 
               <!-- 附件列表（仅 AI 消息且有照片引用时显示） -->
@@ -351,6 +425,68 @@ const hasMessages = computed(() => messages.value.length > 0)
         </NButton>
       </div>
     </div>
+
+    <!-- 保存为黄金用例弹窗 -->
+    <NModal
+      v-model:show="goldenModalVisible"
+      preset="card"
+      title="保存为黄金用例"
+      style="width: 520px; max-width: 90vw;"
+    >
+      <div class="golden-form">
+        <div class="golden-field">
+          <label class="golden-label">查询文本</label>
+          <NInput
+            v-model:value="goldenQueryText"
+            type="text"
+            placeholder="输入查询文本"
+          />
+        </div>
+        <div class="golden-field">
+          <label class="golden-label">关联照片（{{ goldenPhotoIds.length }} 张）</label>
+          <div class="photo-id-tags">
+            <NTag
+              v-for="(p, idx) in goldenPhotoIds"
+              :key="p.photo_id"
+              :bordered="false"
+              size="small"
+              closable
+              @close="goldenPhotoIds.splice(idx, 1)"
+            >
+              <span class="photo-tag-name">{{ p.filename }}</span>
+            </NTag>
+          </div>
+        </div>
+        <div class="golden-field">
+          <label class="golden-label">分类（可选）</label>
+          <NInput
+            v-model:value="goldenCategory"
+            type="text"
+            placeholder="物体 / 场景 / 光线 / 情绪 / 组合查询"
+          />
+        </div>
+        <div class="golden-field">
+          <label class="golden-label">备注（可选）</label>
+          <NInput
+            v-model:value="goldenNotes"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            placeholder="可填写备注信息"
+          />
+        </div>
+        <div class="golden-actions">
+          <NButton @click="goldenModalVisible = false">取消</NButton>
+          <NButton
+            type="primary"
+            :loading="goldenSaving"
+            :disabled="!goldenQueryText.trim() || goldenPhotoIds.length === 0"
+            @click="handleGoldenSave"
+          >
+            保存
+          </NButton>
+        </div>
+      </div>
+    </NModal>
 
     <!-- 图片预览弹窗 -->
     <NModal
@@ -535,5 +671,42 @@ const hasMessages = computed(() => messages.value.length > 0)
 .preview-actions {
   display: flex;
   gap: 12px;
+}
+
+/* ── 黄金用例保存表单 ── */
+.golden-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.golden-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.golden-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--n-text-color-2);
+}
+.photo-id-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 0;
+}
+.photo-tag-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+.golden-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
 }
 </style>
