@@ -127,7 +127,7 @@ def rag_query(state: RouterState, config: lg_types.RunnableConfig) -> dict:  # t
     cfg = _get_cfg(config)
 
     try:
-        answer_text = photo_rag.answer_question(cfg, state["question"])
+        answer_text, _ = photo_rag.answer_question(cfg, state["question"])
     except Exception as exc:
         answer_text = f"RAG 检索失败: {exc}"
 

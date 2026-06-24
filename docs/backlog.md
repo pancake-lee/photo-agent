@@ -117,7 +117,7 @@
 
 #### 1.3 评估基线建立
 
-**现状**：`evaluation.py` 只有 6 条评估查询，覆盖不足。
+**现状**：黄金查询用例定义在 `agent/chain/evaluation.py` 的 `DEFAULT_EVAL_QUERIES`（当前 7 条），覆盖不足。
 
 **做什么**：
 

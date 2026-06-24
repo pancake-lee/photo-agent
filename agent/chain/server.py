@@ -57,10 +57,17 @@ class SessionDetailResponse(pydantic.BaseModel):
     messages: list[dict]
 
 
+class PhotoRef(pydantic.BaseModel):
+    photo_id: str
+    filename: str
+    image_url: str
+
+
 class MessageResponse(pydantic.BaseModel):
     message_id: int
     answer: str
     query_type: str
+    photos: list[PhotoRef] = []
 
 
 class HealthResponse(pydantic.BaseModel):
@@ -184,9 +191,18 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         answer = result.get("answer", "") or "未能获取回答。"
         query_type = result.get("query_type", "")
+        photos_raw = result.get("photos", [])
+
+        # 序列化照片引用
+        import json
+        photos_json = json.dumps(photos_raw, ensure_ascii=False) if photos_raw else ""
 
         # 保存 AI 回复
-        msg_id = s.add_message(session_id, "assistant", answer, query_type=query_type)
+        msg_id = s.add_message(
+            session_id, "assistant", answer,
+            query_type=query_type,
+            photos_json=photos_json,
+        )
 
         # 首条提问后自动更新标题
         # 计算当前 user 消息数（包括刚保存的这条）= 1 表示是第一条
@@ -201,6 +217,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "message_id": msg_id,
             "answer": answer,
             "query_type": query_type,
+            "photos": photos_raw,
         }
 
     # ── Embedding API ─────────────────────────────────────
@@ -278,6 +295,17 @@ def _resolve_db_path(cfg: config_mod.Config) -> str:
 def run_server(cfg: config_mod.Config, port: int = 10005) -> None:
     """启动 uvicorn 服务器（阻塞调用）。"""
     import uvicorn
+
+    # 为 chain.* 应用层 logger 配置 handler（uvicorn 不管这些）
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    _handler.setLevel(logging.DEBUG)
+    logging.getLogger("chain").addHandler(_handler)
+    logging.getLogger("chain").setLevel(logging.INFO)
+
     app = create_app(cfg)
     logger.info("Chat API 服务启动: http://0.0.0.0:%d", port)
     logger.info("API 文档: http://localhost:%d/docs", port)

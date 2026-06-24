@@ -9,9 +9,12 @@
 
 import sys
 import pathlib
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
+import httpx
 import langchain_core.prompts as lc_prompts
 import langchain_openai as lc_openai
 
@@ -20,12 +23,16 @@ import embedding.embedder as embedder
 import utils.streaming_printer as streaming_printer
 import vectorstore.chroma_client as chroma_client
 
+logger = logging.getLogger(__name__)
+
 RAG_SYSTEM_PROMPT = (
     "你是一位摄影档案助手，专门帮助用户从照片库中查找和回顾照片。"
     "你会根据下面提供的照片描述信息回答用户的问题。"
-    "如果上下文中有相关照片，请简要描述它们的内容并提及文件名；"
+    "如果上下文中有相关照片，请使用 Markdown 图片语法在回答中展示照片：\n"
+    "    ![照片描述](图片URL)\n"
+    "每个回答最多展示 3 张照片。"
     "如果没有找到相关照片，请诚实告知。"
-    "回答简洁，控制在 150 字以内。"
+    "回答简洁，控制在 200 字以内。"
 )
 
 CONTEXT_PROMPT = (
@@ -35,18 +42,19 @@ CONTEXT_PROMPT = (
 )
 
 
-def _build_context(results: list[dict]) -> str:
+def _build_context(results: list[dict], cfg: config.Config) -> tuple[str, list[dict]]:
     """
-    将 Chroma 检索结果格式化为上下文文本。
+    将 Chroma 检索结果格式化为上下文文本，并提取结构化照片引用。
 
     参数:
         results: ChromaPhotoStore.query 返回的扁平结果列表
+        cfg:     配置对象（用于构造图片 URL）
 
     返回:
-        拼接后的上下文字符串，每条结果包含文件名、描述和距离
+        (上下文字符串, 结构化照片引用列表)
     """
     if not results:
-        return "未找到相关照片。"
+        return "未找到相关照片。", []
 
     lines: list[str] = []
     for i, r in enumerate(results, 1):
@@ -55,9 +63,79 @@ def _build_context(results: list[dict]) -> str:
         doc = r.get("document") or ""
         distance = r.get("distance")
         dist_str = f" (相似度距离: {distance:.4f})" if distance is not None else ""
-        lines.append(f"[{i}] 照片: {photo_id}{dist_str}\n描述: {doc}")
+        image_url = f"{cfg.go_backend_url}/api/v1/photos/{photo_id}/image"
+        lines.append(
+            f"[{i}] 照片 {photo_id}{dist_str}\n"
+            f"描述: {doc}\n"
+            f"图片: ![{doc[:30] if doc else photo_id}]({image_url})"
+        )
 
-    return "\n\n".join(lines)
+    photo_refs = _extract_photo_refs(results, cfg)
+    return "\n\n".join(lines), photo_refs
+
+
+def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
+    """
+    从检索结果提取去重的结构化照片引用，并行获取原始文件名。
+
+    参数:
+        results: Chroma 检索结果列表
+        cfg:     配置对象
+
+    返回:
+        [{photo_id, filename, image_url}, ...]
+    """
+    if not results:
+        return []
+
+    # 去重提取 photo_id
+    seen: set[str] = set()
+    photo_ids: list[str] = []
+    for r in results:
+        meta = r.get("metadata") or {}
+        pid = meta.get("photo_id", "")
+        if pid and pid not in seen:
+            seen.add(pid)
+            photo_ids.append(pid)
+
+    # 并行获取原始文件名
+    filename_map: dict[str, str] = {}
+
+    def _fetch_filename(pid: str) -> tuple[str, str]:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(
+                    f"{cfg.go_backend_url}/api/v1/photos/{pid}"
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return pid, data.get("filename", pid)
+        except Exception:
+            logger.debug("获取照片文件名失败: %s", pid)
+            return pid, pid
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(_fetch_filename, pid): pid
+            for pid in photo_ids
+        }
+        for future in as_completed(futures):
+            try:
+                pid, filename = future.result()
+                filename_map[pid] = filename
+            except Exception:
+                pass
+
+    # 构建引用列表（保持去重顺序）
+    refs: list[dict] = []
+    for pid in photo_ids:
+        refs.append({
+            "photo_id": pid,
+            "filename": filename_map.get(pid, pid),
+            "image_url": f"{cfg.go_backend_url}/api/v1/photos/{pid}/image",
+        })
+
+    return refs
 
 
 def _aggregate_by_photo(
@@ -168,26 +246,91 @@ def _build_rag_chain(cfg: config.Config):
     return prompt | llm
 
 
+def _filter_by_ratio_gap(results: list[dict], ratio_threshold: float) -> list[dict]:
+    """
+    最大比值法（Max Ratio Gap）：检测相邻距离的比值，在第一个显著跳跃处截断。
+
+    Top-K 结果按距离升序排列（最相似的在前）。遍历相邻对 dist[i], dist[i+1]，
+    若 dist[i+1] / dist[i] >= ratio_threshold，说明第 i+1 个结果的相似度出现
+    断崖式下跌，回退到 i 处截断。
+
+    例如 [0.32, 0.38, 0.95, 1.42]，相邻比值 [1.19, 2.50, 1.49]：
+    ratio=2.50 >= 1.8 → 在 index 1 处截断，保留前 2 个。
+
+    参数:
+        results:         按距离升序排列的检索结果（需含 "distance" 字段）
+        ratio_threshold: 相邻距离比值阈值，>= 此值即截断
+
+    返回:
+        截断后的结果列表（至少保留 1 条）
+    """
+    if len(results) < 2:
+        logger.info("[自动断层] 结果不足 2 条，跳过")
+        return results
+
+    distances = [r.get("distance") for r in results]
+    logger.info("[自动断层] 当前距离序列: %s", [f"{d:.4f}" if d else "None" for d in distances])
+
+    # 打印所有相邻比值
+    ratios: list[float] = []
+    for i in range(len(distances) - 1):
+        d_curr = distances[i]
+        d_next = distances[i + 1]
+        if d_curr and d_next and d_curr > 0:
+            r = d_next / d_curr
+            ratios.append(r)
+        else:
+            ratios.append(float("nan"))
+    logger.info("[自动断层] 相邻比值序列: %s", [f"{r:.2f}" if not (r != r) else "nan" for r in ratios])
+
+    for i in range(len(distances) - 1):
+        d_curr = distances[i]
+        d_next = distances[i + 1]
+        if d_curr is None or d_next is None or d_curr <= 0:
+            continue
+        ratio = d_next / d_curr
+        if ratio >= ratio_threshold:
+            cut_at = i + 1  # 保留 [0, cut_at)
+            logger.info(
+                "[自动断层] ✅ 触发截断: dist[%d]=%.4f → dist[%d]=%.4f (ratio=%.2f >= %.2f), 保留前 %d 条",
+                i, d_curr, i + 1, d_next, ratio, ratio_threshold, cut_at,
+            )
+            return results[:cut_at]
+
+    max_ratio = max(ratios) if ratios else 0.0
+    logger.info("[自动断层] ❌ 未触发截断（最大比值 %.2f < 阈值 %.2f），保留全部 %d 条",
+                max_ratio, ratio_threshold, len(results))
+    return results
+
+
 def answer_question(
     cfg: config.Config,
     question: str,
     n_results: int = 5,
     aggregate: bool = True,
-) -> str:
+    distance_threshold: float | None = None,
+    auto_distance_ratio: float = 1.8,
+) -> tuple[str, list[dict]]:
     """
-    执行完整 RAG 链路（纯向量语义检索），返回答案字符串。
+    执行完整 RAG 链路（纯向量语义检索），返回答案和结构化照片引用。
 
     结构化过滤需求由 Text-to-SQL 路径独立处理，不在 ChromaDB 侧做 where 过滤。
     设计决策见 docs/chroma-metadata-design.md。
 
+    过滤顺序：聚合 → 自动比值断层 → 绝对距离阈值 → 构建上下文。
+    两个过滤独立配置，可组合使用。
+
     参数:
-        cfg:         配置对象
-        question:    用户问题
-        n_results:   检索结果数量（聚合模式下为返回的照片数）
-        aggregate:   是否按照片聚合（默认 True），避免同一照片多 chunk 重复
+        cfg:                 配置对象
+        question:            用户问题
+        n_results:           检索结果数量（聚合模式下为返回的照片数）
+        aggregate:           是否按照片聚合（默认 True），避免同一照片多 chunk 重复
+        distance_threshold:  绝对距离阈值，超过此值的结果被丢弃（None 表示不过滤）
+        auto_distance_ratio: 自动比值断层阈值（默认 1.8），0 表示关闭此算法。
+                             算法：相邻 dist[i+1]/dist[i] >= ratio 时截断
 
     返回:
-        LLM 生成的回答文本
+        (LLM 生成的回答文本, 结构化照片引用列表)
     """
     # 聚合模式下先检索更多 chunk，再聚合到照片级别
     retrieve_n = n_results * 3 if aggregate else n_results
@@ -196,11 +339,45 @@ def answer_question(
     if aggregate:
         results = _aggregate_by_photo(results, top_n=n_results)
 
-    context = _build_context(results)
+    # 打印聚合后的原始结果（诊断用）
+    if results:
+        dists = [f"{r.get('distance', '?'):.4f}" if r.get('distance') is not None else "?" for r in results]
+        pids = [(r.get("metadata") or {}).get("photo_id", "?") for r in results]
+        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s, photo_ids=%s", len(results), dists, pids)
+
+    # 阶段 1: 自动比值断层过滤 — 检测距离序列中的显著跳跃
+    if auto_distance_ratio > 0:
+        before = len(results)
+        results = _filter_by_ratio_gap(results, auto_distance_ratio)
+        if before != len(results):
+            logger.info(
+                "[过滤-阶段1] 自动断层: ratio=%.2f, %d → %d 条",
+                auto_distance_ratio, before, len(results),
+            )
+
+    # 阶段 2: 绝对距离阈值过滤 — 丢弃相似度不达标的低质量结果
+    if distance_threshold is not None:
+        before = len(results)
+        results = [
+            r for r in results
+            if r.get("distance") is not None and r["distance"] <= distance_threshold
+        ]
+        if before != len(results):
+            logger.info(
+                "[过滤-阶段2] 距离阈值: %.4f, %d → %d 条",
+                distance_threshold, before, len(results),
+            )
+        else:
+            logger.info(
+                "[过滤-阶段2] 距离阈值: %.4f, 全部 %d 条均通过",
+                distance_threshold, before,
+            )
+
+    context, photo_refs = _build_context(results, cfg)
 
     chain = _build_rag_chain(cfg)
     response = chain.invoke({"context": context, "question": question})
 
-    return str(response.content)
+    return str(response.content), photo_refs
 
 

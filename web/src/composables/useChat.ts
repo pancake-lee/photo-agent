@@ -102,6 +102,7 @@ async function sendMessage(question: string): Promise<SendMessageResponse> {
       role: 'assistant',
       content: data.answer,
       query_type: data.query_type,
+      photos: data.photos || [],
       created_at: new Date().toISOString(),
     }
     messages.value.push(aiMsg)

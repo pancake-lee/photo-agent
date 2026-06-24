@@ -134,6 +134,10 @@ class Config:
         # prices 配置（可选）
         self.prices_path = self._optional(data, "prices", "path", "")
 
+        # rag 配置（可选）
+        self.rag_distance_threshold: float | None = self._optional(data, "rag", "distance_threshold", None)
+        self.rag_auto_distance_ratio: float = float(self._optional(data, "rag", "auto_distance_ratio", 1.8))
+
         # chat 配置（可选）
         self.chat_db_path: str = self._optional(data, "chat", "db_path", "")
 

@@ -15,17 +15,18 @@
 ### 技术栈
 
 ```
-Dify 本地部署（Agent 编排 + 知识库 RAG + 聊天 UI）
-    ↓ HTTP (OpenAPI Schema 工具)
-Go Backend 业务后端（照片元数据、文件服务、导入任务、VLM 代理、统计 API）
+Web 前端 (Vue 3 + NaiveUI)
+    ↓ HTTP
+Python AI 服务层 (FastAPI + LangChain/LangGraph + Chroma + Text-to-SQL + Function Calling)
     ↑ HTTP
-Python AI 服务层（LangChain/LangGraph + Chroma + Text-to-SQL + Function Calling）
+Go Backend 业务后端（照片元数据、文件服务、导入任务、VLM 代理、统计 API、Embedding HTTP 代理）
 ```
 
 - **Go 后端**：Gin + GORM + SQLite，负责照片元数据 CRUD、文件服务、导入流水线、VLM预处理照片、Embedding HTTP 代理
-- **Python AI 服务层**：LangChain 编排、Chroma 向量检索、Text-to-SQL、LangGraph 查询路由、Function Calling 工具调用、流式输出
+- **Python AI 服务层**：FastAPI 提供对话 API，LangChain 编排、Chroma 向量检索、Text-to-SQL、LangGraph 查询路由、Function Calling 工具调用
+- **Web 前端**：Vue 3 + NaiveUI，照片管理 + AI 对话界面
 - **Python 环境**：Python 3.12（uv 管理），项目 venv 位于 `agent/.venv/`，通过 `uv venv agent/.venv --python 3.12` 创建。系统 Python（3.9）不动，避免影响其他系统软件
-- **Dify**：Docker 本地部署，Agent 图形化编排、知识库 RAG、自带聊天 UI
+- **Dify**（可选验证路径）：Docker 本地部署，早期用于快速验证 Agent 可行性，现已不作为核心方案
 - **核心能力**：智能检索（P0）/ 摄影档案问答（P0）/ 主题分析与创作建议（P1）/ 时间线关联分析（P2）
 
 ### 核心数据流
@@ -33,9 +34,9 @@ Python AI 服务层（LangChain/LangGraph + Chroma + Text-to-SQL + Function Call
 ```
 batch_vlm 预处理（生成 descriptions.json）
     ↓
-server 启动 → AutoSync 自动同步到 SQLite + Dify 知识库
+server 启动 → AutoSync 自动同步到 SQLite
     ↓
-用户自然语言对话 → Agent 意图识别 → 知识库 RAG / Go 工具 / LLM 生成
+Web 对话 / CLI → Python Agent API → ChromaDB 向量检索 / Text-to-SQL / Go 工具 → LLM 生成
 ```
 
 ---

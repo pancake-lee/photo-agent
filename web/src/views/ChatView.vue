@@ -12,10 +12,13 @@ import {
   NEmpty,
   NSpin,
   NSpace,
+  NModal,
   useMessage,
 } from 'naive-ui'
-import { TrashOutline, SendOutline } from '@vicons/ionicons5'
+import { TrashOutline, SendOutline, ImageOutline, DownloadOutline } from '@vicons/ionicons5'
+import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
+import type { PhotoRef } from '../types/chat'
 
 const route = useRoute()
 const router = useRouter()
@@ -151,6 +154,55 @@ watch(
   () => scrollToBottom()
 )
 
+// ── Markdown 渲染 ──
+
+marked.setOptions({ breaks: true, gfm: true })
+
+function renderMarkdown(text: string): string {
+  const result = marked.parse(text, { async: false })
+  return typeof result === 'string' ? result : ''
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+// ── 图片预览与下载 ──
+
+const previewVisible = ref(false)
+const previewUrl = ref('')
+
+function previewPhoto(photo: PhotoRef) {
+  previewUrl.value = photo.image_url
+  previewVisible.value = true
+}
+
+function downloadPhoto(photo: PhotoRef) {
+  downloadImageUrl(photo.image_url, photo.filename || photo.photo_id)
+}
+
+function downloadImageUrl(url: string, filename: string) {
+  // 通过 fetch 下载为 blob，确保跨场景可靠触发下载
+  fetch(url)
+    .then(res => res.blob())
+    .then(blob => {
+      const objUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(objUrl)
+    })
+    .catch(() => {
+      // fallback: 直接打开图片
+      window.open(url, '_blank')
+    })
+}
+
 // ── 计算属性 ──
 
 const hasSession = computed(() => currentSession.value !== null)
@@ -217,11 +269,52 @@ const hasMessages = computed(() => messages.value.length > 0)
             :class="msg.role === 'user' ? 'message-row--user' : 'message-row--assistant'"
           >
             <div class="message-bubble" :class="`message-bubble--${msg.role}`">
-              <div class="message-text">{{ msg.content }}</div>
+              <!-- 用户消息：转义文本；AI 消息：渲染 Markdown -->
+              <div
+                v-if="msg.role === 'user'"
+                class="message-text"
+              >{{ msg.content }}</div>
+              <div
+                v-else
+                class="message-text markdown-body"
+                v-html="renderMarkdown(msg.content)"
+              ></div>
               <div v-if="msg.role === 'assistant' && msg.query_type" class="message-meta">
                 <NTag :bordered="false" size="tiny">
                   {{ routeLabel[msg.query_type] || msg.query_type }}
                 </NTag>
+              </div>
+
+              <!-- 附件列表（仅 AI 消息且有照片引用时显示） -->
+              <div
+                v-if="msg.role === 'assistant' && msg.photos && msg.photos.length"
+                class="photo-attachments"
+              >
+                <div class="attachments-header">📎 相关照片 ({{ msg.photos.length }})</div>
+                <div class="attachments-list">
+                  <div
+                    v-for="(photo, idx) in msg.photos"
+                    :key="photo.photo_id"
+                    class="attachment-item"
+                  >
+                    <span class="attachment-icon">
+                      <NIcon size="16"><ImageOutline /></NIcon>
+                    </span>
+                    <span class="attachment-name" @click="previewPhoto(photo)">
+                      {{ photo.filename }}
+                    </span>
+                    <NButton
+                      size="tiny"
+                      text
+                      @click="downloadPhoto(photo)"
+                      title="下载原图"
+                    >
+                      <template #icon>
+                        <NIcon size="14"><DownloadOutline /></NIcon>
+                      </template>
+                    </NButton>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -258,6 +351,23 @@ const hasMessages = computed(() => messages.value.length > 0)
         </NButton>
       </div>
     </div>
+
+    <!-- 图片预览弹窗 -->
+    <NModal
+      v-model:show="previewVisible"
+      preset="card"
+      title="照片预览"
+      style="width: 90vw; max-width: 1200px;"
+    >
+      <div class="preview-container">
+        <img :src="previewUrl" class="preview-image" />
+        <div class="preview-actions">
+          <NButton type="primary" @click="downloadImageUrl(previewUrl, 'photo')">
+            下载原图
+          </NButton>
+        </div>
+      </div>
+    </NModal>
   </NLayout>
 </template>
 
@@ -345,5 +455,85 @@ const hasMessages = computed(() => messages.value.length > 0)
 }
 .input-wrapper > :first-child {
   flex: 1;
+}
+
+/* ── Markdown 渲染样式 ── */
+.markdown-body :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.markdown-body :deep(p) {
+  margin: 4px 0;
+}
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+/* ── 附件列表样式 ── */
+.photo-attachments {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--n-border-color);
+}
+.attachments-header {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  margin-bottom: 6px;
+}
+.attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.attachment-item:hover {
+  background: var(--n-color-hover);
+}
+.attachment-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--n-color-target);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-name:hover {
+  text-decoration: underline;
+}
+.attachment-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
+}
+
+/* ── 图片预览样式 ── */
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.preview-actions {
+  display: flex;
+  gap: 12px;
 }
 </style>

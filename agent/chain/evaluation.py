@@ -73,6 +73,9 @@ DEFAULT_EVAL_QUERIES: list[dict] = [
     {"question": "有雪山的照片", "relevant_photos": [
         "DSC_6775","IMG_3436","DSC_6773","DSC_6764","DSC_6761","DSC_6759","DSC_6743","DSC_6735","DSC_6716","DSC_6714","DSC_6713","DSC_6710","DSC_6708","DSC_6700","DSC_6697","DSC_6692","DSC_6690","DSC_6678","DSC_6674","DSC_6668","DSC_6667","DSC_6663","DSC_6661","DSC_6658","DSC_6655","DSC_6652","DSC_6646","DSC_6645","IMG_3434","DSC_6644","DSC_6643","DSC_6641","DSC_6639","DSC_6613","DSC_6606","DSC_6604","DSC_6603","DSC_6598","DSC_6584","DSC_6537","DSC_6517","DSC_6506"
     ]},
+    {"question": "有孔雀的照片", "relevant_photos": [
+        "DSC_7849","DSC_7845"
+    ]},
 ]
 
 

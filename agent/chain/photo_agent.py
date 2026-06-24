@@ -54,6 +54,7 @@ class RouterState(typing.TypedDict):
     rag_answer: str
     tool_answer: str
     answer: str
+    photos: list[dict]
 
 
 CLASSIFY_SYSTEM = (
@@ -120,10 +121,15 @@ def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
 def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
     try:
-        answer_text = photo_rag.answer_question(cfg, state["question"])
+        answer_text, photo_refs = photo_rag.answer_question(
+            cfg, state["question"],
+            distance_threshold=cfg.rag_distance_threshold,
+            auto_distance_ratio=cfg.rag_auto_distance_ratio,
+        )
     except Exception as exc:
         answer_text = f"RAG 检索失败: {exc}"
-    return {"rag_answer": answer_text}
+        photo_refs = []
+    return {"rag_answer": answer_text, "photos": photo_refs}
 
 
 def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
@@ -189,7 +195,9 @@ def _answer_node(state: RouterState) -> dict:
         text = state.get("tool_answer") or "工具调用未返回结果。"
     else:
         text = state.get("rag_answer") or "RAG 检索未返回结果。"
-    return {"answer": text}
+    # 只有 RAG 分支才有照片引用
+    photos = state.get("photos", []) if query_type == "rag" else []
+    return {"answer": text, "photos": photos}
 
 
 def _route_by_type(state: RouterState) -> str:
@@ -303,6 +311,7 @@ class PhotoAgent:
             "rag_answer": "",
             "tool_answer": "",
             "answer": "",
+            "photos": [],
         }
         result = self._app.invoke(initial, {"configurable": {"cfg": self._cfg}})
         return typing.cast(RouterState, result)

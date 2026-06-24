@@ -57,7 +57,7 @@ class SessionStore:
         return conn
 
     def _init_tables(self) -> None:
-        """创建表和索引（幂等）。"""
+        """创建表和索引（幂等），并执行列迁移。"""
         with self._lock:
             conn = self._get_conn()
             try:
@@ -82,6 +82,15 @@ class SessionStore:
                     CREATE INDEX IF NOT EXISTS idx_messages_session
                         ON messages(session_id, id);
                 """)
+
+                # 迁移：添加 photos 列（若不存在）
+                cols = conn.execute("PRAGMA table_info(messages)").fetchall()
+                col_names = {row[1] for row in cols}
+                if "photos" not in col_names:
+                    conn.execute(
+                        "ALTER TABLE messages ADD COLUMN photos TEXT DEFAULT ''"
+                    )
+
                 conn.commit()
             finally:
                 conn.close()
@@ -152,7 +161,7 @@ class SessionStore:
                     return None
 
                 msg_rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, usage_json, created_at
+                    """SELECT id, session_id, role, content, query_type, usage_json, photos, created_at
                        FROM messages WHERE session_id=? ORDER BY id""",
                     (session_id,),
                 ).fetchall()
@@ -161,12 +170,19 @@ class SessionStore:
                 for m in msg_rows:
                     import json
                     usage = json.loads(m["usage_json"] or "{}")
+                    photos_list = []
+                    if m["photos"]:
+                        try:
+                            photos_list = json.loads(m["photos"])
+                        except json.JSONDecodeError:
+                            photos_list = []
                     messages.append({
                         "id": m["id"],
                         "session_id": m["session_id"],
                         "role": m["role"],
                         "content": m["content"],
                         "query_type": m["query_type"],
+                        "photos": photos_list,
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "cost": usage.get("cost", 0.0),
@@ -219,6 +235,7 @@ class SessionStore:
         content: str,
         query_type: Optional[str] = None,
         usage: Optional[dict] = None,
+        photos_json: str = "",
     ) -> int:
         """添加一条消息，返回消息 ID。同时更新会话的 updated_at。"""
         import json
@@ -229,9 +246,9 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 cur = conn.execute(
-                    """INSERT INTO messages (session_id, role, content, query_type, usage_json, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (session_id, role, content, query_type, usage_str, now),
+                    """INSERT INTO messages (session_id, role, content, query_type, usage_json, photos, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, role, content, query_type, usage_str, photos_json, now),
                 )
                 conn.execute(
                     "UPDATE sessions SET updated_at=? WHERE id=?",
@@ -248,7 +265,7 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, usage_json, created_at
+                    """SELECT id, session_id, role, content, query_type, usage_json, photos, created_at
                        FROM messages WHERE session_id=? ORDER BY id""",
                     (session_id,),
                 ).fetchall()
@@ -256,12 +273,19 @@ class SessionStore:
                 result = []
                 for m in rows:
                     usage = json.loads(m["usage_json"] or "{}")
+                    photos_list = []
+                    if m["photos"]:
+                        try:
+                            photos_list = json.loads(m["photos"])
+                        except json.JSONDecodeError:
+                            photos_list = []
                     result.append({
                         "id": m["id"],
                         "session_id": m["session_id"],
                         "role": m["role"],
                         "content": m["content"],
                         "query_type": m["query_type"],
+                        "photos": photos_list,
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "cost": usage.get("cost", 0.0),
