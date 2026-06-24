@@ -288,3 +288,79 @@ P2 (加分项): 时间线关联分析 + 个人摄影风格知识库
    - Go 1.22+
    - Python 3.11+
    - 创建 Python 虚拟环境：`python -m venv venv`
+
+---
+
+## 8. 架构演进：Dify 降级为可选 → Web 前端 + Python Agent API（2026-06）
+
+**变更**：原计划 Dify 作为 Agent 编排入口和聊天 UI，实际开发中逐步转向：
+
+- **Agent 编排**：LangGraph StateGraph（Python 侧）替代 Dify Agent
+- **聊天 UI**：Vue 3 + NaiveUI Web 前端替代 Dify Web UI
+- **对话 API**：Python FastAPI（`chain/server.py`）提供 REST 对话接口
+- **向量检索**：ChromaDB（Python 侧）替代 Dify 知识库（Weaviate）
+
+**Dify 现状**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径。不再作为核心方案维护。
+
+**原因**：
+1. LangGraph 提供更精细的查询路由（4 类节点 + 条件边），Dify 图形化编排灵活性不足
+2. Web 前端可定制照片管理功能（上传/筛选/VLM队列/Embedding状态），Dify 只有通用聊天 UI
+3. ChromaDB 可控性强，metadata 最小化策略（Route B）在 Dify 知识库中不好实施
+
+---
+
+## 9. ChromaDB 元数据最小化决策 — Route B（2026-06-23）
+
+**背景**：ChromaDB collection 的 metadata 字段设计有两条路线。
+
+**Route A**：ChromaDB 冗余存储结构化属性（objects/colors/scene/lighting/mood/composition），用 `where` 过滤做组合检索。
+
+**Route B**（✅ 采用）：ChromaDB 仅存 `photo_id` + `chunk_index`，所有结构化属性在 Go SQLite 中，结构化过滤走 Text-to-SQL。
+
+**选择 Route B 的原因**：
+1. Go SQLite 是唯一数据源，避免 Chroma metadata 与 SQLite 数据冗余及同步问题
+2. 职责边界清晰：向量库只管语义相似度，SQL 只管结构化过滤
+3. 组合查询（如"逆光的雪山照片"）通过 SQL ∩ RAG 取交集实现，效果优于单一路径
+
+**设计文档**：`docs/design/chroma-metadata-design.md`
+
+---
+
+## 10. Combined 组合查询实现（2026-06-24）
+
+**背景**：用户查询"蓝调时刻的街拍""暖色调的人像""逆光的雪山"等同时涉及结构化维度（光线/色调/场景）和语义内容的复合查询，需要两条路径协同。
+
+**方案 B（✅ 采用）**：分类器增加 `combined` 类型 + LangGraph 新增 `combined_query` 节点，内部并行执行 SQL 过滤和 RAG 语义检索，取 photo_id 交集。
+
+**流程**：
+```
+classify → "combined"
+    ├─ generate_filter_sql() → SQL 执行 → sql_ids
+    ├─ retrieve_photo_ids() → RAG 语义检索 → rag_ids
+    ├─ intersection = sql_ids ∩ rag_ids（保持RAG相似度排序）
+    └─ 5 层降级：SQL异常/过宽(>50)/为空/交集空/整体异常 → 纯 RAG
+```
+
+**关键发现**：Go 后端的属性映射函数（`mapScene`/`mapLighting`/`mapMood`）产出的值（如 `backlit`）与最初 text_to_sql.py 硬编码的值（如 `backlight`）不一致，导致 SQL 匹配率为 0。
+
+**修复**：新增 `GET /api/v1/photos/attribute-values` API 返回 DB 中实际 distinct 值，text_to_sql.py 动态获取并拼入 System Prompt，确保 LLM 只生成实际存在的值。
+
+**区别于方案 A**（仅增强分类器描述，让 LLM 自动判断走 SQL 还是 RAG）：方案 B 新增独立节点显式执行两条路径取交集，更可控、可观测、降级策略明确。
+
+---
+
+## 11. 图片上传改为原图直传 + 后端压缩（2026-06）
+
+**原方案**：前端用 `browser-image-compression` 压缩后再上传。
+
+**现方案**：前端原图直传，Go 后端用 ImageMagick（`convert -resize 512x512> -quality 85 -format jpg`）压缩，保留完整 EXIF。
+
+**原因**：
+1. 浏览器压缩会丢失 EXIF 数据（拍摄时间、相机参数等），后端 ImageMagick 可保留
+2. 上传链路：原图 → Go 保存原图 + 生成压缩缩略图 → VLM 用压缩图描述 → 原图用于展示
+
+---
+
+## 12. config.go 中 dify.base_url default 值修复
+
+**问题**：见上方第 2 节。Dify 已降级为可选方案，此配置项保留兼容，default 值是否需要修复视后续是否继续使用 Dify 而定。当前状态：未修复，因为 Dify 不在核心路径上。
