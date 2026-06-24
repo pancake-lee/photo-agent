@@ -12,7 +12,7 @@
 | ---- | ------- | ---- | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Done | Phase 0 | 0    | Web 图片管理          | 上传图片 → VLM 描述、目录导入、图片展示/筛选/排序/搜索、删除（同步清理原图+缩略图+DB）                            |
 | Done | Phase 1 | 1.1  | VLM 描述结构化提取    | 用 LLM 从 VLM 纯文本描述中提取结构化属性（主色/光线/构图/情绪/主体），存入 attributes.json 并回写 SQLite           |
-|      | Phase 1 | 1.2  | Chroma 元数据过滤利用 | 补全 Chroma metadata 字段（shot_at/colors/lighting/mood/subject），实现语义+结构化联合过滤检索                     |
+| Done | Phase 1 | 1.2  | Text-to-SQL 结构化过滤 | 结构化属性存入 SQLite，通过 Text-to-SQL 实现多维过滤；向量检索仅负责文本描述相似度，不参与元数据过滤                 |
 |      | Phase 1 | 1.3  | 评估基线建立          | 扩充黄金查询到 ≥20 条，建立 P@10/R@10/MRR 基线，对比分块策略，后续每个 Phase 有量化标准验证                       |
 |      | Phase 2 | 2.1  | 相似照片聚类          | 基于 Chroma 向量做聚类（HDBSCAN/K-Means），按视觉连贯性排序，AI 推荐照片组合方案                                   |
 |      | Phase 2 | 2.2  | 主题标签自动生成      | 每个聚类用 LLM 生成主题标签（如"云南雪山系列"），主题为运行时动态生成，不修改 DB schema                            |
@@ -88,8 +88,8 @@
 
 - 新建 `extract_attributes.py`：LLM 从 VLM 描述中提取结构化属性
   - 维度：主色/色调、光线类型、构图特点、情绪氛围、主体类型
-- 属性存入 `attributes.json`，`index_photos.py` 同步写入 Chroma metadata
-- Go 后端新增 `PUT /api/v1/photos/:id/tags` API，回写 SQLite
+- 属性存入 `attributes.json`，回写 SQLite（通过 Go 后端 API）
+- 向量检索（ChromaDB）仅负责文本描述相似度，不参与元数据过滤
 
 **提升了什么**：
 
@@ -98,22 +98,22 @@
 
 **验收**：5 个以上维度可筛选（色/光/构图/情绪/主体），每个维度检索结果合理
 
-#### 1.2 Chroma 元数据过滤利用（已有基础）
+#### 1.2 Text-to-SQL 结构化过滤
 
-**现状**：`photo_rag.py` 已支持 `where` 参数，但 metadata 字段不全。
+**现状**：结构化属性（色彩/光线/构图/情绪/主体）存入 SQLite 后，Text-to-SQL 已可查询；ChromaDB 已按[设计决策](../design/chroma-metadata-design.md)精简为仅存 `photo_id` + `chunk_index`，不冗余存储元数据。
 
 **做什么**：
 
-- 补全 `index_photos.py` 写入的 metadata 字段（shot_at, colors, lighting, mood, subject）
-- `photo_rag.py` 的 `answer_question()` 从用户查询中提取过滤条件
-- 示例："蓝调时刻的街拍" → `where={"lighting": "blue_hour"}` + RAG
+- 确保 Text-to-SQL 的 Schema 描述覆盖 1.1 提取的所有结构化维度
+- 用户查询"蓝调时刻的街拍"时，LLM 路由到 Text-to-SQL 过滤 `lighting = 'blue_hour'`，结果与向量检索的语义结果取交集
+- 向量检索（ChromaDB）仅负责文本描述相似度，不参与元数据过滤
 
 **提升了什么**：
 
-- 检索从"纯语义模糊匹配"升级为"语义+结构化联合过滤"
-- 选题时可按维度筛选素材（如"先看看我所有逆光照片"）
+- 职责边界清晰：向量库只管语义相似度，SQL 只管结构化过滤，Go 是唯一数据源
+- 避免 ChromaDB metadata 与 SQLite 数据冗余及同步问题
 
-**验收**：组合查询（色调+光线）返回结果明显精准于纯文本搜索
+**验收**：组合查询（色调+光线+语义）返回结果明显精准于纯文本搜索
 
 #### 1.3 评估基线建立
 

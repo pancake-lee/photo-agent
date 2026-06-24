@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pancake-lee/photo-agent/internal/model"
+	"github.com/pancake-lee/photo-agent/internal/service"
 )
 
 // SchemaField 字段定义。
@@ -90,4 +91,16 @@ func buildPhotoSchema() *TableSchema {
 func GetPhotoSchema(c *gin.Context) {
 	schema := buildPhotoSchema()
 	c.JSON(http.StatusOK, schema)
+}
+
+// GetAttributeValues 返回所有结构化属性的去重值，供 Text-to-SQL prompt 动态拼入。
+//
+// GET /api/v1/photos/attribute-values
+func GetAttributeValues(c *gin.Context) {
+	values, err := service.ListDistinctAttributeValues()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, values)
 }

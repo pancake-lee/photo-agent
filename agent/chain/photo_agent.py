@@ -53,17 +53,20 @@ class RouterState(typing.TypedDict):
     sql_result: dict
     rag_answer: str
     tool_answer: str
+    combined_result: dict   # {sql_ids, rag_ids, intersection_ids, answer}
     answer: str
     photos: list[dict]
 
 
 CLASSIFY_SYSTEM = (
-    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag 或 tool，不要解释。\n\n"
+    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool 或 combined，不要解释。\n\n"
     "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、"
     "数量聚合的结构化查询\n"
-    "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的语义检索\n"
+    "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的纯语义检索\n"
     "tool: 涉及照片列表、时间线查看、标签筛选、单张照片详情、归档操作等"
-    "需要调用 API 的查询\n\n"
+    "需要调用 API 的查询\n"
+    "combined: 同时包含结构化维度筛选 + 语义内容检索的查询。"
+    "即用户既指定了光线/色调/情绪/场景等可枚举维度，又描述了画面内容\n\n"
     "示例:\n"
     "- \"我有多少张照片？\" → sql\n"
     "- \"用 Nikon 拍的照片有哪些？\" → sql\n"
@@ -75,7 +78,12 @@ CLASSIFY_SYSTEM = (
     "- \"湖边的风景照\" → rag\n"
     "- \"列出所有时间线\" → tool\n"
     "- \"查看某张照片详情\" → tool\n"
-    "- \"按标签筛选照片\" → tool\n\n"
+    "- \"按标签筛选照片\" → tool\n"
+    "- \"蓝调时刻的街拍\" → combined\n"
+    "- \"暖色调的人像\" → combined\n"
+    "- \"逆光的雪山照片\" → combined\n"
+    "- \"黑白高对比度的建筑\" → combined\n"
+    "- \"宁静氛围的水边照片\" → combined\n\n"
     "用户问题: {question}\n"
     "分类:"
 )
@@ -95,7 +103,9 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     chain = prompt | llm
     response = chain.invoke({"question": state["question"]})
     raw = str(response.content).strip().lower()
-    if "sql" in raw:
+    if "combined" in raw:
+        query_type = "combined"
+    elif "sql" in raw:
         query_type = "sql"
     elif "tool" in raw:
         query_type = "tool"
@@ -186,17 +196,232 @@ _TOOL_SYSTEM_PROMPT = (
 )
 
 
+def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
+    """组合查询节点：SQL 结构化过滤 + RAG 语义检索 → 取交集。
+
+    流程:
+        1. Text-to-SQL 生成结构化过滤 → 执行 → sql_ids
+        2. RAG 语义检索 → rag_ids（按相似度排序）
+        3. 取交集（保持 RAG 相似度顺序）
+        4. 交集非空 → 获取照片详情 → LLM 生成回答
+        5. 交集为空 → 降级为纯 RAG
+    """
+    cfg = _get_cfg(config)
+    question = state["question"]
+    _log = logging.getLogger(__name__)
+
+    try:
+        # Step 1: SQL 结构化过滤
+        filter_sql = text_to_sql.generate_filter_sql(cfg, question)
+        sql_ids = text_to_sql.execute_sql_for_ids(cfg.go_backend_url, filter_sql)
+        _log.info(
+            "[combined] SQL 过滤返回 %d 个 photo_id | SQL: %s",
+            len(sql_ids), filter_sql,
+        )
+
+        # SQL 结果过多说明过滤太宽泛，降级为纯 RAG
+        if len(sql_ids) > 50:
+            _log.info("[combined] SQL 结果过多(%d > 50)，过滤太宽泛，降级为纯 RAG", len(sql_ids))
+            answer_text, photo_refs = photo_rag.answer_question(
+                cfg, question,
+                distance_threshold=cfg.rag_distance_threshold,
+                auto_distance_ratio=cfg.rag_auto_distance_ratio,
+            )
+            return {
+                "combined_result": {
+                    "sql_ids": sql_ids,
+                    "rag_ids": [],
+                    "intersection_ids": [],
+                    "fallback": True,
+                    "fallback_reason": "sql_too_broad",
+                },
+                "rag_answer": answer_text,
+                "photos": photo_refs,
+            }
+
+        # SQL 无结果 → 降级
+        if not sql_ids:
+            _log.info("[combined] SQL 无结果，降级为纯 RAG")
+            answer_text, photo_refs = photo_rag.answer_question(
+                cfg, question,
+                distance_threshold=cfg.rag_distance_threshold,
+                auto_distance_ratio=cfg.rag_auto_distance_ratio,
+            )
+            return {
+                "combined_result": {
+                    "sql_ids": [],
+                    "rag_ids": [],
+                    "intersection_ids": [],
+                    "fallback": True,
+                    "fallback_reason": "sql_empty",
+                },
+                "rag_answer": answer_text,
+                "photos": photo_refs,
+            }
+
+        # Step 2: RAG 语义检索
+        rag_ids = photo_rag.retrieve_photo_ids(
+            cfg, question,
+            n_results=20,
+            distance_threshold=cfg.rag_distance_threshold,
+            auto_distance_ratio=cfg.rag_auto_distance_ratio,
+        )
+        _log.info("[combined] RAG 检索返回 %d 个 photo_id", len(rag_ids))
+
+        # Step 3: 取交集（保持 RAG 相似度排序）
+        sql_set = set(sql_ids)
+        intersection_ids = [pid for pid in rag_ids if pid in sql_set]
+        _log.info(
+            "[combined] 交集: %d 个 photo_id (SQL %d ∩ RAG %d)",
+            len(intersection_ids), len(sql_ids), len(rag_ids),
+        )
+
+        # Step 4: 交集为空 → 降级为纯 RAG
+        if not intersection_ids:
+            _log.info("[combined] 交集为空，降级为纯 RAG")
+            answer_text, photo_refs = photo_rag.answer_question(
+                cfg, question,
+                distance_threshold=cfg.rag_distance_threshold,
+                auto_distance_ratio=cfg.rag_auto_distance_ratio,
+            )
+            return {
+                "combined_result": {
+                    "sql_ids": sql_ids,
+                    "rag_ids": rag_ids,
+                    "intersection_ids": [],
+                    "fallback": True,
+                    "fallback_reason": "intersection_empty",
+                },
+                "rag_answer": answer_text,
+                "photos": photo_refs,
+            }
+
+        # Step 5: 交集非空 → 获取照片详情并生成回答
+        top_ids = intersection_ids[:5]  # 最多展示 5 张
+        photo_details = _fetch_photos_batch(cfg, top_ids)
+
+        # 构建上下文
+        context_lines: list[str] = []
+        photo_refs: list[dict] = []
+        for i, pd in enumerate(photo_details, 1):
+            pid = pd.get("id", "")
+            desc = pd.get("description", "") or "无描述"
+            context_lines.append(f"[{i}] 照片 {pid}\n描述: {desc}")
+            photo_refs.append({
+                "photo_id": pid,
+                "filename": pd.get("filename", pid),
+                "image_url": f"{cfg.go_backend_url}/api/v1/photos/{pid}/image",
+            })
+
+        context = "\n\n".join(context_lines)
+
+        # LLM 生成回答
+        llm = llm_factory.create_llm(
+            cfg, temperature=0.5, callbacks=_get_callbacks(),
+        )
+        answer_prompt = lc_prompts.ChatPromptTemplate.from_messages([
+            ("system",
+             "你是一位摄影档案助手。根据下面经过结构化过滤的照片回答用户问题。"
+             "使用 Markdown 图片语法展示照片: ![描述](图片URL)。"
+             "回答简洁，控制在 200 字以内。"),
+            ("human",
+             "以下是通过光线/色调/场景/情绪等结构化维度 + 语义内容双重过滤后的照片:\n\n"
+             "{context}\n\n"
+             "用户问题: {question}"),
+        ])
+        chain = answer_prompt | llm
+        response = chain.invoke({"context": context, "question": question})
+        answer_text = str(response.content)
+
+        _log.info("[combined] 最终回答基于 %d 张照片", len(photo_refs))
+
+        return {
+            "combined_result": {
+                "sql_ids": sql_ids,
+                "rag_ids": rag_ids,
+                "intersection_ids": intersection_ids,
+                "fallback": False,
+            },
+            "answer": answer_text,
+            "photos": photo_refs,
+        }
+
+    except Exception as exc:
+        _log.exception("[combined] 组合查询异常，降级为纯 RAG")
+        try:
+            answer_text, photo_refs = photo_rag.answer_question(
+                cfg, question,
+                distance_threshold=cfg.rag_distance_threshold,
+                auto_distance_ratio=cfg.rag_auto_distance_ratio,
+            )
+        except Exception:
+            answer_text = f"组合查询和 RAG 降级均失败: {exc}"
+            photo_refs = []
+        return {
+            "combined_result": {
+                "sql_ids": [],
+                "rag_ids": [],
+                "intersection_ids": [],
+                "fallback": True,
+                "fallback_reason": f"error: {exc}",
+            },
+            "rag_answer": answer_text,
+            "photos": photo_refs,
+        }
+
+
+def _fetch_photos_batch(cfg: config.Config, photo_ids: list[str]) -> list[dict]:
+    """批量获取照片详情（并行请求 Go 后端）。"""
+    import httpx
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not photo_ids:
+        return []
+
+    results: list[dict] = []
+
+    def _fetch(pid: str) -> dict | None:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(f"{cfg.go_backend_url}/api/v1/photos/{pid}")
+                resp.raise_for_status()
+                return resp.json()
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_fetch, pid): pid for pid in photo_ids}
+        for future in as_completed(futures):
+            data = future.result()
+            if data:
+                results.append(data)
+
+    # 按原始顺序排列
+    id_order = {pid: i for i, pid in enumerate(photo_ids)}
+    results.sort(key=lambda x: id_order.get(x.get("id", ""), 999))
+    return results
+
+
 def _answer_node(state: RouterState) -> dict:
     query_type = state["query_type"]
-    if query_type == "sql":
+    if query_type == "combined":
+        combined = state.get("combined_result", {})
+        if combined.get("fallback"):
+            # 降级为 RAG，使用 rag_answer
+            text = state.get("rag_answer") or "RAG 检索未返回结果。"
+        else:
+            text = state.get("answer") or "组合查询未返回结果。"
+        photos = state.get("photos", [])
+    elif query_type == "sql":
         result = state.get("sql_result", {})
         text = result.get("answer") or "SQL 查询未返回结果。"
+        photos = []
     elif query_type == "tool":
         text = state.get("tool_answer") or "工具调用未返回结果。"
+        photos = []
     else:
         text = state.get("rag_answer") or "RAG 检索未返回结果。"
-    # 只有 RAG 分支才有照片引用
-    photos = state.get("photos", []) if query_type == "rag" else []
+        photos = state.get("photos", [])
     return {"answer": text, "photos": photos}
 
 
@@ -227,15 +452,22 @@ def _get_graph():
         g.add_node("sql_query", _sql_node)
         g.add_node("rag_query", _rag_node)
         g.add_node("tool_query", _tool_node)
+        g.add_node("combined_query", _combined_node)
         g.add_node("answer", _answer_node)
         g.add_edge(lg_graph.START, "classify")
         g.add_conditional_edges(
             "classify", _route_by_type,
-            {"sql": "sql_query", "rag": "rag_query", "tool": "tool_query"},
+            {
+                "sql": "sql_query",
+                "rag": "rag_query",
+                "tool": "tool_query",
+                "combined": "combined_query",
+            },
         )
         g.add_edge("sql_query", "answer")
         g.add_edge("rag_query", "answer")
         g.add_edge("tool_query", "answer")
+        g.add_edge("combined_query", "answer")
         g.add_edge("answer", lg_graph.END)
         _graph_app = g.compile()
     return _graph_app
@@ -310,6 +542,7 @@ class PhotoAgent:
             "sql_result": {},
             "rag_answer": "",
             "tool_answer": "",
+            "combined_result": {},
             "answer": "",
             "photos": [],
         }
@@ -357,8 +590,17 @@ def _chat_loop(agent: PhotoAgent) -> None:
             "sql": "SQL 统计查询",
             "rag": "RAG 语义检索",
             "tool": "Tool API 调用",
+            "combined": "Combined 组合查询",
         }.get(query_type, "未知路由")
         print(f"路由: {route_name}")
+
+        if query_type == "combined":
+            combined = result.get("combined_result", {})
+            if combined.get("fallback"):
+                reason = combined.get("fallback_reason", "未知")
+                print(f"(组合查询降级: {reason})")
+            else:
+                print(f"SQL ∩ RAG: {len(combined.get('intersection_ids', []))} 张匹配照片")
         print()
 
         if query_type == "sql":
@@ -554,7 +796,7 @@ def _handle_sessions(cfg: config.Config, cmd: list[str]) -> None:
                 store.add_message(session_id, "assistant", answer, query_type=query_type)
 
                 route_label = {
-                    "sql": "SQL", "rag": "RAG", "tool": "Tool",
+                    "sql": "SQL", "rag": "RAG", "tool": "Tool", "combined": "Combined",
                 }.get(query_type, query_type)
                 print(f"[{route_label}] {answer}")
                 print()

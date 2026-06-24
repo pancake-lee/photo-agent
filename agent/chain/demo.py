@@ -22,6 +22,8 @@ DEMO_QUERIES: list[tuple[str, str]] = [
     ("RAG", "红墙前的照片"),
     ("SQL", "2024 年拍了几张照片？"),
     ("RAG", "夜景照片"),
+    ("combined", "蓝调时刻的街拍"),
+    ("combined", "暖色调的人像"),
 ]
 
 
@@ -51,7 +53,10 @@ def run_demo(cfg: config.Config, graph_app, tracker) -> None:
             "query_type": "",
             "sql_result": {},
             "rag_answer": "",
+            "tool_answer": "",
+            "combined_result": {},
             "answer": "",
+            "photos": [],
         }
 
         try:
@@ -66,8 +71,17 @@ def run_demo(cfg: config.Config, graph_app, tracker) -> None:
                 print(f"SQL: {sql_result.get('sql', 'N/A')}")
                 print(f"结果数: {len(sql_result.get('results') or [])}")
                 answer = sql_result.get("answer", "")
+            elif actual_type == "combined":
+                combined = result.get("combined_result", {})
+                if combined.get("fallback"):
+                    print(f"(降级: {combined.get('fallback_reason', '')})")
+                else:
+                    print(f"SQL ∩ RAG: {len(combined.get('intersection_ids', []))} 张")
+                answer = result.get("answer", "") or result.get("rag_answer", "")
+            elif actual_type == "tool":
+                answer = result.get("tool_answer", "") or result.get("answer", "")
             else:
-                answer = result["rag_answer"]
+                answer = result.get("rag_answer", "") or result.get("answer", "")
 
             if len(answer) > 200:
                 answer = answer[:200] + "..."

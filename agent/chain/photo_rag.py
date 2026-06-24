@@ -265,11 +265,9 @@ def _filter_by_ratio_gap(results: list[dict], ratio_threshold: float) -> list[di
         截断后的结果列表（至少保留 1 条）
     """
     if len(results) < 2:
-        logger.info("[自动断层] 结果不足 2 条，跳过")
         return results
 
     distances = [r.get("distance") for r in results]
-    logger.info("[自动断层] 当前距离序列: %s", [f"{d:.4f}" if d else "None" for d in distances])
 
     # 打印所有相邻比值
     ratios: list[float] = []
@@ -281,7 +279,7 @@ def _filter_by_ratio_gap(results: list[dict], ratio_threshold: float) -> list[di
             ratios.append(r)
         else:
             ratios.append(float("nan"))
-    logger.info("[自动断层] 相邻比值序列: %s", [f"{r:.2f}" if not (r != r) else "nan" for r in ratios])
+    logger.info("[过滤-阶段1] 相邻比值序列: %s", [f"{r:.2f}" if not (r != r) else "nan" for r in ratios])
 
     for i in range(len(distances) - 1):
         d_curr = distances[i]
@@ -292,15 +290,65 @@ def _filter_by_ratio_gap(results: list[dict], ratio_threshold: float) -> list[di
         if ratio >= ratio_threshold:
             cut_at = i + 1  # 保留 [0, cut_at)
             logger.info(
-                "[自动断层] ✅ 触发截断: dist[%d]=%.4f → dist[%d]=%.4f (ratio=%.2f >= %.2f), 保留前 %d 条",
+                "[过滤-阶段1] ✅ 触发截断: dist[%d]=%.4f → dist[%d]=%.4f (ratio=%.2f >= %.2f), 保留前 %d 条",
                 i, d_curr, i + 1, d_next, ratio, ratio_threshold, cut_at,
             )
             return results[:cut_at]
 
     max_ratio = max(ratios) if ratios else 0.0
-    logger.info("[自动断层] ❌ 未触发截断（最大比值 %.2f < 阈值 %.2f），保留全部 %d 条",
-                max_ratio, ratio_threshold, len(results))
     return results
+
+
+def retrieve_photo_ids(
+    cfg: config.Config,
+    question: str,
+    n_results: int = 20,
+    distance_threshold: float | None = None,
+    auto_distance_ratio: float = 1.8,
+) -> list[str]:
+    """
+    纯向量语义检索，仅返回 photo_id 列表（按相似度降序）。
+
+    用于组合查询场景（SQL 结构化过滤 + RAG 语义检索取交集）。
+    不生成 LLM 回答，只做检索。
+
+    参数:
+        cfg:                 配置对象
+        question:            用户问题
+        n_results:           返回的最大照片数
+        distance_threshold:  绝对距离阈值（None 表示不过滤）
+        auto_distance_ratio: 自动比值断层阈值（默认 1.8），0 表示关闭
+
+    返回:
+        按相似度降序排列的 photo_id 列表
+    """
+    # 检索更多 chunk 再聚合到照片级别
+    results = _retrieve(cfg, question, n_results=n_results * 3)
+    results = _aggregate_by_photo(results, top_n=n_results)
+
+    # 自动比值断层过滤
+    if auto_distance_ratio > 0:
+        results = _filter_by_ratio_gap(results, auto_distance_ratio)
+
+    # 绝对距离阈值过滤
+    if distance_threshold is not None:
+        results = [
+            r for r in results
+            if r.get("distance") is not None and r["distance"] <= distance_threshold
+        ]
+
+    # 提取 photo_id
+    ids: list[str] = []
+    seen: set[str] = set()
+    for r in results:
+        meta = r.get("metadata") or {}
+        pid = meta.get("photo_id", "")
+        if pid and pid not in seen:
+            seen.add(pid)
+            ids.append(pid)
+
+    logger.info("[组合查询] RAG 检索返回 %d 个 photo_id", len(ids))
+    return ids
 
 
 def answer_question(
@@ -343,7 +391,7 @@ def answer_question(
     if results:
         dists = [f"{r.get('distance', '?'):.4f}" if r.get('distance') is not None else "?" for r in results]
         pids = [(r.get("metadata") or {}).get("photo_id", "?") for r in results]
-        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s, photo_ids=%s", len(results), dists, pids)
+        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s", len(results), dists)
 
     # 阶段 1: 自动比值断层过滤 — 检测距离序列中的显著跳跃
     if auto_distance_ratio > 0:
@@ -366,11 +414,6 @@ def answer_question(
             logger.info(
                 "[过滤-阶段2] 距离阈值: %.4f, %d → %d 条",
                 distance_threshold, before, len(results),
-            )
-        else:
-            logger.info(
-                "[过滤-阶段2] 距离阈值: %.4f, 全部 %d 条均通过",
-                distance_threshold, before,
             )
 
     context, photo_refs = _build_context(results, cfg)

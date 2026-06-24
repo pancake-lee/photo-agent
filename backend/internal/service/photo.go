@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pancake-lee/photo-agent/internal/model"
@@ -431,6 +432,84 @@ func buildOrderClause(sortBy, sortOrder string) string {
 	default:
 		return "shot_at DESC, imported_at DESC"
 	}
+}
+
+// AttributeValues 结构化属性的去重值集合，供 Text-to-SQL prompt 动态拼入。
+type AttributeValues struct {
+	Objects     []string `json:"objects"`
+	Colors      []string `json:"colors"`
+	Scene       []string `json:"scene"`
+	Lighting    []string `json:"lighting"`
+	Mood        []string `json:"mood"`
+	Composition []string `json:"composition"`
+}
+
+// ListDistinctAttributeValues 查询所有结构化属性的去重值。
+// objects/colors/composition 是逗号分隔的多值字段，返回拆分后的独立值。
+func ListDistinctAttributeValues() (*AttributeValues, error) {
+	result := &AttributeValues{}
+
+	// 单值字段: scene, lighting, mood
+	for _, spec := range []struct {
+		col string
+		dst *[]string
+	}{
+		{"scene", &result.Scene},
+		{"lighting", &result.Lighting},
+		{"mood", &result.Mood},
+	} {
+		if err := db.Model(&model.Photo{}).
+			Where(spec.col+" != ?", "").
+			Distinct().
+			Pluck(spec.col, spec.dst).Error; err != nil {
+			return nil, fmt.Errorf("query %s failed: %w", spec.col, err)
+		}
+	}
+
+	// 逗号分隔多值字段: objects, colors, composition
+	for _, spec := range []struct {
+		col string
+		dst *[]string
+	}{
+		{"objects", &result.Objects},
+		{"colors", &result.Colors},
+		{"composition", &result.Composition},
+	} {
+		vals, err := _pluckDistinctSplit(spec.col)
+		if err != nil {
+			return nil, err
+		}
+		*spec.dst = vals
+	}
+
+	return result, nil
+}
+
+// _pluckDistinctSplit 查询逗号分隔字段的拆分去重值。
+func _pluckDistinctSplit(col string) ([]string, error) {
+	var rows []string
+	if err := db.Model(&model.Photo{}).
+		Where(col+" != ?", "").
+		Distinct().
+		Pluck(col, &rows).Error; err != nil {
+		return nil, fmt.Errorf("query %s failed: %w", col, err)
+	}
+
+	seen := make(map[string]struct{})
+	result := make([]string, 0)
+	for _, r := range rows {
+		for _, part := range strings.Split(r, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if _, ok := seen[part]; !ok {
+				seen[part] = struct{}{}
+				result = append(result, part)
+			}
+		}
+	}
+	return result, nil
 }
 
 // ListDistinctTags 查询所有不重复的标签

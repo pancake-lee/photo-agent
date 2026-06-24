@@ -42,8 +42,9 @@ func setupV1Routes(api *gin.RouterGroup) {
 	// 通用 SQL 查询
 	api.POST("/query/sql", ExecuteSQL)
 
-	// 表结构
+	// 表结构 & 属性值
 	api.GET("/schema/photos", GetPhotoSchema)
+	api.GET("/photos/attribute-values", GetAttributeValues)
 
 	// 时间线
 	api.GET("/timelines", ListTimelines)
