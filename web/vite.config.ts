@@ -20,6 +20,10 @@ export default defineConfig({
         target: 'http://localhost:10005',
         changeOrigin: true,
       },
+      '/api/cluster': {
+        target: 'http://localhost:10005',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:10004',
         changeOrigin: true,

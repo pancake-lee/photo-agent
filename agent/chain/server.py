@@ -26,6 +26,7 @@ import chain.photo_agent as photo_agent
 import chain.session_store as session_store
 import chain.embed_queue as embed_queue
 import chain.evaluation as evaluation_mod
+import chain.cluster as cluster_mod
 import vectorstore.chroma_client as chroma_client
 import config as config_mod
 
@@ -220,6 +221,55 @@ class EvalResultResponse(pydantic.BaseModel):
     details: list[EvalDetailItem]
 
 
+# ── 聚类 Pydantic 模型 ────────────────────────────────────
+
+class ClusterRunRequest(pydantic.BaseModel):
+    min_cluster_size: int = 5
+    min_samples: int = 3
+    umap_n_neighbors: int = 15
+    umap_min_dist: float = 0.1
+    umap_n_components: int = 5
+    umap_metric: str = "cosine"
+
+
+class ClusterPhotoItem(pydantic.BaseModel):
+    photo_id: str
+    filename: str
+    distance_to_centroid: float
+
+
+class ClusterItem(pydantic.BaseModel):
+    cluster_id: int
+    label: str
+    size: int
+    coherence_score: float
+    photos: list[ClusterPhotoItem] = []
+
+
+class ClusterStatsResponse(pydantic.BaseModel):
+    total_photos: int
+    clustered_photos: int
+    noise_photos: int
+    num_clusters: int
+    duration_seconds: float
+
+
+class ClusterResultSummary(pydantic.BaseModel):
+    id: str
+    created_at: str
+    params: dict
+    stats: ClusterStatsResponse
+    cluster_labels: list[dict] = []
+
+
+class ClusterResultDetail(pydantic.BaseModel):
+    id: str
+    created_at: str
+    params: dict
+    stats: ClusterStatsResponse
+    clusters: list[ClusterItem]
+
+
 # ── 应用工厂 ──────────────────────────────────────────────
 
 def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
@@ -263,6 +313,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     # 初始化黄金用例存储路径
     global _GOLDEN_QUERIES_DIR
     _GOLDEN_QUERIES_DIR = cfg.resolve_path("./data")
+
+    # 初始化聚类结果存储路径
+    cluster_mod._set_cluster_dir(cfg.resolve_path("./data/clusters"))
 
     # ── 注册路由 ──────────────────────────────────────────
 
@@ -569,6 +622,58 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "precision_k": raw["precision_k"],
             "details": flat_details,
         }
+
+    # ── 聚类 API ─────────────────────────────────────────
+
+    @app.post("/api/cluster/run", response_model=ClusterResultDetail)
+    async def cluster_run(body: ClusterRunRequest, req: fastapi.Request):
+        """触发一次聚类计算（同步执行，结果存入 JSON 文件）。"""
+        chroma = req.app.state.chroma_store
+
+        # 检查是否有 embedding 数据
+        if chroma.count() == 0:
+            raise fastapi.HTTPException(status_code=400, detail="ChromaDB 中无嵌入数据，请先运行 embedding")
+
+        try:
+            result = cluster_mod.run_clustering(
+                chroma,
+                min_cluster_size=body.min_cluster_size,
+                min_samples=body.min_samples,
+                umap_n_neighbors=body.umap_n_neighbors,
+                umap_min_dist=body.umap_min_dist,
+                umap_n_components=body.umap_n_components,
+                umap_metric=body.umap_metric,
+            )
+        except Exception as exc:
+            logger.exception("聚类计算失败")
+            raise fastapi.HTTPException(status_code=500, detail=f"聚类失败: {exc}")
+
+        # 保存结果
+        cluster_mod.save_result(result)
+        logger.info("聚类结果已保存: %s", result.id)
+
+        return cluster_mod._result_to_dict(result)
+
+    @app.get("/api/cluster/results", response_model=list[ClusterResultSummary])
+    async def cluster_list_results():
+        """列出所有聚类结果（摘要，不含簇内照片详情）。"""
+        return cluster_mod.list_results()
+
+    @app.get("/api/cluster/results/{result_id}", response_model=ClusterResultDetail)
+    async def cluster_get_result(result_id: str):
+        """获取一次聚类结果的完整详情。"""
+        r = cluster_mod.load_result(result_id)
+        if r is None:
+            raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
+        return cluster_mod._result_to_dict(r)
+
+    @app.delete("/api/cluster/results/{result_id}", response_model=dict)
+    async def cluster_delete_result(result_id: str):
+        """删除一次聚类结果。"""
+        ok = cluster_mod.delete_result(result_id)
+        if not ok:
+            raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
+        return {"ok": True}
 
     return app
 

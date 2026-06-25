@@ -6,6 +6,7 @@ import {
   ImageOutline,
   AddOutline,
   BookmarkOutline,
+  GitNetworkOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
@@ -59,6 +60,11 @@ const menuOptions = computed<MenuOption[]>(() => {
       key: '/golden-queries',
       icon: renderIcon(BookmarkOutline),
     },
+    {
+      label: '组图发现',
+      key: '/cluster',
+      icon: renderIcon(GitNetworkOutline),
+    },
     // 新建对话放在固定功能最后
     {
       label: '新建对话',
@@ -91,6 +97,9 @@ const selectedKey = computed(() => {
   }
   if (path === '/golden-queries') {
     return '/golden-queries'
+  }
+  if (path === '/cluster') {
+    return '/cluster'
   }
   return '/photos'
 })

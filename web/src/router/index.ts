@@ -10,6 +10,11 @@ const routes = [
     component: () => import('../views/GoldenQueryManagement.vue'),
   },
   {
+    path: '/cluster',
+    name: 'cluster',
+    component: () => import('../views/ClusterView.vue'),
+  },
+  {
     path: '/chat/:sessionId?',
     name: 'chat',
     component: () => import('../views/ChatView.vue'),

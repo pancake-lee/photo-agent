@@ -1,0 +1,428 @@
+"""
+    照片向量聚类模块。
+
+    基于 ChromaDB 中已有照片向量，通过 UMAP 降维 + HDBSCAN 聚类，
+    发现视觉相似的照片分组。结果以 JSON 文件存储。
+
+    用法:
+        import chain.cluster as cluster_mod
+
+        result = cluster_mod.run_clustering(
+            chroma_store,
+            min_cluster_size=5,
+            min_samples=3,
+            umap_n_neighbors=15,
+            umap_min_dist=0.1,
+            umap_n_components=5,
+            umap_metric="cosine",
+        )
+"""
+
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
+import time
+import json
+import uuid
+import logging
+import datetime
+import dataclasses
+import typing
+
+import numpy as np
+
+import vectorstore.chroma_client as chroma_client
+
+logger = logging.getLogger(__name__)
+
+
+# ── 聚类结果存储 ──────────────────────────────────────────────
+
+_CLUSTER_DIR: pathlib.Path | None = None
+
+
+def _set_cluster_dir(dir_path: pathlib.Path) -> None:
+    """设置聚类结果存储目录（由 server.py 创建 app 时调用）。"""
+    global _CLUSTER_DIR
+    _CLUSTER_DIR = dir_path
+    _CLUSTER_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _cluster_dir() -> pathlib.Path:
+    global _CLUSTER_DIR
+    if _CLUSTER_DIR is None:
+        raise RuntimeError("聚类存储路径未初始化，请先调用 _set_cluster_dir()")
+    return _CLUSTER_DIR
+
+
+# ── 结果数据结构 ──────────────────────────────────────────────
+
+@dataclasses.dataclass
+class ClusterPhoto:
+    photo_id: str
+    filename: str
+    distance_to_centroid: float
+
+
+@dataclasses.dataclass
+class ClusterInfo:
+    cluster_id: int
+    label: str
+    size: int
+    coherence_score: float
+    photos: list[ClusterPhoto]
+
+
+@dataclasses.dataclass
+class ClusterStats:
+    total_photos: int
+    clustered_photos: int
+    noise_photos: int
+    num_clusters: int
+    duration_seconds: float
+
+
+@dataclasses.dataclass
+class ClusterResult:
+    id: str
+    created_at: str
+    params: dict
+    stats: ClusterStats
+    clusters: list[ClusterInfo]
+
+
+# ── 内部：向量获取 ────────────────────────────────────────────
+
+def _fetch_photo_vectors(
+    chroma: chroma_client.ChromaPhotoStore,
+) -> tuple[list[str], list[str], np.ndarray]:
+    """
+    从 ChromaDB 获取全部照片向量。
+
+    多 chunk 的照片取各 chunk embedding 的平均值。
+
+    返回:
+        photo_ids:  照片 ID 列表（与向量矩阵行对应）
+        filenames:  文件名列表（从 metadata 提取，兜底用 photo_id）
+        matrix:      N × D 的 numpy 数组
+    """
+    raw = chroma.collection.get(include=["embeddings", "metadatas"])
+    all_ids = raw.get("ids", [])
+    embeddings_all = raw.get("embeddings", [])
+    metadatas_all = raw.get("metadatas", [])
+
+    if not all_ids or len(embeddings_all) == 0:
+        raise ValueError("ChromaDB 中无嵌入数据，请先运行 embedding")
+
+    # 按 photo_id 分组求平均
+    groups: dict[str, list[np.ndarray]] = {}
+    filenames: dict[str, str] = {}
+
+    for i, chunk_id in enumerate(all_ids):
+        emb = embeddings_all[i]
+        meta = metadatas_all[i] if i < len(metadatas_all) else {}
+        pid = (meta or {}).get("photo_id", chunk_id)
+        groups.setdefault(pid, []).append(np.array(emb, dtype=np.float32))
+        # 优先使用 metadata 中的文件名，兜底用 photo_id
+        if pid not in filenames:
+            fn = (meta or {}).get("filename", "")
+            if not fn:
+                fn = (meta or {}).get("file_path", "")
+                if fn:
+                    fn = pathlib.Path(fn).name
+            filenames[pid] = fn if fn else pid
+
+    photo_ids: list[str] = []
+    vectors: list[np.ndarray] = []
+    for pid, emb_list in groups.items():
+        photo_ids.append(pid)
+        avg = np.mean(emb_list, axis=0)
+        vectors.append(avg)
+
+    matrix = np.stack(vectors, axis=0)
+    logger.info(
+        "从 ChromaDB 获取 %d 个 photo_id（%d 个 chunk），向量矩阵 shape=%s",
+        len(photo_ids), len(all_ids), matrix.shape,
+    )
+    return photo_ids, [filenames.get(pid, pid) for pid in photo_ids], matrix
+
+
+# ── 内部：聚类核心逻辑 ────────────────────────────────────────
+
+def _run_umap(
+    matrix: np.ndarray,
+    n_neighbors: int,
+    min_dist: float,
+    n_components: int,
+    metric: str,
+) -> np.ndarray:
+    """UMAP 降维。"""
+    import umap
+
+    # n_neighbors 不能超过样本数
+    n = max(2, min(n_neighbors, matrix.shape[0] - 1))
+    if n != n_neighbors:
+        logger.warning("n_neighbors 从 %d 调整为 %d（样本数=%d）", n_neighbors, n, matrix.shape[0])
+
+    reducer = umap.UMAP(
+        n_neighbors=n,
+        min_dist=min_dist,
+        n_components=n_components,
+        metric=metric,
+        random_state=42,
+        n_jobs=1,
+    )
+    reduced = reducer.fit_transform(matrix)
+    logger.info("UMAP 降维完成: %s → %s", matrix.shape, reduced.shape)
+    return reduced
+
+
+def _run_hdbscan(
+    reduced: np.ndarray,
+    min_cluster_size: int,
+    min_samples: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """HDBSCAN 聚类。"""
+    import hdbscan
+
+    # min_cluster_size 不能超过样本数
+    n = max(2, min(min_cluster_size, reduced.shape[0]))
+    s = max(1, min(min_samples, reduced.shape[0]))
+    if n != min_cluster_size:
+        logger.warning("min_cluster_size 从 %d 调整为 %d", min_cluster_size, n)
+    if s != min_samples:
+        logger.warning("min_samples 从 %d 调整为 %d", min_samples, s)
+
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=n,
+        min_samples=s,
+        metric="euclidean",
+        cluster_selection_method="eom",
+    )
+    labels = clusterer.fit_predict(reduced)
+    probabilities = clusterer.probabilities_
+    logger.info(
+        "HDBSCAN 完成: %d 个簇, %d 个噪声点",
+        len(set(labels)) - (1 if -1 in labels else 0),
+        np.sum(labels == -1),
+    )
+    return labels, probabilities
+
+
+def _compute_cluster_stats(
+    reduced: np.ndarray,
+    labels: np.ndarray,
+    photo_ids: list[str],
+    filenames: list[str],
+) -> list[ClusterInfo]:
+    """计算每个聚类的统计信息。"""
+    unique_labels = sorted(set(labels))
+    clusters: list[ClusterInfo] = []
+
+    for label in unique_labels:
+        if label == -1:
+            continue  # 跳过噪声
+
+        mask = labels == label
+        indices = np.where(mask)[0]
+        members = reduced[mask]
+        centroid = np.mean(members, axis=0)
+
+        # 凝聚度：成员到质心的平均距离（归一化取反，越高越好）
+        distances = np.linalg.norm(members - centroid, axis=1)
+        mean_dist = float(np.mean(distances))
+        # 用 1/(1+mean_dist) 映射到 (0, 1]，距离越小分数越高
+        coherence = round(1.0 / (1.0 + mean_dist), 4)
+
+        # 按质心距离排序（距离最近的排前面 → 视觉最连贯）
+        sorted_order = np.argsort(distances)
+
+        photos: list[ClusterPhoto] = []
+        for idx in sorted_order:
+            i = int(indices[idx])
+            photos.append(ClusterPhoto(
+                photo_id=photo_ids[i],
+                filename=filenames[i],
+                distance_to_centroid=round(float(distances[idx]), 4),
+            ))
+
+        clusters.append(ClusterInfo(
+            cluster_id=int(label),
+            label=f"聚类 {label}",
+            size=len(photos),
+            coherence_score=coherence,
+            photos=photos,
+        ))
+
+    # 按簇大小降序排列
+    clusters.sort(key=lambda c: c.size, reverse=True)
+    return clusters
+
+
+# ── 公开接口 ──────────────────────────────────────────────────
+
+def run_clustering(
+    chroma: chroma_client.ChromaPhotoStore,
+    min_cluster_size: int = 5,
+    min_samples: int = 3,
+    umap_n_neighbors: int = 15,
+    umap_min_dist: float = 0.1,
+    umap_n_components: int = 5,
+    umap_metric: str = "cosine",
+) -> ClusterResult:
+    """
+    执行一次完整的聚类流程。
+
+    参数:
+        chroma: ChromaPhotoStore 实例
+        其他: 聚类参数（见 backlog 说明）
+    """
+    t0 = time.time()
+
+    # 1. 获取向量
+    photo_ids, filenames, matrix = _fetch_photo_vectors(chroma)
+    n_total = len(photo_ids)
+
+    # 2. UMAP 降维
+    reduced = _run_umap(
+        matrix,
+        n_neighbors=umap_n_neighbors,
+        min_dist=umap_min_dist,
+        n_components=umap_n_components,
+        metric=umap_metric,
+    )
+
+    # 3. HDBSCAN 聚类
+    labels, _probs = _run_hdbscan(reduced, min_cluster_size, min_samples)
+
+    # 4. 计算簇统计
+    clusters = _compute_cluster_stats(reduced, labels, photo_ids, filenames)
+
+    noise_count = int(np.sum(labels == -1))
+    clustered_count = n_total - noise_count
+
+    stats = ClusterStats(
+        total_photos=n_total,
+        clustered_photos=clustered_count,
+        noise_photos=noise_count,
+        num_clusters=len(clusters),
+        duration_seconds=round(time.time() - t0, 1),
+    )
+
+    result = ClusterResult(
+        id=uuid.uuid4().hex[:12],
+        created_at=datetime.datetime.now().isoformat(),
+        params={
+            "min_cluster_size": min_cluster_size,
+            "min_samples": min_samples,
+            "umap_n_neighbors": umap_n_neighbors,
+            "umap_min_dist": umap_min_dist,
+            "umap_n_components": umap_n_components,
+            "umap_metric": umap_metric,
+        },
+        stats=stats,
+        clusters=clusters,
+    )
+
+    logger.info(
+        "聚类完成: %d 张照片 → %d 个簇, %d 噪声, 耗时 %.1fs",
+        n_total, stats.num_clusters, stats.noise_photos, stats.duration_seconds,
+    )
+    return result
+
+
+# ── 结果文件读写 ──────────────────────────────────────────────
+
+def _result_to_dict(r: ClusterResult) -> dict:
+    """将 ClusterResult 转为可 JSON 序列化的 dict。"""
+    return {
+        "id": r.id,
+        "created_at": r.created_at,
+        "params": r.params,
+        "stats": dataclasses.asdict(r.stats),
+        "clusters": [
+            {
+                "cluster_id": c.cluster_id,
+                "label": c.label,
+                "size": c.size,
+                "coherence_score": c.coherence_score,
+                "photos": [dataclasses.asdict(p) for p in c.photos],
+            }
+            for c in r.clusters
+        ],
+    }
+
+
+def _dict_to_result(d: dict) -> ClusterResult:
+    """从 dict 还原 ClusterResult（不含 clusters 详情时 clusters 为空）。"""
+    stats_raw = d.get("stats", {})
+    return ClusterResult(
+        id=d["id"],
+        created_at=d["created_at"],
+        params=d.get("params", {}),
+        stats=ClusterStats(**stats_raw),
+        clusters=[
+            ClusterInfo(
+                cluster_id=c["cluster_id"],
+                label=c.get("label", f"聚类 {c['cluster_id']}"),
+                size=c["size"],
+                coherence_score=c.get("coherence_score", 0.0),
+                photos=[ClusterPhoto(**p) for p in c.get("photos", [])],
+            )
+            for c in d.get("clusters", [])
+        ],
+    )
+
+
+def save_result(result: ClusterResult) -> None:
+    """将聚类结果保存为 JSON 文件。"""
+    d = _result_to_dict(result)
+    fp = _cluster_dir() / f"{result.id}.json"
+    fp.write_text(json.dumps(d, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+def load_result(result_id: str) -> ClusterResult | None:
+    """加载单个聚类结果。"""
+    fp = _cluster_dir() / f"{result_id}.json"
+    if not fp.exists():
+        return None
+    return _dict_to_result(json.loads(fp.read_text(encoding="utf-8")))
+
+
+def list_results() -> list[dict]:
+    """
+    列出所有聚类结果（摘要，不含 clusters 详情）。
+    按创建时间倒序。
+    """
+    results: list[dict] = []
+    if not _cluster_dir or not _CLUSTER_DIR.exists():
+        return results
+    for fp in sorted(_cluster_dir().glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            d = json.loads(fp.read_text(encoding="utf-8"))
+            # 返回摘要（去掉 clusters 里的 photos 以减少传输量）
+            summary = {
+                "id": d["id"],
+                "created_at": d["created_at"],
+                "params": d.get("params", {}),
+                "stats": d.get("stats", {}),
+                "cluster_labels": [
+                    {"cluster_id": c["cluster_id"], "label": c.get("label", ""), "size": c["size"]}
+                    for c in d.get("clusters", [])
+                ],
+            }
+            results.append(summary)
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning("跳过损坏的聚类结果文件 %s: %s", fp.name, e)
+    return results
+
+
+def delete_result(result_id: str) -> bool:
+    """删除一个聚类结果文件。返回 True 表示成功删除。"""
+    fp = _cluster_dir() / f"{result_id}.json"
+    if not fp.exists():
+        return False
+    fp.unlink()
+    return True
