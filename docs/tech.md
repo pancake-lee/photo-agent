@@ -10,12 +10,14 @@
 ```
 Web 前端 (Vue 3 + NaiveUI, :5173)
     ├─ /api/v1/*  →  Go Backend (:10004)
-    └─ /api/chat/*,/api/embed/*  →  Python Agent API (:10005)
+    └─ /api/chat/*,/api/embed/*,/api/golden-queries/*,/api/cluster/*  →  Python Agent API (:10005)
           │                              │
           │  Text-to-SQL ────────────────→ Go /api/v1/query/sql
           │  Function Calling ───────────→ Go /v1/openapi.json → 工具调用
           │  RAG ←── ChromaDB (本地向量库)
           │  Embedding ←── Go /v1/embeddings (代理)
+          │  聚类分析 ←── ChromaDB 向量聚类 (HDBSCAN + UMAP)
+          │  黄金用例 ←── agent/data/golden_queries.json
           │
     Go Backend (:10004)
         ├── 照片 CRUD / 文件服务 / 统计 API
@@ -259,12 +261,32 @@ descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go
 | POST | `/api/embed/photos/:id` | 单张嵌入 |
 | GET | `/api/embed/photos/:id` | 嵌入详情 |
 
+**黄金查询用例**：
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| GET | `/api/golden-queries` | 用例列表 |
+| POST | `/api/golden-queries` | 创建用例 |
+| POST | `/api/golden-queries/import` | 批量导入 |
+| DELETE | `/api/golden-queries/:id` | 删除用例 |
+| POST | `/api/golden-queries/evaluate` | 运行评估，返回 P@10/R@10/MRR |
+
+**聚类分析**：
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| POST | `/api/cluster/run` | 执行聚类（参数：min_cluster_size 等） |
+| GET | `/api/cluster/results` | 历史聚类结果列表 |
+| GET | `/api/cluster/results/:id` | 聚类结果详情（含每个 cluster 的照片列表） |
+| DELETE | `/api/cluster/results/:id` | 删除聚类结果 |
+| POST | `/api/cluster/results/:id/clusters/:cid/generate-theme` | 为指定聚类生成主题标签 |
+
 ### 4.3 Web 前端路由
 
 | 路径 | 组件 | 用途 |
 |------|------|------|
 | `#/photos` | PhotoManagement | 照片管理主页（浏览/筛选/上传/删除） |
 | `#/chat/:sessionId?` | ChatView | AI 对话界面 |
+| `#/golden-queries` | GoldenQueryManagement | 黄金查询用例管理 |
+| `#/cluster` | ClusterView | 聚类分析与组图发现 |
 
 Vite 开发代理：
 - `/api/v1/*` → Go Backend (:10004)

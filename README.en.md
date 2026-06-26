@@ -1,0 +1,195 @@
+# Photo Agent
+
+English | [中文](./README.md)
+
+> Search your photo library with natural language — "that cat at the bathroom door with its mouth wide open" finds the exact photo.
+
+![Cat at bathroom door with mouth open](./docs/capture/v1.0.6-p1.png)
+![Photo Management](./docs/capture/v1.0.6-p2.png)
+![Golden Cases](./docs/capture/v1.0.6-p3.png)
+![Photo Clustering](./docs/capture/v1.0.6-p4.png)
+
+---
+
+## 🎯 Who Is This For?
+
+- **Photography Enthusiasts**: Want to search your photo library with natural language → Jump to [Quick Start](#-quick-start)
+- **AI Developers**: Want to learn LangGraph + ChromaDB + Go three-stack practice → See [Architecture Overview](#-architecture-overview) and [`docs/tech.md`](docs/tech.md)
+
+---
+
+## 🚀 Quick Start
+
+### 0. Prerequisites
+
+- Go 1.23+
+- Python 3.12 (recommended with `uv`)
+- Node.js + pnpm
+
+### 1. Clone & Configure
+
+```bash
+git clone https://github.com/yourname/photo-agent.git
+cd photo-agent
+cp ./configs/config.yaml .local/my-config.yaml
+# Edit .local/my-config.yaml, fill in your API Key and photo path
+```
+
+### 2. Preprocess Photos (VLM Description Generation)
+
+```bash
+make backend
+./bin/batch_vlm -c .local/my-config.yaml -input /path/to/your/photos
+```
+
+### 3. Start Services (Three Terminals)
+
+```bash
+# Terminal 1: Go Backend
+./bin/server -c .local/my-config.yaml
+
+# Terminal 2: Python AI Agent
+cd agent && source .venv/bin/activate
+python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+
+# Terminal 3: Web Frontend
+cd web && pnpm dev
+```
+
+Visit `http://localhost:5173` to start using.
+
+> All service ports are configured in `config.yaml` — no hardcoding required.
+
+---
+
+## 🧭 Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Web Frontend (Vue 3 + NaiveUI)                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  Chat / Clusters │  │  Semantic Search │  │  Structured     │
+│  (Python API)   │  │  (RAG / ChromaDB)│  │  Query (Go API) │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+         │                    │                    │
+         └────────────────────┼────────────────────┘
+                              ▼
+                    ┌─────────────────────┐
+                    │  LangGraph Router   │
+                    │  SQL / RAG / Combined│
+                    └─────────────────────┘
+```
+
+**Core Decision**: User queries are automatically routed by LangGraph —
+
+- **SQL Branch**: Statistics, EXIF filtering ("how many shots at 50mm in 2023")
+- **RAG Branch**: Semantic descriptions ("atmospheric sunset by the sea")
+- **Combined Branch**: Composite conditions ("cat photos from last year with 85mm lens")
+
+See [`docs/tech.md`](docs/tech.md) for detailed architecture.
+
+---
+
+## ✨ Core Features
+
+### 1. Natural Language Search
+
+- **Semantic Search**: VLM-generated visual descriptions enable vector matching for fuzzy queries like "snow-capped mountains at golden hour"
+- **Structured Queries**: EXIF metadata (focal length, ISO, lens, time) via Text-to-SQL for precise filtering
+- **Hybrid Routing**: LangGraph automatically decides between SQL, RAG, or a combination
+
+### 2. Smart Albums (Unsupervised Clustering)
+
+- HDBSCAN + UMAP dimensionality reduction to automatically discover thematic groups in your library
+- LLM-generated topic names for each cluster (e.g., "Urban Blue Hour," "Yunnan Snow Mountain Series")
+- Web UI sorted by visual coherence
+
+### 3. Photo Archive Q&A
+
+- Multi-turn conversations with follow-up and condition refinement
+- Style analysis and composition preference insights based on actual work
+- Automatic timeline association with travel and activity tags
+
+### 4. Retrieval Quality Evaluation
+
+- Built-in "Golden Cases" test set for ongoing Precision@K / Recall / MRR monitoring
+- Current baseline: `Precision@10 = 0.93`, `MRR = 1.0`
+
+---
+
+## 🏗️ Three-Stack Architecture, Best of Both Worlds
+
+| Layer                | Tech Stack                               | Responsibilities                                                            |
+| :------------------- | :--------------------------------------- | :-------------------------------------------------------------------------- |
+| **Web Frontend**     | Vue 3 + NaiveUI                          | Photo management, chat interface, cluster browsing, golden case management  |
+| **Python Inference** | FastAPI + LangChain/LangGraph + ChromaDB | Agent orchestration, vector search, Text-to-SQL, cluster analysis           |
+| **Go Backend**       | Gin + GORM + SQLite                      | Photo metadata management, file serving, VLM preprocessing, Embedding proxy |
+
+**Why Not a Single Framework?**
+
+- **Go**: Stable, fast concurrency and metadata processing, familiar to you
+- **Python**: Richest AI ecosystem, LangGraph provides fine-grained routing control
+- **Each layer can be replaced independently** — no need to rewrite the backend when swapping frontend frameworks
+
+---
+
+## 📁 Project Structure
+
+```
+photo-agent/
+├── backend/              # Go Business Backend
+│   ├── cmd/server/       # HTTP Service + AutoSync
+│   └── cmd/batch_vlm/    # Batch VLM Preprocessing CLI
+├── agent/                # Python AI Service Layer
+│   ├── chain/            # LangGraph Orchestration + FastAPI Service
+│   ├── vectorstore/      # ChromaDB Wrapper
+│   ├── tools/            # OpenAPI Tool Parsing & Execution
+│   └── scripts/          # Indexing Scripts, Evaluation Scripts
+├── web/                  # Vue 3 Frontend
+├── configs/              # Configuration Templates
+├── data/                 # Runtime Data (Photos/SQLite/ChromaDB/descriptions.json)
+├── dify/                 # Early Dify Validation, Reference Only (Non-Core)
+└── docs/                 # Project Documentation
+```
+
+---
+
+## 📚 Documentation Index
+
+| Document                           | Content                                                 |
+| :--------------------------------- | :------------------------------------------------------ |
+| [docs/prd.md](docs/prd.md)         | Product requirements, user stories, acceptance criteria |
+| [docs/tech.md](docs/tech.md)       | Architecture design, API contracts, data models         |
+| [docs/backlog.md](docs/backlog.md) | Roadmap, rejected items                                 |
+| [docs/deploy.md](docs/deploy.md)   | Deployment guide                                        |
+| [docs/note.md](docs/note.md)       | Decision memos, lessons learned                         |
+
+---
+
+## 📊 Current Status
+
+| Feature                             | Status         |
+| :---------------------------------- | :------------- |
+| Natural Language Search (RAG + SQL) | ✅ Live        |
+| Smart Albums (HDBSCAN + UMAP)       | ✅ Live        |
+| Golden Case Evaluation              | ✅ Live        |
+| Web UI                              | ✅ Live        |
+| Text-to-SQL Hybrid Routing          | ✅ Live        |
+| Multi-turn Conversation Memory      | 🚧 In Progress |
+
+---
+
+## 🤝 Contributing
+
+Issues and PRs are welcome. Please read [docs/backlog.md](docs/backlog.md) first to understand current priorities and avoid duplicate work.
+
+---
+
+## 📄 License
+
+MIT

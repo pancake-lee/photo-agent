@@ -3,7 +3,7 @@
 # 建议复制到 .local/ 目录下并重命名（如 .local/my-config.yaml），避免将个人配置提交到 Git
 
 server:
-  addr: ":10000"                    # Go 后端监听地址
+  addr: ":10004"                    # Go 后端监听地址
 
 db:
   sqlite_path: "./data/sqlite/photo_agent.db"

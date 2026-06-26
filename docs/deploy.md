@@ -15,7 +15,7 @@
    ↓
 3. VLM 预处理（batch_vlm → descriptions.json + 压缩图片）
    ↓
-4. 启动 Go 后端（server → AutoSync：EXIF + 结构化属性提取 + SQLite + Dify）
+4. 启动 Go 后端（server → AutoSync：EXIF + 结构化属性提取 + SQLite）
    ↓
 5. 启动 Python Agent — CLI 或 API 模式 + Web 前端
 ```
@@ -23,8 +23,8 @@
 **运行时组件的关系**：
 
 ```
-Web (:10006) ─── /api/v1/* ──→ Go Backend (:10004)  [图片管理]
-     └── /api/chat/* ──→ Python Agent (:10005)       [AI 对话]
+Web (:10006) ─── /api/v1/* ──→ Go Backend (:10004)       [图片管理]
+     └── /api/chat/*,/api/embed/*,/api/golden-queries/*,/api/cluster/* ──→ Python Agent (:10005)  [AI 对话]
 
 Python Agent
   ├── CLI: stdin/stdout 交互式聊天
@@ -41,11 +41,11 @@ Python Agent
   ├── 工具调用: Function Calling → Go API (OpenAPI)
   └── 回答生成: LLM
 
-Go Backend (:10000)
+Go Backend (:10004)
      ├── 照片元数据 CRUD (SQLite)
      ├── 文件服务（图片访问）
      ├── Embedding 代理 (/v1/embeddings)
-     └── AutoSync 自动导入（EXIF 提取 + 结构化属性解析 + Dify 同步）
+     └── AutoSync 自动导入（EXIF 提取 + 结构化属性解析）
 ```
 
 ---
@@ -151,7 +151,7 @@ storage:
 
 ```yaml
 server:
-  addr: ":10000"                            # Go 后端监听地址
+  addr: ":10004"                            # Go 后端监听地址
 
 prices:
   path: ./configs/prices.yaml               # Token 价格追踪（可选）
@@ -375,7 +375,7 @@ pnpm dev
 ```
 
 Vite 代理配置：
-- `/api/chat/*` → Python Agent (`:10005`)
+- `/api/chat/*`, `/api/embed/*`, `/api/golden-queries/*`, `/api/cluster/*` → Python Agent (`:10005`)
 - `/api/v1/*` → Go Backend (`:10004`)
 
 Web 界面提供：
