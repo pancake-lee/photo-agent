@@ -70,9 +70,10 @@ class ClusterPhoto:
 class ClusterInfo:
     cluster_id: int
     label: str
-    size: int
-    coherence_score: float
-    photos: list[ClusterPhoto]
+    theme_description: str = ""
+    size: int = 0
+    coherence_score: float = 0.0
+    photos: list[ClusterPhoto] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -333,6 +334,221 @@ def run_clustering(
     return result
 
 
+# ── 主题标签生成 ──────────────────────────────────────────────
+
+_MAX_REPRESENTATIVE_PHOTOS = 8
+
+_THEME_SYSTEM_PROMPT = (
+    "你是一位摄影主题策划专家。用户会提供一组照片聚类中代表性照片的信息，"
+    "你需要为这组照片生成一个主题标签和一句话描述。\n\n"
+    "规则：\n"
+    "- 主题标签 6-12 个字，精炼有记忆点（如\"云南雪山系列\"\"城市蓝调时刻\"\"逆光人像合集\"）\n"
+    "- 一句话描述 15-30 字，概括这组照片的核心特征和视觉风格\n\n"
+    "你必须严格返回一行合法 JSON，不得包含任何其他文字、注释或 markdown 标记。\n"
+    '输出格式：{"label":"主题标签","description":"一句话描述"}'
+)
+
+_PHOTO_INFO_TEMPLATE = (
+    "- {filename} | 主体: {objects} | 场景: {scene} | 色调: {colors} | 光线: {lighting} | 情绪: {mood}"
+)
+
+
+def _fetch_photo_descriptions(
+    go_backend_url: str, photo_ids: list[str]
+) -> dict[str, dict]:
+    """从 Go 后端批量获取照片描述和结构化属性。"""
+    import httpx
+
+    result: dict[str, dict] = {}
+    if not photo_ids:
+        return result
+
+    photo_id_set = set(photo_ids)
+    client = httpx.Client(timeout=30.0)
+    try:
+        page = 1
+        while True:
+            resp = client.get(
+                f"{go_backend_url}/api/v1/photos",
+                params={"page": page, "page_size": 500},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("items", data if isinstance(data, list) else [])
+            if not items:
+                break
+            for p in items:
+                pid = p.get("id", "")
+                if pid in photo_id_set:
+                    result[pid] = {
+                        "filename": p.get("filename", pid),
+                        "objects": p.get("objects", "") or "",
+                        "scene": p.get("scene", "") or "",
+                        "colors": p.get("colors", "") or "",
+                        "lighting": p.get("lighting", "") or "",
+                        "mood": p.get("mood", "") or "",
+                        "description": (p.get("description", "") or "")[:200],
+                    }
+            page += 1
+    finally:
+        client.close()
+
+    return result
+
+
+def _build_photo_info_text(photo: dict) -> str:
+    """将单张照片的结构化属性格式化为一行描述文本。"""
+    return _PHOTO_INFO_TEMPLATE.format(
+        filename=photo.get("filename", "未知"),
+        objects=photo.get("objects") or "未识别",
+        scene=photo.get("scene") or "未识别",
+        colors=photo.get("colors") or "未识别",
+        lighting=photo.get("lighting") or "未识别",
+        mood=photo.get("mood") or "未识别",
+    )
+
+
+def _parse_llm_theme_response(raw: str) -> tuple[str, str]:
+    """从 LLM 响应中提取 label 和 description。
+
+    优先尝试 JSON 解析；失败时用正则从自由文本中提取。
+    返回 (label, description)，提取失败时两者均为空字符串。
+    """
+    import re
+
+    raw = raw.strip()
+
+    # 1. 尝试纯 JSON 解析
+    for attempt in (raw,):
+        # 去掉可能的 markdown 代码块包裹
+        cleaned = attempt
+        if cleaned.startswith("```"):
+            lines = cleaned.split("\n")
+            lines = [l for l in lines if not l.startswith("```")]
+            cleaned = "\n".join(lines).strip()
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict) and parsed.get("label"):
+                return parsed["label"].strip(), parsed.get("description", "").strip()
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+
+    # 2. Fallback: 从自由文本提取
+    # 尝试匹配 {"label":"...","description":"..."} 子串
+    m = re.search(r'\{\s*"label"\s*:\s*"([^"]+)"\s*,\s*"description"\s*:\s*"([^"]+)"\s*\}', raw)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+
+    # 3. Fallback: 匹配 "主题标签：xxx" / "标签：xxx" 等中文模式
+    label = ""
+    desc = ""
+    for pattern in [r'主题标签[：:]\s*(.+?)(?:\n|$)', r'标签[：:]\s*(.+?)(?:\n|$)', r'\*\*主题标签[：:]*\*\*\s*(.+?)(?:\n|$)']:
+        m = re.search(pattern, raw)
+        if m:
+            label = m.group(1).strip().lstrip("#").strip()
+            break
+
+    for pattern in [r'描述[：:]\s*(.+?)(?:\n|$)', r'\*\*描述[：:]*\*\*\s*(.+?)(?:\n|$)']:
+        m = re.search(pattern, raw)
+        if m:
+            desc = m.group(1).strip()
+            break
+
+    # 清理 label 中的 markdown 和多余符号
+    label = re.sub(r'[#*_]', '', label).strip()
+    # 如果 label 太长（可能是多标签拼接），只取第一个
+    if label and len(label) > 16:
+        # 尝试按空格或标点拆开取第一部分
+        parts = re.split(r'[，,、\s#]', label)
+        label = parts[0].strip()
+
+    return label, desc
+
+
+def generate_cluster_theme(
+    cfg,
+    result: ClusterResult,
+    cluster_id: int,
+    go_backend_url: str,
+) -> ClusterResult:
+    """为聚类结果中指定簇生成主题标签和描述。
+
+    通过 LLM 分析该簇的代表性照片，生成有意义的主题标签
+    （如"云南雪山系列"）和一句话描述。结果持久化到 JSON 文件。
+
+    参数:
+        cfg: 配置对象（需含 LLM 配置）
+        result: 聚类结果
+        cluster_id: 要生成主题的簇 ID（ClusterInfo.cluster_id）
+        go_backend_url: Go 后端地址
+
+    返回:
+        更新后的 ClusterResult（已持久化）
+    """
+    import langchain_core.messages as lc_messages
+    import utils.llm_factory as llm_factory
+
+    # 找到目标簇
+    target: ClusterInfo | None = None
+    for c in result.clusters:
+        if c.cluster_id == cluster_id:
+            target = c
+            break
+    if target is None:
+        raise ValueError(f"簇 {cluster_id} 不存在")
+
+    llm = llm_factory.create_llm(cfg, temperature=0.7)
+
+    # 1. 获取代表照片的描述
+    reps = target.photos[:_MAX_REPRESENTATIVE_PHOTOS]
+    rep_ids = [p.photo_id for p in reps]
+    photo_map = _fetch_photo_descriptions(go_backend_url, rep_ids)
+    logger.info("簇 %d: 获取了 %d/%d 张照片的描述", cluster_id, len(photo_map), len(rep_ids))
+
+    # 2. 构建照片信息文本
+    lines: list[str] = []
+    for p in reps:
+        info = photo_map.get(p.photo_id)
+        if info:
+            lines.append(_build_photo_info_text(info))
+        else:
+            lines.append(f"- {p.filename}")
+
+    if not lines:
+        raise RuntimeError(f"簇 {cluster_id} 无可用照片信息")
+
+    photo_text = "\n".join(lines)
+
+    # 3. 调用 LLM（使用 SystemMessage + HumanMessage 分离指令和输入）
+    messages = [
+        lc_messages.SystemMessage(content=_THEME_SYSTEM_PROMPT),
+        lc_messages.HumanMessage(
+            content=f"以下是一个照片聚类中 {len(lines)} 张代表性照片的信息，"
+            f"请为这组照片生成主题标签和描述：\n\n{photo_text}"
+        ),
+    ]
+
+    resp = llm.invoke(messages)
+    raw = resp.content if hasattr(resp, "content") else str(resp)
+
+    label, desc = _parse_llm_theme_response(raw)
+
+    if not label:
+        raise RuntimeError(
+            f"簇 {cluster_id} LLM 未返回有效主题标签（raw={raw[:200]}）"
+        )
+
+    target.label = label
+    target.theme_description = desc
+    logger.info("簇 %d 主题: %s — %s", cluster_id, label, desc)
+
+    # 4. 持久化
+    save_result(result)
+    logger.info("主题标签已保存到 %s.json", result.id)
+
+    return result
+
+
 # ── 结果文件读写 ──────────────────────────────────────────────
 
 def _result_to_dict(r: ClusterResult) -> dict:
@@ -346,6 +562,7 @@ def _result_to_dict(r: ClusterResult) -> dict:
             {
                 "cluster_id": c.cluster_id,
                 "label": c.label,
+                "theme_description": c.theme_description,
                 "size": c.size,
                 "coherence_score": c.coherence_score,
                 "photos": [dataclasses.asdict(p) for p in c.photos],
@@ -367,6 +584,7 @@ def _dict_to_result(d: dict) -> ClusterResult:
             ClusterInfo(
                 cluster_id=c["cluster_id"],
                 label=c.get("label", f"聚类 {c['cluster_id']}"),
+                theme_description=c.get("theme_description", ""),
                 size=c["size"],
                 coherence_score=c.get("coherence_score", 0.0),
                 photos=[ClusterPhoto(**p) for p in c.get("photos", [])],

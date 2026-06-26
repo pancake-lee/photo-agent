@@ -241,6 +241,7 @@ class ClusterPhotoItem(pydantic.BaseModel):
 class ClusterItem(pydantic.BaseModel):
     cluster_id: int
     label: str
+    theme_description: str = ""
     size: int
     coherence_score: float
     photos: list[ClusterPhotoItem] = []
@@ -674,6 +675,32 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if not ok:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
         return {"ok": True}
+
+    @app.post("/api/cluster/results/{result_id}/clusters/{cluster_id}/generate-theme", response_model=ClusterResultDetail)
+    async def cluster_generate_theme(result_id: str, cluster_id: int, req: fastapi.Request):
+        """为指定簇生成主题标签和描述。
+
+        通过 LLM 分析该簇的代表性照片，生成有意义的主题标签
+        （如"云南雪山系列"）和一句话描述，结果回写 JSON 文件。
+        """
+        result = cluster_mod.load_result(result_id)
+        if result is None:
+            raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
+
+        cfg = req.app.state.cfg
+        try:
+            updated = cluster_mod.generate_cluster_theme(
+                cfg, result, cluster_id, cfg.go_backend_url,
+            )
+        except ValueError as exc:
+            raise fastapi.HTTPException(status_code=404, detail=str(exc))
+        except RuntimeError as exc:
+            raise fastapi.HTTPException(status_code=500, detail=str(exc))
+        except Exception as exc:
+            logger.exception("主题标签生成失败")
+            raise fastapi.HTTPException(status_code=500, detail=f"主题生成失败: {exc}")
+
+        return cluster_mod._result_to_dict(updated)
 
     return app
 

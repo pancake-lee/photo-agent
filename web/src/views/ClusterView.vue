@@ -25,7 +25,6 @@ import {
   EyeOutline,
   GitNetworkOutline,
   PlayOutline,
-  ImageOutline,
   AppsOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
@@ -41,6 +40,7 @@ interface ClusterPhoto {
 interface ClusterItem {
   cluster_id: number
   label: string
+  theme_description: string
   size: number
   coherence_score: number
   photos: ClusterPhoto[]
@@ -98,6 +98,9 @@ const umapMetricOptions = [
 const detailVisible = ref(false)
 const detailItem = ref<ClusterResultDetail | null>(null)
 const detailLoading = ref(false)
+
+// 主题生成状态（track 正在生成的 cluster_id）
+const generatingThemeId = ref<number | null>(null)
 
 // 全部展开的簇 ID 集合
 const expandedClusters = ref<Set<number>>(new Set())
@@ -170,6 +173,41 @@ async function handleDelete(id: string) {
     }
   } catch {
     message.error('删除失败')
+  }
+}
+
+// ── 生成主题（单簇） ──
+
+async function handleGenerateTheme(resultId: string, clusterId: number) {
+  generatingThemeId.value = clusterId
+  try {
+    const resp = await fetch(
+      `${AGENT_BASE}/cluster/results/${resultId}/clusters/${clusterId}/generate-theme`,
+      { method: 'POST' },
+    )
+    if (resp.ok) {
+      const updated = await resp.json()
+      // 更新详情弹窗
+      detailItem.value = updated
+      // 更新列表中的 cluster_labels
+      const idx = results.value.findIndex((r) => r.id === resultId)
+      if (idx >= 0 && updated.clusters) {
+        results.value[idx].cluster_labels = updated.clusters.map((c: ClusterItem) => ({
+          cluster_id: c.cluster_id,
+          label: c.label,
+          size: c.size,
+        }))
+      }
+      const cluster = updated.clusters?.find((c: ClusterItem) => c.cluster_id === clusterId)
+      message.success(`主题生成: ${cluster?.label || '完成'}`)
+    } else {
+      const err = await resp.json()
+      message.error(err.detail || '主题生成失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '主题生成请求失败')
+  } finally {
+    generatingThemeId.value = null
   }
 }
 
@@ -564,7 +602,10 @@ const columns = [
               class="cluster-card"
             >
               <div class="cluster-card-header">
-                <span class="cluster-label">{{ c.label || `聚类 ${c.cluster_id}` }}</span>
+                <div class="cluster-title-area">
+                  <span class="cluster-label">{{ c.label || `聚类 ${c.cluster_id}` }}</span>
+                  <span v-if="c.theme_description" class="cluster-theme-desc">{{ c.theme_description }}</span>
+                </div>
                 <NSpace size="small">
                   <NTag size="tiny" :bordered="false" type="info">{{ c.size }} 张</NTag>
                   <NTag size="tiny" :bordered="false">凝聚度 {{ (c.coherence_score * 100).toFixed(0) }}%</NTag>
@@ -578,6 +619,14 @@ const columns = [
                       <NIcon><AppsOutline /></NIcon>
                     </template>
                     {{ expandedClusters.has(c.cluster_id) ? '收起' : '展开全部' }}
+                  </NButton>
+                  <NButton
+                    size="tiny"
+                    :type="c.theme_description ? 'default' : 'primary'"
+                    :loading="generatingThemeId === c.cluster_id"
+                    @click.stop="handleGenerateTheme(detailItem!.id, c.cluster_id)"
+                  >
+                    {{ c.theme_description ? '重新生成' : '生成主题' }}
                   </NButton>
                 </NSpace>
               </div>
@@ -716,9 +765,19 @@ const columns = [
   justify-content: space-between;
   margin-bottom: 10px;
 }
+.cluster-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .cluster-label {
   font-size: 14px;
   font-weight: 600;
+}
+.cluster-theme-desc {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  line-height: 1.4;
 }
 
 /* 照片缩略图（复用黄金用例样式） */
