@@ -12,6 +12,7 @@ import re
 import typing
 
 import httpx
+import utils.http_client as http_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -33,8 +34,8 @@ class OpenAPIClient:
         url = f"{self.base_url}/v1/openapi.json"
         _logger.info("正在从 Go 后端拉取 OpenAPI 文档: %s", url)
         try:
-            with httpx.Client() as client:
-                resp = client.get(url, timeout=10.0)
+            with http_utils.create_client(timeout=10.0) as client:
+                resp = client.get(url)
                 resp.raise_for_status()
                 self.doc = resp.json()
                 _logger.info("OpenAPI 文档加载成功，获取到 %d 个 API 路径",
@@ -148,11 +149,11 @@ class OpenAPIClient:
         url, query_params, body = self._build_request(path, spec, arguments)
 
         try:
-            with httpx.Client() as client:
+            with http_utils.create_client(timeout=15.0) as client:
                 if method == "GET":
-                    resp = client.get(url, params=query_params, timeout=15.0)
+                    resp = client.get(url, params=query_params)
                 else:
-                    resp = client.request(method, url, params=query_params, json=body, timeout=15.0)
+                    resp = client.request(method, url, params=query_params, json=body)
                 resp.raise_for_status()
                 return resp.text
         except httpx.HTTPStatusError as e:

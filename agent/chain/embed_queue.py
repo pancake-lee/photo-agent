@@ -22,7 +22,7 @@ import threading
 import sys
 import pathlib
 
-import httpx
+import utils.http_client as http_utils
 
 
 import config as cfg_module
@@ -46,7 +46,7 @@ class EmbedQueue:
         self._cfg = cfg
         self._store = store
         self._go_url = cfg.go_backend_url.rstrip("/")
-        self._http = httpx.Client(timeout=30.0)
+        self._http = http_utils.create_client(timeout=30.0)
         self._embedder = embedder.Embedder(
             base_url=self._go_url,
             model=cfg.embedding_model,

@@ -33,8 +33,8 @@ import config as config_mod
 logger = logging.getLogger(__name__)
 
 # ── 黄金用例 JSON 存储 ─────────────────────────────────────
-
-_GOLDEN_QUERIES_DIR: pathlib.Path | None = None
+# 注意: 黄金用例存储路径已迁移到 app.state.golden_queries_dir，
+# 不再使用模块级全局变量。各函数通过 request.app.state 访问。
 
 
 def _normalize_ext(filename: str) -> str:
@@ -46,9 +46,9 @@ def _normalize_ext(filename: str) -> str:
 
 def _build_filename_to_uuid(go_backend_url: str) -> dict[str, str]:
     """从 Go 后端获取全部照片，构建 文件名(去后缀) → UUID 映射。"""
-    import httpx
+    import utils.http_client as http_utils
     mapping: dict[str, str] = {}
-    client = httpx.Client(timeout=30.0)
+    client = http_utils.create_client(timeout=30.0)
     page = 1
     try:
         while True:
@@ -73,21 +73,18 @@ def _build_filename_to_uuid(go_backend_url: str) -> dict[str, str]:
 
 
 
-def _golden_queries_path() -> pathlib.Path:
-    """返回 golden_queries.json 的路径（首次调用时根据 cfg 解析）。"""
-    global _GOLDEN_QUERIES_DIR
-    if _GOLDEN_QUERIES_DIR is None:
-        raise RuntimeError("golden_queries 存储路径未初始化，请先调用 create_app()")
-    return _GOLDEN_QUERIES_DIR / "golden_queries.json"
+def _golden_queries_path(dir_path: pathlib.Path) -> pathlib.Path:
+    """返回 golden_queries.json 的路径。"""
+    return dir_path / "golden_queries.json"
 
 
-def _load_golden_queries() -> list[dict]:
+def _load_golden_queries(dir_path: pathlib.Path) -> list[dict]:
     """加载所有黄金用例。文件不存在时返回空列表。
 
     兼容旧格式 relevant_photo_ids (list[str])，自动迁移为
     新格式 relevant_photos (list[{photo_id, filename}]).
     """
-    fp = _golden_queries_path()
+    fp = _golden_queries_path(dir_path)
     if not fp.exists():
         return []
     try:
@@ -105,13 +102,13 @@ def _load_golden_queries() -> list[dict]:
             ]
             migrated = True
     if migrated:
-        _save_golden_queries(items)
+        _save_golden_queries(items, dir_path)
     return items
 
 
-def _save_golden_queries(items: list[dict]) -> None:
+def _save_golden_queries(items: list[dict], dir_path: pathlib.Path) -> None:
     """保存黄金用例列表到 JSON 文件。"""
-    fp = _golden_queries_path()
+    fp = _golden_queries_path(dir_path)
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(
         json.dumps(items, ensure_ascii=False, indent=2, default=str),
@@ -312,12 +309,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     embed_q = embed_queue.EmbedQueue(cfg, chroma_store)
     app.state.embed_queue = embed_q
 
-    # 初始化黄金用例存储路径
-    global _GOLDEN_QUERIES_DIR
-    _GOLDEN_QUERIES_DIR = cfg.resolve_path("./data")
+    # 初始化黄金用例存储路径（存入 app.state，避免模块级全局变量）
+    app.state.golden_queries_dir = cfg.resolve_path("./data")
 
-    # 初始化聚类结果存储路径
-    cluster_mod._set_cluster_dir(cfg.resolve_path("./data/clusters"))
+    # 初始化聚类结果存储路径（存入 app.state，避免模块级全局变量）
+    app.state.cluster_dir = cfg.resolve_path("./data/clusters")
+    app.state.cluster_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 注册路由 ──────────────────────────────────────────
 
@@ -389,9 +386,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             result = agent_inst.route(question)
         except Exception as exc:
             logger.exception("Agent 路由失败")
-            # 保存错误消息
-            s.add_message(session_id, "assistant", f"抱歉，处理请求时出错: {exc}", query_type="error")
-            raise fastapi.HTTPException(status_code=500, detail=str(exc))
+            # 保存错误消息（仅向前端暴露通用提示，避免泄露内部信息）
+            s.add_message(session_id, "assistant", "抱歉，处理请求时发生内部错误，请稍后重试。", query_type="error")
+            raise fastapi.HTTPException(status_code=500, detail="处理请求时发生内部错误")
 
         answer = result.get("answer", "") or "未能获取回答。"
         query_type = result.get("query_type", "")
@@ -488,18 +485,19 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     # ── 黄金用例 API ─────────────────────────────────────
 
     @app.get("/api/golden-queries", response_model=list[GoldenQueryItem])
-    async def list_golden_queries():
+    async def list_golden_queries(req: fastapi.Request):
         """列出所有黄金查询用例。"""
-        return _load_golden_queries()
+        return _load_golden_queries(req.app.state.golden_queries_dir)
 
     @app.post("/api/golden-queries", response_model=GoldenQueryItem, status_code=201)
-    async def create_golden_query(body: GoldenQueryCreateRequest):
+    async def create_golden_query(body: GoldenQueryCreateRequest, req: fastapi.Request):
         """创建一条黄金查询用例。"""
         if not body.query_text.strip():
             raise fastapi.HTTPException(status_code=400, detail="查询文本不能为空")
         if not body.relevant_photos:
             raise fastapi.HTTPException(status_code=400, detail="关联照片不能为空")
 
+        gq_dir = req.app.state.golden_queries_dir
         now = datetime.datetime.now().isoformat()
         item = {
             "id": uuid.uuid4().hex[:12],
@@ -517,20 +515,21 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "created_at": now,
             "updated_at": now,
         }
-        items = _load_golden_queries()
+        items = _load_golden_queries(gq_dir)
         items.append(item)
-        _save_golden_queries(items)
+        _save_golden_queries(items, gq_dir)
         return item
 
     @app.delete("/api/golden-queries/{golden_id}", response_model=dict)
-    async def delete_golden_query(golden_id: str):
+    async def delete_golden_query(golden_id: str, req: fastapi.Request):
         """删除一条黄金查询用例。"""
-        items = _load_golden_queries()
+        gq_dir = req.app.state.golden_queries_dir
+        items = _load_golden_queries(gq_dir)
         before = len(items)
         items = [it for it in items if it["id"] != golden_id]
         if len(items) == before:
             raise fastapi.HTTPException(status_code=404, detail="用例不存在")
-        _save_golden_queries(items)
+        _save_golden_queries(items, gq_dir)
         return {"ok": True}
 
     @app.post("/api/golden-queries/import", response_model=dict)
@@ -544,9 +543,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=400, detail="导入数据不能为空")
 
         cfg = req.app.state.cfg
+        gq_dir = req.app.state.golden_queries_dir
         fname_to_uuid = _build_filename_to_uuid(cfg.go_backend_url)
 
-        items = _load_golden_queries()
+        items = _load_golden_queries(gq_dir)
         added = 0
         now = datetime.datetime.now().isoformat()
         for it in body:
@@ -571,7 +571,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 "updated_at": now,
             })
             added += 1
-        _save_golden_queries(items)
+        _save_golden_queries(items, gq_dir)
         return {"ok": True, "imported": added}
 
     @app.post("/api/golden-queries/evaluate", response_model=EvalResultResponse)
@@ -592,9 +592,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 precision_k=10,
                 verbose=True,
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("评估执行失败")
-            raise fastapi.HTTPException(status_code=500, detail=f"评估失败: {exc}")
+            raise fastapi.HTTPException(status_code=500, detail="评估执行失败，请稍后重试")
 
         # 扁平化 details，提取前端需要的字段
         flat_details: list[EvalDetailItem] = []
@@ -625,54 +625,80 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "details": flat_details,
         }
 
+    # ── 聚类任务后台状态 ───────────────────────────────────
+
+    # 聚类后台任务追踪: task_id -> {"status": "running"|"done"|"error", "result_id": str, "error": str}
+    _cluster_tasks: dict[str, dict] = {}
+
     # ── 聚类 API ─────────────────────────────────────────
 
-    @app.post("/api/cluster/run", response_model=ClusterResultDetail)
-    async def cluster_run(body: ClusterRunRequest, req: fastapi.Request):
-        """触发一次聚类计算（同步执行，结果存入 JSON 文件）。"""
+    @app.post("/api/cluster/run")
+    async def cluster_run(body: ClusterRunRequest, req: fastapi.Request, background_tasks: fastapi.BackgroundTasks):
+        """触发一次聚类计算（后台异步执行，结果存入 JSON 文件）。
+
+        立即返回 task_id，前端可通过 GET /api/cluster/status/{task_id} 查询进度，
+        或通过 GET /api/cluster/results 轮询结果列表。
+        """
         chroma = req.app.state.chroma_store
 
         # 检查是否有 embedding 数据
         if chroma.count() == 0:
             raise fastapi.HTTPException(status_code=400, detail="ChromaDB 中无嵌入数据，请先运行 embedding")
 
-        try:
-            result = cluster_mod.run_clustering(
-                chroma,
-                min_cluster_size=body.min_cluster_size,
-                min_samples=body.min_samples,
-                umap_n_neighbors=body.umap_n_neighbors,
-                umap_min_dist=body.umap_min_dist,
-                umap_n_components=body.umap_n_components,
-                umap_metric=body.umap_metric,
-            )
-        except Exception as exc:
-            logger.exception("聚类计算失败")
-            raise fastapi.HTTPException(status_code=500, detail=f"聚类失败: {exc}")
+        import threading
 
-        # 保存结果
-        cluster_mod.save_result(result)
-        logger.info("聚类结果已保存: %s", result.id)
+        task_id = uuid.uuid4().hex[:12]
+        _cluster_dir = req.app.state.cluster_dir  # 在线程启动前捕获
+        _cluster_tasks[task_id] = {"status": "running", "result_id": "", "error": ""}
 
-        return cluster_mod._result_to_dict(result)
+        def _run_in_thread():
+            try:
+                result = cluster_mod.run_clustering(
+                    chroma,
+                    min_cluster_size=body.min_cluster_size,
+                    min_samples=body.min_samples,
+                    umap_n_neighbors=body.umap_n_neighbors,
+                    umap_min_dist=body.umap_min_dist,
+                    umap_n_components=body.umap_n_components,
+                    umap_metric=body.umap_metric,
+                )
+                cluster_mod.save_result(result, _cluster_dir)
+                logger.info("聚类结果已保存: %s", result.id)
+                _cluster_tasks[task_id] = {"status": "done", "result_id": result.id, "error": ""}
+            except Exception as exc:
+                logger.exception("聚类计算失败")
+                _cluster_tasks[task_id] = {"status": "error", "result_id": "", "error": "聚类计算失败，请稍后重试"}
+
+        thread = threading.Thread(target=_run_in_thread, daemon=True)
+        thread.start()
+
+        return {"task_id": task_id, "status": "started"}
+
+    @app.get("/api/cluster/status/{task_id}")
+    async def cluster_task_status(task_id: str):
+        """查询聚类后台任务状态。"""
+        task = _cluster_tasks.get(task_id)
+        if task is None:
+            raise fastapi.HTTPException(status_code=404, detail="任务不存在")
+        return task
 
     @app.get("/api/cluster/results", response_model=list[ClusterResultSummary])
-    async def cluster_list_results():
+    async def cluster_list_results(req: fastapi.Request):
         """列出所有聚类结果（摘要，不含簇内照片详情）。"""
-        return cluster_mod.list_results()
+        return cluster_mod.list_results(req.app.state.cluster_dir)
 
     @app.get("/api/cluster/results/{result_id}", response_model=ClusterResultDetail)
-    async def cluster_get_result(result_id: str):
+    async def cluster_get_result(result_id: str, req: fastapi.Request):
         """获取一次聚类结果的完整详情。"""
-        r = cluster_mod.load_result(result_id)
+        r = cluster_mod.load_result(result_id, req.app.state.cluster_dir)
         if r is None:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
         return cluster_mod._result_to_dict(r)
 
     @app.delete("/api/cluster/results/{result_id}", response_model=dict)
-    async def cluster_delete_result(result_id: str):
+    async def cluster_delete_result(result_id: str, req: fastapi.Request):
         """删除一次聚类结果。"""
-        ok = cluster_mod.delete_result(result_id)
+        ok = cluster_mod.delete_result(result_id, req.app.state.cluster_dir)
         if not ok:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
         return {"ok": True}
@@ -684,22 +710,23 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         通过 LLM 分析该簇的代表性照片，生成有意义的主题标签
         （如"云南雪山系列"）和一句话描述，结果回写 JSON 文件。
         """
-        result = cluster_mod.load_result(result_id)
+        cluster_dir = req.app.state.cluster_dir
+        result = cluster_mod.load_result(result_id, cluster_dir)
         if result is None:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
 
         cfg = req.app.state.cfg
         try:
             updated = cluster_mod.generate_cluster_theme(
-                cfg, result, cluster_id, cfg.go_backend_url,
+                cfg, result, cluster_id, cfg.go_backend_url, cluster_dir,
             )
         except ValueError as exc:
             raise fastapi.HTTPException(status_code=404, detail=str(exc))
-        except RuntimeError as exc:
-            raise fastapi.HTTPException(status_code=500, detail=str(exc))
-        except Exception as exc:
+        except RuntimeError:
+            raise fastapi.HTTPException(status_code=500, detail="主题标签生成失败")
+        except Exception:
             logger.exception("主题标签生成失败")
-            raise fastapi.HTTPException(status_code=500, detail=f"主题生成失败: {exc}")
+            raise fastapi.HTTPException(status_code=500, detail="主题标签生成失败，请稍后重试")
 
         return cluster_mod._result_to_dict(updated)
 

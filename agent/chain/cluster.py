@@ -38,22 +38,13 @@ logger = logging.getLogger(__name__)
 
 
 # ── 聚类结果存储 ──────────────────────────────────────────────
-
-_CLUSTER_DIR: pathlib.Path | None = None
-
-
-def _set_cluster_dir(dir_path: pathlib.Path) -> None:
-    """设置聚类结果存储目录（由 server.py 创建 app 时调用）。"""
-    global _CLUSTER_DIR
-    _CLUSTER_DIR = dir_path
-    _CLUSTER_DIR.mkdir(parents=True, exist_ok=True)
+# 注意: 聚类存储路径通过函数参数传入，不再使用模块级全局变量。
+# server.py 中通过 app.state.cluster_dir 管理，CLI 模式直接传入路径。
 
 
-def _cluster_dir() -> pathlib.Path:
-    global _CLUSTER_DIR
-    if _CLUSTER_DIR is None:
-        raise RuntimeError("聚类存储路径未初始化，请先调用 _set_cluster_dir()")
-    return _CLUSTER_DIR
+def _ensure_cluster_dir(dir_path: pathlib.Path) -> None:
+    """确保聚类存储目录存在。"""
+    dir_path.mkdir(parents=True, exist_ok=True)
 
 
 # ── 结果数据结构 ──────────────────────────────────────────────
@@ -356,14 +347,14 @@ def _fetch_photo_descriptions(
     go_backend_url: str, photo_ids: list[str]
 ) -> dict[str, dict]:
     """从 Go 后端批量获取照片描述和结构化属性。"""
-    import httpx
+    import utils.http_client as http_utils
 
     result: dict[str, dict] = {}
     if not photo_ids:
         return result
 
     photo_id_set = set(photo_ids)
-    client = httpx.Client(timeout=30.0)
+    client = http_utils.create_client(timeout=30.0)
     try:
         page = 1
         while True:
@@ -469,6 +460,7 @@ def generate_cluster_theme(
     result: ClusterResult,
     cluster_id: int,
     go_backend_url: str,
+    cluster_dir: pathlib.Path,
 ) -> ClusterResult:
     """为聚类结果中指定簇生成主题标签和描述。
 
@@ -542,8 +534,8 @@ def generate_cluster_theme(
     logger.info("簇 %d 主题: %s — %s", cluster_id, label, desc)
 
     # 4. 持久化
-    save_result(result)
-    logger.info("主题标签已保存到 %s.json", result.id)
+    save_result(result, cluster_dir)
+    logger.info("主题标签已保存到 %s/%s.json", cluster_dir, result.id)
 
     return result
 
@@ -593,30 +585,31 @@ def _dict_to_result(d: dict) -> ClusterResult:
     )
 
 
-def save_result(result: ClusterResult) -> None:
+def save_result(result: ClusterResult, cluster_dir: pathlib.Path) -> None:
     """将聚类结果保存为 JSON 文件。"""
+    _ensure_cluster_dir(cluster_dir)
     d = _result_to_dict(result)
-    fp = _cluster_dir() / f"{result.id}.json"
+    fp = cluster_dir / f"{result.id}.json"
     fp.write_text(json.dumps(d, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 
 
-def load_result(result_id: str) -> ClusterResult | None:
+def load_result(result_id: str, cluster_dir: pathlib.Path) -> ClusterResult | None:
     """加载单个聚类结果。"""
-    fp = _cluster_dir() / f"{result_id}.json"
+    fp = cluster_dir / f"{result_id}.json"
     if not fp.exists():
         return None
     return _dict_to_result(json.loads(fp.read_text(encoding="utf-8")))
 
 
-def list_results() -> list[dict]:
+def list_results(cluster_dir: pathlib.Path) -> list[dict]:
     """
     列出所有聚类结果（摘要，不含 clusters 详情）。
     按创建时间倒序。
     """
     results: list[dict] = []
-    if not _cluster_dir or not _CLUSTER_DIR.exists():
+    if not cluster_dir.exists():
         return results
-    for fp in sorted(_cluster_dir().glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for fp in sorted(cluster_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             d = json.loads(fp.read_text(encoding="utf-8"))
             # 返回摘要（去掉 clusters 里的 photos 以减少传输量）
@@ -636,9 +629,9 @@ def list_results() -> list[dict]:
     return results
 
 
-def delete_result(result_id: str) -> bool:
+def delete_result(result_id: str, cluster_dir: pathlib.Path) -> bool:
     """删除一个聚类结果文件。返回 True 表示成功删除。"""
-    fp = _cluster_dir() / f"{result_id}.json"
+    fp = cluster_dir / f"{result_id}.json"
     if not fp.exists():
         return False
     fp.unlink()

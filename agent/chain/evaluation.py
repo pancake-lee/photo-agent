@@ -22,7 +22,7 @@
 import os
 import json
 
-import httpx
+import utils.http_client as http_utils
 
 import config
 import embedding.embedder as embedder
@@ -44,7 +44,7 @@ def _build_id_to_filename(go_backend_url: str) -> dict[str, str]:
     才能与黄金用例中的 relevant_photos（文件名）匹配。
     """
     mapping: dict[str, str] = {}
-    client = httpx.Client(timeout=30.0)
+    client = http_utils.create_client(timeout=30.0)
     page = 1
     try:
         while True:

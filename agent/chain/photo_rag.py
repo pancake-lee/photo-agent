@@ -13,7 +13,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-import httpx
+import utils.http_client as http_utils
 import langchain_core.prompts as lc_prompts
 
 import utils.llm_factory as llm_factory
@@ -103,7 +103,7 @@ def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
 
     def _fetch_filename(pid: str) -> tuple[str, str]:
         try:
-            with httpx.Client(timeout=5.0) as client:
+            with http_utils.create_client(timeout=5.0) as client:
                 resp = client.get(
                     f"{cfg.go_backend_url}/api/v1/photos/{pid}"
                 )

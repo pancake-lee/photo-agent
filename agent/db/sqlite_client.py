@@ -15,6 +15,7 @@
 import re
 
 import httpx
+import utils.http_client as http_utils
 
 
 DEFAULT_TIMEOUT = 30.0
@@ -64,7 +65,7 @@ class QueryClient:
         payload = {"sql": sql}
         params = {"limit": limit}
 
-        with httpx.Client(timeout=self.timeout) as client:
+        with http_utils.create_client(timeout=self.timeout) as client:
             response = client.post(url, json=payload, params=params)
             response.raise_for_status()
             return response.json()
@@ -113,7 +114,7 @@ class QueryClient:
             httpx.HTTPError: HTTP 请求失败
         """
         url = f"{self.base_url}/api/v1/schema/photos"
-        with httpx.Client(timeout=self.timeout) as client:
+        with http_utils.create_client(timeout=self.timeout) as client:
             response = client.get(url)
             response.raise_for_status()
             return response.json()

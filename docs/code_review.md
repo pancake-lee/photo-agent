@@ -94,30 +94,6 @@ LangGraph StateGraph 编排清晰（6 节点 + 条件路由），Combined 查询
 
 9 个提示词变量全部以字符串常量形式写在代码里，无配置文件化、无版本管理、无 A/B 测试能力。建议抽到 YAML 或独立 prompt 文件中。
 
-### P6. 🟡 高 — 聚类 API 同步阻塞
-
-**位置**：`chain/server.py` — `POST /api/cluster/run`
-
-UMAP + HDBSCAN 计算可能需要数分钟。在 FastAPI handler 中同步执行会阻塞事件循环。应使用 `run_in_executor` 或改为后台任务。
-
-### P7. 🟡 中 — 全局可变状态
-
-模块级单例 `_graph_app`、`_tracker`、`_callbacks`、`_tool_clients`、`_GOLDEN_QUERIES_DIR`、`_CLUSTER_DIR` 增加了耦合度和测试难度。
-
-### P8. 🟡 中 — HTTP 请求无重试
-
-所有对 Go 后端的 HTTP 调用都没有重试逻辑。Go 后端短暂不可用时 Python Agent 会直接报错。
-
-### P9. 🟡 中 — Error detail 泄露内部信息
-
-**位置**：`chain/server.py` — `send_message` 端点
-
-```python
-raise fastapi.HTTPException(status_code=500, detail=str(exc))
-```
-
-`str(exc)` 可能包含堆栈跟踪、SQL 查询等内部信息。
-
 ### P13. 🟢 低 — 缺少 API 认证和速率限制
 
 对于本地工具可接受，但需在文档中明确说明。
@@ -233,15 +209,13 @@ catch { /* 静默失败 */ }  // usePhotos, useVlmQueue, useEmbedQueue, useChat.
 
 9. **[C1]** 为核心链路补充自动化测试
 10. **[G4]** OpenAPI 规范自动生成
-11. **[P6]** 聚类 API 改为异步执行
-12. **[W4]** 为静默错误处理加上日志
+11. **[W4]** 为静默错误处理加上日志
 
 ### 后续可考虑
 
-13. **[P8]** HTTP 调用增加重试
-14. **[P13]** API 增加认证和速率限制
-15. **[G5]** 替换废弃依赖（goexif、go.uuid）
-16. **[W11]** 接入 ESLint + Prettier
+12. **[P13]** API 增加认证和速率限制
+13. **[G5]** 替换废弃依赖（goexif、go.uuid）
+14. **[W11]** 接入 ESLint + Prettier
 17. **[P11]** 清理未使用依赖（tenacity、python-dotenv）
 
 ---
@@ -352,6 +326,38 @@ allow_credentials=True,
 **位置**：`chain/session_store.py`
 
 Python 3.12+ 中 `datetime.utcnow()` 已废弃，应使用 `datetime.now(datetime.UTC)`。
+
+#### P6. 🟡 高 — 聚类 API 同步阻塞
+
+**位置**：`chain/server.py` — `POST /api/cluster/run`
+
+UMAP + HDBSCAN 计算可能需要数分钟。在 FastAPI handler 中同步执行会阻塞事件循环。应使用 `run_in_executor` 或改为后台任务。
+
+方案：改为后台任务模式。POST /api/cluster/run 启动后台线程执行聚类，立即返回 task_id；前端通过 GET /api/cluster/status/{task_id} 查询进度，或轮询 GET /api/cluster/results 查看新结果。
+
+#### P7. 🟡 中 — 全局可变状态
+
+模块级单例 `_graph_app`、`_tracker`、`_callbacks`、`_tool_clients`、`_GOLDEN_QUERIES_DIR`、`_CLUSTER_DIR` 增加了耦合度和测试难度。
+
+方案：目录路径全局变量（`_GOLDEN_QUERIES_DIR`、`_CLUSTER_DIR`）迁移到 `app.state`，函数通过参数接收路径。其余单例（`_graph_app` 等）保留并在注释中说明设计权衡——这些在 PhotoAgent 初始化时创建一次，进程生命周期内复用，是单进程 FastAPI 的务实选择。
+
+#### P8. 🟡 中 — HTTP 请求无重试
+
+所有对 Go 后端的 HTTP 调用都没有重试逻辑。Go 后端短暂不可用时 Python Agent 会直接报错。
+
+方案：创建 `utils/http_client.py` 共享工厂，使用 `httpx.HTTPTransport(retries=3)` 配置重试。所有 HTTP 调用点（sqlite_client、openapi_client、embed_queue、embedder 及内联 httpx.Client）统一使用该工厂。
+
+#### P9. 🟡 中 — Error detail 泄露内部信息
+
+**位置**：`chain/server.py` — `send_message` 端点
+
+```python
+raise fastapi.HTTPException(status_code=500, detail=str(exc))
+```
+
+`str(exc)` 可能包含堆栈跟踪、SQL 查询等内部信息。
+
+方案：HTTPException 的 detail 改为通用提示（"处理请求时发生内部错误"），完整异常信息通过 `logger.exception()` 记录到日志。用户聊天消息也同步改为通用提示。
 
 ---
 

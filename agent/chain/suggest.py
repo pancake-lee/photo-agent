@@ -26,7 +26,7 @@ import dataclasses
 import typing
 import collections
 
-import httpx
+import utils.http_client as http_utils
 import langchain_core.messages as lc_messages
 
 import chain.cluster as cluster_mod
@@ -86,7 +86,7 @@ _SUGGEST_SYSTEM_PROMPT = (
 def _fetch_all_photos(go_backend_url: str) -> list[dict]:
     """从 Go 后端分页获取全部照片数据。"""
     all_photos: list[dict] = []
-    client = httpx.Client(timeout=30.0)
+    client = http_utils.create_client(timeout=30.0)
     try:
         page = 1
         while True:
@@ -110,7 +110,7 @@ def _fetch_all_photos(go_backend_url: str) -> list[dict]:
 
 def _fetch_stats(go_backend_url: str) -> dict:
     """获取照片库统计信息（含月度分布）。"""
-    client = httpx.Client(timeout=10.0)
+    client = http_utils.create_client(timeout=10.0)
     try:
         resp = client.get(f"{go_backend_url}/api/v1/photos/stats")
         resp.raise_for_status()

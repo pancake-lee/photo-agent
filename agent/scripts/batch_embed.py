@@ -27,6 +27,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
+import utils.http_client as http_utils
 
 import config as cfg_module
 import embedding.chunking as chunking
@@ -179,7 +180,7 @@ def main() -> None:
     print(f"Embedding Model: {cfg.embedding_model}")
     print()
 
-    http = httpx.Client(timeout=30.0)
+    http = http_utils.create_client(timeout=30.0)
 
     # 获取全部照片
     print("正在获取照片列表...")

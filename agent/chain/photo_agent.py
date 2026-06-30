@@ -373,7 +373,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
 
 def _fetch_photos_batch(cfg: config.Config, photo_ids: list[str]) -> list[dict]:
     """批量获取照片详情（并行请求 Go 后端）。"""
-    import httpx
+    import utils.http_client as http_utils
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     if not photo_ids:
@@ -383,7 +383,7 @@ def _fetch_photos_batch(cfg: config.Config, photo_ids: list[str]) -> list[dict]:
 
     def _fetch(pid: str) -> dict | None:
         try:
-            with httpx.Client(timeout=5.0) as client:
+            with http_utils.create_client(timeout=5.0) as client:
                 resp = client.get(f"{cfg.go_backend_url}/api/v1/photos/{pid}")
                 resp.raise_for_status()
                 return resp.json()
@@ -431,6 +431,10 @@ def _route_by_type(state: RouterState) -> str:
 
 
 # 工具客户端单例（按 base_url 缓存）
+# 设计说明: 以下模块级单例 (_tool_clients, _graph_app, _tracker, _callbacks)
+# 在 PhotoAgent.__init__ 中初始化，进程生命周期内仅创建一次，避免重复创建
+# 开销较大的 LangGraph 图和 HTTP 客户端。这是 FastAPI 单进程模式下的务实选择，
+# 代价是测试时需手动重置这些状态。如需提升可测试性，可改为依赖注入。
 _tool_clients: dict[str, openapi_client.OpenAPIClient] = {}
 
 

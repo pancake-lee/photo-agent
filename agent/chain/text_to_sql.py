@@ -21,6 +21,7 @@ import typing
 
 
 import httpx
+import utils.http_client as http_utils
 import langchain_core.prompts as lc_prompts
 
 import config
@@ -175,7 +176,7 @@ def _fetch_attribute_values(base_url: str) -> dict:
         return _attr_cache[base_url]
 
     try:
-        with httpx.Client(timeout=5.0) as client:
+        with http_utils.create_client(timeout=5.0) as client:
             resp = client.get(f"{base_url}/api/v1/photos/attribute-values")
             resp.raise_for_status()
             data = resp.json()

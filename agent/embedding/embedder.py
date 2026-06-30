@@ -18,8 +18,8 @@
         vectors = embedder.embed_texts(["文本1", "文本2"])
 """
 
-import httpx
 import numpy as np
+import utils.http_client as http_utils
 
 
 class Embedder:
@@ -41,7 +41,7 @@ class Embedder:
         """
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self._client = httpx.Client(timeout=60.0)
+        self._client = http_utils.create_client(timeout=60.0)
         self._tracker = tracker
         self.total_tokens = 0
 
