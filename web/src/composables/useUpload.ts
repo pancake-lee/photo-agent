@@ -55,8 +55,8 @@ export function useUpload() {
       if (data?.DateTimeOriginal) {
         return new Date(data.DateTimeOriginal).toISOString()
       }
-    } catch {
-      // EXIF 读取失败静默
+    } catch (e) {
+      console.warn('EXIF 读取失败', e)
     }
     return null
   }
@@ -123,7 +123,8 @@ export function useUpload() {
         } else {
           uf.uploadStatus = 'done'
         }
-      } catch {
+      } catch (e) {
+        console.warn('上传文件失败', uf.originalName, e)
         uf.uploadStatus = 'error'
       }
     }

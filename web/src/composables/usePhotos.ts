@@ -68,8 +68,8 @@ export function usePhotos() {
       const resp = await fetch(`${API_BASE}/photos/stats`)
       if (!resp.ok) return
       stats.value = await resp.json()
-    } catch {
-      // 静默失败
+    } catch (e) {
+      console.warn('获取统计信息失败', e)
     }
   }
 
@@ -78,8 +78,8 @@ export function usePhotos() {
       const resp = await fetch(`${API_BASE}/timelines`)
       if (!resp.ok) return
       timelines.value = await resp.json()
-    } catch {
-      // 静默失败
+    } catch (e) {
+      console.warn('获取时间线列表失败', e)
     }
   }
 
@@ -152,8 +152,8 @@ export function usePhotos() {
       if (selectedPhoto.value?.id === photoId) {
         selectedPhoto.value = detail
       }
-    } catch {
-      // 静默失败
+    } catch (e) {
+      console.warn('刷新照片状态失败', e)
     }
   }
 

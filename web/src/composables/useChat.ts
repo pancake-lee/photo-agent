@@ -23,8 +23,8 @@ async function fetchSessions() {
     if (resp.ok) {
       sessions.value = await resp.json()
     }
-  } catch {
-    // 静默失败，sessions 保持旧值
+  } catch (e) {
+    console.warn('获取会话列表失败', e)
   }
 }
 

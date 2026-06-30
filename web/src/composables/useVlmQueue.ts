@@ -36,8 +36,9 @@ export function useVlmQueue() {
       if (!data.running) {
         stopPolling()
       }
-    } catch {
-      // 静默失败
+    } catch (e) {
+      // Agent 可能未启动，轮询 404 属于预期行为
+      console.debug('VLM 队列状态查询失败', e)
     }
   }
 
@@ -83,8 +84,8 @@ export function useVlmQueue() {
       stopPolling()
       // 重置状态
       status.value = { running: false, total: 0, completed: 0, failed: 0 }
-    } catch {
-      // 静默失败
+    } catch (e) {
+      console.debug('VLM 队列停止失败', e)
     }
   }
 

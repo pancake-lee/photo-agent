@@ -28,6 +28,8 @@ import {
   AppsOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
+import PhotoThumbList from '../components/PhotoThumbList.vue'
+import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 
 // ── 类型定义 ──
 
@@ -106,11 +108,12 @@ const generatingThemeId = ref<number | null>(null)
 const expandedClusters = ref<Set<number>>(new Set())
 
 // 图片预览
-const previewVisible = ref(false)
-const previewUrl = ref('')
+const previewShow = ref(false)
+const previewImg = ref('')
 
-function imageUrl(uuid: string): string {
-  return uuid ? `/api/v1/photos/${uuid}/image` : ''
+function openPreview(uuid: string) {
+  previewImg.value = `/api/v1/photos/${uuid}/image`
+  previewShow.value = true
 }
 
 // ── 数据加载 ──
@@ -122,7 +125,8 @@ async function fetchResults() {
     if (resp.ok) {
       results.value = await resp.json()
     }
-  } catch {
+  } catch (e) {
+    console.warn('加载聚类结果失败', e)
     message.error('加载聚类结果失败')
   } finally {
     loading.value = false
@@ -171,7 +175,8 @@ async function handleDelete(id: string) {
       const err = await resp.json()
       message.error(err.detail || '删除失败')
     }
-  } catch {
+  } catch (e) {
+    console.warn('删除聚类结果失败', e)
     message.error('删除失败')
   }
 }
@@ -226,19 +231,13 @@ async function showDetail(row: ClusterResultSummary) {
       message.error('加载详情失败')
       detailVisible.value = false
     }
-  } catch {
+  } catch (e) {
+    console.warn('加载聚类详情失败', e)
     message.error('加载详情失败')
     detailVisible.value = false
   } finally {
     detailLoading.value = false
   }
-}
-
-// ── 图片预览 ──
-
-function openPreview(uuid: string) {
-  previewUrl.value = imageUrl(uuid)
-  previewVisible.value = true
 }
 
 // ── 全部展开切换 ──
@@ -251,52 +250,6 @@ function toggleExpandAll(clusterId: number) {
     next.add(clusterId)
   }
   expandedClusters.value = next
-}
-
-// ── 照片缩略图渲染函数 ──
-
-function renderPhotoThumbs(photos: ClusterPhoto[], showAll: boolean) {
-  if (!photos || photos.length === 0) {
-    return h('span', { style: { color: 'var(--n-text-color-3)', fontSize: '13px' } }, '无照片')
-  }
-
-  const displayPhotos = showAll ? photos : photos.slice(0, 3)
-  const rest = showAll ? [] : photos.slice(3)
-  const children: any[] = []
-
-  // 缩略图
-  const thumbChildren: any[] = []
-  for (const p of displayPhotos) {
-    const url = imageUrl(p.photo_id)
-    thumbChildren.push(
-      h('span', {
-        class: 'photo-thumb-wrap',
-        style: { cursor: 'pointer' },
-        onClick: () => openPreview(p.photo_id),
-        title: p.filename,
-      }, [
-        h('img', { class: 'photo-thumb', src: url }),
-      ]),
-    )
-  }
-  children.push(h('div', { class: 'photo-thumb-row' }, thumbChildren))
-
-  // 超过 3 张且未展开 → 显示文件名
-  if (rest.length > 0) {
-    const nameChildren: any[] = []
-    for (const p of rest) {
-      nameChildren.push(
-        h('span', {
-          class: 'photo-name-tag',
-          style: { cursor: 'pointer' },
-          onClick: () => openPreview(p.photo_id),
-        }, p.filename),
-      )
-    }
-    children.push(h('div', { class: 'photo-thumb-row' }, nameChildren))
-  }
-
-  return h('div', { class: 'photo-thumb-list' }, children)
 }
 
 // ── 初始化 ──
@@ -630,7 +583,11 @@ const columns = [
                   </NButton>
                 </NSpace>
               </div>
-              <component :is="renderPhotoThumbs(c.photos, expandedClusters.has(c.cluster_id))" />
+              <PhotoThumbList
+                :photos="c.photos"
+                :max-preview="expandedClusters.has(c.cluster_id) ? 0 : 3"
+                @preview="openPreview"
+              />
             </div>
           </div>
         </div>
@@ -638,16 +595,7 @@ const columns = [
     </NModal>
 
     <!-- 图片预览弹窗 -->
-    <NModal
-      v-model:show="previewVisible"
-      preset="card"
-      title="照片预览"
-      style="width: 90vw; max-width: 1200px;"
-    >
-      <div class="preview-container">
-        <img :src="previewUrl" class="preview-image" />
-      </div>
-    </NModal>
+    <PhotoPreviewModal v-model:show="previewShow" :image-url="previewImg" />
   </NLayout>
 </template>
 
@@ -778,56 +726,5 @@ const columns = [
   font-size: 12px;
   color: var(--n-text-color-3);
   line-height: 1.4;
-}
-
-/* 照片缩略图（复用黄金用例样式） */
-.photo-thumb-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.photo-thumb-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.photo-thumb-wrap {
-  display: inline-block;
-  flex-shrink: 0;
-}
-.photo-thumb {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--n-border-color);
-  transition: transform 0.15s;
-}
-.photo-thumb:hover {
-  transform: scale(1.08);
-}
-.photo-name-tag {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: var(--n-color-target);
-  border-radius: 3px;
-  background: var(--n-color-embedded);
-}
-.photo-name-tag:hover {
-  text-decoration: underline;
-}
-
-/* 图片预览 */
-.preview-container {
-  display: flex;
-  justify-content: center;
-}
-.preview-image {
-  max-width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
-  border-radius: 8px;
 }
 </style>

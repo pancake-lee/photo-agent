@@ -34,8 +34,9 @@ export function useEmbedQueue() {
       if (!data.running) {
         stopPolling()
       }
-    } catch {
-      // 静默失败（Agent 可能未启动）
+    } catch (e) {
+      // Agent 可能未启动，轮询 404 属于预期行为
+      console.debug('Embed 队列状态查询失败', e)
     }
   }
 
@@ -76,8 +77,8 @@ export function useEmbedQueue() {
       await fetch(`${AGENT_BASE}/embed/queue/stop`, { method: 'POST' })
       stopPolling()
       status.value = { running: false, total: 0, completed: 0, failed: 0 }
-    } catch {
-      // 静默失败
+    } catch (e) {
+      console.debug('Embed 队列停止失败', e)
     }
   }
 

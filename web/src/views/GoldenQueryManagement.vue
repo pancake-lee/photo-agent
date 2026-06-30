@@ -23,9 +23,10 @@ import {
   DownloadOutline,
   CloudUploadOutline,
   BarChartOutline,
-  ImageOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
+import PhotoThumbList from '../components/PhotoThumbList.vue'
+import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 
 interface GoldenPhotoRef {
   photo_id: string
@@ -93,63 +94,12 @@ const evalDetailItem = ref<EvalDetail | null>(null)
 
 // ── 图片预览 ──
 
-const previewVisible = ref(false)
-const previewUrl = ref('')
+const previewShow = ref(false)
+const previewImg = ref('')
 
-function openPreview(url: string) {
-  previewUrl.value = url
-  previewVisible.value = true
-}
-
-function imageUrl(uuid: string): string {
-  return uuid ? `/api/v1/photos/${uuid}/image` : ''
-}
-
-// ── 照片缩略图列表组件（h 函数渲染）──
-
-function renderPhotoList(photos: EvalPhotoItem[], emptyText: string) {
-  if (!photos || photos.length === 0) {
-    return h('span', { style: { color: 'var(--n-text-color-3)', fontSize: '13px' } }, emptyText)
-  }
-  const showThumbs = photos.slice(0, 3)
-  const rest = photos.slice(3)
-  const thumbChildren: any[] = []
-  const nameChildren: any[] = []
-
-  // 前 3 张缩略图
-  for (const p of showThumbs) {
-    const url = imageUrl(p.uuid)
-    thumbChildren.push(
-      h('span', {
-        class: 'photo-thumb-wrap',
-        style: { cursor: 'pointer' },
-        onClick: () => url && openPreview(url),
-        title: p.filename,
-      }, [
-        url
-          ? h('img', { class: 'photo-thumb', src: url })
-          : h(NIcon, { size: 24 }, { default: () => h(ImageOutline) }),
-      ]),
-    )
-  }
-  // 超过 3 张显示文件名
-  for (const p of rest) {
-    nameChildren.push(
-      h('span', {
-        class: 'photo-name-tag',
-        style: { cursor: 'pointer' },
-        onClick: () => {
-          const url = imageUrl(p.uuid)
-          if (url) openPreview(url)
-        },
-      }, p.filename),
-    )
-  }
-
-  return h('div', { class: 'photo-thumb-list' }, [
-    thumbChildren.length > 0 ? h('div', { class: 'photo-thumb-row' }, thumbChildren) : null,
-    nameChildren.length > 0 ? h('div', { class: 'photo-thumb-row' }, nameChildren) : null,
-  ].filter(Boolean))
+function openPreview(uuid: string) {
+  previewImg.value = `/api/v1/photos/${uuid}/image`
+  previewShow.value = true
 }
 
 // ── 数据加载 ──
@@ -161,7 +111,8 @@ async function fetchItems() {
     if (resp.ok) {
       items.value = await resp.json()
     }
-  } catch {
+  } catch (e) {
+    console.warn('加载黄金用例失败', e)
     message.error('加载黄金用例失败')
   } finally {
     loading.value = false
@@ -182,7 +133,8 @@ async function handleDelete(id: string) {
       const err = await resp.json()
       message.error(err.detail || '删除失败')
     }
-  } catch {
+  } catch (e) {
+    console.warn('删除黄金用例失败', e)
     message.error('删除失败')
   }
 }
@@ -524,35 +476,11 @@ const evalColumns = [
         </div>
         <div class="detail-field">
           <span class="detail-label">关联照片 ({{ detailItem.relevant_photos.length }})</span>
-          <div class="photo-thumb-list">
-            <!-- 前 3 张缩略图 -->
-            <div class="photo-thumb-row">
-              <span
-                v-for="p in detailItem.relevant_photos.slice(0, 3)"
-                :key="p.photo_id"
-                class="photo-thumb-wrap"
-                :style="{ cursor: p.uuid ? 'pointer' : 'default' }"
-                :title="p.filename"
-                @click="p.uuid && openPreview(imageUrl(p.uuid))"
-              >
-                <img v-if="p.uuid" class="photo-thumb" :src="imageUrl(p.uuid)" />
-                <span v-else class="photo-name-tag">{{ p.filename }}</span>
-              </span>
-            </div>
-            <!-- 超过 3 张的部分作为文件名标签 -->
-            <div
-              v-if="detailItem.relevant_photos.length > 3"
-              class="photo-thumb-row"
-            >
-              <span
-                v-for="p in detailItem.relevant_photos.slice(3)"
-                :key="p.photo_id"
-                class="photo-name-tag"
-                :class="{ 'photo-name-clickable': !!p.uuid }"
-                @click="p.uuid && openPreview(imageUrl(p.uuid))"
-              >{{ p.filename }}</span>
-            </div>
-          </div>
+          <PhotoThumbList
+            :photos="detailItem.relevant_photos"
+            empty-text="无关联照片"
+            @preview="openPreview"
+          />
         </div>
       </div>
     </NModal>
@@ -635,7 +563,7 @@ const evalColumns = [
             ✅ 命中 ({{ evalDetailItem.hits }} 张)
             <span class="eval-section-sub">检索结果中属于正确答案的照片</span>
           </div>
-          <component :is="renderPhotoList(evalDetailItem.hit_ids, '无命中')" />
+          <PhotoThumbList :photos="evalDetailItem.hit_ids" empty-text="无命中" @preview="openPreview" />
         </div>
 
         <!-- 遗漏 -->
@@ -644,7 +572,7 @@ const evalColumns = [
             ❌ 遗漏 ({{ evalDetailItem.remaining_ids.length }} 张)
             <span class="eval-section-sub">标注为相关但未检索到的照片</span>
           </div>
-          <component :is="renderPhotoList(evalDetailItem.remaining_ids, '无遗漏')" />
+          <PhotoThumbList :photos="evalDetailItem.remaining_ids" empty-text="无遗漏" @preview="openPreview" />
         </div>
 
         <!-- 未命中 -->
@@ -653,22 +581,13 @@ const evalColumns = [
             ⬜ 未命中 ({{ evalDetailItem.miss_ids.length }} 张)
             <span class="eval-section-sub">检索到了但与查询不相关的照片</span>
           </div>
-          <component :is="renderPhotoList(evalDetailItem.miss_ids, '无多余')" />
+          <PhotoThumbList :photos="evalDetailItem.miss_ids" empty-text="无多余" @preview="openPreview" />
         </div>
       </div>
     </NModal>
 
     <!-- 图片预览弹窗 -->
-    <NModal
-      v-model:show="previewVisible"
-      preset="card"
-      title="照片预览"
-      style="width: 90vw; max-width: 1200px;"
-    >
-      <div class="preview-container">
-        <img :src="previewUrl" class="preview-image" />
-      </div>
-    </NModal>
+    <PhotoPreviewModal v-model:show="previewShow" :image-url="previewImg" />
   </NLayout>
 </template>
 
@@ -728,15 +647,6 @@ const evalColumns = [
   font-size: 14px;
   color: var(--n-text-color);
 }
-.photo-id-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.photo-name-clickable {
-  cursor: pointer;
-}
-
 /* ── 评估结果 ── */
 .eval-loading {
   display: flex;
@@ -812,56 +722,5 @@ const evalColumns = [
   font-weight: 400;
   color: var(--n-text-color-3);
   margin-left: 8px;
-}
-
-/* ── 照片缩略图 ── */
-.photo-thumb-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.photo-thumb-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.photo-thumb-wrap {
-  display: inline-block;
-  flex-shrink: 0;
-}
-.photo-thumb {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--n-border-color);
-  transition: transform 0.15s;
-}
-.photo-thumb:hover {
-  transform: scale(1.08);
-}
-.photo-name-tag {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: var(--n-color-target);
-  border-radius: 3px;
-  background: var(--n-color-embedded);
-}
-.photo-name-tag:hover {
-  text-decoration: underline;
-}
-
-/* ── 图片预览 ── */
-.preview-container {
-  display: flex;
-  justify-content: center;
-}
-.preview-image {
-  max-width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
-  border-radius: 8px;
 }
 </style>

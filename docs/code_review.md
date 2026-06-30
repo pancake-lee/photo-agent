@@ -18,35 +18,6 @@
 
 ---
 
-## 跨层共性问题
-
-### C1. 严重 — 无自动化测试覆盖核心链路
-
-- **Go 后端**：零个 `*_test.go` 文件。仅有一个 875 行的 E2E 集成测试 CLI（`test/backendTest.go`），需要手动编译运行
-- **Python Agent**：测试仅覆盖旧的 `demo/query_router.py`（简单版 4 节点图），生产环境的 `chain/photo_agent.py`（7 节点，含 combined/tool 分支）无任何自动化测试
-- **Web 前端**：无组件测试或 E2E 测试
-
-**建议**：优先为 Go 后端的 SQL 安全校验（`validate_select_only`）、Python Agent 的查询分类器（`_classify_node`）和 Combined 降级逻辑补充测试
-
-### C2. 中等 — 代码重复普遍存在
-
-| 重复内容                       | 出现位置                                                                                                                    | 重复次数          |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| 图片扫描逻辑                   | `batch_vlm/scanImages`, `scanner/ScanDirectory`, `vlm_pipeline/ScanImagesForPipeline`, `sync/scanImagesInPhotoPath` | 4 次              |
-| `_fetch_all_photos` 分页逻辑 | `embed_queue`, `evaluation`, `cluster`, `server`                                                                    | 4 次              |
-| 照片预览 Modal                 | `ChatView`, `GoldenQueryManagement`, `ClusterView`                                                                    | 3 次              |
-| 照片缩略图渲染（h 函数）       | `GoldenQueryManagement`, `ClusterView`                                                                                  | 2 次（~80 行/次） |
-
-### C3. 中等 — 错误被静默吞掉
-
-三层都大量使用 `catch {}`（空 catch 块）或 `_ = err`，且无日志。部分有合理性（轮询端点可能 404），但大多数情况下用户无法感知操作失败。
-
-### C4. 低 — 中英文混用
-
-Go 后端日志和错误消息部分用中文、部分用英文。Python 和前端以中文为主。对于中文团队这不是问题，但 HTTP API 返回的错误消息建议统一英文。
-
----
-
 ## Go 后端 (backend/)
 
 ### 代码量：~6,583 行，34 个 Go 文件
@@ -100,49 +71,6 @@ LangGraph StateGraph 编排清晰（6 节点 + 条件路由），Combined 查询
 
 ---
 
-## Web 前端 (web/)
-
-### 代码量：~3,000 行，9 个组件，6 个 composables，4 个视图
-
-### 架构评分：良好
-
-Vue 3 Composition API + TypeScript + NaiveUI，项目结构清晰。Composable 模式做状态管理（模块级单例 ref），适合当前规模。零 `any` 使用，TypeScript 覆盖率优秀。
-
-### W2. 🟡 高 — 照片缩略图渲染代码大量重复
-
-**位置**：`GoldenQueryManagement.vue` 和 `ClusterView.vue`
-
-两个文件各自实现了 ~80 行的 `h()` 函数渲染照片缩略图（3 张预览 + 其余文件名的列表）。逻辑几乎相同但签名和行为略有差异：
-
-- `GoldenQueryManagement`: `renderPhotoList(photos, emptyText)` — 最多 3 张
-- `ClusterView`: `renderPhotoThumbs(photos, showAll)` — 可选全部或前 3 张
-
-**建议**：提取为共享的 `PhotoThumbList.vue` 组件。
-
-方案：提取为共享的 `PhotoThumbList.vue` 组件，功能为：默认展示前3张+文件名列表，提供按钮展开/收起。
-
-### W3. 🟡 高 — 照片预览 Modal 重复 3 次
-
-**位置**：`ChatView.vue`、`GoldenQueryManagement.vue`、`ClusterView.vue`
-
-完全相同的 `NModal + img` 结构重复 3 次，CSS 也重复。
-
-### W4. 🟡 中 — 14+ 处静默错误吞没
-
-```typescript
-catch { /* 静默失败 */ }  // usePhotos, useVlmQueue, useEmbedQueue, useChat...
-```
-
-部分合理（轮询端点 Agent 未启动时 404），但至少应加 `console.warn` 区分预期的 404 和意外错误。
-
-### W7. 🟡 中 — 上传冲突回调的 Promise 泄漏风险
-
-**位置**：`PhotoManagement.vue:236-244` 和 `useUpload.ts`
-
-如果用户关闭冲突弹窗而不做选择，Promise 永远不 resolve，upload 循环永久阻塞。
-
----
-
 ## AI 开发最佳实践对齐评估
 
 ### 做得好的 ✅
@@ -186,37 +114,6 @@ catch { /* 静默失败 */ }  // usePhotos, useVlmQueue, useEmbedQueue, useChat.
 - **Vue 负责 UI**：照片管理、对话界面、聚类浏览 — 这是正确的，现代 SPA 框架
 
 **无需改变架构。** 当前模式已经合理利用了每层的最佳能力。
-
----
-
-## 优先级排序建议
-
-### 第一优先级（影响稳定性/安全性）
-
-1. **[G1]** 修复 timeline.go panic → 改为 error return
-2. **[G2]** 移除硬编码 `/root/project/` 路径 → 配置化
-3. **[P2]** Text-to-SQL 和 RAG 改用 LLM 工厂（修复重试/fallback/token 追踪缺失）
-4. **[W1]** 修复 composable 的 `onUnmounted` 无效 bug（资源泄漏）
-
-### 第二优先级（影响代码质量和可维护性）
-
-5. **[P1]** 消除 `sys.path` 操作 → 安装为可编辑包
-6. **[C2]** 提取共享代码（图片扫描、照片缩略图渲染、日期格式化）
-7. **[G3]** 裁剪 pgo 依赖树
-8. **[P5]** Prompt 外部化（抽到 YAML/独立文件）
-
-### 第三优先级（提升工程成熟度）
-
-9. **[C1]** 为核心链路补充自动化测试
-10. **[G4]** OpenAPI 规范自动生成
-11. **[W4]** 为静默错误处理加上日志
-
-### 后续可考虑
-
-12. **[P13]** API 增加认证和速率限制
-13. **[G5]** 替换废弃依赖（goexif、go.uuid）
-14. **[W11]** 接入 ESLint + Prettier
-17. **[P11]** 清理未使用依赖（tenacity、python-dotenv）
 
 ---
 
@@ -363,6 +260,12 @@ raise fastapi.HTTPException(status_code=500, detail=str(exc))
 
 ### Web 前端 (web/)
 
+### 代码量：~3,000 行，9 个组件，6 个 composables，4 个视图
+
+### 架构评分：良好
+
+Vue 3 Composition API + TypeScript + NaiveUI，项目结构清晰。Composable 模式做状态管理（模块级单例 ref），适合当前规模。零 `any` 使用，TypeScript 覆盖率优秀。
+
 #### W1. 🔴 严重 — `onUnmounted` 在单例 composable 中无效
 
 **位置**：`src/composables/useVlmQueue.ts` 和 `useEmbedQueue.ts`
@@ -376,7 +279,37 @@ export function useVlmQueue() {
 
 因为 composable 使用模块级单例模式，`onUnmounted` 只在首次调用 `useVlmQueue()` 的组件 `setup` 时注册。当用户导航离开使用了该 composable 的视图后，轮询 interval **继续运行**（直到 SPA 完全刷新）。这是一个真实的资源泄漏 bug。
 
-**修复**：在 `stopPolling`/`stopQueue` 中主动清理 interval，而非依赖 `onUnmounted`。
+**修复**：在 `stopPolling`/`stopQueue` 中主动清理 interval，而非依赖 `onUnmounted`。当前已通过 usageCount 引用计数实现，最后一个组件卸载时停止轮询。
+
+#### W2. 🟡 高 — 照片缩略图渲染代码大量重复
+
+**位置**：`GoldenQueryManagement.vue` 和 `ClusterView.vue`
+
+两个文件各自实现了 ~80 行的 `h()` 函数渲染照片缩略图。`GoldenQueryManagement`: `renderPhotoList(photos, emptyText)`；`ClusterView`: `renderPhotoThumbs(photos, showAll)`。
+
+**修复**：提取为共享的 `components/PhotoThumbList.vue` 组件。支持 `photos`、`maxPreview`（默认 3，设为 0 展示全部）、`emptyText` 属性，emit `preview` 事件。同时替换了 `GoldenQueryManagement.vue` 详情弹窗中的内联缩略图渲染。
+
+#### W3. 🟡 高 — 照片预览 Modal 重复 3 次
+
+**位置**：`ChatView.vue`、`GoldenQueryManagement.vue`、`ClusterView.vue`
+
+完全相同的 `NModal + img` 结构重复 3 次，CSS 也重复。ChatView 还额外有下载按钮。
+
+**修复**：提取为共享的 `components/PhotoPreviewModal.vue` 组件。支持 `show`（v-model）、`imageUrl`、`title`、`showDownload`、`downloadFilename` 属性。内置下载逻辑（fetch→blob→download，失败时 fallback 到 `window.open`）。
+
+#### W4. 🟡 中 — 14+ 处静默错误吞没
+
+14+ 处 `catch { }` 不输出任何日志，排查问题时无从下手。
+
+**修复**：为所有静默 catch 添加错误日志。CRUD 操作使用 `console.warn`（带上下文描述），轮询操作使用 `console.debug`（Agent 未启动时 404 属预期）。涉及文件：`useChat.ts`、`usePhotos.ts`、`useVlmQueue.ts`、`useEmbedQueue.ts`、`useUpload.ts`、`ChatView.vue`、`GoldenQueryManagement.vue`、`ClusterView.vue`。
+
+#### W7. 🟡 中 — 上传冲突回调的 Promise 泄漏风险
+
+**位置**：`PhotoManagement.vue` 和 `useUpload.ts`
+
+用户关闭冲突弹窗而不做选择时，`onConflict` 回调返回的 Promise 永远不 resolve，upload 循环永久阻塞。
+
+**修复**：在 `PhotoManagement.vue` 中添加 `watch(showConflictModal)`，当弹窗关闭但 `conflictResolver` 未消费时，自动以 `'skip'` resolve，确保上传循环能继续执行。
 
 #### W5. 🟡 中 — 日期格式化重复 ~15 次
 
@@ -384,7 +317,9 @@ export function useVlmQueue() {
 new Date(t).toLocaleString('zh-CN')
 ```
 
-散落在各组件中，格式不统一。应提取为共享工具函数。
+散落在各组件中，格式不统一。
+
+**修复**：已提取为 `utils/format.ts` 中的 `formatDate()` 函数，所有组件统一导入使用。
 
 #### W6. 🟡 中 — `UploadDropZone` 使用字符串 `$refs`
 
@@ -392,26 +327,28 @@ new Date(t).toLocaleString('zh-CN')
 @click="($refs.fileInput as HTMLInputElement).click()"
 ```
 
-模板字符串 refs 类型推断不佳。应使用 `const fileInput = ref<HTMLInputElement>()` 模板 ref。
+模板字符串 refs 类型推断不佳。
+
+**修复**：已改为 `const fileInput = ref<HTMLInputElement>()` 模板 ref。
 
 #### W8. 🟢 低 — `NImage` 导入但未使用
 
 **位置**：`GoldenQueryManagement.vue:16`、`ClusterView.vue:16`
 
-导入但模板中用 `<img>` 替代。未使用的导入可能被 tree-shaking 移除，但不符合 `noUnusedLocals` 精神。
+**修复**：已移除未使用的 `NImage` 导入。
 
 #### W9. 🟢 低 — `marked.parse({ async: false })` 已弃用
 
 **位置**：`ChatView.vue:162`
 
-新版本 marked 推荐 `await marked.parse(text)`。
+**修复**：已升级 marked 到 v18，使用新版 API `marked.parse(text)`（无 options 参数时同步返回 string）。
 
 #### W10. 🟢 低 — `/photos` 路由非懒加载
 
-其他 3 个路由都是 `() => import(...)` 懒加载，`/photos` 是直接 import。
+**修复**：所有 5 个路由均已改为 `() => import(...)` 懒加载。
 
 #### W11. 🟢 低 — 无 ESLint/Prettier 配置
 
 代码风格依赖开发者编辑器设置，无项目级约束。
 
-方案：使用Prettier配置
+**修复**：已添加 `.prettierrc` 配置文件（semi: false, singleQuote: true, trailingComma: all, printWidth: 100）。ESLint 按评审方案不引入，仅使用 Prettier。

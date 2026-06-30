@@ -19,6 +19,7 @@ import { TrashOutline, SendOutline, ImageOutline, DownloadOutline, BookmarkOutli
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
 import type { PhotoRef } from '../types/chat'
+import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -229,7 +230,8 @@ async function handleGoldenSave() {
       const err = await resp.json()
       message.error(err.detail || '保存失败')
     }
-  } catch {
+  } catch (e) {
+    console.warn('保存黄金用例失败', e)
     message.error('保存失败')
   } finally {
     goldenSaving.value = false
@@ -489,21 +491,12 @@ const hasMessages = computed(() => messages.value.length > 0)
     </NModal>
 
     <!-- 图片预览弹窗 -->
-    <NModal
+    <PhotoPreviewModal
       v-model:show="previewVisible"
-      preset="card"
-      title="照片预览"
-      style="width: 90vw; max-width: 1200px;"
-    >
-      <div class="preview-container">
-        <img :src="previewUrl" class="preview-image" />
-        <div class="preview-actions">
-          <NButton type="primary" @click="downloadImageUrl(previewUrl, 'photo')">
-            下载原图
-          </NButton>
-        </div>
-      </div>
-    </NModal>
+      :image-url="previewUrl"
+      :show-download="true"
+      :download-filename="'photo'"
+    />
   </NLayout>
 </template>
 
@@ -653,24 +646,6 @@ const hasMessages = computed(() => messages.value.length > 0)
   align-items: center;
   flex-shrink: 0;
   color: var(--n-text-color-3);
-}
-
-/* ── 图片预览样式 ── */
-.preview-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-.preview-image {
-  max-width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
-  border-radius: 8px;
-}
-.preview-actions {
-  display: flex;
-  gap: 12px;
 }
 
 /* ── 黄金用例保存表单 ── */

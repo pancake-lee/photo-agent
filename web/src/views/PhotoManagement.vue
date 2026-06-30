@@ -256,6 +256,14 @@ function handleConflictResolve(resolution: ConflictResolution) {
   showConflictModal.value = false
 }
 
+// 冲突弹窗关闭但未选择时，默认 skip，避免上传循环永久阻塞
+watch(showConflictModal, (v) => {
+  if (!v && conflictResolver.value) {
+    conflictResolver.value('skip')
+    conflictResolver.value = null
+  }
+})
+
 // 日期变化处理（NaiveUI DatePicker v-model 返回时间戳或 null）
 function handleDateStart(v: number | null) {
   if (v) {
