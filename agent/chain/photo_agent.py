@@ -14,6 +14,7 @@
         python chain/photo_agent.py -c ../.local/my-config.yaml --eval   # 评估模式
         python chain/photo_agent.py -c ../.local/my-config.yaml --usage  # 用量统计
         python chain/photo_agent.py -c ../.local/my-config.yaml --demo   # 场景演示
+        python chain/photo_agent.py -c ../.local/my-config.yaml --suggest # 选题建议
         python chain/photo_agent.py -c ../.local/my-config.yaml sessions list         # 列出会话
         python chain/photo_agent.py -c ../.local/my-config.yaml sessions resume <id>  # 恢复会话
 """
@@ -35,6 +36,7 @@ import langgraph.graph as lg_graph
 import chain.demo as demo
 import chain.evaluation as evaluation
 import chain.photo_rag as photo_rag
+import chain.suggest as suggest_mod
 import chain.text_to_sql as text_to_sql
 import config
 import tools.openapi_client as openapi_client
@@ -674,6 +676,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
   python chain/photo_agent.py -c config.yaml --eval       # 评估模式
   python chain/photo_agent.py -c config.yaml --usage      # 用量统计
   python chain/photo_agent.py -c config.yaml --demo       # 场景演示
+  python chain/photo_agent.py -c config.yaml --suggest    # 选题建议
   python chain/photo_agent.py -c config.yaml --usage 30   # 最近 30 天用量
   python chain/photo_agent.py -c config.yaml sessions list        # 列出所有会话
   python chain/photo_agent.py -c config.yaml sessions resume <id> # 恢复会话
@@ -699,6 +702,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--serve", dest="serve_port", nargs="?", const=10005, type=int, default=None,
         metavar="PORT",
         help="启动 HTTP API 服务（默认端口 10005）",
+    )
+    parser.add_argument(
+        "--suggest", dest="suggest_mode", action="store_true",
+        help="运行潜在主题识别，输出选题建议列表",
     )
     parser.add_argument(
         "sessions_command", nargs="*", default=None,
@@ -854,6 +861,18 @@ def main() -> None:
 
         elif args.usage_days is not None:
             _print_usage(agent.tracker, days=args.usage_days)
+
+        elif args.suggest_mode:
+            print("潜在主题识别（选题建议）...")
+            print()
+            cluster_dir = cfg.resolve_path("./data/clusters")
+            suggestions, meta = suggest_mod.run_suggest(
+                cfg, cfg.go_backend_url, cluster_dir,
+            )
+            output = suggest_mod.format_suggestions(
+                suggestions, meta, go_backend_url=cfg.go_backend_url,
+            )
+            print(output)
 
         else:
             _chat_loop(agent)

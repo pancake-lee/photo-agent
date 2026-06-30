@@ -27,6 +27,7 @@ import chain.session_store as session_store
 import chain.embed_queue as embed_queue
 import chain.evaluation as evaluation_mod
 import chain.cluster as cluster_mod
+import chain.suggest as suggest_mod
 import vectorstore.chroma_client as chroma_client
 import config as config_mod
 
@@ -701,6 +702,51 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=500, detail=f"主题生成失败: {exc}")
 
         return cluster_mod._result_to_dict(updated)
+
+    # ── 选题建议 API ─────────────────────────────────────
+
+    class SuggestResponse(pydantic.BaseModel):
+        generated_at: str
+        total_photos: int
+        cluster_count: int
+        candidates_found: int
+        suggestions: list[dict] = []
+        error: str = ""
+
+    @app.post("/api/suggest/run", response_model=SuggestResponse)
+    async def suggest_run(req: fastapi.Request):
+        """运行潜在主题识别，返回选题建议列表。
+
+        通过数据分析 + LLM 生成选题建议，识别三类潜在主题：
+        - 高频未成组
+        - 时间线规律
+        - 稀缺优质
+        """
+        cfg = req.app.state.cfg
+        cluster_dir = cfg.resolve_path("./data/clusters")
+
+        suggestions, meta = suggest_mod.run_suggest(
+            cfg, cfg.go_backend_url, cluster_dir,
+        )
+
+        result = {
+            "generated_at": meta.get("generated_at", ""),
+            "total_photos": meta.get("total_photos", 0),
+            "cluster_count": meta.get("cluster_count", 0),
+            "candidates_found": meta.get("candidates_found", 0),
+            "suggestions": [
+                {
+                    "title": s.title,
+                    "angle": s.angle,
+                    "rationale": s.rationale,
+                    "category": s.category,
+                    "photo_ids": s.photo_ids,
+                }
+                for s in suggestions
+            ],
+            "error": meta.get("error", ""),
+        }
+        return result
 
     return app
 

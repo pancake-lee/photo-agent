@@ -7,6 +7,7 @@ import {
   AddOutline,
   BookmarkOutline,
   GitNetworkOutline,
+  BulbOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
@@ -65,6 +66,11 @@ const menuOptions = computed<MenuOption[]>(() => {
       key: '/cluster',
       icon: renderIcon(GitNetworkOutline),
     },
+    {
+      label: '主题发现',
+      key: '/suggest',
+      icon: renderIcon(BulbOutline),
+    },
     // 新建对话放在固定功能最后
     {
       label: '新建对话',
@@ -100,6 +106,9 @@ const selectedKey = computed(() => {
   }
   if (path === '/cluster') {
     return '/cluster'
+  }
+  if (path === '/suggest') {
+    return '/suggest'
   }
   return '/photos'
 })
