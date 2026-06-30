@@ -16,9 +16,9 @@
 |         | Phase 3 | 3.3  | 摄影报告生成           | 复用 stats API + Chroma 聚类结果，CLI`--report [year]` 输出 Markdown 结构化报告（概览/器材/时间/风格/创作建议）   |
 |         | Phase 4 | 4.1  | 发布历史分析           | 用户标记"已发布"，统计分析主题分布/频率/时间规律，识别缺口并建议补发方向                                          |
 |         | Phase 4 | 4.2  | 系列感维护             | 跨时间线主题提取，发现"对比/延续/变奏"系列（如雨天 vs 晴天、2023 vs 2024 同一地点）                               |
-|         | 工程    | E1   | SQLite WAL 模式        | `PRAGMA journal_mode=WAL;` 提升并发写入效率                                                                       |
-|         | 工程    | E2   | 优雅关闭               | 监听 SIGINT/SIGTERM，停止接受新请求、等待后台任务完成                                                             |
-|         | 工程    | E3   | 日志轮转               | 长期运行基础保障，接入 pgo 日志体系                                                                               |
+| Done    | 工程    | E1   | SQLite WAL 模式        | `PRAGMA journal_mode=WAL;` 提升并发写入效率                                                                       |
+| Done    | 工程    | E2   | 优雅关闭               | 监听 SIGINT/SIGTERM，停止接受新请求、等待后台任务完成                                                             |
+| Done    | 工程    | E3   | 日志轮转               | 长期运行基础保障，接入 pgo 日志体系                                                                               |
 
 ---
 

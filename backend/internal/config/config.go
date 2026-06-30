@@ -58,6 +58,13 @@ type DifyConfig struct {
 	DBPath      string `json:"db_path" toml:"db_path"`
 }
 
+// LogConfig 日志配置
+type LogConfig struct {
+	Path         string `json:"path" toml:"path"`                              // 日志目录或文件路径
+	MaxAge       int    `json:"max_age" toml:"max_age" default:"7"`            // 日志保留天数
+	RotationSize int64  `json:"rotation_size" toml:"rotation_size" default:"0"` // 按大小轮转（bytes），0 不启用
+}
+
 // Config 全局配置
 type Config struct {
 	Server    ServerConfig
@@ -66,6 +73,7 @@ type Config struct {
 	VLM       VLMConfig
 	Embedding EmbeddingConfig
 	Dify      DifyConfig
+	Log       LogConfig
 }
 
 var globalConfig Config

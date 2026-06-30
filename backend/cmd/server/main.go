@@ -1,7 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"net/http"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pancake-lee/photo-agent/internal/api"
@@ -31,12 +37,18 @@ func main() {
 		}
 	}
 
+	// 加载配置后重新初始化日志，使用配置文件中的日志轮转设置
+	reinitLogger(*logConsole)
+
 	if err := service.InitDB(); err != nil {
 		plogger.Fatalf("db init failed: %v", err)
 	}
 
 	// 启动时后台自动同步照片数据（不阻塞 server 启动）
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := service.AutoSync(*clearDB); err != nil {
 			plogger.Warnf("auto sync failed: %v", err)
 		}
@@ -50,8 +62,63 @@ func main() {
 	// Embedding 代理（兼容 OpenAI 格式 -> 火山引擎 multimodal）
 	r.POST("/v1/embeddings", api.EmbeddingProxy)
 
-	plogger.Infof("Server starting on %s", cfg.Server.Addr)
-	if err := r.Run(cfg.Server.Addr); err != nil {
-		plogger.Fatalf("server run failed: %v", err)
+	srv := &http.Server{
+		Addr:    cfg.Server.Addr,
+		Handler: r,
 	}
+
+	// 在 goroutine 中启动服务，主 goroutine 等待信号
+	go func() {
+		plogger.Infof("Server starting on %s", cfg.Server.Addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			plogger.Fatalf("server listen failed: %v", err)
+		}
+	}()
+
+	// 监听 SIGINT / SIGTERM
+	quit := make(chan struct{})
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	<-ctx.Done()
+	plogger.Info("received shutdown signal, stopping gracefully...")
+
+	// 停止接受新请求，等待已有请求处理完（最多 10 秒）
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		plogger.Errorf("server forced to shutdown: %v", err)
+	}
+
+	// 等待后台任务完成
+	plogger.Info("waiting for background tasks to complete...")
+	wg.Wait()
+
+	// 关闭数据库
+	if err := service.CloseDB(); err != nil {
+		plogger.Errorf("close db failed: %v", err)
+	}
+
+	close(quit)
+	plogger.Info("server exited gracefully")
+}
+
+// reinitLogger 在配置加载后重新初始化日志，应用配置文件中的日志轮转设置
+func reinitLogger(isLogConsole bool) {
+	cfg := config.Get()
+	logPath := cfg.Log.Path
+	if logPath == "" {
+		logPath = "" // 使用 plogger 默认路径 ({exec}/logs/)
+	}
+
+	var rotCfg *plogger.RotateConfig
+	if cfg.Log.MaxAge > 0 || cfg.Log.RotationSize > 0 {
+		rotCfg = &plogger.RotateConfig{
+			MaxAge:       time.Duration(cfg.Log.MaxAge) * 24 * time.Hour,
+			RotationSize: cfg.Log.RotationSize,
+		}
+	}
+
+	plogger.InitLoggerWithRotate(isLogConsole, zapcore.DebugLevel, logPath, rotCfg)
 }

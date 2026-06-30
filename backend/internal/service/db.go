@@ -34,16 +34,38 @@ func InitDB() error {
 		return fmt.Errorf("open sqlite failed: %w", err)
 	}
 
+	// 启用 WAL 模式，提升并发写入效率
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("get sql.DB failed: %w", err)
+	}
+	if _, err := sqlDB.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return fmt.Errorf("set WAL mode failed: %w", err)
+	}
+
 	// 自动迁移表结构
 	if err := db.AutoMigrate(&model.Photo{}, &model.ImportJob{}); err != nil {
 		return fmt.Errorf("auto migrate failed: %w", err)
 	}
 
-	plogger.Info("SQLite initialized, path: " + sqlitePath)
+	plogger.Info("SQLite initialized (WAL mode), path: " + sqlitePath)
 	return nil
 }
 
 // GetDB 获取数据库实例
 func GetDB() *gorm.DB {
 	return db
+}
+
+// CloseDB 关闭数据库连接
+func CloseDB() error {
+	if db == nil {
+		return nil
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	plogger.Info("closing SQLite database...")
+	return sqlDB.Close()
 }
