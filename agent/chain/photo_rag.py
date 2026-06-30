@@ -12,11 +12,11 @@ import pathlib
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import httpx
 import langchain_core.prompts as lc_prompts
-import langchain_openai as lc_openai
+
+import utils.llm_factory as llm_factory
 
 import config
 import embedding.embedder as embedder
@@ -230,13 +230,7 @@ def _build_rag_chain(cfg: config.Config):
     返回:
         可 invoke 的 LangChain Chain
     """
-    llm = lc_openai.ChatOpenAI(
-        model=cfg.llm_model,
-        api_key=cfg.llm_api_key,  # type: ignore[arg-type]
-        base_url=cfg.llm_base_url,
-        temperature=0.5,
-        streaming=True,
-    )
+    llm = llm_factory.create_llm(cfg, temperature=0.5, streaming=True)
 
     prompt = lc_prompts.ChatPromptTemplate.from_messages([
         ("system", RAG_SYSTEM_PROMPT),

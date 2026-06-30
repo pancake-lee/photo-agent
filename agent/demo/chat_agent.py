@@ -8,7 +8,6 @@
 import sys
 import pathlib
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import langchain_core.prompts as lc_prompts
 import langchain_core.messages as lc_messages

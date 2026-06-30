@@ -8,14 +8,22 @@ dependencies = [
     "langchain-openai>=1.2.0",
     "chromadb>=1.5.0",
     "requests>=2.31.0",
-    "python-dotenv>=1.0.0",
     "httpx>=0.28.0",
     "langgraph>=1.2.0",
-    "tenacity>=9.0.0",
     "pyyaml>=6.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
 ]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["config"]
+
+[tool.setuptools.packages.find]
+where = ["."]
 
 [tool.pyright]
 reportPrivateImportUsage = false

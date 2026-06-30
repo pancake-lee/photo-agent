@@ -9,7 +9,6 @@ import pathlib
 import sys
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import embedding.chunking as chunking
 

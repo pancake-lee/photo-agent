@@ -13,7 +13,6 @@ import pathlib
 import sys
 import typing
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import langchain_core.prompts as lc_prompts
 import langchain_openai as lc_openai

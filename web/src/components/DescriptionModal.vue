@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { NModal, NButton, NSpace, NDivider, NTag } from 'naive-ui'
+import { formatDate } from '../utils/format'
 
 const props = defineProps<{
   show: boolean
@@ -17,7 +18,7 @@ const emit = defineEmits<{
 function formatTime(t: string): string {
   if (!t) return '未知'
   try {
-    return new Date(t).toLocaleString('zh-CN')
+    return formatDate(t)
   } catch {
     return t
   }

@@ -28,9 +28,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
 
-# 确保 agent 根目录在 sys.path
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-
 import config as cfg_module
 import embedding.chunking as chunking
 import embedding.embedder as embedder_mod

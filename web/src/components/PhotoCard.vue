@@ -7,6 +7,7 @@ import {
   LayersOutline,
 } from '@vicons/ionicons5'
 import type { PhotoListItem } from '../types/photo'
+import { formatDate } from '../utils/format'
 
 const props = defineProps<{
   photo: PhotoListItem
@@ -41,7 +42,7 @@ function handleEmbedClick() {
 function formatExifTooltip(): string {
   const p = props.photo
   const parts: string[] = []
-  if (p.shot_at) parts.push(`拍摄: ${new Date(p.shot_at).toLocaleString('zh-CN')}`)
+  if (p.shot_at) parts.push(`拍摄: ${formatDate(p.shot_at)}`)
   if (p.brand && p.model) parts.push(`${p.brand} ${p.model}`)
   else if (p.model) parts.push(p.model)
   if (p.lens) parts.push(`镜头: ${p.lens}`)

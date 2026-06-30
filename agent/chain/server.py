@@ -16,7 +16,6 @@ import uuid
 import datetime
 import os
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import fastapi
 import fastapi.middleware.cors
@@ -284,10 +283,11 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     )
 
     # CORS — 开发阶段允许所有来源
+    # 注意: allow_credentials=True 时 allow_origins 不能是 *
     app.add_middleware(
         fastapi.middleware.cors.CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

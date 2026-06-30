@@ -1,6 +1,5 @@
 """Smoke test for suggest.py — verifies core logic functions work correctly."""
 import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import chain.suggest as suggest_mod
 

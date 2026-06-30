@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/model"
@@ -37,8 +38,9 @@ type VlmQueue struct {
 	current   string             // 当前处理中的文件名
 	ctx       context.Context    // 队列上下文（控制消费循环）
 	cancel    context.CancelFunc // 取消函数
-	active    sync.WaitGroup     // 正在执行的 VLM 请求计数
-	taskID    string             // 当前任务 ID（每次 Start 重新生成）
+	active      sync.WaitGroup // 正在执行的 VLM 请求 goroutine
+	activeNum   int32          // 活跃 goroutine 可读计数器（配合 WaitGroup 使用）
+	taskID      string         // 当前任务 ID（每次 Start 重新生成）
 }
 
 var (
@@ -179,6 +181,7 @@ func (q *VlmQueue) workerLoop() {
 				return
 			}
 			q.active.Add(1)
+			atomic.AddInt32(&q.activeNum, 1)
 			go q.processOne(photoID)
 		}
 	}
@@ -187,7 +190,10 @@ func (q *VlmQueue) workerLoop() {
 // processOne 处理单张照片的 VLM 描述。
 // 使用独立 context（不继承队列 ctx），确保中止后已发出的请求不被取消。
 func (q *VlmQueue) processOne(photoID string) {
-	defer q.active.Done()
+	defer func() {
+		q.active.Done()
+		atomic.AddInt32(&q.activeNum, -1)
+	}()
 
 	// 获取照片信息
 	photo, err := GetPhotoByID(photoID)
@@ -229,11 +235,9 @@ func (q *VlmQueue) drainPending() {
 	}
 }
 
-// activeCount 获取当前活跃 goroutine 数量（无锁版本）。
+// activeCount 获取当前活跃 goroutine 数量。
 func (q *VlmQueue) activeCount() int {
-	// WaitGroup 不提供读计数器，用近似方式
-	// 这里通过 mu 保护了 running 状态，active 计数不需要精确
-	return 0
+	return int(atomic.LoadInt32(&q.activeNum))
 }
 
 // --- 内部辅助 ---

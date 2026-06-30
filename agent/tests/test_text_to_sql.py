@@ -9,7 +9,6 @@ import pathlib
 import sys
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import db.sqlite_client as sqlite_client
 import chain.text_to_sql as text_to_sql

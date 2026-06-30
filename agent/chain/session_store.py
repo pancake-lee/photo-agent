@@ -9,13 +9,13 @@ import sqlite3
 import uuid
 import pathlib
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
 def _now_iso() -> str:
     """返回当前 UTC 时间的 ISO 格式字符串。"""
-    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _format_initial_title() -> str:

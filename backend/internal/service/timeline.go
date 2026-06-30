@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/pgo/pkg/plogger"
+	"github.com/pancake-lee/photo-agent/internal/config"
 )
 
 // TimelineEntry 时间线单条记录
@@ -30,7 +30,7 @@ func LoadTimeline() ([]TimelineEntry, error) {
 	if path == "" {
 		return nil, nil
 	}
-
+	// 如果配置文件制定了路径，则必须解析成功，以免用户忽略了错误，所以panic了
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {

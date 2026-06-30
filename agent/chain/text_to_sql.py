@@ -19,14 +19,13 @@ import re
 import sys
 import typing
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import httpx
 import langchain_core.prompts as lc_prompts
-import langchain_openai as lc_openai
 
 import config
 import db.sqlite_client as sqlite_client
+import utils.llm_factory as llm_factory
 
 logger = logging.getLogger(__name__)
 
@@ -326,14 +325,9 @@ def _validate_sql_safe(sql: str) -> None:
 # LLM 调用
 # --------------------------------------------------------------------------- #
 
-def _build_llm(cfg: config.Config) -> lc_openai.ChatOpenAI:
-    """构建 LLM 实例。"""
-    return lc_openai.ChatOpenAI(
-        model=cfg.llm_model,
-        api_key=cfg.llm_api_key,  # type: ignore[arg-type]
-        base_url=cfg.llm_base_url,
-        temperature=0.0,
-    )
+def _build_llm(cfg: config.Config):
+    """构建 LLM 实例（带重试和降级）。"""
+    return llm_factory.create_llm(cfg, temperature=0.0)
 
 
 def generate_sql(

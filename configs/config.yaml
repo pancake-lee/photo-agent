@@ -5,42 +5,49 @@
 server:
   addr: ":10004"                    # Go 后端监听地址
 
+storage:
+  # 代码根目录（影响相对路径计算）
+  project_root: "."
+  # 原图存储路径
+  photo_src: "./data/photos/src"
+  # 压缩后的图片存储路径
+  photo_path: "./data/photos/compressed"
+  # vlm 图像识别结果输出路径
+  descriptions_path: "./data/descriptions.json"
+  # 用户提供的时间线文件路径
+  timeline_path: "./data/timeline.md"
+
 db:
   sqlite_path: "./data/sqlite/photo_agent.db"
 
-storage:
-  project_root: "."                  # 项目根目录，建议保持为 "."
-  photo_src: "./data/photos"         # 原始照片源目录（batch_vlm 输入）
-  photo_path: "./data/photos"        # 照片服务目录（server 对外提供文件服务）
-  descriptions_path: "./data/descriptions.json"
-  timeline_path: "./data/timeline.md"  # 时间线 Markdown 文件路径
-
 llm:
-  base_url: "https://api.openai.com/v1"  # 或火山引擎 / 通义千问地址
+  base_url: "https://api.openai.com/v1"
   api_key: "your-llm-api-key"        # LLM API Key
-  model: "gpt-4o-mini"               # 或 doubao-seed-1-6-251015 / qwen-turbo
-  fallback_model: ""                # 可选备用模型（如主模型调用失败时使用）
-  retry_enabled: true                   # 是否启用失败重试机制
-  retry_max_attempts: 3                   # 最大重试次数
+  model: "gpt-4o-mini"
+  fallback_model: ""
+  retry_enabled: true # 是否启用失败重试机制
+  retry_max_attempts: 3 # 最大重试次数
+  request_timeout: 60.0 # LLM 请求超时秒数
 
 vlm:
-  api_key: "your-vlm-api-key"        # VLM API Key（可与 LLM 共用同一 Key）
-  model: "gpt-4o-mini"               # 或 doubao-1-5-vision-pro / qwen-vl
   base_url: "https://api.openai.com/v1"
-  concurrency: 3                     # VLM 并发数（控制费用和速率）
-  retry: 3                           # 失败重试次数
-  max_image_size_mb: 0.2             # 单张图片最大尺寸（超过自动压缩）
-  prompt: ./configs/vlm_prompt.md    # VLM 描述生成提示词文件路径
+  api_key: "your-vlm-api-key"
+  model: "gpt-4o-mini"
+  concurrency: 3 # VLM 并发数
+  retry: 3 # 失败重试次数
+  max_image_size_mb: 0.2 # 单张图片最大尺寸（超过自动压缩）
+  max_tokens: 500 # VLM 生成最大 token 数
+  prompt: ./configs/vlm_prompt.md # VLM 描述生成提示词文件路径
 
 embedding:
-  api_key: "your-embedding-api-key"  # Embedding API Key
-  model: "text-embedding-3-small"    # 或 doubao-embedding-vision
   base_url: "https://api.openai.com/v1"
-  context_size: 128000               # 模型上下文窗口大小
-  chunk_strategy: "none"             # 分块策略: none | fixed_size | markdown_heading
-  chunk_size: 500                    # fixed_size 策略：每块字数
-  chunk_overlap: 50                  # fixed_size 策略：块间重叠字数
-  heading_level: 2                   # markdown_heading 策略：按 H2 切分
+  api_key: "your-embedding-api-key"
+  model: "text-embedding-3-small"
+  context_size: 128000 # 模型上下文窗口大小
+  chunk_strategy: "none" # 分块策略: none | fixed_size | markdown_heading
+  chunk_size: 500 # fixed_size 策略：每块字数
+  chunk_overlap: 50 # fixed_size 策略：块间重叠字数
+  heading_level: 2 # markdown_heading 策略：按 H2 切分
 
 rag:
   # 直觉理解：1.8 表示"rag分数中下一个距离是上一个的 1.8 倍就截断"
@@ -52,13 +59,14 @@ rag:
   distance_threshold: 1.5
 
 dify:
-  api_key: "your-dify-api-key"       # Dify 知识库 API Key（首次由 init_dify 自动生成）
-  base_url: "http://localhost"       # Dify 根地址，不带 /v1
-  dataset_id: ""                     # 知识库 ID（首次运行 init_dify 后自动填入）
-  email: "your-dify-email"           # Dify 管理员邮箱
-  password: "your-dify-password"     # Dify 管理员密码
+  base_url: "http://localhost"
+  api_key: "your-dify-api-key"
+  dataset_id: "" # 知识库 ID（首次运行 init_dify 后自动填入）
+  email: "your-dify-email" # Dify 管理员邮箱
+  password: "your-dify-password" # Dify 管理员密码
   dataset_name: "photo-agent-descriptions"
   db_path: "./data/sqlite/photo_agent.db"
 
 prices:
   path: ./configs/prices.yaml
+  

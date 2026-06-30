@@ -39,6 +39,7 @@ def create_llm(
         api_key=cfg.llm_api_key,  # type: ignore[arg-type]
         base_url=cfg.llm_base_url,
         temperature=temperature,
+        request_timeout=cfg.llm_request_timeout,
         streaming=streaming,
         callbacks=callbacks,
     )
@@ -62,6 +63,7 @@ def create_llm(
             api_key=cfg.llm_api_key,  # type: ignore[arg-type]
             base_url=cfg.llm_base_url,
             temperature=temperature,
+            request_timeout=cfg.llm_request_timeout,
             streaming=streaming,
             callbacks=callbacks,
         )

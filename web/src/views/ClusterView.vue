@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
+import { formatDate } from '../utils/format'
 import {
   NLayout,
   NLayoutContent,
@@ -13,7 +14,6 @@ import {
   NDataTable,
   NPopconfirm,
   NModal,
-  NImage,
   NInputNumber,
   NForm,
   NFormItem,
@@ -312,7 +312,7 @@ const columns = [
     width: 160,
     render(row: ClusterResultSummary) {
       if (!row.created_at) return '—'
-      return new Date(row.created_at).toLocaleString('zh-CN')
+      return formatDate(row.created_at)
     },
   },
   {

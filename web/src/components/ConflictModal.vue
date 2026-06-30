@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { NModal, NButton, NRadio, NSpace } from 'naive-ui'
+import { formatDate } from '../utils/format'
 import { ref } from 'vue'
 import type { ConflictInfo, ConflictResolution } from '../types/upload'
 
@@ -37,14 +38,14 @@ const selected = ref<ConflictResolution>('keep_both')
           />
           <p class="compare-name">{{ conflict.existing_filename }}</p>
           <p v-if="conflict.existing_shot_at" class="compare-meta">
-            拍摄: {{ new Date(conflict.existing_shot_at).toLocaleString('zh-CN') }}
+            拍摄: {{ formatDate(conflict.existing_shot_at) }}
           </p>
         </div>
         <div class="compare-side">
           <h4>新上传图片</h4>
           <p class="compare-name">{{ newFilename }}</p>
           <p v-if="newShotAt" class="compare-meta">
-            拍摄: {{ new Date(newShotAt).toLocaleString('zh-CN') }}
+            拍摄: {{ formatDate(newShotAt) }}
           </p>
         </div>
       </div>

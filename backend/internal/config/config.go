@@ -37,6 +37,7 @@ type VLMConfig struct {
 	Concurrency    int    `json:"concurrency" toml:"concurrency" default:"3"`
 	Retry          int    `json:"retry" toml:"retry" default:"3"`
 	MaxImageSizeMB float64 `json:"max_image_size_mb" toml:"max_image_size_mb" default:"1"`
+	MaxTokens      int     `json:"max_tokens" toml:"max_tokens" default:"500"`
 	Prompt         string `json:"prompt" toml:"prompt"`
 }
 

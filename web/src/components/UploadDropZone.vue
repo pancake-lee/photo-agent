@@ -8,6 +8,7 @@ const emit = defineEmits<{
 }>()
 
 const dragging = ref(false)
+const fileInput = ref<HTMLInputElement>()
 
 function onDragOver(e: DragEvent) {
   e.preventDefault()
@@ -42,7 +43,7 @@ function onFileSelect(e: Event) {
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"
-    @click="() => ($refs.fileInput as HTMLInputElement).click()"
+    @click="fileInput?.click()"
   >
     <NIcon size="48" color="var(--n-text-color-3)">
       <CloudUploadOutline />

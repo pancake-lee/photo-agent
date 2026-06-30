@@ -28,10 +28,10 @@ func StorePhoto(sourcePath, timeline string) (string, error) {
 		return relPath, nil
 	}
 
-	// 若是 /root/project/ 下的文件，检查对应压缩版本是否已在 PhotoPath 中
-	const projectPrefix = "/root/project/"
-	if strings.HasPrefix(absSourcePath, projectPrefix) {
-		rel := strings.TrimPrefix(absSourcePath, projectPrefix)
+	// 若是 photo_src 下的文件，检查对应压缩版本是否已在 photo_path 中
+	absPhotoSrc, _ := filepath.Abs(cfg.PhotoSrc)
+	if absPhotoSrc != "" && strings.HasPrefix(absSourcePath, absPhotoSrc+string(filepath.Separator)) {
+		rel := strings.TrimPrefix(absSourcePath, absPhotoSrc+string(filepath.Separator))
 		base := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
 		compressedPath := filepath.Join(absPhotoPath, base+".jpg")
 		if _, err := os.Stat(compressedPath); err == nil {

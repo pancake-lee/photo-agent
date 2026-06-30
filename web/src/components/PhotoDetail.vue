@@ -13,6 +13,7 @@ import {
   NTag,
 } from 'naive-ui'
 import type { PhotoDetail, EmbedInfo } from '../types/photo'
+import { formatDate } from '../utils/format'
 import { useEmbedStatus } from '../composables/useEmbedStatus'
 
 const { fetchEmbedInfo } = useEmbedStatus()
@@ -47,9 +48,9 @@ watch(
   }
 )
 
-function formatDate(d: string | null): string {
+function formatDateLocal(d: string | null): string {
   if (!d) return '未知'
-  return new Date(d).toLocaleString('zh-CN')
+  return formatDate(d)
 }
 </script>
 
@@ -75,7 +76,7 @@ function formatDate(d: string | null): string {
         <NDescriptions label-placement="left" :column="1" size="small" bordered>
           <NDescriptionsItem label="文件名">{{ photo.filename }}</NDescriptionsItem>
           <NDescriptionsItem label="拍摄时间">
-            {{ formatDate(photo.shot_at) }}
+            {{ formatDateLocal(photo.shot_at) }}
           </NDescriptionsItem>
           <NDescriptionsItem v-if="photo.brand" label="相机品牌">
             {{ photo.brand }}
@@ -156,7 +157,7 @@ function formatDate(d: string | null): string {
                 <NTag type="info" size="small">{{ embedInfo.model || '未知' }}</NTag>
               </NDescriptionsItem>
               <NDescriptionsItem label="生成时间">
-                {{ embedInfo.embedded_at ? formatDate(embedInfo.embedded_at) : '未知' }}
+                {{ embedInfo.embedded_at ? formatDateLocal(embedInfo.embedded_at) : '未知' }}
               </NDescriptionsItem>
               <NDescriptionsItem label="分块数">
                 {{ embedInfo.chunks }}

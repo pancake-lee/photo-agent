@@ -14,6 +14,7 @@ const status = ref<EmbedQueueStatus>({
 const polling = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let onCompleteCallback: (() => void) | null = null
+let usageCount = 0
 
 export function useEmbedQueue() {
   async function fetchStatus() {
@@ -92,8 +93,13 @@ export function useEmbedQueue() {
     onCompleteCallback = fn
   }
 
+  usageCount++
   onUnmounted(() => {
-    stopPolling()
+    usageCount--
+    if (usageCount <= 0) {
+      usageCount = 0
+      stopPolling()
+    }
   })
 
   return {

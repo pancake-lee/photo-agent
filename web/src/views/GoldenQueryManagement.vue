@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
+import { formatDate } from '../utils/format'
 import {
   NLayout,
   NLayoutContent,
@@ -13,7 +14,6 @@ import {
   NDataTable,
   NPopconfirm,
   NModal,
-  NImage,
   useMessage,
 } from 'naive-ui'
 import {
@@ -327,7 +327,7 @@ const columns = [
     width: 160,
     render(row: GoldenQuery) {
       if (!row.created_at) return '—'
-      return new Date(row.created_at).toLocaleString('zh-CN')
+      return formatDate(row.created_at)
     },
   },
   {
@@ -519,7 +519,7 @@ const evalColumns = [
         <div class="detail-field">
           <span class="detail-label">创建时间</span>
           <span class="detail-value">
-            {{ detailItem.created_at ? new Date(detailItem.created_at).toLocaleString('zh-CN') : '—' }}
+            {{ detailItem.created_at ? formatDate(detailItem.created_at) : '—' }}
           </span>
         </div>
         <div class="detail-field">

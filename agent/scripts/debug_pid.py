@@ -12,7 +12,6 @@ import sys
 import pathlib
 import argparse
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 from utils.streaming_printer import PIDController
 

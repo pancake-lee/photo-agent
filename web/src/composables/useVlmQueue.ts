@@ -15,6 +15,8 @@ const polling = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 // VLM 完成回调（在队列运行结束或中止后触发）
 let onCompleteCallback: (() => void) | null = null
+// 组件引用计数：仅最后一个使用该 composable 的组件卸载时才停止轮询
+let usageCount = 0
 
 export function useVlmQueue() {
   async function fetchStatus() {
@@ -103,9 +105,14 @@ export function useVlmQueue() {
     onCompleteCallback = fn
   }
 
-  // 组件卸载时自动清理
+  // 组件卸载时递减引用计数，最后一个组件卸载时停止轮询
+  usageCount++
   onUnmounted(() => {
-    stopPolling()
+    usageCount--
+    if (usageCount <= 0) {
+      usageCount = 0
+      stopPolling()
+    }
   })
 
   return {

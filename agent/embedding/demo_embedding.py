@@ -12,7 +12,6 @@ import sys
 import pathlib
 import json
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import config
 import embedding.chunking as chunking

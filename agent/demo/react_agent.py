@@ -15,7 +15,6 @@ import re
 import sys
 import typing
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import langchain_openai as lc_openai
 import langchain_core.messages as lc_messages

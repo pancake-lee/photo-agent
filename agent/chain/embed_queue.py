@@ -24,7 +24,6 @@ import pathlib
 
 import httpx
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import config as cfg_module
 import embedding.chunking as chunking
@@ -317,7 +316,7 @@ class EmbedQueue:
             self._set_current("")
 
     # ------------------------------------------------------------------ #
-    # 分块辅助（复用 AutoEmbed 的逻辑）
+    # 分块辅助
     # ------------------------------------------------------------------ #
 
     def _prepare_chunks(

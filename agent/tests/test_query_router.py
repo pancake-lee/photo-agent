@@ -13,7 +13,6 @@ import sys
 import pathlib
 import unittest.mock
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 import demo.query_router as router
 

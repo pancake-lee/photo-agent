@@ -159,7 +159,7 @@ watch(
 marked.setOptions({ breaks: true, gfm: true })
 
 function renderMarkdown(text: string): string {
-  const result = marked.parse(text, { async: false })
+  const result = marked.parse(text)
   return typeof result === 'string' ? result : ''
 }
 

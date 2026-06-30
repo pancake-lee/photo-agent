@@ -1,9 +1,12 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import PhotoManagement from '../views/PhotoManagement.vue'
 
 const routes = [
   { path: '/', redirect: '/photos' },
-  { path: '/photos', name: 'photos', component: PhotoManagement },
+  {
+    path: '/photos',
+    name: 'photos',
+    component: () => import('../views/PhotoManagement.vue'),
+  },
   {
     path: '/golden-queries',
     name: 'golden-queries',

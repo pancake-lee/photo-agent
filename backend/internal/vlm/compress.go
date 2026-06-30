@@ -69,13 +69,14 @@ func GetCompressedPath(inputPath string) string {
 }
 
 // resolveCompressOutput 解析压缩输出路径。
-// /root/project/ 下的文件映射到 PhotoPath 对应路径，其他使用临时文件。
+// photo_src 下的文件映射到 photo_path 对应路径，其他使用临时文件。
 func resolveCompressOutput(inputPath string) (string, func(), error) {
-	const projectPrefix = "/root/project/"
-	if strings.HasPrefix(inputPath, projectPrefix) {
-		rel := strings.TrimPrefix(inputPath, projectPrefix)
+	cfg := config.Get()
+	absPhotoSrc, _ := filepath.Abs(cfg.Storage.PhotoSrc)
+	if absPhotoSrc != "" && strings.HasPrefix(inputPath, absPhotoSrc+string(filepath.Separator)) {
+		rel := strings.TrimPrefix(inputPath, absPhotoSrc+string(filepath.Separator))
 		base := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
-		outputPath := filepath.Join(config.Get().Storage.PhotoPath, base+".jpg")
+		outputPath := filepath.Join(cfg.Storage.PhotoPath, base+".jpg")
 		return outputPath, nil, nil
 	}
 

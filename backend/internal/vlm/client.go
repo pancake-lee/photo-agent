@@ -147,7 +147,7 @@ func describeWithHTTP(imagePath string, cfg config.VLMConfig, prompt string) (st
 				},
 			},
 		},
-		"max_tokens": 500,
+		"max_tokens": cfg.MaxTokens,
 	}
 
 	req, err := putil.NewHttpRequestJson("POST", cfg.BaseURL+"/chat/completions", map[string]string{

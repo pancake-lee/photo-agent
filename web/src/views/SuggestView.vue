@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, h } from 'vue'
+import { formatDate } from '../utils/format'
 import {
   NLayout,
   NLayoutContent,
@@ -167,7 +168,7 @@ function renderPhotoThumbs(photoIds: string[], showAll: boolean) {
 function formatTime(iso: string): string {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleString('zh-CN')
+    return formatDate(iso)
   } catch {
     return iso
   }
