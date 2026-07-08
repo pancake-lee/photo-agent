@@ -47,3 +47,4 @@ logs
 backend/go.work
 backend/go.work.sum
 node_modules
+.pids
