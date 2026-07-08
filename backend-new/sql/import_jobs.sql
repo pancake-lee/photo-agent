@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS import_jobs;
+CREATE TABLE import_jobs (
+  id TEXT NOT NULL PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'pending',
+  source_path TEXT NOT NULL DEFAULT '',
+  total_photos INTEGER NOT NULL DEFAULT 0,
+  processed_photos INTEGER NOT NULL DEFAULT 0,
+  failed_photos INTEGER NOT NULL DEFAULT 0,
+  log TEXT NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at DATETIME
+);

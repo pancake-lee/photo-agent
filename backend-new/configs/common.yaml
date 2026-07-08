@@ -1,0 +1,37 @@
+T3: 33
+T4: "44"
+
+Http:
+  Addr: "0.0.0.0:8000"
+  Timeout: 1000
+
+Grpc:
+  Addr: "0.0.0.0:9000"
+  Timeout: 1000
+
+Pgsql:
+  Addr: "pgo-pgsql:5432"
+  DbName: pgo
+  User: pgo
+  Password: pgo
+
+Mysql:
+  Addr: "pgo-mysql:3306"
+  DbName: pgo
+  User: root
+  Password: root
+
+Redis:
+  Addr: "pgo-redis:6379"
+  Password: pgo
+
+RabbitMQ:
+    Addr: "pgo-rabbitmq:5672"
+    User: "pgo"
+    Password: "pgo"
+    VHost: "pgo_vhost"
+    IsLogMessage: 1
+
+APITable:
+  token: ""
+  baseUrl: ""

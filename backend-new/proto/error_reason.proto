@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package api;
+
+import "errors/errors.proto";
+
+option go_package = "github.com/pancake-lee/pgo/api;api";
+
+enum ErrorReason {
+  // 设置缺省错误码
+  option (errors.default_code) = 500;
+
+  Unknown = 0 [(errors.code) = 500]; // 未知错误
+  InvalidArgument = 1 [(errors.code) = 400]; // 请求参数错误
+  Unauthorized = 2 [(errors.code) = 401]; // 未授权
+}
