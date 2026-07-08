@@ -30,15 +30,15 @@ type StorageConfig struct {
 
 // VLMConfig VLM 配置
 type VLMConfig struct {
-	Provider       string `json:"provider" toml:"provider" default:"openai"`
-	APIKey         string `json:"api_key" toml:"api_key"`
-	Model          string `json:"model" toml:"model" default:"gpt-4o-mini"`
-	BaseURL        string `json:"base_url" toml:"base_url" default:"https://api.openai.com/v1"`
-	Concurrency    int    `json:"concurrency" toml:"concurrency" default:"3"`
-	Retry          int    `json:"retry" toml:"retry" default:"3"`
+	Provider       string  `json:"provider" toml:"provider" default:"openai"`
+	APIKey         string  `json:"api_key" toml:"api_key"`
+	Model          string  `json:"model" toml:"model" default:"gpt-4o-mini"`
+	BaseURL        string  `json:"base_url" toml:"base_url" default:"https://api.openai.com/v1"`
+	Concurrency    int     `json:"concurrency" toml:"concurrency" default:"3"`
+	Retry          int     `json:"retry" toml:"retry" default:"3"`
 	MaxImageSizeMB float64 `json:"max_image_size_mb" toml:"max_image_size_mb" default:"1"`
 	MaxTokens      int     `json:"max_tokens" toml:"max_tokens" default:"500"`
-	Prompt         string `json:"prompt" toml:"prompt"`
+	Prompt         string  `json:"prompt" toml:"prompt"`
 }
 
 // EmbeddingConfig Embedding 代理配置
@@ -61,9 +61,7 @@ type DifyConfig struct {
 
 // LogConfig 日志配置
 type LogConfig struct {
-	Path         string `json:"path" toml:"path"`                              // 日志目录或文件路径
-	MaxAge       int    `json:"max_age" toml:"max_age" default:"7"`            // 日志保留天数
-	RotationSize int64  `json:"rotation_size" toml:"rotation_size" default:"0"` // 按大小轮转（bytes），0 不启用
+	Path string `json:"path" toml:"path"` // 日志目录或文件路径
 }
 
 // Config 全局配置

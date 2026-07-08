@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/photo-agent/internal/api"
 	"github.com/pancake-lee/photo-agent/internal/config"
 	"github.com/pancake-lee/photo-agent/internal/service"
-	"github.com/pancake-lee/pgo/pkg/plogger"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -36,9 +36,6 @@ func main() {
 			plogger.Fatalf("config init failed: %v", err)
 		}
 	}
-
-	// 加载配置后重新初始化日志，使用配置文件中的日志轮转设置
-	reinitLogger(*logConsole)
 
 	if err := service.InitDB(); err != nil {
 		plogger.Fatalf("db init failed: %v", err)
@@ -102,23 +99,4 @@ func main() {
 
 	close(quit)
 	plogger.Info("server exited gracefully")
-}
-
-// reinitLogger 在配置加载后重新初始化日志，应用配置文件中的日志轮转设置
-func reinitLogger(isLogConsole bool) {
-	cfg := config.Get()
-	logPath := cfg.Log.Path
-	if logPath == "" {
-		logPath = "" // 使用 plogger 默认路径 ({exec}/logs/)
-	}
-
-	var rotCfg *plogger.RotateConfig
-	if cfg.Log.MaxAge > 0 || cfg.Log.RotationSize > 0 {
-		rotCfg = &plogger.RotateConfig{
-			MaxAge:       time.Duration(cfg.Log.MaxAge) * 24 * time.Hour,
-			RotationSize: cfg.Log.RotationSize,
-		}
-	}
-
-	plogger.InitLoggerWithRotate(isLogConsole, zapcore.DebugLevel, logPath, rotCfg)
 }
