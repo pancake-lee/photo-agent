@@ -2,7 +2,7 @@ syntax = "proto3";
 package api;
 import "google/api/annotations.proto";
 import "common.proto";
-option go_package = "github.com/pancake-lee/pgo/api;api";
+option go_package = "backend-new/internal/pkg/api;api";
 
 // --------------------------------------------------
 service abandonCodeCURD { // 该命名应该全文唯一

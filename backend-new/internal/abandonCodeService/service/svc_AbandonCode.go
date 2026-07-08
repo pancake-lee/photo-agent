@@ -6,7 +6,7 @@ package service
 import (
 	"context"
 
-	"backend-new/api"
+	"backend-new/internal/pkg/api"
 	"backend-new/internal/abandonCodeService/data"
 	"github.com/pancake-lee/pgo/pkg/papp"
 )

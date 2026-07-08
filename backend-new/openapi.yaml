@@ -1,0 +1,448 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /abandon-code:
+        get:
+            tags:
+                - AbandonCodeCURD
+            operationId: AbandonCodeCURD_GetAbandonCodeList
+            parameters:
+                - name: idx1List
+                  in: query
+                  description: MARK REPLACE IDX COL START 替换内容，索引字段
+                  schema:
+                    type: array
+                    items:
+                        type: integer
+                        format: int32
+                - name: idx2List
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: integer
+                        format: int32
+                - name: idx3List
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: integer
+                        format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetAbandonCodeListResponse'
+        post:
+            tags:
+                - AbandonCodeCURD
+            description: |-
+                MARK REPEAT API START 一个表的接口定义
+                 --------------------------------------------------
+                 tbl : abandon_code
+            operationId: AbandonCodeCURD_AddAbandonCode
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.AddAbandonCodeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.AddAbandonCodeResponse'
+        delete:
+            tags:
+                - AbandonCodeCURD
+            operationId: AbandonCodeCURD_DelAbandonCodeByIdx1List
+            parameters:
+                - name: idx1List
+                  in: query
+                  description: MARK REPLACE PRIMARY IDX START
+                  schema:
+                    type: array
+                    items:
+                        type: integer
+                        format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
+        patch:
+            tags:
+                - AbandonCodeCURD
+            description: MARK REMOVE IF NO PRIMARY KEY START
+            operationId: AbandonCodeCURD_UpdateAbandonCode
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdateAbandonCodeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UpdateAbandonCodeResponse'
+    /import-jobs:
+        get:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_GetImportJobList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetImportJobListResponse'
+        post:
+            tags:
+                - DefaultCURD
+            description: |-
+                --------------------------------------------------
+                 tbl : import_jobs
+            operationId: DefaultCURD_AddImportJob
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.AddImportJobRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.AddImportJobResponse'
+        delete:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_DelImportJobByIDList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
+        patch:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_UpdateImportJob
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdateImportJobRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UpdateImportJobResponse'
+    /photos:
+        get:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_GetPhotoList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotoListResponse'
+        post:
+            tags:
+                - DefaultCURD
+            description: |-
+                --------------------------------------------------
+                 tbl : photos
+            operationId: DefaultCURD_AddPhoto
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.AddPhotoRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.AddPhotoResponse'
+        delete:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_DelPhotoByIDList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
+        patch:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_UpdatePhoto
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdatePhotoRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UpdatePhotoResponse'
+components:
+    schemas:
+        api.AbandonCodeInfo:
+            type: object
+            properties:
+                idx1:
+                    type: integer
+                    description: MARK REPLACE PB COL START 替换内容，所有字段
+                    format: int32
+                col1:
+                    type: string
+            description: |-
+                --------------------------------------------------
+                 tbl : abandon_code
+        api.AddAbandonCodeRequest:
+            type: object
+            properties:
+                abandonCode:
+                    $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.AddAbandonCodeResponse:
+            type: object
+            properties:
+                abandonCode:
+                    $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.AddImportJobRequest:
+            type: object
+            properties:
+                importJob:
+                    $ref: '#/components/schemas/api.ImportJobInfo'
+        api.AddImportJobResponse:
+            type: object
+            properties:
+                importJob:
+                    $ref: '#/components/schemas/api.ImportJobInfo'
+        api.AddPhotoRequest:
+            type: object
+            properties:
+                photo:
+                    $ref: '#/components/schemas/api.PhotoInfo'
+        api.AddPhotoResponse:
+            type: object
+            properties:
+                photo:
+                    $ref: '#/components/schemas/api.PhotoInfo'
+        api.Empty:
+            type: object
+            properties: {}
+        api.GetAbandonCodeListResponse:
+            type: object
+            properties:
+                abandonCodeList:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.GetImportJobListResponse:
+            type: object
+            properties:
+                importJobList:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.ImportJobInfo'
+        api.GetPhotoListResponse:
+            type: object
+            properties:
+                photoList:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.PhotoInfo'
+        api.ImportJobInfo:
+            type: object
+            properties:
+                ID:
+                    type: string
+                status:
+                    type: string
+                sourcePath:
+                    type: string
+                totalPhotos:
+                    type: integer
+                    format: int32
+                processedPhotos:
+                    type: integer
+                    format: int32
+                failedPhotos:
+                    type: integer
+                    format: int32
+                log:
+                    type: string
+                createdAt:
+                    type: string
+                completedAt:
+                    type: string
+            description: |-
+                --------------------------------------------------
+                 tbl : import_jobs
+        api.PhotoInfo:
+            type: object
+            properties:
+                ID:
+                    type: string
+                filename:
+                    type: string
+                filePath:
+                    type: string
+                timeline:
+                    type: string
+                tags:
+                    type: string
+                description:
+                    type: string
+                objects:
+                    type: string
+                colors:
+                    type: string
+                scene:
+                    type: string
+                lighting:
+                    type: string
+                mood:
+                    type: string
+                composition:
+                    type: string
+                shotAt:
+                    type: string
+                width:
+                    type: integer
+                    format: int32
+                height:
+                    type: integer
+                    format: int32
+                brand:
+                    type: string
+                model:
+                    type: string
+                lens:
+                    type: string
+                focalLength:
+                    type: string
+                aperture:
+                    type: string
+                iso:
+                    type: integer
+                    format: int32
+                exposureTime:
+                    type: string
+                latitude:
+                    type: number
+                    format: double
+                longitude:
+                    type: number
+                    format: double
+                altitude:
+                    type: number
+                    format: double
+                importedAt:
+                    type: string
+            description: |-
+                --------------------------------------------------
+                 tbl : photos
+        api.UpdateAbandonCodeRequest:
+            type: object
+            properties:
+                abandonCode:
+                    $ref: '#/components/schemas/api.AbandonCodeInfo'
+            description: MARK REMOVE IF NO PRIMARY KEY START
+        api.UpdateAbandonCodeResponse:
+            type: object
+            properties:
+                abandonCode:
+                    $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.UpdateImportJobRequest:
+            type: object
+            properties:
+                importJob:
+                    $ref: '#/components/schemas/api.ImportJobInfo'
+        api.UpdateImportJobResponse:
+            type: object
+            properties:
+                importJob:
+                    $ref: '#/components/schemas/api.ImportJobInfo'
+        api.UpdatePhotoRequest:
+            type: object
+            properties:
+                photo:
+                    $ref: '#/components/schemas/api.PhotoInfo'
+        api.UpdatePhotoResponse:
+            type: object
+            properties:
+                photo:
+                    $ref: '#/components/schemas/api.PhotoInfo'
+tags:
+    - name: AbandonCodeCURD
+      description: '--------------------------------------------------'
+    - name: DefaultCURD
+      description: '--------------------------------------------------'
+servers:
+    - description: PGO API
+      url: http://127.0.0.1:8080

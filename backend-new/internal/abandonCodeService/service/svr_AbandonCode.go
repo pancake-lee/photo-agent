@@ -1,7 +1,7 @@
 package service
 
 import (
-	api "backend-new/api"
+	api "backend-new/internal/pkg/api"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"

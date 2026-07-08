@@ -4,7 +4,7 @@ package api;
 
 import "errors/errors.proto";
 
-option go_package = "github.com/pancake-lee/pgo/api;api";
+option go_package = "backend-new/internal/pkg/api;api";
 
 enum ErrorReason {
   // 设置缺省错误码

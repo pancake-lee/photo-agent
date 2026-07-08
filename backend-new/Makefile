@@ -5,13 +5,8 @@ GOPATH:=$(shell go env GOPATH)
 VERSION?=$(shell git describe --tags --always --dirty)
 COMMIT=$(shell git describe --tags --always --dirty)
 
-dbIP?=127.0.0.1
-dbPort?=3306
-dbUser?=pgo
-dbPass?=pgo
-dbName?=pgo
-
-dbCmd=mysql -h $(dbIP) -P ${dbPort} -u $(dbUser) -p$(dbPass)
+# SQLite3 配置
+DB_ORM_PATH?=./data/sqlite/photo_agent_orm.db
 
 # 遍历所有proto文件
 # every developer has a Git. run in GitBash.
@@ -91,41 +86,33 @@ dbSqlPath?=./sql
 dbCodePath?=./internal/pkg/db
 .PHONY: gorm
 gorm:
-	$(dbCmd) -e "DROP DATABASE IF EXISTS ${dbName}_orm; CREATE DATABASE ${dbName}_orm DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
-	for file in ${dbSqlPath}/*.sql; do \
-		$(dbCmd) ${dbName}_orm < $$file; \
-	done
-
 	rm -rf ${dbCodePath}/model/
 	rm -rf ${dbCodePath}/query/
-	
-	
+
 # 	最初用的是GORM的[gentool]，后来因为前后还要嵌入我自己的逻辑，
 #   就集成到pgo里了，底层依然调用了gentool，make env 中安装了 pgo
 	pgo genGORM \
-		-db mysql \
-		-dsn "${dbUser}:${dbPass}@tcp(${dbIP}:${dbPort})/${dbName}_orm?charset=utf8mb4&parseTime=True&loc=Local" \
+		-db sqlite3 \
+		-dsn "$(DB_ORM_PATH)" \
 		-outPath ${dbCodePath}/query/ \
 		-outFile query.go \
 		-modelPkgName model \
 
 .PHONY: initDB
+# 创建 SQLite ORM 数据库并执行 DDL（genGORM / genCURD 的前置步骤）
 initDB:
-	$(dbCmd) -e "CREATE DATABASE ${dbName} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
-	for file in ./sql/*.sql; do \
-		$(dbCmd) ${dbName} < $$file; \
+	@mkdir -p ./data/sqlite
+	rm -f $(DB_ORM_PATH)
+	for file in ${dbSqlPath}/*.sql; do \
+		echo "executing $$file ..."; \
+		sqlite3 $(DB_ORM_PATH) < $$file; \
 	done
-
-.PHONY: reInitDB
-# 慎重，这是重置数据库的操作
-reInitDB:
-	$(dbCmd) -e "DROP DATABASE ${dbName};"
-	make initDB
+	@echo "ORM database created: $(DB_ORM_PATH)"
 
 .PHONY: curd
 # 根据数据库生成 CURD 代码
 curd:
-	pgo genCURD -db mysql -dsn "${dbUser}:${dbPass}@tcp(${dbIP}:${dbPort})/${dbName}_orm?charset=utf8mb4&parseTime=True&loc=Local"
+	pgo genCURD -db sqlite3 -dsn "$(DB_ORM_PATH)"
 
 .PHONY: build
 # build
