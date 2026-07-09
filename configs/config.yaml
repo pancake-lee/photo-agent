@@ -19,7 +19,9 @@ Storage:
   # vlm 图像识别结果输出路径
   DescriptionsPath: "./data/descriptions.json"
   # 用户提供的时间线文件路径
-  TimelinePath: "./data/timeline.md"
+  TimelinePath: "./data/timeline.json"
+  # 时间线活动窗口天数（活动日前后各 N 天内的照片归入该活动）
+  TimelineWindowDays: 7
 
 VLM:
   # 单张图片最大尺寸（超过自动压缩）
