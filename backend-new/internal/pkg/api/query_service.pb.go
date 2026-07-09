@@ -223,7 +223,6 @@ type GetPhotoSchemaResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TableName     string                 `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
 	Fields        []*SchemaField         `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty"`
-	Notes         []string               `protobuf:"bytes,3,rep,name=notes,proto3" json:"notes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -268,13 +267,6 @@ func (x *GetPhotoSchemaResponse) GetTableName() string {
 func (x *GetPhotoSchemaResponse) GetFields() []*SchemaField {
 	if x != nil {
 		return x.Fields
-	}
-	return nil
-}
-
-func (x *GetPhotoSchemaResponse) GetNotes() []string {
-	if x != nil {
-		return x.Notes
 	}
 	return nil
 }
@@ -425,12 +417,11 @@ const file_query_service_proto_rawDesc = "" +
 	"\bsql_type\x18\x03 \x01(\tR\asqlType\x12\x19\n" +
 	"\bjson_tag\x18\x04 \x01(\tR\ajsonTag\x12\x19\n" +
 	"\bgorm_tag\x18\x05 \x01(\tR\agormTag\x12\x1a\n" +
-	"\bnullable\x18\x06 \x01(\bR\bnullable\"w\n" +
+	"\bnullable\x18\x06 \x01(\bR\bnullable\"a\n" +
 	"\x16GetPhotoSchemaResponse\x12\x1d\n" +
 	"\n" +
 	"table_name\x18\x01 \x01(\tR\ttableName\x12(\n" +
-	"\x06fields\x18\x02 \x03(\v2\x10.api.SchemaFieldR\x06fields\x12\x14\n" +
-	"\x05notes\x18\x03 \x03(\tR\x05notes\"\xab\x01\n" +
+	"\x06fields\x18\x02 \x03(\v2\x10.api.SchemaFieldR\x06fields\"\xab\x01\n" +
 	"\x0fAttributeValues\x12\x18\n" +
 	"\aobjects\x18\x01 \x03(\tR\aobjects\x12\x16\n" +
 	"\x06colors\x18\x02 \x03(\tR\x06colors\x12\x14\n" +
@@ -439,14 +430,14 @@ const file_query_service_proto_rawDesc = "" +
 	"\x04mood\x18\x05 \x03(\tR\x04mood\x12 \n" +
 	"\vcomposition\x18\x06 \x03(\tR\vcomposition\"J\n" +
 	"\x1aGetAttributeValuesResponse\x12,\n" +
-	"\x06values\x18\x01 \x01(\v2\x14.api.AttributeValuesR\x06values2\xb1\x02\n" +
+	"\x06values\x18\x01 \x01(\v2\x14.api.AttributeValuesR\x06values2\xb9\x02\n" +
 	"\fQueryService\x12[\n" +
 	"\n" +
-	"ExecuteSQL\x12\x16.api.ExecuteSQLRequest\x1a\x17.api.ExecuteSQLResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/v1/query/sql\x12X\n" +
+	"ExecuteSQL\x12\x16.api.ExecuteSQLRequest\x1a\x17.api.ExecuteSQLResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/v1/sql/query\x12\\\n" +
 	"\x0eGetPhotoSchema\x12\n" +
-	".api.Empty\x1a\x1b.api.GetPhotoSchemaResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/schema/photos\x12j\n" +
+	".api.Empty\x1a\x1b.api.GetPhotoSchemaResponse\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/api/v1/sql/photos/schema\x12n\n" +
 	"\x12GetAttributeValues\x12\n" +
-	".api.Empty\x1a\x1f.api.GetAttributeValuesResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/photos/attribute-valuesB\"Z backend-new/internal/pkg/api;apib\x06proto3"
+	".api.Empty\x1a\x1f.api.GetAttributeValuesResponse\"+\x82\xd3\xe4\x93\x02%\x12#/api/v1/sql/photos/attribute-valuesB\"Z backend-new/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_query_service_proto_rawDescOnce sync.Once

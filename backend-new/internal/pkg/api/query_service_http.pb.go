@@ -34,9 +34,9 @@ type QueryServiceHTTPServer interface {
 
 func RegisterQueryServiceHTTPServer(s *http.Server, srv QueryServiceHTTPServer) {
 	r := s.Route("/")
-	r.POST("/api/v1/query/sql", _QueryService_ExecuteSQL0_HTTP_Handler(srv))
-	r.GET("/api/v1/schema/photos", _QueryService_GetPhotoSchema0_HTTP_Handler(srv))
-	r.GET("/api/v1/photos/attribute-values", _QueryService_GetAttributeValues0_HTTP_Handler(srv))
+	r.POST("/api/v1/sql/query", _QueryService_ExecuteSQL0_HTTP_Handler(srv))
+	r.GET("/api/v1/sql/photos/schema", _QueryService_GetPhotoSchema0_HTTP_Handler(srv))
+	r.GET("/api/v1/sql/photos/attribute-values", _QueryService_GetAttributeValues0_HTTP_Handler(srv))
 }
 
 func _QueryService_ExecuteSQL0_HTTP_Handler(srv QueryServiceHTTPServer) func(ctx http.Context) error {
@@ -119,7 +119,7 @@ func NewQueryServiceHTTPClient(client *http.Client) QueryServiceHTTPClient {
 // ExecuteSQL 执行 SELECT SQL 查询
 func (c *QueryServiceHTTPClientImpl) ExecuteSQL(ctx context.Context, in *ExecuteSQLRequest, opts ...http.CallOption) (*ExecuteSQLResponse, error) {
 	var out ExecuteSQLResponse
-	pattern := "/api/v1/query/sql"
+	pattern := "/api/v1/sql/query"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationQueryServiceExecuteSQL))
 	opts = append(opts, http.PathTemplate(pattern))
@@ -133,7 +133,7 @@ func (c *QueryServiceHTTPClientImpl) ExecuteSQL(ctx context.Context, in *Execute
 // GetAttributeValues 返回所有结构化属性的去重值（供 Text-to-SQL prompt 拼接）
 func (c *QueryServiceHTTPClientImpl) GetAttributeValues(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetAttributeValuesResponse, error) {
 	var out GetAttributeValuesResponse
-	pattern := "/api/v1/photos/attribute-values"
+	pattern := "/api/v1/sql/photos/attribute-values"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationQueryServiceGetAttributeValues))
 	opts = append(opts, http.PathTemplate(pattern))
@@ -147,7 +147,7 @@ func (c *QueryServiceHTTPClientImpl) GetAttributeValues(ctx context.Context, in 
 // GetPhotoSchema 返回 photos 表结构
 func (c *QueryServiceHTTPClientImpl) GetPhotoSchema(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetPhotoSchemaResponse, error) {
 	var out GetPhotoSchemaResponse
-	pattern := "/api/v1/schema/photos"
+	pattern := "/api/v1/sql/photos/schema"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationQueryServiceGetPhotoSchema))
 	opts = append(opts, http.PathTemplate(pattern))

@@ -178,19 +178,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.SearchPhotosResponse'
-    /api/v1/photos/attribute-values:
-        get:
-            tags:
-                - QueryService
-            description: 返回所有结构化属性的去重值（供 Text-to-SQL prompt 拼接）
-            operationId: QueryService_GetAttributeValues
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/api.GetAttributeValuesResponse'
     /api/v1/photos/stats:
         get:
             tags:
@@ -291,7 +278,33 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.Empty'
-    /api/v1/query/sql:
+    /api/v1/sql/photos/attribute-values:
+        get:
+            tags:
+                - QueryService
+            description: 返回所有结构化属性的去重值（供 Text-to-SQL prompt 拼接）
+            operationId: QueryService_GetAttributeValues
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetAttributeValuesResponse'
+    /api/v1/sql/photos/schema:
+        get:
+            tags:
+                - QueryService
+            description: 返回 photos 表结构
+            operationId: QueryService_GetPhotoSchema
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotoSchemaResponse'
+    /api/v1/sql/query:
         post:
             tags:
                 - QueryService
@@ -310,19 +323,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.ExecuteSQLResponse'
-    /api/v1/schema/photos:
-        get:
-            tags:
-                - QueryService
-            description: 返回 photos 表结构
-            operationId: QueryService_GetPhotoSchema
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/api.GetPhotoSchemaResponse'
     /api/v1/tags:
         get:
             tags:
@@ -670,10 +670,6 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.SchemaField'
-                notes:
-                    type: array
-                    items:
-                        type: string
         api.GetPhotoStatsResponse:
             type: object
             properties:
