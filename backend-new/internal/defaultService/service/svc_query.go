@@ -177,7 +177,7 @@ func (s *QueryServer) GetPhotoSchema(_ctx context.Context, _ *api.Empty) (*api.G
 func (s *QueryServer) GetAttributeValues(_ctx context.Context, _ *api.Empty) (*api.GetAttributeValuesResponse, error) {
 	ctx := papp.NewAppCtx(_ctx)
 
-	dto, err := data.ListDistinctAttributeValues(ctx)
+	dto, err := data.GetDistinctAttributeValues(ctx)
 	if err != nil {
 		return nil, err // DAO 层已打日志
 	}

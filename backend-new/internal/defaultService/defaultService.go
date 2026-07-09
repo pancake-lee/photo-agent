@@ -23,7 +23,8 @@ func main() {
 	pdb.MustInitSqliteByConfig()
 
 	// 加载服务配置
-	if err := pconfig.Scan(&conf.C); err != nil {
+	err := pconfig.Scan(&conf.C)
+	if err != nil {
 		plogger.Fatalf("scan config failed: %v", err)
 	}
 

@@ -336,6 +336,44 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.ListTagsResponse'
+    /api/v1/tags/bind:
+        post:
+            tags:
+                - TagService
+            description: 批量给照片绑定标签
+            operationId: TagService_BindTags
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.BindTagsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.BindTagsResponse'
+    /api/v1/tags/unbind:
+        post:
+            tags:
+                - TagService
+            description: 批量从照片解绑标签
+            operationId: TagService_UnbindTags
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UnbindTagsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UnbindTagsResponse'
     /api/v1/tags/{name}/photos:
         get:
             tags:
@@ -573,6 +611,23 @@ components:
                     type: array
                     items:
                         type: string
+        api.BindTagsRequest:
+            type: object
+            properties:
+                photoIds:
+                    type: array
+                    items:
+                        type: string
+                tag:
+                    type: string
+        api.BindTagsResponse:
+            type: object
+            properties:
+                successCount:
+                    type: integer
+                    format: int32
+                message:
+                    type: string
         api.DeletePhotoResponse:
             type: object
             properties:
@@ -948,6 +1003,23 @@ components:
             properties:
                 stopped:
                     type: boolean
+        api.UnbindTagsRequest:
+            type: object
+            properties:
+                photoIds:
+                    type: array
+                    items:
+                        type: string
+                tag:
+                    type: string
+        api.UnbindTagsResponse:
+            type: object
+            properties:
+                successCount:
+                    type: integer
+                    format: int32
+                message:
+                    type: string
         api.UpdateAbandonCodeRequest:
             type: object
             properties:

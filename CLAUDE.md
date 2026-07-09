@@ -213,3 +213,43 @@ Web 对话 / CLI → Python Agent API → ChromaDB 向量检索 / Text-to-SQL / 
 | 7    | `docs/backlog.md` | 产品演进路线图、Phase 规划、拒绝清单                     | API 设计、数据模型、部署细节、详细任务拆分                          |
 | 8    | `dify/USAGE.md`   | 部署步骤、操作命令、常见问题                             | 技术方案论证、需求描述、API 设计                                    |
 | 9    | 代码实现            | 最终事实来源                                             | —                                                                  |
+
+## GO代码风格
+
+拷贝自pgo项目
+
+### 命名规范
+
+- **列表/切片**：后缀 `List`（如 `userRoleList`、`permissionList`）
+- **Map 结构**：后缀 `Map`（如 `roleIDMap`、`permissionMap`），更清晰时用 `keyToValueMap`（如 `idToUserMap`）
+- **函数命名**：统一用"动宾"结构
+  - C: `add` — 新增，尽量让一种数据的创建入口尽可能少
+  - U: `edit` — 主动修改；`update` — 被动更新
+  - R: `get` — 查询
+  - D: `del` — 删除
+  - 关联关系：`addXxxToYyy` / `delXxxFromYyy`
+- **HTTP method**：GET（查询）、POST（创建）、PUT（全量更新）、PATCH（部分更新）、DELETE（删除）
+
+### 格式化
+
+- 逻辑修改后统一用 `gofmt -w <file>` 处理，不纠结缩进对齐
+
+### 代码组织
+
+- 避免 `if` 中使用 `;`（如 `if d, ok := data["k"]; ok`），易造成长代码
+- 入口函数放在 `internal/<module>/<module>.go`，而非 `cmd/`
+- 非复杂场景优先用基础类型组合，仅在复用明显或封装语义明确时抽象 `type`
+- **接口代理模式**：基础类通过接口代理支持子类覆盖，子类初始化后调用 `BindProvider(self)`
+
+## 测试规范
+
+- 编写集成测试验证 Service 层逻辑
+- 使用 `defer` + 清理函数移除测试数据
+- **禁止**在测试中修改表结构，差异应正常报错以提醒升级注意
+
+## 禁忌清单
+
+- 不要在测试中修改表结构
+- 不要直接 `go build` 到根目录
+- `bootCheck` 的 MySQL 检查不允许执行 `DROP`、`TRUNCATE`、`ALTER ... MODIFY/CHANGE/RENAME`、删索引、删主键等危险 SQL
+- 数据库结构不能 drop，仅代码层面废弃，实际数据清理由用户自行操作

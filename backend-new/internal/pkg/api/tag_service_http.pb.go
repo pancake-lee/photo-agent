@@ -19,20 +19,28 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationTagServiceBindTags = "/api.TagService/BindTags"
 const OperationTagServiceGetPhotosByTag = "/api.TagService/GetPhotosByTag"
 const OperationTagServiceListTags = "/api.TagService/ListTags"
+const OperationTagServiceUnbindTags = "/api.TagService/UnbindTags"
 
 type TagServiceHTTPServer interface {
+	// BindTags 批量给照片绑定标签
+	BindTags(context.Context, *BindTagsRequest) (*BindTagsResponse, error)
 	// GetPhotosByTag 某标签下的照片
 	GetPhotosByTag(context.Context, *GetPhotosByTagRequest) (*GetPhotosByTagResponse, error)
 	// ListTags 所有标签列表
 	ListTags(context.Context, *Empty) (*ListTagsResponse, error)
+	// UnbindTags 批量从照片解绑标签
+	UnbindTags(context.Context, *UnbindTagsRequest) (*UnbindTagsResponse, error)
 }
 
 func RegisterTagServiceHTTPServer(s *http.Server, srv TagServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/api/v1/tags", _TagService_ListTags0_HTTP_Handler(srv))
 	r.GET("/api/v1/tags/{name}/photos", _TagService_GetPhotosByTag0_HTTP_Handler(srv))
+	r.POST("/api/v1/tags/bind", _TagService_BindTags0_HTTP_Handler(srv))
+	r.POST("/api/v1/tags/unbind", _TagService_UnbindTags0_HTTP_Handler(srv))
 }
 
 func _TagService_ListTags0_HTTP_Handler(srv TagServiceHTTPServer) func(ctx http.Context) error {
@@ -76,11 +84,59 @@ func _TagService_GetPhotosByTag0_HTTP_Handler(srv TagServiceHTTPServer) func(ctx
 	}
 }
 
+func _TagService_BindTags0_HTTP_Handler(srv TagServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in BindTagsRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTagServiceBindTags)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.BindTags(ctx, req.(*BindTagsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*BindTagsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _TagService_UnbindTags0_HTTP_Handler(srv TagServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UnbindTagsRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTagServiceUnbindTags)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UnbindTags(ctx, req.(*UnbindTagsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UnbindTagsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type TagServiceHTTPClient interface {
+	// BindTags 批量给照片绑定标签
+	BindTags(ctx context.Context, req *BindTagsRequest, opts ...http.CallOption) (rsp *BindTagsResponse, err error)
 	// GetPhotosByTag 某标签下的照片
 	GetPhotosByTag(ctx context.Context, req *GetPhotosByTagRequest, opts ...http.CallOption) (rsp *GetPhotosByTagResponse, err error)
 	// ListTags 所有标签列表
 	ListTags(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *ListTagsResponse, err error)
+	// UnbindTags 批量从照片解绑标签
+	UnbindTags(ctx context.Context, req *UnbindTagsRequest, opts ...http.CallOption) (rsp *UnbindTagsResponse, err error)
 }
 
 type TagServiceHTTPClientImpl struct {
@@ -89,6 +145,20 @@ type TagServiceHTTPClientImpl struct {
 
 func NewTagServiceHTTPClient(client *http.Client) TagServiceHTTPClient {
 	return &TagServiceHTTPClientImpl{client}
+}
+
+// BindTags 批量给照片绑定标签
+func (c *TagServiceHTTPClientImpl) BindTags(ctx context.Context, in *BindTagsRequest, opts ...http.CallOption) (*BindTagsResponse, error) {
+	var out BindTagsResponse
+	pattern := "/api/v1/tags/bind"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationTagServiceBindTags))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetPhotosByTag 某标签下的照片
@@ -113,6 +183,20 @@ func (c *TagServiceHTTPClientImpl) ListTags(ctx context.Context, in *Empty, opts
 	opts = append(opts, http.Operation(OperationTagServiceListTags))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UnbindTags 批量从照片解绑标签
+func (c *TagServiceHTTPClientImpl) UnbindTags(ctx context.Context, in *UnbindTagsRequest, opts ...http.CallOption) (*UnbindTagsResponse, error) {
+	var out UnbindTagsResponse
+	pattern := "/api/v1/tags/unbind"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationTagServiceUnbindTags))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

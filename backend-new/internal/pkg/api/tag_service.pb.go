@@ -170,6 +170,214 @@ func (x *GetPhotosByTagResponse) GetTotal() int32 {
 	return 0
 }
 
+type BindTagsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PhotoIds      []string               `protobuf:"bytes,1,rep,name=photo_ids,json=photoIds,proto3" json:"photo_ids,omitempty"`
+	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindTagsRequest) Reset() {
+	*x = BindTagsRequest{}
+	mi := &file_tag_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindTagsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindTagsRequest) ProtoMessage() {}
+
+func (x *BindTagsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_tag_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindTagsRequest.ProtoReflect.Descriptor instead.
+func (*BindTagsRequest) Descriptor() ([]byte, []int) {
+	return file_tag_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *BindTagsRequest) GetPhotoIds() []string {
+	if x != nil {
+		return x.PhotoIds
+	}
+	return nil
+}
+
+func (x *BindTagsRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+type BindTagsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SuccessCount  int32                  `protobuf:"varint,1,opt,name=success_count,json=successCount,proto3" json:"success_count,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindTagsResponse) Reset() {
+	*x = BindTagsResponse{}
+	mi := &file_tag_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindTagsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindTagsResponse) ProtoMessage() {}
+
+func (x *BindTagsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_tag_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindTagsResponse.ProtoReflect.Descriptor instead.
+func (*BindTagsResponse) Descriptor() ([]byte, []int) {
+	return file_tag_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *BindTagsResponse) GetSuccessCount() int32 {
+	if x != nil {
+		return x.SuccessCount
+	}
+	return 0
+}
+
+func (x *BindTagsResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type UnbindTagsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PhotoIds      []string               `protobuf:"bytes,1,rep,name=photo_ids,json=photoIds,proto3" json:"photo_ids,omitempty"`
+	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnbindTagsRequest) Reset() {
+	*x = UnbindTagsRequest{}
+	mi := &file_tag_service_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnbindTagsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnbindTagsRequest) ProtoMessage() {}
+
+func (x *UnbindTagsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_tag_service_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnbindTagsRequest.ProtoReflect.Descriptor instead.
+func (*UnbindTagsRequest) Descriptor() ([]byte, []int) {
+	return file_tag_service_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UnbindTagsRequest) GetPhotoIds() []string {
+	if x != nil {
+		return x.PhotoIds
+	}
+	return nil
+}
+
+func (x *UnbindTagsRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+type UnbindTagsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SuccessCount  int32                  `protobuf:"varint,1,opt,name=success_count,json=successCount,proto3" json:"success_count,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnbindTagsResponse) Reset() {
+	*x = UnbindTagsResponse{}
+	mi := &file_tag_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnbindTagsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnbindTagsResponse) ProtoMessage() {}
+
+func (x *UnbindTagsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_tag_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnbindTagsResponse.ProtoReflect.Descriptor instead.
+func (*UnbindTagsResponse) Descriptor() ([]byte, []int) {
+	return file_tag_service_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UnbindTagsResponse) GetSuccessCount() int32 {
+	if x != nil {
+		return x.SuccessCount
+	}
+	return 0
+}
+
+func (x *UnbindTagsResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_tag_service_proto protoreflect.FileDescriptor
 
 const file_tag_service_proto_rawDesc = "" +
@@ -182,12 +390,27 @@ const file_tag_service_proto_rawDesc = "" +
 	"\x16GetPhotosByTagResponse\x12\x10\n" +
 	"\x03tag\x18\x01 \x01(\tR\x03tag\x12$\n" +
 	"\x05items\x18\x02 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x05R\x05total2\xc0\x01\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\"@\n" +
+	"\x0fBindTagsRequest\x12\x1b\n" +
+	"\tphoto_ids\x18\x01 \x03(\tR\bphotoIds\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\"Q\n" +
+	"\x10BindTagsResponse\x12#\n" +
+	"\rsuccess_count\x18\x01 \x01(\x05R\fsuccessCount\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"B\n" +
+	"\x11UnbindTagsRequest\x12\x1b\n" +
+	"\tphoto_ids\x18\x01 \x03(\tR\bphotoIds\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\"S\n" +
+	"\x12UnbindTagsResponse\x12#\n" +
+	"\rsuccess_count\x18\x01 \x01(\x05R\fsuccessCount\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xf6\x02\n" +
 	"\n" +
 	"TagService\x12C\n" +
 	"\bListTags\x12\n" +
 	".api.Empty\x1a\x15.api.ListTagsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/v1/tags\x12m\n" +
-	"\x0eGetPhotosByTag\x12\x1a.api.GetPhotosByTagRequest\x1a\x1b.api.GetPhotosByTagResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/api/v1/tags/{name}/photosB\"Z backend-new/internal/pkg/api;apib\x06proto3"
+	"\x0eGetPhotosByTag\x12\x1a.api.GetPhotosByTagRequest\x1a\x1b.api.GetPhotosByTagResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/api/v1/tags/{name}/photos\x12U\n" +
+	"\bBindTags\x12\x14.api.BindTagsRequest\x1a\x15.api.BindTagsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/v1/tags/bind\x12]\n" +
+	"\n" +
+	"UnbindTags\x12\x16.api.UnbindTagsRequest\x1a\x17.api.UnbindTagsResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/v1/tags/unbindB\"Z backend-new/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_tag_service_proto_rawDescOnce sync.Once
@@ -201,22 +424,30 @@ func file_tag_service_proto_rawDescGZIP() []byte {
 	return file_tag_service_proto_rawDescData
 }
 
-var file_tag_service_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_tag_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_tag_service_proto_goTypes = []any{
 	(*ListTagsResponse)(nil),       // 0: api.ListTagsResponse
 	(*GetPhotosByTagRequest)(nil),  // 1: api.GetPhotosByTagRequest
 	(*GetPhotosByTagResponse)(nil), // 2: api.GetPhotosByTagResponse
-	(*PhotoItem)(nil),              // 3: api.PhotoItem
-	(*Empty)(nil),                  // 4: api.Empty
+	(*BindTagsRequest)(nil),        // 3: api.BindTagsRequest
+	(*BindTagsResponse)(nil),       // 4: api.BindTagsResponse
+	(*UnbindTagsRequest)(nil),      // 5: api.UnbindTagsRequest
+	(*UnbindTagsResponse)(nil),     // 6: api.UnbindTagsResponse
+	(*PhotoItem)(nil),              // 7: api.PhotoItem
+	(*Empty)(nil),                  // 8: api.Empty
 }
 var file_tag_service_proto_depIdxs = []int32{
-	3, // 0: api.GetPhotosByTagResponse.items:type_name -> api.PhotoItem
-	4, // 1: api.TagService.ListTags:input_type -> api.Empty
+	7, // 0: api.GetPhotosByTagResponse.items:type_name -> api.PhotoItem
+	8, // 1: api.TagService.ListTags:input_type -> api.Empty
 	1, // 2: api.TagService.GetPhotosByTag:input_type -> api.GetPhotosByTagRequest
-	0, // 3: api.TagService.ListTags:output_type -> api.ListTagsResponse
-	2, // 4: api.TagService.GetPhotosByTag:output_type -> api.GetPhotosByTagResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
+	3, // 3: api.TagService.BindTags:input_type -> api.BindTagsRequest
+	5, // 4: api.TagService.UnbindTags:input_type -> api.UnbindTagsRequest
+	0, // 5: api.TagService.ListTags:output_type -> api.ListTagsResponse
+	2, // 6: api.TagService.GetPhotosByTag:output_type -> api.GetPhotosByTagResponse
+	4, // 7: api.TagService.BindTags:output_type -> api.BindTagsResponse
+	6, // 8: api.TagService.UnbindTags:output_type -> api.UnbindTagsResponse
+	5, // [5:9] is the sub-list for method output_type
+	1, // [1:5] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -235,7 +466,7 @@ func file_tag_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tag_service_proto_rawDesc), len(file_tag_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

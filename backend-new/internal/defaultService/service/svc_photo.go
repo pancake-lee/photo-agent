@@ -12,9 +12,9 @@ import (
 	"backend-new/internal/defaultService/conf"
 	"backend-new/internal/defaultService/data"
 	"backend-new/internal/pkg/api"
+	"backend-new/internal/pkg/db"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
-	"github.com/pancake-lee/pgo/pkg/pdb"
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
 
@@ -53,7 +53,7 @@ func (s *PhotoServer) SearchPhotos(
 ) (*api.SearchPhotosResponse, error) {
 	ctx := papp.NewAppCtx(_ctx)
 
-	params := data.ListPhotosParams{
+	params := data.GetPhotoListParams{
 		Page:        int(req.Page),
 		PageSize:    int(req.PageSize),
 		Timeline:    req.Timeline,
@@ -71,7 +71,7 @@ func (s *PhotoServer) SearchPhotos(
 		SortOrder:   req.SortOrder,
 	}
 
-	photos, total, err := data.PhotoDAO.ListPhotos(ctx, params)
+	photos, total, err := data.PhotoDAO.GetPhotoList(ctx, params)
 	if err != nil {
 		return nil, ctx.Log.LogErr(err)
 	}
@@ -515,6 +515,8 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, shotAt *time.Tim
 		updates["height"] = height
 	}
 
-	pdb.GetGormDB().WithContext(ctx).Model(&data.PhotoDO{}).
-		Where("id = ?", photoID).Updates(updates)
+	q := db.GetQuery().Photo
+	if _, err := q.WithContext(ctx).Where(q.ID.Eq(photoID)).Updates(updates); err != nil {
+		plogger.Warnf("Overwrite photo failed: %v", err)
+	}
 }

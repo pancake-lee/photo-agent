@@ -19,6 +19,20 @@ service TagService {
             get: "/api/v1/tags/{name}/photos"
         };
     }
+    // 批量给照片绑定标签
+    rpc BindTags (BindTagsRequest) returns (BindTagsResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/tags/bind"
+            body: "*"
+        };
+    }
+    // 批量从照片解绑标签
+    rpc UnbindTags (UnbindTagsRequest) returns (UnbindTagsResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/tags/unbind"
+            body: "*"
+        };
+    }
 }
 
 // --------------------------------------------------
@@ -39,4 +53,30 @@ message GetPhotosByTagResponse {
     string tag = 1;
     repeated PhotoItem items = 2;
     int32 total = 3;
+}
+
+// --------------------------------------------------
+// BindTags
+
+message BindTagsRequest {
+    repeated string photo_ids = 1;
+    string tag = 2;
+}
+
+message BindTagsResponse {
+    int32 success_count = 1;
+    string message = 2;
+}
+
+// --------------------------------------------------
+// UnbindTags
+
+message UnbindTagsRequest {
+    repeated string photo_ids = 1;
+    string tag = 2;
+}
+
+message UnbindTagsResponse {
+    int32 success_count = 1;
+    string message = 2;
 }

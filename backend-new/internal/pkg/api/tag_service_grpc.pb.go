@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	TagService_ListTags_FullMethodName       = "/api.TagService/ListTags"
 	TagService_GetPhotosByTag_FullMethodName = "/api.TagService/GetPhotosByTag"
+	TagService_BindTags_FullMethodName       = "/api.TagService/BindTags"
+	TagService_UnbindTags_FullMethodName     = "/api.TagService/UnbindTags"
 )
 
 // TagServiceClient is the client API for TagService service.
@@ -33,6 +35,10 @@ type TagServiceClient interface {
 	ListTags(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListTagsResponse, error)
 	// 某标签下的照片
 	GetPhotosByTag(ctx context.Context, in *GetPhotosByTagRequest, opts ...grpc.CallOption) (*GetPhotosByTagResponse, error)
+	// 批量给照片绑定标签
+	BindTags(ctx context.Context, in *BindTagsRequest, opts ...grpc.CallOption) (*BindTagsResponse, error)
+	// 批量从照片解绑标签
+	UnbindTags(ctx context.Context, in *UnbindTagsRequest, opts ...grpc.CallOption) (*UnbindTagsResponse, error)
 }
 
 type tagServiceClient struct {
@@ -63,6 +69,26 @@ func (c *tagServiceClient) GetPhotosByTag(ctx context.Context, in *GetPhotosByTa
 	return out, nil
 }
 
+func (c *tagServiceClient) BindTags(ctx context.Context, in *BindTagsRequest, opts ...grpc.CallOption) (*BindTagsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindTagsResponse)
+	err := c.cc.Invoke(ctx, TagService_BindTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tagServiceClient) UnbindTags(ctx context.Context, in *UnbindTagsRequest, opts ...grpc.CallOption) (*UnbindTagsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnbindTagsResponse)
+	err := c.cc.Invoke(ctx, TagService_UnbindTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TagServiceServer is the server API for TagService service.
 // All implementations must embed UnimplementedTagServiceServer
 // for forward compatibility.
@@ -73,6 +99,10 @@ type TagServiceServer interface {
 	ListTags(context.Context, *Empty) (*ListTagsResponse, error)
 	// 某标签下的照片
 	GetPhotosByTag(context.Context, *GetPhotosByTagRequest) (*GetPhotosByTagResponse, error)
+	// 批量给照片绑定标签
+	BindTags(context.Context, *BindTagsRequest) (*BindTagsResponse, error)
+	// 批量从照片解绑标签
+	UnbindTags(context.Context, *UnbindTagsRequest) (*UnbindTagsResponse, error)
 	mustEmbedUnimplementedTagServiceServer()
 }
 
@@ -88,6 +118,12 @@ func (UnimplementedTagServiceServer) ListTags(context.Context, *Empty) (*ListTag
 }
 func (UnimplementedTagServiceServer) GetPhotosByTag(context.Context, *GetPhotosByTagRequest) (*GetPhotosByTagResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPhotosByTag not implemented")
+}
+func (UnimplementedTagServiceServer) BindTags(context.Context, *BindTagsRequest) (*BindTagsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindTags not implemented")
+}
+func (UnimplementedTagServiceServer) UnbindTags(context.Context, *UnbindTagsRequest) (*UnbindTagsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnbindTags not implemented")
 }
 func (UnimplementedTagServiceServer) mustEmbedUnimplementedTagServiceServer() {}
 func (UnimplementedTagServiceServer) testEmbeddedByValue()                    {}
@@ -146,6 +182,42 @@ func _TagService_GetPhotosByTag_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TagService_BindTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindTagsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TagServiceServer).BindTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TagService_BindTags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TagServiceServer).BindTags(ctx, req.(*BindTagsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TagService_UnbindTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnbindTagsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TagServiceServer).UnbindTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TagService_UnbindTags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TagServiceServer).UnbindTags(ctx, req.(*UnbindTagsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TagService_ServiceDesc is the grpc.ServiceDesc for TagService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -160,6 +232,14 @@ var TagService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPhotosByTag",
 			Handler:    _TagService_GetPhotosByTag_Handler,
+		},
+		{
+			MethodName: "BindTags",
+			Handler:    _TagService_BindTags_Handler,
+		},
+		{
+			MethodName: "UnbindTags",
+			Handler:    _TagService_UnbindTags_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
