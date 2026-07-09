@@ -19,122 +19,26 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
-const OperationDefaultCURDAddImportJob = "/api.defaultCURD/AddImportJob"
 const OperationDefaultCURDAddPhoto = "/api.defaultCURD/AddPhoto"
-const OperationDefaultCURDDelImportJobByIDList = "/api.defaultCURD/DelImportJobByIDList"
 const OperationDefaultCURDDelPhotoByIDList = "/api.defaultCURD/DelPhotoByIDList"
-const OperationDefaultCURDGetImportJobList = "/api.defaultCURD/GetImportJobList"
 const OperationDefaultCURDGetPhotoList = "/api.defaultCURD/GetPhotoList"
-const OperationDefaultCURDUpdateImportJob = "/api.defaultCURD/UpdateImportJob"
 const OperationDefaultCURDUpdatePhoto = "/api.defaultCURD/UpdatePhoto"
 
 type DefaultCURDHTTPServer interface {
-	// AddImportJob --------------------------------------------------
-	// tbl : import_jobs
-	AddImportJob(context.Context, *AddImportJobRequest) (*AddImportJobResponse, error)
 	// AddPhoto --------------------------------------------------
 	// tbl : photos
 	AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error)
-	DelImportJobByIDList(context.Context, *DelImportJobByIDListRequest) (*Empty, error)
 	DelPhotoByIDList(context.Context, *DelPhotoByIDListRequest) (*Empty, error)
-	GetImportJobList(context.Context, *GetImportJobListRequest) (*GetImportJobListResponse, error)
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
-	UpdateImportJob(context.Context, *UpdateImportJobRequest) (*UpdateImportJobResponse, error)
 	UpdatePhoto(context.Context, *UpdatePhotoRequest) (*UpdatePhotoResponse, error)
 }
 
 func RegisterDefaultCURDHTTPServer(s *http.Server, srv DefaultCURDHTTPServer) {
 	r := s.Route("/")
-	r.POST("/import-jobs", _DefaultCURD_AddImportJob0_HTTP_Handler(srv))
-	r.GET("/import-jobs", _DefaultCURD_GetImportJobList0_HTTP_Handler(srv))
-	r.PATCH("/import-jobs", _DefaultCURD_UpdateImportJob0_HTTP_Handler(srv))
-	r.DELETE("/import-jobs", _DefaultCURD_DelImportJobByIDList0_HTTP_Handler(srv))
 	r.POST("/photos", _DefaultCURD_AddPhoto0_HTTP_Handler(srv))
 	r.GET("/photos", _DefaultCURD_GetPhotoList0_HTTP_Handler(srv))
 	r.PATCH("/photos", _DefaultCURD_UpdatePhoto0_HTTP_Handler(srv))
 	r.DELETE("/photos", _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv))
-}
-
-func _DefaultCURD_AddImportJob0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
-	return func(ctx http.Context) error {
-		var in AddImportJobRequest
-		if err := ctx.Bind(&in); err != nil {
-			return err
-		}
-		if err := ctx.BindQuery(&in); err != nil {
-			return err
-		}
-		http.SetOperation(ctx, OperationDefaultCURDAddImportJob)
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.AddImportJob(ctx, req.(*AddImportJobRequest))
-		})
-		out, err := h(ctx, &in)
-		if err != nil {
-			return err
-		}
-		reply := out.(*AddImportJobResponse)
-		return ctx.Result(200, reply)
-	}
-}
-
-func _DefaultCURD_GetImportJobList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
-	return func(ctx http.Context) error {
-		var in GetImportJobListRequest
-		if err := ctx.BindQuery(&in); err != nil {
-			return err
-		}
-		http.SetOperation(ctx, OperationDefaultCURDGetImportJobList)
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.GetImportJobList(ctx, req.(*GetImportJobListRequest))
-		})
-		out, err := h(ctx, &in)
-		if err != nil {
-			return err
-		}
-		reply := out.(*GetImportJobListResponse)
-		return ctx.Result(200, reply)
-	}
-}
-
-func _DefaultCURD_UpdateImportJob0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
-	return func(ctx http.Context) error {
-		var in UpdateImportJobRequest
-		if err := ctx.Bind(&in); err != nil {
-			return err
-		}
-		if err := ctx.BindQuery(&in); err != nil {
-			return err
-		}
-		http.SetOperation(ctx, OperationDefaultCURDUpdateImportJob)
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.UpdateImportJob(ctx, req.(*UpdateImportJobRequest))
-		})
-		out, err := h(ctx, &in)
-		if err != nil {
-			return err
-		}
-		reply := out.(*UpdateImportJobResponse)
-		return ctx.Result(200, reply)
-	}
-}
-
-func _DefaultCURD_DelImportJobByIDList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
-	return func(ctx http.Context) error {
-		var in DelImportJobByIDListRequest
-		if err := ctx.BindQuery(&in); err != nil {
-			return err
-		}
-		http.SetOperation(ctx, OperationDefaultCURDDelImportJobByIDList)
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.DelImportJobByIDList(ctx, req.(*DelImportJobByIDListRequest))
-		})
-		out, err := h(ctx, &in)
-		if err != nil {
-			return err
-		}
-		reply := out.(*Empty)
-		return ctx.Result(200, reply)
-	}
 }
 
 func _DefaultCURD_AddPhoto0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
@@ -220,17 +124,11 @@ func _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv DefaultCURDHTTPServer) func
 }
 
 type DefaultCURDHTTPClient interface {
-	// AddImportJob --------------------------------------------------
-	// tbl : import_jobs
-	AddImportJob(ctx context.Context, req *AddImportJobRequest, opts ...http.CallOption) (rsp *AddImportJobResponse, err error)
 	// AddPhoto --------------------------------------------------
 	// tbl : photos
 	AddPhoto(ctx context.Context, req *AddPhotoRequest, opts ...http.CallOption) (rsp *AddPhotoResponse, err error)
-	DelImportJobByIDList(ctx context.Context, req *DelImportJobByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	DelPhotoByIDList(ctx context.Context, req *DelPhotoByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
-	GetImportJobList(ctx context.Context, req *GetImportJobListRequest, opts ...http.CallOption) (rsp *GetImportJobListResponse, err error)
 	GetPhotoList(ctx context.Context, req *GetPhotoListRequest, opts ...http.CallOption) (rsp *GetPhotoListResponse, err error)
-	UpdateImportJob(ctx context.Context, req *UpdateImportJobRequest, opts ...http.CallOption) (rsp *UpdateImportJobResponse, err error)
 	UpdatePhoto(ctx context.Context, req *UpdatePhotoRequest, opts ...http.CallOption) (rsp *UpdatePhotoResponse, err error)
 }
 
@@ -242,21 +140,6 @@ func NewDefaultCURDHTTPClient(client *http.Client) DefaultCURDHTTPClient {
 	return &DefaultCURDHTTPClientImpl{client}
 }
 
-// AddImportJob --------------------------------------------------
-// tbl : import_jobs
-func (c *DefaultCURDHTTPClientImpl) AddImportJob(ctx context.Context, in *AddImportJobRequest, opts ...http.CallOption) (*AddImportJobResponse, error) {
-	var out AddImportJobResponse
-	pattern := "/import-jobs"
-	path := binding.EncodeURL(pattern, in, false)
-	opts = append(opts, http.Operation(OperationDefaultCURDAddImportJob))
-	opts = append(opts, http.PathTemplate(pattern))
-	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 // AddPhoto --------------------------------------------------
 // tbl : photos
 func (c *DefaultCURDHTTPClientImpl) AddPhoto(ctx context.Context, in *AddPhotoRequest, opts ...http.CallOption) (*AddPhotoResponse, error) {
@@ -266,19 +149,6 @@ func (c *DefaultCURDHTTPClientImpl) AddPhoto(ctx context.Context, in *AddPhotoRe
 	opts = append(opts, http.Operation(OperationDefaultCURDAddPhoto))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-func (c *DefaultCURDHTTPClientImpl) DelImportJobByIDList(ctx context.Context, in *DelImportJobByIDListRequest, opts ...http.CallOption) (*Empty, error) {
-	var out Empty
-	pattern := "/import-jobs"
-	path := binding.EncodeURL(pattern, in, true)
-	opts = append(opts, http.Operation(OperationDefaultCURDDelImportJobByIDList))
-	opts = append(opts, http.PathTemplate(pattern))
-	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -298,19 +168,6 @@ func (c *DefaultCURDHTTPClientImpl) DelPhotoByIDList(ctx context.Context, in *De
 	return &out, nil
 }
 
-func (c *DefaultCURDHTTPClientImpl) GetImportJobList(ctx context.Context, in *GetImportJobListRequest, opts ...http.CallOption) (*GetImportJobListResponse, error) {
-	var out GetImportJobListResponse
-	pattern := "/import-jobs"
-	path := binding.EncodeURL(pattern, in, true)
-	opts = append(opts, http.Operation(OperationDefaultCURDGetImportJobList))
-	opts = append(opts, http.PathTemplate(pattern))
-	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 func (c *DefaultCURDHTTPClientImpl) GetPhotoList(ctx context.Context, in *GetPhotoListRequest, opts ...http.CallOption) (*GetPhotoListResponse, error) {
 	var out GetPhotoListResponse
 	pattern := "/photos"
@@ -318,19 +175,6 @@ func (c *DefaultCURDHTTPClientImpl) GetPhotoList(ctx context.Context, in *GetPho
 	opts = append(opts, http.Operation(OperationDefaultCURDGetPhotoList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-func (c *DefaultCURDHTTPClientImpl) UpdateImportJob(ctx context.Context, in *UpdateImportJobRequest, opts ...http.CallOption) (*UpdateImportJobResponse, error) {
-	var out UpdateImportJobResponse
-	pattern := "/import-jobs"
-	path := binding.EncodeURL(pattern, in, false)
-	opts = append(opts, http.Operation(OperationDefaultCURDUpdateImportJob))
-	opts = append(opts, http.PathTemplate(pattern))
-	err := c.cc.Invoke(ctx, "PATCH", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

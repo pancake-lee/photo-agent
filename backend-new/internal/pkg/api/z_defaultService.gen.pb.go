@@ -25,424 +25,6 @@ const (
 )
 
 // --------------------------------------------------
-// tbl : import_jobs
-type ImportJobInfo struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ID              string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	SourcePath      string                 `protobuf:"bytes,3,opt,name=sourcePath,proto3" json:"sourcePath,omitempty"`
-	TotalPhotos     int32                  `protobuf:"varint,4,opt,name=totalPhotos,proto3" json:"totalPhotos,omitempty"`
-	ProcessedPhotos int32                  `protobuf:"varint,5,opt,name=processedPhotos,proto3" json:"processedPhotos,omitempty"`
-	FailedPhotos    int32                  `protobuf:"varint,6,opt,name=failedPhotos,proto3" json:"failedPhotos,omitempty"`
-	Log             string                 `protobuf:"bytes,7,opt,name=log,proto3" json:"log,omitempty"`
-	CreatedAt       int64                  `protobuf:"varint,8,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
-	CompletedAt     int64                  `protobuf:"varint,9,opt,name=completedAt,proto3" json:"completedAt,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *ImportJobInfo) Reset() {
-	*x = ImportJobInfo{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ImportJobInfo) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ImportJobInfo) ProtoMessage() {}
-
-func (x *ImportJobInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ImportJobInfo.ProtoReflect.Descriptor instead.
-func (*ImportJobInfo) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *ImportJobInfo) GetID() string {
-	if x != nil {
-		return x.ID
-	}
-	return ""
-}
-
-func (x *ImportJobInfo) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *ImportJobInfo) GetSourcePath() string {
-	if x != nil {
-		return x.SourcePath
-	}
-	return ""
-}
-
-func (x *ImportJobInfo) GetTotalPhotos() int32 {
-	if x != nil {
-		return x.TotalPhotos
-	}
-	return 0
-}
-
-func (x *ImportJobInfo) GetProcessedPhotos() int32 {
-	if x != nil {
-		return x.ProcessedPhotos
-	}
-	return 0
-}
-
-func (x *ImportJobInfo) GetFailedPhotos() int32 {
-	if x != nil {
-		return x.FailedPhotos
-	}
-	return 0
-}
-
-func (x *ImportJobInfo) GetLog() string {
-	if x != nil {
-		return x.Log
-	}
-	return ""
-}
-
-func (x *ImportJobInfo) GetCreatedAt() int64 {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return 0
-}
-
-func (x *ImportJobInfo) GetCompletedAt() int64 {
-	if x != nil {
-		return x.CompletedAt
-	}
-	return 0
-}
-
-type AddImportJobRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ImportJob     *ImportJobInfo         `protobuf:"bytes,1,opt,name=import_job,json=importJob,proto3" json:"import_job,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AddImportJobRequest) Reset() {
-	*x = AddImportJobRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AddImportJobRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddImportJobRequest) ProtoMessage() {}
-
-func (x *AddImportJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddImportJobRequest.ProtoReflect.Descriptor instead.
-func (*AddImportJobRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *AddImportJobRequest) GetImportJob() *ImportJobInfo {
-	if x != nil {
-		return x.ImportJob
-	}
-	return nil
-}
-
-type AddImportJobResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ImportJob     *ImportJobInfo         `protobuf:"bytes,1,opt,name=import_job,json=importJob,proto3" json:"import_job,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AddImportJobResponse) Reset() {
-	*x = AddImportJobResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AddImportJobResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddImportJobResponse) ProtoMessage() {}
-
-func (x *AddImportJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddImportJobResponse.ProtoReflect.Descriptor instead.
-func (*AddImportJobResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *AddImportJobResponse) GetImportJob() *ImportJobInfo {
-	if x != nil {
-		return x.ImportJob
-	}
-	return nil
-}
-
-type GetImportJobListRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IDList        []string               `protobuf:"bytes,1,rep,name=IDList,proto3" json:"IDList,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetImportJobListRequest) Reset() {
-	*x = GetImportJobListRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetImportJobListRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetImportJobListRequest) ProtoMessage() {}
-
-func (x *GetImportJobListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetImportJobListRequest.ProtoReflect.Descriptor instead.
-func (*GetImportJobListRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *GetImportJobListRequest) GetIDList() []string {
-	if x != nil {
-		return x.IDList
-	}
-	return nil
-}
-
-type GetImportJobListResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ImportJobList []*ImportJobInfo       `protobuf:"bytes,1,rep,name=importJobList,proto3" json:"importJobList,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetImportJobListResponse) Reset() {
-	*x = GetImportJobListResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetImportJobListResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetImportJobListResponse) ProtoMessage() {}
-
-func (x *GetImportJobListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetImportJobListResponse.ProtoReflect.Descriptor instead.
-func (*GetImportJobListResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *GetImportJobListResponse) GetImportJobList() []*ImportJobInfo {
-	if x != nil {
-		return x.ImportJobList
-	}
-	return nil
-}
-
-type UpdateImportJobRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ImportJob     *ImportJobInfo         `protobuf:"bytes,1,opt,name=importJob,proto3" json:"importJob,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpdateImportJobRequest) Reset() {
-	*x = UpdateImportJobRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpdateImportJobRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpdateImportJobRequest) ProtoMessage() {}
-
-func (x *UpdateImportJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpdateImportJobRequest.ProtoReflect.Descriptor instead.
-func (*UpdateImportJobRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *UpdateImportJobRequest) GetImportJob() *ImportJobInfo {
-	if x != nil {
-		return x.ImportJob
-	}
-	return nil
-}
-
-type UpdateImportJobResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ImportJob     *ImportJobInfo         `protobuf:"bytes,1,opt,name=importJob,proto3" json:"importJob,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpdateImportJobResponse) Reset() {
-	*x = UpdateImportJobResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpdateImportJobResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpdateImportJobResponse) ProtoMessage() {}
-
-func (x *UpdateImportJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpdateImportJobResponse.ProtoReflect.Descriptor instead.
-func (*UpdateImportJobResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *UpdateImportJobResponse) GetImportJob() *ImportJobInfo {
-	if x != nil {
-		return x.ImportJob
-	}
-	return nil
-}
-
-type DelImportJobByIDListRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IDList        []string               `protobuf:"bytes,1,rep,name=IDList,proto3" json:"IDList,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DelImportJobByIDListRequest) Reset() {
-	*x = DelImportJobByIDListRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DelImportJobByIDListRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DelImportJobByIDListRequest) ProtoMessage() {}
-
-func (x *DelImportJobByIDListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DelImportJobByIDListRequest.ProtoReflect.Descriptor instead.
-func (*DelImportJobByIDListRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *DelImportJobByIDListRequest) GetIDList() []string {
-	if x != nil {
-		return x.IDList
-	}
-	return nil
-}
-
-// --------------------------------------------------
 // tbl : photos
 type PhotoInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -478,7 +60,7 @@ type PhotoInfo struct {
 
 func (x *PhotoInfo) Reset() {
 	*x = PhotoInfo{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[8]
+	mi := &file_z_defaultService_gen_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -490,7 +72,7 @@ func (x *PhotoInfo) String() string {
 func (*PhotoInfo) ProtoMessage() {}
 
 func (x *PhotoInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[8]
+	mi := &file_z_defaultService_gen_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -503,7 +85,7 @@ func (x *PhotoInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoInfo.ProtoReflect.Descriptor instead.
 func (*PhotoInfo) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{8}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *PhotoInfo) GetID() string {
@@ -697,7 +279,7 @@ type AddPhotoRequest struct {
 
 func (x *AddPhotoRequest) Reset() {
 	*x = AddPhotoRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[9]
+	mi := &file_z_defaultService_gen_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -709,7 +291,7 @@ func (x *AddPhotoRequest) String() string {
 func (*AddPhotoRequest) ProtoMessage() {}
 
 func (x *AddPhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[9]
+	mi := &file_z_defaultService_gen_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,7 +304,7 @@ func (x *AddPhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPhotoRequest.ProtoReflect.Descriptor instead.
 func (*AddPhotoRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{9}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *AddPhotoRequest) GetPhoto() *PhotoInfo {
@@ -741,7 +323,7 @@ type AddPhotoResponse struct {
 
 func (x *AddPhotoResponse) Reset() {
 	*x = AddPhotoResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[10]
+	mi := &file_z_defaultService_gen_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -753,7 +335,7 @@ func (x *AddPhotoResponse) String() string {
 func (*AddPhotoResponse) ProtoMessage() {}
 
 func (x *AddPhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[10]
+	mi := &file_z_defaultService_gen_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -766,7 +348,7 @@ func (x *AddPhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPhotoResponse.ProtoReflect.Descriptor instead.
 func (*AddPhotoResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{10}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AddPhotoResponse) GetPhoto() *PhotoInfo {
@@ -785,7 +367,7 @@ type GetPhotoListRequest struct {
 
 func (x *GetPhotoListRequest) Reset() {
 	*x = GetPhotoListRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[11]
+	mi := &file_z_defaultService_gen_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -797,7 +379,7 @@ func (x *GetPhotoListRequest) String() string {
 func (*GetPhotoListRequest) ProtoMessage() {}
 
 func (x *GetPhotoListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[11]
+	mi := &file_z_defaultService_gen_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -810,7 +392,7 @@ func (x *GetPhotoListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPhotoListRequest.ProtoReflect.Descriptor instead.
 func (*GetPhotoListRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{11}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetPhotoListRequest) GetIDList() []string {
@@ -829,7 +411,7 @@ type GetPhotoListResponse struct {
 
 func (x *GetPhotoListResponse) Reset() {
 	*x = GetPhotoListResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[12]
+	mi := &file_z_defaultService_gen_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +423,7 @@ func (x *GetPhotoListResponse) String() string {
 func (*GetPhotoListResponse) ProtoMessage() {}
 
 func (x *GetPhotoListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[12]
+	mi := &file_z_defaultService_gen_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +436,7 @@ func (x *GetPhotoListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPhotoListResponse.ProtoReflect.Descriptor instead.
 func (*GetPhotoListResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{12}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetPhotoListResponse) GetPhotoList() []*PhotoInfo {
@@ -873,7 +455,7 @@ type UpdatePhotoRequest struct {
 
 func (x *UpdatePhotoRequest) Reset() {
 	*x = UpdatePhotoRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[13]
+	mi := &file_z_defaultService_gen_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -885,7 +467,7 @@ func (x *UpdatePhotoRequest) String() string {
 func (*UpdatePhotoRequest) ProtoMessage() {}
 
 func (x *UpdatePhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[13]
+	mi := &file_z_defaultService_gen_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -898,7 +480,7 @@ func (x *UpdatePhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePhotoRequest.ProtoReflect.Descriptor instead.
 func (*UpdatePhotoRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{13}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *UpdatePhotoRequest) GetPhoto() *PhotoInfo {
@@ -917,7 +499,7 @@ type UpdatePhotoResponse struct {
 
 func (x *UpdatePhotoResponse) Reset() {
 	*x = UpdatePhotoResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[14]
+	mi := &file_z_defaultService_gen_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -929,7 +511,7 @@ func (x *UpdatePhotoResponse) String() string {
 func (*UpdatePhotoResponse) ProtoMessage() {}
 
 func (x *UpdatePhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[14]
+	mi := &file_z_defaultService_gen_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -942,7 +524,7 @@ func (x *UpdatePhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePhotoResponse.ProtoReflect.Descriptor instead.
 func (*UpdatePhotoResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{14}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *UpdatePhotoResponse) GetPhoto() *PhotoInfo {
@@ -961,7 +543,7 @@ type DelPhotoByIDListRequest struct {
 
 func (x *DelPhotoByIDListRequest) Reset() {
 	*x = DelPhotoByIDListRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[15]
+	mi := &file_z_defaultService_gen_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -973,7 +555,7 @@ func (x *DelPhotoByIDListRequest) String() string {
 func (*DelPhotoByIDListRequest) ProtoMessage() {}
 
 func (x *DelPhotoByIDListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[15]
+	mi := &file_z_defaultService_gen_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -986,7 +568,7 @@ func (x *DelPhotoByIDListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DelPhotoByIDListRequest.ProtoReflect.Descriptor instead.
 func (*DelPhotoByIDListRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{15}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DelPhotoByIDListRequest) GetIDList() []string {
@@ -1000,35 +582,7 @@ var File_z_defaultService_gen_proto protoreflect.FileDescriptor
 
 const file_z_defaultService_gen_proto_rawDesc = "" +
 	"\n" +
-	"\x1az_defaultService.gen.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\x1a\fcommon.proto\"\x99\x02\n" +
-	"\rImportJobInfo\x12\x0e\n" +
-	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1e\n" +
-	"\n" +
-	"sourcePath\x18\x03 \x01(\tR\n" +
-	"sourcePath\x12 \n" +
-	"\vtotalPhotos\x18\x04 \x01(\x05R\vtotalPhotos\x12(\n" +
-	"\x0fprocessedPhotos\x18\x05 \x01(\x05R\x0fprocessedPhotos\x12\"\n" +
-	"\ffailedPhotos\x18\x06 \x01(\x05R\ffailedPhotos\x12\x10\n" +
-	"\x03log\x18\a \x01(\tR\x03log\x12\x1c\n" +
-	"\tcreatedAt\x18\b \x01(\x03R\tcreatedAt\x12 \n" +
-	"\vcompletedAt\x18\t \x01(\x03R\vcompletedAt\"H\n" +
-	"\x13AddImportJobRequest\x121\n" +
-	"\n" +
-	"import_job\x18\x01 \x01(\v2\x12.api.ImportJobInfoR\timportJob\"I\n" +
-	"\x14AddImportJobResponse\x121\n" +
-	"\n" +
-	"import_job\x18\x01 \x01(\v2\x12.api.ImportJobInfoR\timportJob\"1\n" +
-	"\x17GetImportJobListRequest\x12\x16\n" +
-	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"T\n" +
-	"\x18GetImportJobListResponse\x128\n" +
-	"\rimportJobList\x18\x01 \x03(\v2\x12.api.ImportJobInfoR\rimportJobList\"J\n" +
-	"\x16UpdateImportJobRequest\x120\n" +
-	"\timportJob\x18\x01 \x01(\v2\x12.api.ImportJobInfoR\timportJob\"K\n" +
-	"\x17UpdateImportJobResponse\x120\n" +
-	"\timportJob\x18\x01 \x01(\v2\x12.api.ImportJobInfoR\timportJob\"5\n" +
-	"\x1bDelImportJobByIDListRequest\x12\x16\n" +
-	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"\xaf\x05\n" +
+	"\x1az_defaultService.gen.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\x1a\fcommon.proto\"\xaf\x05\n" +
 	"\tPhotoInfo\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1a\n" +
@@ -1072,13 +626,8 @@ const file_z_defaultService_gen_proto_rawDesc = "" +
 	"\x13UpdatePhotoResponse\x12$\n" +
 	"\x05photo\x18\x01 \x01(\v2\x0e.api.PhotoInfoR\x05photo\"1\n" +
 	"\x17DelPhotoByIDListRequest\x12\x16\n" +
-	"\x06IDList\x18\x01 \x03(\tR\x06IDList2\xdd\x05\n" +
-	"\vdefaultCURD\x12\\\n" +
-	"\fAddImportJob\x12\x18.api.AddImportJobRequest\x1a\x19.api.AddImportJobResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/import-jobs\x12e\n" +
-	"\x10GetImportJobList\x12\x1c.api.GetImportJobListRequest\x1a\x1d.api.GetImportJobListResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/import-jobs\x12e\n" +
-	"\x0fUpdateImportJob\x12\x1b.api.UpdateImportJobRequest\x1a\x1c.api.UpdateImportJobResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*2\f/import-jobs\x12Z\n" +
-	"\x14DelImportJobByIDList\x12 .api.DelImportJobByIDListRequest\x1a\n" +
-	".api.Empty\"\x14\x82\xd3\xe4\x93\x02\x0e*\f/import-jobs\x12K\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList2\xd5\x02\n" +
+	"\vdefaultCURD\x12K\n" +
 	"\bAddPhoto\x12\x14.api.AddPhotoRequest\x1a\x15.api.AddPhotoResponse\"\x12\x82\xd3\xe4\x93\x02\f:\x01*\"\a/photos\x12T\n" +
 	"\fGetPhotoList\x12\x18.api.GetPhotoListRequest\x1a\x19.api.GetPhotoListResponse\"\x0f\x82\xd3\xe4\x93\x02\t\x12\a/photos\x12T\n" +
 	"\vUpdatePhoto\x12\x17.api.UpdatePhotoRequest\x1a\x18.api.UpdatePhotoResponse\"\x12\x82\xd3\xe4\x93\x02\f:\x01*2\a/photos\x12M\n" +
@@ -1097,58 +646,37 @@ func file_z_defaultService_gen_proto_rawDescGZIP() []byte {
 	return file_z_defaultService_gen_proto_rawDescData
 }
 
-var file_z_defaultService_gen_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_z_defaultService_gen_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_z_defaultService_gen_proto_goTypes = []any{
-	(*ImportJobInfo)(nil),               // 0: api.ImportJobInfo
-	(*AddImportJobRequest)(nil),         // 1: api.AddImportJobRequest
-	(*AddImportJobResponse)(nil),        // 2: api.AddImportJobResponse
-	(*GetImportJobListRequest)(nil),     // 3: api.GetImportJobListRequest
-	(*GetImportJobListResponse)(nil),    // 4: api.GetImportJobListResponse
-	(*UpdateImportJobRequest)(nil),      // 5: api.UpdateImportJobRequest
-	(*UpdateImportJobResponse)(nil),     // 6: api.UpdateImportJobResponse
-	(*DelImportJobByIDListRequest)(nil), // 7: api.DelImportJobByIDListRequest
-	(*PhotoInfo)(nil),                   // 8: api.PhotoInfo
-	(*AddPhotoRequest)(nil),             // 9: api.AddPhotoRequest
-	(*AddPhotoResponse)(nil),            // 10: api.AddPhotoResponse
-	(*GetPhotoListRequest)(nil),         // 11: api.GetPhotoListRequest
-	(*GetPhotoListResponse)(nil),        // 12: api.GetPhotoListResponse
-	(*UpdatePhotoRequest)(nil),          // 13: api.UpdatePhotoRequest
-	(*UpdatePhotoResponse)(nil),         // 14: api.UpdatePhotoResponse
-	(*DelPhotoByIDListRequest)(nil),     // 15: api.DelPhotoByIDListRequest
-	(*Empty)(nil),                       // 16: api.Empty
+	(*PhotoInfo)(nil),               // 0: api.PhotoInfo
+	(*AddPhotoRequest)(nil),         // 1: api.AddPhotoRequest
+	(*AddPhotoResponse)(nil),        // 2: api.AddPhotoResponse
+	(*GetPhotoListRequest)(nil),     // 3: api.GetPhotoListRequest
+	(*GetPhotoListResponse)(nil),    // 4: api.GetPhotoListResponse
+	(*UpdatePhotoRequest)(nil),      // 5: api.UpdatePhotoRequest
+	(*UpdatePhotoResponse)(nil),     // 6: api.UpdatePhotoResponse
+	(*DelPhotoByIDListRequest)(nil), // 7: api.DelPhotoByIDListRequest
+	(*Empty)(nil),                   // 8: api.Empty
 }
 var file_z_defaultService_gen_proto_depIdxs = []int32{
-	0,  // 0: api.AddImportJobRequest.import_job:type_name -> api.ImportJobInfo
-	0,  // 1: api.AddImportJobResponse.import_job:type_name -> api.ImportJobInfo
-	0,  // 2: api.GetImportJobListResponse.importJobList:type_name -> api.ImportJobInfo
-	0,  // 3: api.UpdateImportJobRequest.importJob:type_name -> api.ImportJobInfo
-	0,  // 4: api.UpdateImportJobResponse.importJob:type_name -> api.ImportJobInfo
-	8,  // 5: api.AddPhotoRequest.photo:type_name -> api.PhotoInfo
-	8,  // 6: api.AddPhotoResponse.photo:type_name -> api.PhotoInfo
-	8,  // 7: api.GetPhotoListResponse.photoList:type_name -> api.PhotoInfo
-	8,  // 8: api.UpdatePhotoRequest.photo:type_name -> api.PhotoInfo
-	8,  // 9: api.UpdatePhotoResponse.photo:type_name -> api.PhotoInfo
-	1,  // 10: api.defaultCURD.AddImportJob:input_type -> api.AddImportJobRequest
-	3,  // 11: api.defaultCURD.GetImportJobList:input_type -> api.GetImportJobListRequest
-	5,  // 12: api.defaultCURD.UpdateImportJob:input_type -> api.UpdateImportJobRequest
-	7,  // 13: api.defaultCURD.DelImportJobByIDList:input_type -> api.DelImportJobByIDListRequest
-	9,  // 14: api.defaultCURD.AddPhoto:input_type -> api.AddPhotoRequest
-	11, // 15: api.defaultCURD.GetPhotoList:input_type -> api.GetPhotoListRequest
-	13, // 16: api.defaultCURD.UpdatePhoto:input_type -> api.UpdatePhotoRequest
-	15, // 17: api.defaultCURD.DelPhotoByIDList:input_type -> api.DelPhotoByIDListRequest
-	2,  // 18: api.defaultCURD.AddImportJob:output_type -> api.AddImportJobResponse
-	4,  // 19: api.defaultCURD.GetImportJobList:output_type -> api.GetImportJobListResponse
-	6,  // 20: api.defaultCURD.UpdateImportJob:output_type -> api.UpdateImportJobResponse
-	16, // 21: api.defaultCURD.DelImportJobByIDList:output_type -> api.Empty
-	10, // 22: api.defaultCURD.AddPhoto:output_type -> api.AddPhotoResponse
-	12, // 23: api.defaultCURD.GetPhotoList:output_type -> api.GetPhotoListResponse
-	14, // 24: api.defaultCURD.UpdatePhoto:output_type -> api.UpdatePhotoResponse
-	16, // 25: api.defaultCURD.DelPhotoByIDList:output_type -> api.Empty
-	18, // [18:26] is the sub-list for method output_type
-	10, // [10:18] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	0, // 0: api.AddPhotoRequest.photo:type_name -> api.PhotoInfo
+	0, // 1: api.AddPhotoResponse.photo:type_name -> api.PhotoInfo
+	0, // 2: api.GetPhotoListResponse.photoList:type_name -> api.PhotoInfo
+	0, // 3: api.UpdatePhotoRequest.photo:type_name -> api.PhotoInfo
+	0, // 4: api.UpdatePhotoResponse.photo:type_name -> api.PhotoInfo
+	1, // 5: api.defaultCURD.AddPhoto:input_type -> api.AddPhotoRequest
+	3, // 6: api.defaultCURD.GetPhotoList:input_type -> api.GetPhotoListRequest
+	5, // 7: api.defaultCURD.UpdatePhoto:input_type -> api.UpdatePhotoRequest
+	7, // 8: api.defaultCURD.DelPhotoByIDList:input_type -> api.DelPhotoByIDListRequest
+	2, // 9: api.defaultCURD.AddPhoto:output_type -> api.AddPhotoResponse
+	4, // 10: api.defaultCURD.GetPhotoList:output_type -> api.GetPhotoListResponse
+	6, // 11: api.defaultCURD.UpdatePhoto:output_type -> api.UpdatePhotoResponse
+	8, // 12: api.defaultCURD.DelPhotoByIDList:output_type -> api.Empty
+	9, // [9:13] is the sub-list for method output_type
+	5, // [5:9] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_z_defaultService_gen_proto_init() }
@@ -1163,7 +691,7 @@ func file_z_defaultService_gen_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_z_defaultService_gen_proto_rawDesc), len(file_z_defaultService_gen_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -9,30 +9,6 @@ option go_package = "backend-new/internal/pkg/api;api";
 // --------------------------------------------------
 service defaultCURD { // 该命名应该全文唯一
     // --------------------------------------------------
-    // tbl : import_jobs
-    rpc AddImportJob (AddImportJobRequest) returns (AddImportJobResponse) {
-        option (google.api.http) = {
-            post: "/import-jobs"
-            body: "*"
-        };
-    }
-    rpc GetImportJobList (GetImportJobListRequest) returns (GetImportJobListResponse) {
-        option (google.api.http) = {
-            get: "/import-jobs"
-        };
-    }
-    rpc UpdateImportJob(UpdateImportJobRequest) returns (UpdateImportJobResponse) {
-        option (google.api.http) = {
-            patch: "/import-jobs"
-            body: "*"
-        };
-    }
-    rpc DelImportJobByIDList (DelImportJobByIDListRequest) returns (Empty) {
-        option (google.api.http) = {
-            delete: "/import-jobs"
-        };
-    }
-    // --------------------------------------------------
     // tbl : photos
     rpc AddPhoto (AddPhotoRequest) returns (AddPhotoResponse) {
         option (google.api.http) = {
@@ -56,48 +32,6 @@ service defaultCURD { // 该命名应该全文唯一
             delete: "/photos"
         };
     }
-}
-
-
-// --------------------------------------------------
-// tbl : import_jobs
-message ImportJobInfo {
-    string ID = 1;
-    string status = 2;
-    string sourcePath = 3;
-    int32 totalPhotos = 4;
-    int32 processedPhotos = 5;
-    int32 failedPhotos = 6;
-    string log = 7;
-    int64 createdAt = 8;
-    int64 completedAt = 9;
-}
-
-message AddImportJobRequest {
-    ImportJobInfo import_job = 1;
-}
-
-message AddImportJobResponse {
-    ImportJobInfo import_job = 1;
-}
-
-message GetImportJobListRequest {
-    repeated string IDList = 1;
-}
-message GetImportJobListResponse {
-    repeated ImportJobInfo importJobList = 1;
-}
-
-message UpdateImportJobRequest {
-    ImportJobInfo importJob = 1;
-}
-
-message UpdateImportJobResponse {
-    ImportJobInfo importJob = 1;
-}
-
-message DelImportJobByIDListRequest {
-    repeated string IDList = 1;
 }
 
 

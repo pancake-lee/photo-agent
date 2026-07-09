@@ -19,7 +19,6 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
 		db:          db,
 		AbandonCode: newAbandonCode(db, opts...),
-		ImportJob:   newImportJob(db, opts...),
 		Photo:       newPhoto(db, opts...),
 	}
 }
@@ -28,7 +27,6 @@ type Query struct {
 	db *gorm.DB
 
 	AbandonCode abandonCode
-	ImportJob   importJob
 	Photo       photo
 }
 
@@ -38,7 +36,6 @@ func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
 		db:          db,
 		AbandonCode: q.AbandonCode.clone(db),
-		ImportJob:   q.ImportJob.clone(db),
 		Photo:       q.Photo.clone(db),
 	}
 }
@@ -55,21 +52,18 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
 		db:          db,
 		AbandonCode: q.AbandonCode.replaceDB(db),
-		ImportJob:   q.ImportJob.replaceDB(db),
 		Photo:       q.Photo.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
 	AbandonCode *abandonCodeDo
-	ImportJob   *importJobDo
 	Photo       *photoDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
 		AbandonCode: q.AbandonCode.WithContext(ctx),
-		ImportJob:   q.ImportJob.WithContext(ctx),
 		Photo:       q.Photo.WithContext(ctx),
 	}
 }

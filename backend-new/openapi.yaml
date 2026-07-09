@@ -253,80 +253,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.Empty'
-    /import-jobs:
-        get:
-            tags:
-                - DefaultCURD
-            operationId: DefaultCURD_GetImportJobList
-            parameters:
-                - name: IDList
-                  in: query
-                  schema:
-                    type: array
-                    items:
-                        type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/api.GetImportJobListResponse'
-        post:
-            tags:
-                - DefaultCURD
-            description: |-
-                --------------------------------------------------
-                 tbl : import_jobs
-            operationId: DefaultCURD_AddImportJob
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/api.AddImportJobRequest'
-                required: true
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/api.AddImportJobResponse'
-        delete:
-            tags:
-                - DefaultCURD
-            operationId: DefaultCURD_DelImportJobByIDList
-            parameters:
-                - name: IDList
-                  in: query
-                  schema:
-                    type: array
-                    items:
-                        type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/api.Empty'
-        patch:
-            tags:
-                - DefaultCURD
-            operationId: DefaultCURD_UpdateImportJob
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/api.UpdateImportJobRequest'
-                required: true
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/api.UpdateImportJobResponse'
     /photos:
         get:
             tags:
@@ -425,16 +351,6 @@ components:
             properties:
                 abandonCode:
                     $ref: '#/components/schemas/api.AbandonCodeInfo'
-        api.AddImportJobRequest:
-            type: object
-            properties:
-                importJob:
-                    $ref: '#/components/schemas/api.ImportJobInfo'
-        api.AddImportJobResponse:
-            type: object
-            properties:
-                importJob:
-                    $ref: '#/components/schemas/api.ImportJobInfo'
         api.AddPhotoRequest:
             type: object
             properties:
@@ -478,13 +394,6 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.AbandonCodeInfo'
-        api.GetImportJobListResponse:
-            type: object
-            properties:
-                importJobList:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/api.ImportJobInfo'
         api.GetPhotoDetailResponse:
             type: object
             properties:
@@ -542,33 +451,6 @@ components:
                     format: int32
                 count:
                     type: string
-        api.ImportJobInfo:
-            type: object
-            properties:
-                ID:
-                    type: string
-                status:
-                    type: string
-                sourcePath:
-                    type: string
-                totalPhotos:
-                    type: integer
-                    format: int32
-                processedPhotos:
-                    type: integer
-                    format: int32
-                failedPhotos:
-                    type: integer
-                    format: int32
-                log:
-                    type: string
-                createdAt:
-                    type: string
-                completedAt:
-                    type: string
-            description: |-
-                --------------------------------------------------
-                 tbl : import_jobs
         api.MonthlyStat:
             type: object
             properties:
@@ -741,16 +623,6 @@ components:
             properties:
                 abandonCode:
                     $ref: '#/components/schemas/api.AbandonCodeInfo'
-        api.UpdateImportJobRequest:
-            type: object
-            properties:
-                importJob:
-                    $ref: '#/components/schemas/api.ImportJobInfo'
-        api.UpdateImportJobResponse:
-            type: object
-            properties:
-                importJob:
-                    $ref: '#/components/schemas/api.ImportJobInfo'
         api.UpdatePhotoRequest:
             type: object
             properties:

@@ -21,14 +21,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DefaultCURD_AddImportJob_FullMethodName         = "/api.defaultCURD/AddImportJob"
-	DefaultCURD_GetImportJobList_FullMethodName     = "/api.defaultCURD/GetImportJobList"
-	DefaultCURD_UpdateImportJob_FullMethodName      = "/api.defaultCURD/UpdateImportJob"
-	DefaultCURD_DelImportJobByIDList_FullMethodName = "/api.defaultCURD/DelImportJobByIDList"
-	DefaultCURD_AddPhoto_FullMethodName             = "/api.defaultCURD/AddPhoto"
-	DefaultCURD_GetPhotoList_FullMethodName         = "/api.defaultCURD/GetPhotoList"
-	DefaultCURD_UpdatePhoto_FullMethodName          = "/api.defaultCURD/UpdatePhoto"
-	DefaultCURD_DelPhotoByIDList_FullMethodName     = "/api.defaultCURD/DelPhotoByIDList"
+	DefaultCURD_AddPhoto_FullMethodName         = "/api.defaultCURD/AddPhoto"
+	DefaultCURD_GetPhotoList_FullMethodName     = "/api.defaultCURD/GetPhotoList"
+	DefaultCURD_UpdatePhoto_FullMethodName      = "/api.defaultCURD/UpdatePhoto"
+	DefaultCURD_DelPhotoByIDList_FullMethodName = "/api.defaultCURD/DelPhotoByIDList"
 )
 
 // DefaultCURDClient is the client API for DefaultCURD service.
@@ -37,12 +33,6 @@ const (
 //
 // --------------------------------------------------
 type DefaultCURDClient interface {
-	// --------------------------------------------------
-	// tbl : import_jobs
-	AddImportJob(ctx context.Context, in *AddImportJobRequest, opts ...grpc.CallOption) (*AddImportJobResponse, error)
-	GetImportJobList(ctx context.Context, in *GetImportJobListRequest, opts ...grpc.CallOption) (*GetImportJobListResponse, error)
-	UpdateImportJob(ctx context.Context, in *UpdateImportJobRequest, opts ...grpc.CallOption) (*UpdateImportJobResponse, error)
-	DelImportJobByIDList(ctx context.Context, in *DelImportJobByIDListRequest, opts ...grpc.CallOption) (*Empty, error)
 	// --------------------------------------------------
 	// tbl : photos
 	AddPhoto(ctx context.Context, in *AddPhotoRequest, opts ...grpc.CallOption) (*AddPhotoResponse, error)
@@ -57,46 +47,6 @@ type defaultCURDClient struct {
 
 func NewDefaultCURDClient(cc grpc.ClientConnInterface) DefaultCURDClient {
 	return &defaultCURDClient{cc}
-}
-
-func (c *defaultCURDClient) AddImportJob(ctx context.Context, in *AddImportJobRequest, opts ...grpc.CallOption) (*AddImportJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddImportJobResponse)
-	err := c.cc.Invoke(ctx, DefaultCURD_AddImportJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *defaultCURDClient) GetImportJobList(ctx context.Context, in *GetImportJobListRequest, opts ...grpc.CallOption) (*GetImportJobListResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetImportJobListResponse)
-	err := c.cc.Invoke(ctx, DefaultCURD_GetImportJobList_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *defaultCURDClient) UpdateImportJob(ctx context.Context, in *UpdateImportJobRequest, opts ...grpc.CallOption) (*UpdateImportJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpdateImportJobResponse)
-	err := c.cc.Invoke(ctx, DefaultCURD_UpdateImportJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *defaultCURDClient) DelImportJobByIDList(ctx context.Context, in *DelImportJobByIDListRequest, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, DefaultCURD_DelImportJobByIDList_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *defaultCURDClient) AddPhoto(ctx context.Context, in *AddPhotoRequest, opts ...grpc.CallOption) (*AddPhotoResponse, error) {
@@ -146,12 +96,6 @@ func (c *defaultCURDClient) DelPhotoByIDList(ctx context.Context, in *DelPhotoBy
 // --------------------------------------------------
 type DefaultCURDServer interface {
 	// --------------------------------------------------
-	// tbl : import_jobs
-	AddImportJob(context.Context, *AddImportJobRequest) (*AddImportJobResponse, error)
-	GetImportJobList(context.Context, *GetImportJobListRequest) (*GetImportJobListResponse, error)
-	UpdateImportJob(context.Context, *UpdateImportJobRequest) (*UpdateImportJobResponse, error)
-	DelImportJobByIDList(context.Context, *DelImportJobByIDListRequest) (*Empty, error)
-	// --------------------------------------------------
 	// tbl : photos
 	AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error)
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
@@ -167,18 +111,6 @@ type DefaultCURDServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDefaultCURDServer struct{}
 
-func (UnimplementedDefaultCURDServer) AddImportJob(context.Context, *AddImportJobRequest) (*AddImportJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AddImportJob not implemented")
-}
-func (UnimplementedDefaultCURDServer) GetImportJobList(context.Context, *GetImportJobListRequest) (*GetImportJobListResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetImportJobList not implemented")
-}
-func (UnimplementedDefaultCURDServer) UpdateImportJob(context.Context, *UpdateImportJobRequest) (*UpdateImportJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpdateImportJob not implemented")
-}
-func (UnimplementedDefaultCURDServer) DelImportJobByIDList(context.Context, *DelImportJobByIDListRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method DelImportJobByIDList not implemented")
-}
 func (UnimplementedDefaultCURDServer) AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddPhoto not implemented")
 }
@@ -210,78 +142,6 @@ func RegisterDefaultCURDServer(s grpc.ServiceRegistrar, srv DefaultCURDServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&DefaultCURD_ServiceDesc, srv)
-}
-
-func _DefaultCURD_AddImportJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddImportJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DefaultCURDServer).AddImportJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DefaultCURD_AddImportJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DefaultCURDServer).AddImportJob(ctx, req.(*AddImportJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DefaultCURD_GetImportJobList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetImportJobListRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DefaultCURDServer).GetImportJobList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DefaultCURD_GetImportJobList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DefaultCURDServer).GetImportJobList(ctx, req.(*GetImportJobListRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DefaultCURD_UpdateImportJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateImportJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DefaultCURDServer).UpdateImportJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DefaultCURD_UpdateImportJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DefaultCURDServer).UpdateImportJob(ctx, req.(*UpdateImportJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DefaultCURD_DelImportJobByIDList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DelImportJobByIDListRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DefaultCURDServer).DelImportJobByIDList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DefaultCURD_DelImportJobByIDList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DefaultCURDServer).DelImportJobByIDList(ctx, req.(*DelImportJobByIDListRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _DefaultCURD_AddPhoto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -363,22 +223,6 @@ var DefaultCURD_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.defaultCURD",
 	HandlerType: (*DefaultCURDServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "AddImportJob",
-			Handler:    _DefaultCURD_AddImportJob_Handler,
-		},
-		{
-			MethodName: "GetImportJobList",
-			Handler:    _DefaultCURD_GetImportJobList_Handler,
-		},
-		{
-			MethodName: "UpdateImportJob",
-			Handler:    _DefaultCURD_UpdateImportJob_Handler,
-		},
-		{
-			MethodName: "DelImportJobByIDList",
-			Handler:    _DefaultCURD_DelImportJobByIDList_Handler,
-		},
 		{
 			MethodName: "AddPhoto",
 			Handler:    _DefaultCURD_AddPhoto_Handler,
