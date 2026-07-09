@@ -68,20 +68,10 @@ backend/
 ├── internal/
 │   ├── db/                     # 数据库相关
 │   │   ├── sql/                # DDL 定义（建表 SQL 文件）
-│   │   │   ├── photo.sql
-│   │   │   └── import_job.sql
+│   │   │   └── photo.sql
 │   │   ├── model/              # 生成的 GORM 模型（由 genGORM 产出）
 │   │   └── query/              # 生成的类型安全查询代码（由 genGORM 产出）
 │   ├── photo_service/          # 照片 CRUD 服务
-│   │   ├── photo_service.go    # main() 入口
-│   │   ├── data/               # DAO 层
-│   │   │   ├── z_dao_photo.gen.go       # 生成的 CRUD DAO
-│   │   │   └── dao_photo.go             # 手写扩展（自定义查询/统计）
-│   │   └── service/            # Service 层
-│   │       ├── z_svr_photo.gen.go       # 生成的 Server 注册
-│   │       ├── z_svc_photo.gen.go       # 生成的标准 CRUD Service
-│   │       └── svc_photo.go             # 手写扩展（复杂过滤/统计逻辑）
-│   ├── import_service/         # 同上结构
 │   ├── vlm_service/            # VLM 业务（手写为主，proto 定义接口）
 │   ├── stats_service/          # 统计业务
 │   ├── query_service/          # SQL 查询 + schema + 属性值
@@ -106,7 +96,7 @@ backend/
 
 ## 三、工作流一：SQLite3 建表 → genGORM → genCURD
 
-这是标准 CRUD 表的完整代码生成流水线。适用于 `photos`、`import_jobs` 等以数据库 CRUD 为核心的表。
+这是标准 CRUD 表的完整代码生成流水线。适用于 `photos` 等以数据库 CRUD 为核心的表。
 
 ### 3.1 整体流程
 
@@ -361,7 +351,6 @@ message GetVlmQueueStatusResponse {
 | **统计**           | `GET /photos/stats`                                                          | `api/photo.go`           | `proto/stats_service.proto`                              |
 | **时间线**         | `GET /timelines`, `GET /timelines/:name/photos`                            | `api/timeline.go`        | `proto/timeline_service.proto`                           |
 | **标签**           | `GET /tags`, `GET /tags/:name/photos`                                      | `api/tag.go`             | `proto/tag_service.proto`                                |
-| **导入任务**       | `POST /import/jobs`, `GET /import/jobs/:id`, `GET /import/jobs/:id/logs` | `api/import.go`          | 部分融入 genCURD（jobs 表 CRUD），手写扩展处理导入执行逻辑 |
 | **Embedding 代理** | `POST /v1/embeddings`                                                        | `api/embedding_proxy.go` | 保持独立注册（纯代理，与业务 proto 分离）                  |
 
 ### 4.4 搬运业务代码的策略
@@ -663,9 +652,13 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
 
 #### 阶段 3：其余服务逐一迁移
 
-- [ ] 导入任务服务（CRUD 部分生成 + 导入执行手写）
-- [ ] VLM 服务（全部手写 proto + 搬运业务逻辑）
-- [ ] 统计/查询/Timeline/Tag 服务
+- [X] 导入任务服务 — 已删除（业务上与 batch_vlm + Web 上传重叠，废弃 import_jobs 表）
+- [X] VLM 服务 — proto 定义 + 脚手架 done（svc_vlm.go stub），业务逻辑待迁移
+- [X] 统计/查询/Timeline/Tag 服务 — proto 定义 + 脚手架 done，统计已在阶段 2 融入 photo_service
+  - [X] `vlm_service.proto` — VLM 队列控制 + 单张描述
+  - [X] `timeline_service.proto` — 时间线列表 + 按时间线查照片
+  - [X] `tag_service.proto` — 标签列表 + 按标签查照片
+  - [X] `query_service.proto` — SQL 查询 + 表结构 + 属性值
 - [ ] Embedding 代理（保持特殊处理，不纳入 proto）
 
 #### 阶段 4：SDK 集成 + 清理 + 文档

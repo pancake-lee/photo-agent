@@ -178,6 +178,19 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.SearchPhotosResponse'
+    /api/v1/photos/attribute-values:
+        get:
+            tags:
+                - QueryService
+            description: 返回所有结构化属性的去重值（供 Text-to-SQL prompt 拼接）
+            operationId: QueryService_GetAttributeValues
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetAttributeValuesResponse'
     /api/v1/photos/stats:
         get:
             tags:
@@ -228,6 +241,31 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.DeletePhotoResponse'
+    /api/v1/photos/{id}/describe:
+        post:
+            tags:
+                - VlmService
+            description: 单张照片触发 VLM 描述
+            operationId: VlmService_DescribePhoto
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.DescribePhotoRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.DescribePhotoResponse'
     /api/v1/photos/{id}/tags:
         put:
             tags:
@@ -253,6 +291,153 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.Empty'
+    /api/v1/query/sql:
+        post:
+            tags:
+                - QueryService
+            description: 执行 SELECT SQL 查询
+            operationId: QueryService_ExecuteSQL
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.ExecuteSQLRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.ExecuteSQLResponse'
+    /api/v1/schema/photos:
+        get:
+            tags:
+                - QueryService
+            description: 返回 photos 表结构
+            operationId: QueryService_GetPhotoSchema
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotoSchemaResponse'
+    /api/v1/tags:
+        get:
+            tags:
+                - TagService
+            description: 所有标签列表
+            operationId: TagService_ListTags
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.ListTagsResponse'
+    /api/v1/tags/{name}/photos:
+        get:
+            tags:
+                - TagService
+            description: 某标签下的照片
+            operationId: TagService_GetPhotosByTag
+            parameters:
+                - name: name
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotosByTagResponse'
+    /api/v1/timelines:
+        get:
+            tags:
+                - TimelineService
+            description: 所有时间线列表
+            operationId: TimelineService_ListTimelines
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.ListTimelinesResponse'
+    /api/v1/timelines/{name}/photos:
+        get:
+            tags:
+                - TimelineService
+            description: 某时间线下的照片
+            operationId: TimelineService_GetPhotosByTimeline
+            parameters:
+                - name: name
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotosByTimelineResponse'
+    /api/v1/vlm/queue/start:
+        post:
+            tags:
+                - VlmService
+            description: 启动 VLM 队列处理
+            operationId: VlmService_StartVlmQueue
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.StartVlmQueueRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.StartVlmQueueResponse'
+    /api/v1/vlm/queue/status:
+        get:
+            tags:
+                - VlmService
+            description: 查询 VLM 队列状态
+            operationId: VlmService_GetVlmQueueStatus
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetVlmQueueStatusResponse'
+    /api/v1/vlm/queue/stop:
+        post:
+            tags:
+                - VlmService
+            description: 中止 VLM 队列处理
+            operationId: VlmService_StopVlmQueue
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.Empty'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.StopVlmQueueResponse'
     /photos:
         get:
             tags:
@@ -361,6 +546,33 @@ components:
             properties:
                 photo:
                     $ref: '#/components/schemas/api.PhotoInfo'
+        api.AttributeValues:
+            type: object
+            properties:
+                objects:
+                    type: array
+                    items:
+                        type: string
+                colors:
+                    type: array
+                    items:
+                        type: string
+                scene:
+                    type: array
+                    items:
+                        type: string
+                lighting:
+                    type: array
+                    items:
+                        type: string
+                mood:
+                    type: array
+                    items:
+                        type: string
+                composition:
+                    type: array
+                    items:
+                        type: string
         api.DeletePhotoResponse:
             type: object
             properties:
@@ -368,9 +580,41 @@ components:
                     type: string
                 id:
                     type: string
+        api.DescribePhotoRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+        api.DescribePhotoResponse:
+            type: object
+            properties:
+                queued:
+                    type: boolean
         api.Empty:
             type: object
             properties: {}
+        api.ExecuteSQLRequest:
+            type: object
+            properties:
+                sql:
+                    type: string
+                limit:
+                    type: integer
+                    format: int32
+        api.ExecuteSQLResponse:
+            type: object
+            properties:
+                columns:
+                    type: array
+                    items:
+                        type: string
+                rows:
+                    type: array
+                    items:
+                        type: object
+                count:
+                    type: integer
+                    format: int32
         api.FocalRangeStat:
             type: object
             properties:
@@ -394,6 +638,11 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.GetAttributeValuesResponse:
+            type: object
+            properties:
+                values:
+                    $ref: '#/components/schemas/api.AttributeValues'
         api.GetPhotoDetailResponse:
             type: object
             properties:
@@ -412,6 +661,19 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.PhotoInfo'
+        api.GetPhotoSchemaResponse:
+            type: object
+            properties:
+                tableName:
+                    type: string
+                fields:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.SchemaField'
+                notes:
+                    type: array
+                    items:
+                        type: string
         api.GetPhotoStatsResponse:
             type: object
             properties:
@@ -443,6 +705,35 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.HourlyStat'
+        api.GetPhotosByTagResponse:
+            type: object
+            properties:
+                tag:
+                    type: string
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.PhotoItem'
+                total:
+                    type: integer
+                    format: int32
+        api.GetPhotosByTimelineResponse:
+            type: object
+            properties:
+                timeline:
+                    type: string
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.PhotoItem'
+                total:
+                    type: integer
+                    format: int32
+        api.GetVlmQueueStatusResponse:
+            type: object
+            properties:
+                status:
+                    $ref: '#/components/schemas/api.VlmQueueStatus'
         api.HourlyStat:
             type: object
             properties:
@@ -451,6 +742,20 @@ components:
                     format: int32
                 count:
                     type: string
+        api.ListTagsResponse:
+            type: object
+            properties:
+                tags:
+                    type: array
+                    items:
+                        type: string
+        api.ListTimelinesResponse:
+            type: object
+            properties:
+                timelines:
+                    type: array
+                    items:
+                        type: string
         api.MonthlyStat:
             type: object
             properties:
@@ -587,6 +892,21 @@ components:
                     type: boolean
                 thumbnailUrl:
                     type: string
+        api.SchemaField:
+            type: object
+            properties:
+                name:
+                    type: string
+                goType:
+                    type: string
+                sqlType:
+                    type: string
+                jsonTag:
+                    type: string
+                gormTag:
+                    type: string
+                nullable:
+                    type: boolean
         api.SearchPhotosResponse:
             type: object
             properties:
@@ -605,6 +925,21 @@ components:
                 totalPages:
                     type: integer
                     format: int32
+        api.StartVlmQueueRequest:
+            type: object
+            properties:
+                force:
+                    type: boolean
+        api.StartVlmQueueResponse:
+            type: object
+            properties:
+                taskId:
+                    type: string
+                total:
+                    type: integer
+                    format: int32
+                message:
+                    type: string
         api.StatItem:
             type: object
             properties:
@@ -612,6 +947,11 @@ components:
                     type: string
                 count:
                     type: string
+        api.StopVlmQueueResponse:
+            type: object
+            properties:
+                stopped:
+                    type: boolean
         api.UpdateAbandonCodeRequest:
             type: object
             properties:
@@ -640,6 +980,22 @@ components:
                     type: string
                 tags:
                     type: string
+        api.VlmQueueStatus:
+            type: object
+            properties:
+                running:
+                    type: boolean
+                total:
+                    type: integer
+                    format: int32
+                completed:
+                    type: integer
+                    format: int32
+                failed:
+                    type: integer
+                    format: int32
+                currentFile:
+                    type: string
 tags:
     - name: AbandonCodeCURD
       description: '--------------------------------------------------'
@@ -647,6 +1003,14 @@ tags:
       description: '--------------------------------------------------'
     - name: PhotoService
       description: PhotoService 照片业务扩展接口（非 genCURD 标准 CRUD 覆盖的部分）
+    - name: QueryService
+      description: QueryService 通用 SQL 查询 + 表结构 + 属性值
+    - name: TagService
+      description: TagService 标签服务
+    - name: TimelineService
+      description: TimelineService 时间线服务
+    - name: VlmService
+      description: VlmService VLM 队列控制 + 单张照片 VLM 描述
 servers:
     - description: PGO API
       url: http://127.0.0.1:8080

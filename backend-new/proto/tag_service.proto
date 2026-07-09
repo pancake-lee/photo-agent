@@ -1,0 +1,42 @@
+syntax = "proto3";
+package api;
+import "google/api/annotations.proto";
+import "common.proto";
+import "photo_service.proto";
+option go_package = "backend-new/internal/pkg/api;api";
+
+// TagService 标签服务
+service TagService {
+    // 所有标签列表
+    rpc ListTags (Empty) returns (ListTagsResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/tags"
+        };
+    }
+    // 某标签下的照片
+    rpc GetPhotosByTag (GetPhotosByTagRequest) returns (GetPhotosByTagResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/tags/{name}/photos"
+        };
+    }
+}
+
+// --------------------------------------------------
+// ListTags
+
+message ListTagsResponse {
+    repeated string tags = 1;
+}
+
+// --------------------------------------------------
+// GetPhotosByTag
+
+message GetPhotosByTagRequest {
+    string name = 1;
+}
+
+message GetPhotosByTagResponse {
+    string tag = 1;
+    repeated PhotoItem items = 2;
+    int32 total = 3;
+}

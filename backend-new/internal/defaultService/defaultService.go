@@ -27,9 +27,13 @@ func main() {
 		plogger.Fatalf("scan config failed: %v", err)
 	}
 
-	// 注册两个服务：genCURD 标准 CRUD + PhotoService 扩展业务
+	// 注册所有服务：genCURD 标准 CRUD + 业务扩展服务
 	var defaultSvr service.DefaultCURDServer
 	var photoSvr service.PhotoServer
+	var vlmSvr service.VlmServer
+	var timelineSvr service.TimelineServer
+	var tagSvr service.TagServer
+	var querySvr service.QueryServer
 
-	papp.RunKratosApp(&defaultSvr, &photoSvr)
+	papp.RunKratosApp(&defaultSvr, &photoSvr, &vlmSvr, &timelineSvr, &tagSvr, &querySvr)
 }
