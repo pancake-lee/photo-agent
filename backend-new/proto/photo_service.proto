@@ -1,0 +1,175 @@
+syntax = "proto3";
+package api;
+import "google/api/annotations.proto";
+import "common.proto";
+option go_package = "backend-new/internal/pkg/api;api";
+
+// PhotoService 照片业务扩展接口（非 genCURD 标准 CRUD 覆盖的部分）
+service PhotoService {
+    // 复杂条件分页查询
+    rpc SearchPhotos (SearchPhotosRequest) returns (SearchPhotosResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/photos"
+        };
+    }
+    // 综合统计
+    rpc GetPhotoStats (Empty) returns (GetPhotoStatsResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/photos/stats"
+        };
+    }
+    // 单张详情
+    rpc GetPhotoDetail (GetPhotoDetailRequest) returns (GetPhotoDetailResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/photos/{id}"
+        };
+    }
+    // 更新标签
+    rpc UpdatePhotoTags (UpdatePhotoTagsRequest) returns (Empty) {
+        option (google.api.http) = {
+            put: "/api/v1/photos/{id}/tags"
+            body: "*"
+        };
+    }
+    // 删除照片（含文件清理）
+    rpc DeletePhoto (DeletePhotoRequest) returns (DeletePhotoResponse) {
+        option (google.api.http) = {
+            delete: "/api/v1/photos/{id}"
+        };
+    }
+}
+
+// --------------------------------------------------
+// SearchPhotos
+
+message SearchPhotosRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+    string timeline = 3;
+    string tag = 4;
+    string keyword = 5;
+    string brand = 6;
+    string lens = 7;
+    string focal_min = 8;
+    string focal_max = 9;
+    int32 iso_min = 10;
+    int32 iso_max = 11;
+    string shot_at_start = 12;
+    string shot_at_end = 13;
+    string sort_by = 14;
+    string sort_order = 15;
+}
+
+message PhotoItem {
+    string id = 1;
+    string filename = 2;
+    string file_path = 3;
+    string timeline = 4;
+    string tags = 5;
+    string description = 6;
+    string objects = 7;
+    string colors = 8;
+    string scene = 9;
+    string lighting = 10;
+    string mood = 11;
+    string composition = 12;
+    int64 shot_at = 13;
+    int32 width = 14;
+    int32 height = 15;
+    string brand = 16;
+    string model = 17;
+    string lens = 18;
+    string focal_length = 19;
+    string aperture = 20;
+    int32 iso = 21;
+    string exposure_time = 22;
+    double latitude = 23;
+    double longitude = 24;
+    double altitude = 25;
+    int64 imported_at = 26;
+    bool has_description = 27;
+    string thumbnail_url = 28;
+}
+
+message SearchPhotosResponse {
+    repeated PhotoItem items = 1;
+    int64 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+    int32 total_pages = 5;
+}
+
+// --------------------------------------------------
+// GetPhotoStats
+
+message StatItem {
+    string name = 1;
+    int64 count = 2;
+}
+
+message FocalRangeStat {
+    string range = 1;
+    string label = 2;
+    int64 count = 3;
+}
+
+message GPSStat {
+    int64 with_gps = 1;
+    int64 without_gps = 2;
+}
+
+message MonthlyStat {
+    string month = 1;
+    int64 count = 2;
+}
+
+message HourlyStat {
+    int32 hour = 1;
+    int64 count = 2;
+}
+
+message GetPhotoStatsResponse {
+    int64 total = 1;
+    int64 with_description = 2;
+    int64 without_description = 3;
+    repeated StatItem brands = 4;
+    repeated StatItem lens = 5;
+    repeated FocalRangeStat focal_ranges = 6;
+    GPSStat gps = 7;
+    repeated MonthlyStat monthly = 8;
+    repeated HourlyStat hourly = 9;
+}
+
+// --------------------------------------------------
+// GetPhotoDetail
+
+message GetPhotoDetailRequest {
+    string id = 1;
+}
+
+message GetPhotoDetailResponse {
+    PhotoItem photo = 1;
+    string image_url = 2;
+    string description_model = 3;
+    string description_time = 4;
+}
+
+// --------------------------------------------------
+// UpdatePhotoTags
+
+message UpdatePhotoTagsRequest {
+    string id = 1;
+    string tags = 2;
+}
+
+// --------------------------------------------------
+// DeletePhoto
+
+message DeletePhotoRequest {
+    string id = 1;
+}
+
+message DeletePhotoResponse {
+    string status = 1;
+    string id = 2;
+}

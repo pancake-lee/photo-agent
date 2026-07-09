@@ -11,7 +11,7 @@
 
 ### 1.2 重构原则
 
-- **对外接口不变**：所有 HTTP API 的路径、方法、请求/响应结构保持与当前一致，前端零改动
+- **对外接口通过 SDK 调用**：重构后不再要求 URL 与原来一致。标准 CRUD 直接使用 genCURD 生成的接口，agent 和 web 通过 Swagger/OpenAPI 生成对应语言的 SDK 来调用，避免代码中硬编码 URL 和字段名
 - **业务逻辑复用**：原有 service 层的业务逻辑尽量保留，搬到新结构后统一风格重写，逻辑保持一致
 - **生成 vs 手写分离**：生成代码（`*.gen.go`、`*.pb.go`）与手写代码严格分离，重新生成不影响手写逻辑
 - **先工具链后业务**：先完善 pgo 的 genGORM/genCURD 对 SQLite3 的支持，再做 backend 代码迁移
@@ -214,18 +214,64 @@ curd:
 
 > PS: 这部分其实在“四、工作流二”中展开
 
-### 3.3 当前 photos 表的 CRUD 映射关系
+### 3.4 SDK 生成与调用
 
-| 当前 Gin 路由                   | 对应 genCURD 操作    | 备注                                 |
-| ------------------------------- | -------------------- | ------------------------------------ |
-| `GET /api/v1/photos`          | `GetPhotoList`     | 当前有复杂的多条件过滤，需要手写扩展 |
-| `GET /api/v1/photos/:id`      | `GetPhotoByID`     | genCURD 按主键查询                   |
-| `PUT /api/v1/photos/:id/tags` | 手写扩展             | 非标准 CRUD，只更新 tags 字段        |
-| `DELETE /api/v1/photos/:id`   | `DelPhotoByIDList` | 额外需要删除磁盘文件                 |
-| `POST /api/v1/photos/upload`  | 手写                 | 文件上传逻辑复杂，非标准 CRUD        |
-| `GET /api/v1/photos/stats`    | 手写                 | 聚合统计，非 CRUD                    |
+genCURD 内部的 `make api` 会产出 `openapi.yaml`（OpenAPI 3.0 规范），基于此文件可以自动生成各语言的调用 SDK。
 
-genCURD 覆盖简单 CRUD，复杂操作通过 proto 定义 → 手写 Service 实现（见第四部分）。
+**整体流程**：
+
+```
+make api (protoc + 插件)
+    ↓
+openapi.yaml (OpenAPI 规范)
+    ↓  swagger-codegen / openapi-generator
+├── Python SDK → agent/ 调用
+└── TypeScript SDK → web/ 调用
+```
+
+**目标**：
+
+- agent（Python）和 web（Vue 3 / TypeScript）不再手写 HTTP 请求代码（`fetch` / `requests`），不硬编码 URL 路径和参数名
+- 调用方通过生成的 SDK 类和方法来访问后端 API，享受编译期类型检查和 IDE 自动补全
+- 后端 URL 变更只需重新生成 SDK，调用方代码无需手动修改
+
+**当前 Makefile 中的参考实现**（`api-cli` 目标）：
+
+```makefile
+.PHONY: api-cli
+api-cli:
+    java -jar ~/swagger-codegen-cli.jar generate \
+        -i ./openapi.yaml \
+        -l go \
+        -o ./client/swagger \
+        -D packageName=swagger
+```
+
+> 注：上述示例生成的是 Go SDK（供 CLI 工具使用），agent 和 web 各自选择对应语言生成器：
+>
+> - Python：`-l python`（swagger-codegen）或 `-g python`（openapi-generator）
+> - TypeScript：`-l typescript-axios` 或 `-g typescript-axios`
+
+**注意事项**：
+
+- proto 通过 gnostic 生成的 `openapi.yaml` 不带 `required` 标识（所有字段都是可选），这会导致 openapi-generator 生成的 Go 代码中所有字段为指针类型。swagger-codegen 无此问题，目前 Makefile 已使用 swagger-codegen
+- agent 和 web 的 SDK 生成命令可以在各自目录的构建脚本中维护，也可以统一在 backend 的 Makefile 中提供目标
+- SDK 生成是纯增量流程，不影响后端自身的构建和运行
+
+genCURD 生成的标准 CRUD 接口可直接覆盖以下场景：
+
+- **照片列表查询**：genCURD 的 `GetPhotoList` 提供基础分页查询，复杂多条件过滤通过手写扩展补充
+- **单张照片查询**：`GetPhotoByID`（genCURD 按主键查询）
+- **照片删除**：`DelPhotoByIDList`，额外需要手写扩展处理磁盘文件删除
+- **照片创建**：`AddPhoto`（genCURD 标准新增）
+
+以下操作无法被 genCURD 覆盖，需要手写 proto + Service：
+
+- **照片上传**：文件上传逻辑复杂，非标准 CRUD
+- **标签更新**：只更新 tags 字段，非标准 CRUD
+- **统计聚合**：聚合查询，非 CRUD
+
+> 重构后 URL 路径由 proto 的 `google.api.http` 注解决定（genCURD 生成或手写定义），不再要求与旧 Gin 路由一致。agent 和 web 通过 OpenAPI 生成的 SDK 调用，URL 变更对调用方透明。
 
 ---
 
@@ -293,9 +339,10 @@ message GetVlmQueueStatusResponse {
 
 关键点：
 
-- `google.api.http` 注解的路径**完全保持现有 API 路径不变**
-- HTTP 方法与现有路由一致（POST/GET/PUT/DELETE）
+- `google.api.http` 注解定义 API 路径，重构后按 proto 规范重新设计，不要求与旧 Gin 路由一致
+- HTTP 方法与操作语义匹配（POST/GET/PUT/DELETE）
 - 请求/响应结构从当前 `gin.H` / 手写 struct 迁移到 proto message，获得强类型约束
+- agent 和 web 通过生成的 SDK 调用，URL 变更对调用方透明
 
 ### 4.3 需要手写 proto 的服务清单
 
@@ -345,6 +392,7 @@ message GetVlmQueueStatusResponse {
 **决策**：pgo 的 Makefile 硬编码 MySQL 只是 pgo 自身项目的默认值，在 photo-agent 项目的 Makefile 中直接使用 `-db sqlite3` 参数即可，无需改动 pgo 的 Makefile。需要做的是：pgo 增加 `pdb.InitSqlite()`、genGROM/genCURD 增加 `-db sqlite3` 参数路由、驱动层增加纯 Go 驱动支持和 WAL 模式。
 
 **执行状态：[已完成]** — 2026-07-08，详见 pgo commit `6e688e9` 及 `docs/design/sqlite.md`：
+
 - genGORM、genCURD 均已支持 `-db sqlite3` 参数，dispatch 到 `pdb.InitSqlite()`
 - `pdb.InitSqlite()` 已创建（使用 `gorm.io/driver/sqlite`），统一 pgo 内部 DB 初始化模式
 - 驱动层面：genGORM/genCURD 在代码生成阶段使用 CGO 驱动无影响（开发者机器有 CGO），运行时 photo-agent 继续使用 glebarez/sqlite 纯 Go 驱动，两者各司其职
@@ -363,6 +411,7 @@ message GetVlmQueueStatusResponse {
 **描述**：genCURD 的模板文件原来固定在 pgo 仓库的 `internal/abandonCodeService/` 中，不同项目使用时依赖 pgo 仓库内的模板。
 
 **决策**：经验证，pgo 已有的 `initProj` + `workDir` 机制已充分解决此问题：
+
 - `initProj` 将模板文件（`internal/abandonCodeService/`、`proto/abandonCode.proto`、`Makefile`）复制到目标项目
 - genCURD 通过 `-workDir` 参数 chdir 到目标项目后，使用相对路径读取项目内的模板
 - 无需额外代码改动
@@ -460,7 +509,7 @@ internal/<name>_service/       # 每个 service 一个独立目录
 - **Go 类型**：`UpperCamelCase`，保持 `ID` 全大写（`PhotoID` 而非 `PhotoId`），保持 `URL` 全大写
 - **Proto field**：`snake_case`，如 `photo_id`、`created_at`
 - **Service 名**：与表名的关联由 `inferServiceName` 或配置文件决定
-- **HTTP 路径**：kebab-case，如 `/api/v1/vlm-queue/status`（但本次重构保持现有路径不变）
+- **HTTP 路径**：kebab-case，如 `/api/v1/vlm-queue/status`，由 proto 的 `google.api.http` 注解决定
 
 ### 6.2 分层职责
 
@@ -588,26 +637,28 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
 
 #### 阶段 0：pgo 工具链完善（在 pgo 项目中进行）
 
-- [x] genGORM + genCURD 支持 `-db sqlite3` 参数（pgo commit `6e688e9`）
-- [x] `pdb.InitSqlite()` 创建（`gorm.io/driver/sqlite`）
-- [x] genCURD 模板解耦方案确认（initProj + workDir 已够用）
-- [x] genCURD `inferServiceName` → 暂缓（backlog #14，photo-agent 用 default 即可）
-- [ ] genCURD 对 SQLite3 的端到端测试（用 photo-agent 的表结构验证生成质量）
+- [X] genGORM + genCURD 支持 `-db sqlite3` 参数（pgo commit `6e688e9`）
+- [X] `pdb.InitSqlite()` 创建（`gorm.io/driver/sqlite`）
+- [X] genCURD 模板解耦方案确认（initProj + workDir 已够用）
+- [X] genCURD `inferServiceName` → 暂缓（backlog #14，photo-agent 用 default 即可）
+- [X] genCURD 对 SQLite3 的端到端测试（用 photo-agent 的表结构验证生成质量）
 
 #### 阶段 1：DDL + 数据库层（不影响运行）
 
-- [ ] 编写 `internal/db/sql/photo.sql` 和 `import_job.sql`
-- [ ] 配置 `make initDB` / `make gorm` / `make curd` 目标
-- [ ] 跑通 genGORM → genCURD 流程，检查生成代码质量
-- [ ] 对比生成代码与当前手写代码，确认覆盖度
+- [X] 使用`pgo`的`initProj`功能初始化项目
+- [X] 编写 `sql/photo.sql` 和 `import_job.sql`
+- [X] 配置 `make initDB` / `make gorm` / `make curd` 目标，改成基于sqlite3
+- [X] 跑通 genGORM → genCURD 流程，检查生成代码质量
+- [X] 对比生成代码与当前手写代码，确认覆盖度
 
 #### 阶段 2：照片 CRUD 服务迁移
 
-- [ ] 创建 `internal/photo_service/`，跑通生成代码
-- [ ] 手写扩展：复杂过滤查询（`ListPhotos`）的 Service + DAO 逻辑
-- [ ] 手写扩展：统计（`GetPhotoStats`）的逻辑
-- [ ] 手写扩展：标签更新（`UpdatePhotoTags`）
-- [ ] 手写扩展：上传（`UploadPhoto`）+ 文件管理
+- [X] 创建 `photo_service.proto`，跑通生成代码
+- [X] 手写扩展：复杂过滤查询（`ListPhotos`）的 Service + DAO 逻辑
+- [X] 手写扩展：统计（`GetPhotoStats`）的逻辑
+- [X] 手写扩展：标签更新（`UpdatePhotoTags`）
+- [X] 手写扩展：上传（`UploadPhoto`）+ 文件管理
+- [ ] 从 `openapi.yaml` 生成 Python SDK 和 TypeScript SDK，验证 SDK 可用性
 - [ ] 切换到新服务，删除旧 `internal/api/photo.go` + `internal/api/upload.go`
 
 #### 阶段 3：其余服务逐一迁移
@@ -617,16 +668,18 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
 - [ ] 统计/查询/Timeline/Tag 服务
 - [ ] Embedding 代理（保持特殊处理，不纳入 proto）
 
-#### 阶段 4：清理 + 文档
+#### 阶段 4：SDK 集成 + 清理 + 文档
 
 - [ ] 删除旧的 `internal/api/`、`internal/service/`（业务逻辑全部搬完后）
+- [ ] agent（Python）改用生成的 Python SDK 调用后端，移除手写的 HTTP 请求代码
+- [ ] web（Vue 3）改用生成的 TypeScript SDK 调用后端，移除手写的 fetch/axios 代码
 - [ ] 更新 `CLAUDE.md`、`README.md`
-- [ ] 前后端联调验证所有 API
+- [ ] 端到端联调验证所有 API
 
 ### 7.2 验证方式
 
-- 每个阶段迁移完成后，用当前 `test/backendTest.go` 做回归测试
-- 保持前端不变，通过浏览器/API 调用逐接口验证
+- 每个阶段迁移完成后，用当前 `test/backendTest.go` 做回归测试（测试文件需随 URL 变更同步更新）
+- 生成 SDK 后，在 agent 和 web 中验证 SDK 调用是否正常
 - 在迁移过程中，新旧代码可以暂时共存（通过路由前缀区分），逐步切换
 
 ---
@@ -634,8 +687,9 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
 ## 八、风险与注意事项
 
 - **框架切换成本**：当前是 Gin 直接写 handler，重构后是 proto → Kratos。Service 层业务逻辑可复用，但 api 层的参数解析/响应渲染需要改写。估时约 2-3 天完成全部迁移
-- **proto 路径映射**：需要确保 `google.api.http` 注解的路径与当前 Gin 路由完全一致，包括参数位置（path params vs query params）
 - **genCURD 的局限性**：只生成单表的简单 CRUD，复杂查询仍需手写。不要期望 genCURD 覆盖所有场景，它解决的是 80% 的样板代码
 - **GORM 类型映射差异**：genGORM 从 SQLite3 列类型推导 Go 类型，可能与当前手写 struct 的类型不同（如 TEXT 映射为 `string` vs `sql.NullString`），需要逐字段验证。SQLite 柔性类型系统的注意事项见 pgo `docs/design/sqlite.md` 的「类型映射注意事项」章节
+- **OpenAPI 生成 SDK 的字段可选问题**：proto 通过 gnostic 生成的 `openapi.yaml` 不带 `required` 标识，可能导致某些语言生成器的产出代码中所有字段为指针/可选类型。Makefile 中已选用 swagger-codegen 规避此问题，但切换到其他语言生成器时需验证
+- **SDK 生成流程的维护成本**：每次 proto 变更后需要重新生成 SDK 并同步到 agent 和 web 项目。建议在各项目的构建流程中集成 SDK 生成步骤，或在 backend Makefile 中提供统一入口
 - **Embedding 代理**：当前是纯反向代理（OpenAI 格式 → 火山引擎格式），与业务 proto 无关。建议保持特殊处理，不纳入 proto 生成体系
 - **batch_vlm 和 init_dify CLI**：这两个 CLI 工具不对外暴露 HTTP API，不涉及 proto 定义。保持 `cmd/` 下的独立入口，只迁移它们引用的 service 层代码到新位置

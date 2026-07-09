@@ -100,6 +100,159 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.UpdateAbandonCodeResponse'
+    /api/v1/photos:
+        get:
+            tags:
+                - PhotoService
+            description: 复杂条件分页查询
+            operationId: PhotoService_SearchPhotos
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: timeline
+                  in: query
+                  schema:
+                    type: string
+                - name: tag
+                  in: query
+                  schema:
+                    type: string
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: brand
+                  in: query
+                  schema:
+                    type: string
+                - name: lens
+                  in: query
+                  schema:
+                    type: string
+                - name: focalMin
+                  in: query
+                  schema:
+                    type: string
+                - name: focalMax
+                  in: query
+                  schema:
+                    type: string
+                - name: isoMin
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: isoMax
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: shotAtStart
+                  in: query
+                  schema:
+                    type: string
+                - name: shotAtEnd
+                  in: query
+                  schema:
+                    type: string
+                - name: sortBy
+                  in: query
+                  schema:
+                    type: string
+                - name: sortOrder
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.SearchPhotosResponse'
+    /api/v1/photos/stats:
+        get:
+            tags:
+                - PhotoService
+            description: 综合统计
+            operationId: PhotoService_GetPhotoStats
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotoStatsResponse'
+    /api/v1/photos/{id}:
+        get:
+            tags:
+                - PhotoService
+            description: 单张详情
+            operationId: PhotoService_GetPhotoDetail
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotoDetailResponse'
+        delete:
+            tags:
+                - PhotoService
+            description: 删除照片（含文件清理）
+            operationId: PhotoService_DeletePhoto
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.DeletePhotoResponse'
+    /api/v1/photos/{id}/tags:
+        put:
+            tags:
+                - PhotoService
+            description: 更新标签
+            operationId: PhotoService_UpdatePhotoTags
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdatePhotoTagsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
     /import-jobs:
         get:
             tags:
@@ -292,9 +445,32 @@ components:
             properties:
                 photo:
                     $ref: '#/components/schemas/api.PhotoInfo'
+        api.DeletePhotoResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                id:
+                    type: string
         api.Empty:
             type: object
             properties: {}
+        api.FocalRangeStat:
+            type: object
+            properties:
+                range:
+                    type: string
+                label:
+                    type: string
+                count:
+                    type: string
+        api.GPSStat:
+            type: object
+            properties:
+                withGps:
+                    type: string
+                withoutGps:
+                    type: string
         api.GetAbandonCodeListResponse:
             type: object
             properties:
@@ -309,6 +485,17 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.ImportJobInfo'
+        api.GetPhotoDetailResponse:
+            type: object
+            properties:
+                photo:
+                    $ref: '#/components/schemas/api.PhotoItem'
+                imageUrl:
+                    type: string
+                descriptionModel:
+                    type: string
+                descriptionTime:
+                    type: string
         api.GetPhotoListResponse:
             type: object
             properties:
@@ -316,6 +503,45 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.PhotoInfo'
+        api.GetPhotoStatsResponse:
+            type: object
+            properties:
+                total:
+                    type: string
+                withDescription:
+                    type: string
+                withoutDescription:
+                    type: string
+                brands:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.StatItem'
+                lens:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.StatItem'
+                focalRanges:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.FocalRangeStat'
+                gps:
+                    $ref: '#/components/schemas/api.GPSStat'
+                monthly:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.MonthlyStat'
+                hourly:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.HourlyStat'
+        api.HourlyStat:
+            type: object
+            properties:
+                hour:
+                    type: integer
+                    format: int32
+                count:
+                    type: string
         api.ImportJobInfo:
             type: object
             properties:
@@ -343,6 +569,13 @@ components:
             description: |-
                 --------------------------------------------------
                  tbl : import_jobs
+        api.MonthlyStat:
+            type: object
+            properties:
+                month:
+                    type: string
+                count:
+                    type: string
         api.PhotoInfo:
             type: object
             properties:
@@ -407,6 +640,96 @@ components:
             description: |-
                 --------------------------------------------------
                  tbl : photos
+        api.PhotoItem:
+            type: object
+            properties:
+                id:
+                    type: string
+                filename:
+                    type: string
+                filePath:
+                    type: string
+                timeline:
+                    type: string
+                tags:
+                    type: string
+                description:
+                    type: string
+                objects:
+                    type: string
+                colors:
+                    type: string
+                scene:
+                    type: string
+                lighting:
+                    type: string
+                mood:
+                    type: string
+                composition:
+                    type: string
+                shotAt:
+                    type: string
+                width:
+                    type: integer
+                    format: int32
+                height:
+                    type: integer
+                    format: int32
+                brand:
+                    type: string
+                model:
+                    type: string
+                lens:
+                    type: string
+                focalLength:
+                    type: string
+                aperture:
+                    type: string
+                iso:
+                    type: integer
+                    format: int32
+                exposureTime:
+                    type: string
+                latitude:
+                    type: number
+                    format: double
+                longitude:
+                    type: number
+                    format: double
+                altitude:
+                    type: number
+                    format: double
+                importedAt:
+                    type: string
+                hasDescription:
+                    type: boolean
+                thumbnailUrl:
+                    type: string
+        api.SearchPhotosResponse:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.PhotoItem'
+                total:
+                    type: string
+                page:
+                    type: integer
+                    format: int32
+                pageSize:
+                    type: integer
+                    format: int32
+                totalPages:
+                    type: integer
+                    format: int32
+        api.StatItem:
+            type: object
+            properties:
+                name:
+                    type: string
+                count:
+                    type: string
         api.UpdateAbandonCodeRequest:
             type: object
             properties:
@@ -438,11 +761,20 @@ components:
             properties:
                 photo:
                     $ref: '#/components/schemas/api.PhotoInfo'
+        api.UpdatePhotoTagsRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                tags:
+                    type: string
 tags:
     - name: AbandonCodeCURD
       description: '--------------------------------------------------'
     - name: DefaultCURD
       description: '--------------------------------------------------'
+    - name: PhotoService
+      description: PhotoService 照片业务扩展接口（非 genCURD 标准 CRUD 覆盖的部分）
 servers:
     - description: PGO API
       url: http://127.0.0.1:8080
