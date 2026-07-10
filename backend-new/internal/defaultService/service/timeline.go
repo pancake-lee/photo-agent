@@ -23,11 +23,11 @@ var (
 )
 
 // --------------------------------------------------
-// LoadTimeline 从 JSON 文件加载时间线数据。
+// loadTimeline 从 JSON 文件加载时间线数据。
 // JSON 格式：[[dateStr, event], ...]，dateStr 为 YYMMDD 格式（如 "250309"），
 // 或 "none" 表示散图（跳过不参与匹配）。条目按日期升序排列。
 // 缓存按文件修改时间判断是否失效，文件未变则直接返回缓存。
-func LoadTimeline(path string) ([]TimelineEntry, error) {
+func loadTimeline(path string) ([]TimelineEntry, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -64,8 +64,8 @@ func LoadTimeline(path string) ([]TimelineEntry, error) {
 	return entries, nil
 }
 
-// ClearTimelineCache 清除时间线缓存（用于强制重载）
-func ClearTimelineCache() {
+// clearTimelineCache 清除时间线缓存（用于强制重载）
+func clearTimelineCache() {
 	timelineCache = nil
 	timelineCachePath = ""
 	timelineCacheTime = time.Time{}
@@ -111,11 +111,11 @@ func endOfDay(t time.Time) time.Time {
 }
 
 // --------------------------------------------------
-// FindEventByTime 根据拍摄时间和窗口天数，从时间线条目列表中匹配活动。
+// findEventByTime 根据拍摄时间和窗口天数，从时间线条目列表中匹配活动。
 // 算法：排序后，活动 i 的时间段为 [date_i − D, right_i]，其中
 // right_i = min(midpoint(date_i, date_{i+1}), date_i + D)，
 // 最后一个活动为 date_last + D。D = windowDays。
-func FindEventByTime(t time.Time, entries []TimelineEntry, windowDays int) string {
+func findEventByTime(t time.Time, entries []TimelineEntry, windowDays int) string {
 	if len(entries) == 0 {
 		return ""
 	}

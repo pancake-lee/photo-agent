@@ -16,6 +16,13 @@ type descriptionEntry struct {
 	Model       string `json:"model"`
 	ProcessedAt string `json:"processed_at"`
 	ShotAt      string `json:"shot_at"`
+	// 结构化 VLM 字段（batch_vlm 可选输出）
+	Objects     string `json:"objects"`
+	Colors      string `json:"colors"`
+	Scene       string `json:"scene"`
+	Lighting    string `json:"lighting"`
+	Mood        string `json:"mood"`
+	Composition string `json:"composition"`
 }
 
 // descriptionMap 预描述数据
@@ -59,16 +66,21 @@ func getDescriptionEntry(relPath string, descPath string) (descriptionEntry, boo
 	if err != nil || m == nil {
 		return descriptionEntry{}, false
 	}
+	entry := findDescInMap(m, relPath)
+	return entry, entry.Description != ""
+}
 
+// findDescInMap 在已加载的描述 map 中按文件路径多级 fallback 查找。
+// 查找顺序：精确匹配 → 路径分隔符规范化 → 扩展名模糊匹配 → 文件名匹配。
+func findDescInMap(m descriptionMap, relPath string) descriptionEntry {
 	keys := []string{
 		relPath,
 		filepath.ToSlash(relPath),
 		filepath.FromSlash(relPath),
 	}
-
 	for _, k := range keys {
 		if entry, ok := m[k]; ok {
-			return entry, true
+			return entry
 		}
 	}
 
@@ -77,7 +89,7 @@ func getDescriptionEntry(relPath string, descPath string) (descriptionEntry, boo
 	for k, entry := range m {
 		keyNoExt := strings.TrimSuffix(k, filepath.Ext(k))
 		if keyNoExt == baseNoExt || keyNoExt == filepath.ToSlash(baseNoExt) {
-			return entry, true
+			return entry
 		}
 	}
 
@@ -85,11 +97,11 @@ func getDescriptionEntry(relPath string, descPath string) (descriptionEntry, boo
 	baseName := strings.ToLower(filepath.Base(relPath))
 	for k, entry := range m {
 		if strings.ToLower(filepath.Base(k)) == baseName {
-			return entry, true
+			return entry
 		}
 	}
 
-	return descriptionEntry{}, false
+	return descriptionEntry{}
 }
 
 // ClearDescCache 清除预描述缓存（用于重载）

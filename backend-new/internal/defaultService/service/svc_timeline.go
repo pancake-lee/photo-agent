@@ -68,7 +68,7 @@ func (s *TimelineServer) GetPhotosByTimeline(_ctx context.Context, req *api.GetP
 // sortTimelinesByFileOrder 按 timeline JSON 文件中条目出现的先后顺序排列 timelines，
 // 文件中未出现的条目排在最后，相对顺序保持不变。
 func sortTimelinesByFileOrder(timelines []string) []string {
-	entries, _ := LoadTimeline(conf.C.Storage.TimelinePath)
+	entries, _ := loadTimeline(conf.C.Storage.TimelinePath)
 	if len(entries) == 0 {
 		return timelines
 	}

@@ -425,8 +425,8 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, shotAt *time.Time) str
 
 	timeline := ""
 	if ei.ShotAt != nil {
-		entries, _ := LoadTimeline(conf.C.Storage.TimelinePath)
-		timeline = FindEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
+		entries, _ := loadTimeline(conf.C.Storage.TimelinePath)
+		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
 	width, height := getImageSize(fullPath)
@@ -480,8 +480,8 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, shotAt *time.Tim
 
 	timeline := ""
 	if ei.ShotAt != nil {
-		entries, _ := LoadTimeline(conf.C.Storage.TimelinePath)
-		timeline = FindEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
+		entries, _ := loadTimeline(conf.C.Storage.TimelinePath)
+		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 	width, height := getImageSize(fullPath)
 
