@@ -121,10 +121,10 @@ build:
 
 .PHONY: precommit
 # 提交生成的代码[*.pb.go, ./cmd/pgo/swagger/*, *.gen.go, *.gen.proto]
+# 该命令执行后，剩下的就是手动修改的代码，方便分开审查，也方便分开提交
 precommit:
 	git add "openapi.yaml"
 	git add "*.pb.go"
-	git add "./cmd/pgo/swagger/*"
 	git add "*.gen.go"
 	git add "*.gen.proto"
 	git add "./internal/pkg/db/model/"
@@ -135,38 +135,16 @@ precommit:
 .PHONY: api-cli
 # generate cli sdk from openapi.yaml
 api-cli:
-
-# openapitools/openapi-generator-cli不管是docker还是jar包，都有一个问题：
-# proto通过gnostic生成的openapi.yaml不带required标识，所有字段都是可选
-# 这导致生成go客户端代码时，所有字段都是指针类型，使用起来非常麻烦
-# docker run --rm -v ./:/local openapitools/openapi-generator-cli:v7.18.0 generate -i /local/openapi.yaml -g go -o /local/client/swagger -p packageName=swagger
-
-# dnf install -y java-11-openjdk-headless
-# wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.19.0/openapi-generator-cli-7.19.0.jar
-# java -jar ~/openapi-generator-cli-7.19.0.jar generate \
-# 	-i ./openapi.yaml \
-# 	-g go \
-# 	-o ./cmd/pgo/swagger \
-# 	-p packageName=swagger \
-# 	-p withGoMod=false \
-
-# swagger家的没问题，不是指针
+# dnf install java
 # wget https://repo1.maven.org/maven2/io/swagger/codegen/v3/swagger-codegen-cli/3.0.77/swagger-codegen-cli-3.0.77.jar -O swagger-codegen-cli.jar
 	java -jar ~/swagger-codegen-cli.jar generate \
 		-i ./openapi.yaml \
-		-l go \
-		-o ./cmd/pgo/swagger \
-		-D packageName=swagger \
+		-l python \
+		-o ../agent/backend-sdk \
+
+	java -jar ~/swagger-codegen-cli.jar generate \
+		-i ./openapi.yaml \
+		-l typescript-fetch \
+		-o ../web/backend-sdk \
 	
-	rm -f client/swagger/go.mod
-	rm -f client/swagger/go.sum
 
-.PHONY: cli
-# build pgo for current platform
-cli:
-	go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(shell date +%Y-%m-%dT%H:%M:%S)" -o ./bin/pgo ./cmd/pgo
-
-.PHONY: cli-win
-# build pgo for windows
-cli-win:
-	CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows go build -ldflags "-H=windowsgui -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(shell date +%Y-%m-%dT%H:%M:%S)" -o ./bin/pgo.exe ./cmd/pgo
