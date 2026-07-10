@@ -643,25 +643,27 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
 #### 阶段 2：照片 CRUD 服务迁移
 
 - [X] 创建 `photo_service.proto`，跑通生成代码
-- [X] 手写扩展：复杂过滤查询（`ListPhotos`）的 Service + DAO 逻辑
+- [X] 手写扩展：复杂过滤查询（`SearchPhotos`）的 Service + DAO 逻辑
 - [X] 手写扩展：统计（`GetPhotoStats`）的逻辑
 - [X] 手写扩展：标签更新（`UpdatePhotoTags`）
 - [X] 手写扩展：上传（`UploadPhoto`）+ 文件管理
+- [X] 手写扩展：照片详情（`GetPhotoDetail`）+ 图片 serving + 删除（含文件清理）
 - [ ] 从 `openapi.yaml` 生成 Python SDK 和 TypeScript SDK，验证 SDK 可用性
-- [ ] 切换到新服务，删除旧 `internal/api/photo.go` + `internal/api/upload.go`
+- [ ] 切换到新服务，删除旧 `internal/api/` + `internal/service/`
 
 #### 阶段 3：其余服务逐一迁移
 
 - [X] 导入任务服务 — 已删除（业务上与 batch_vlm + Web 上传重叠，废弃 import_jobs 表）
-- [X] VLM 服务 — proto 定义 + 脚手架 done（svc_vlm.go stub），业务逻辑待迁移
-- [X] 统计/查询/Timeline/Tag 服务 — proto 定义 + 脚手架 done，统计已在阶段 2 融入 photo_service
+- [X] VLM 服务 — proto 定义 + 业务逻辑已迁移（队列控制 + 单张描述同步）
+- [X] 统计/查询/Timeline/Tag 服务 — 全部完成
   - [X] `vlm_service.proto` — VLM 队列控制 + 单张描述
   - [X] `timeline_service.proto` — 时间线列表 + 按时间线查照片
-  - [X] `tag_service.proto` — 标签列表 + 按标签查照片
-    - [X] 补全tag小闭环，绑定/解绑/查询tag/查询photo
+  - [X] `tag_service.proto` — 标签列表 + 按标签查照片 + 绑定/解绑
   - [X] `query_service.proto` — SQL 查询 + 表结构 + 属性值
     - [X] 在pgo实现只读连接的封装，绕开sql审计问题
+  - [X] `photo_service.proto` — 搜索/统计/详情/标签更新/删除 + 上传/图片 serving
 - [X] Embedding 代理（保持特殊处理，不纳入 proto）
+- [X] EXIF / Timeline / Descriptions / FileUtil 等工具函数 — 已迁移到 service 包
 
 #### 阶段 4：SDK 集成 + 清理 + 文档
 
@@ -688,3 +690,123 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
 - **SDK 生成流程的维护成本**：每次 proto 变更后需要重新生成 SDK 并同步到 agent 和 web 项目。建议在各项目的构建流程中集成 SDK 生成步骤，或在 backend Makefile 中提供统一入口
 - **Embedding 代理**：当前是纯反向代理（OpenAI 格式 → 火山引擎格式），与业务 proto 无关。建议保持特殊处理，不纳入 proto 生成体系
 - **batch_vlm 和 init_dify CLI**：这两个 CLI 工具不对外暴露 HTTP API，不涉及 proto 定义。保持 `cmd/` 下的独立入口，只迁移它们引用的 service 层代码到新位置
+
+---
+
+## 九、backend vs backend-new 对比分析报告（2026-07-10）
+
+### 9.1 数据来源
+
+- **旧 backend**：`backend/internal/api/routes.go`（路由定义）+ 各 handler/service 实现
+- **新 backend-new**：proto 定义 + 手写 service/dao 实现
+- **调用方**：agent（Python）的 `openapi_client.py`、`sqlite_client.py`、`text_to_sql.py`、`embed_queue.py`、`photo_rag.py`、`suggest.py`；web（Vue 3）的 `usePhotos.ts`、`useVlmQueue.ts`、`useUpload.ts`
+
+### 9.2 API 端点覆盖
+
+| 旧端点 | 新端点 | 状态 |
+|---|---|---|
+| `GET /api/v1/health` | `GET /api/v1/health` | ✅（手动注册） |
+| `GET /api/v1/photos` | `GET /api/v1/photos` | ✅ |
+| `GET /api/v1/photos/stats` | `GET /api/v1/photos/stats` | ✅ |
+| `GET /api/v1/photos/:id` | `GET /api/v1/photos/{id}` | ✅ |
+| `GET /api/v1/photos/:id/image` | `GET /api/v1/photos/{id}/image` | ✅（手动注册） |
+| `PUT /api/v1/photos/:id/tags` | `PUT /api/v1/photos/{id}/tags` | ✅ |
+| `DELETE /api/v1/photos/:id` | `DELETE /api/v1/photos/{id}` | ✅ |
+| `POST /api/v1/photos/upload` | `POST /api/v1/photos/upload` | ✅（手动注册） |
+| `POST /api/v1/vlm/queue/start` | `POST /api/v1/vlm/queue/start` | ✅ |
+| `POST /api/v1/vlm/queue/stop` | `POST /api/v1/vlm/queue/stop` | ✅ |
+| `GET /api/v1/vlm/queue/status` | `GET /api/v1/vlm/queue/status` | ✅ |
+| `POST /api/v1/photos/:id/describe` | `POST /api/v1/photos/{id}/describe` | ✅ |
+| `POST /api/v1/query/sql` | `POST /api/v1/sql/query` | ✅（URL 变更） |
+| `GET /api/v1/schema/photos` | `GET /api/v1/sql/photos/schema` | ✅（URL 变更） |
+| `GET /api/v1/photos/attribute-values` | `GET /api/v1/sql/photos/attribute-values` | ✅（URL 变更） |
+| `GET /api/v1/timelines` | `GET /api/v1/timelines` | ✅ |
+| `GET /api/v1/timelines/:name/photos` | `GET /api/v1/timelines/{name}/photos` | ✅ |
+| `GET /api/v1/tags` | `GET /api/v1/tags` | ✅ |
+| `GET /api/v1/tags/:name/photos` | `GET /api/v1/tags/{name}/photos` | ✅ |
+| `GET /v1/openapi.json` | `GET /v1/openapi.json`（读取 openapi.yaml，运行时转换） | ✅（手动注册） |
+| `POST /v1/embeddings` | `POST /v1/embeddings` | ✅ |
+| （无） | `POST /api/v1/tags/bind` | 🆕 新增 |
+| （无） | `POST /api/v1/tags/unbind` | 🆕 新增 |
+| （无） | genCURD 标准 CRUD | 🆕 新增 |
+
+> import_jobs 相关 3 个端点已确认删除，不在此表列出。
+
+### 9.3 关键缺失项
+
+#### L1：OpenAPI 运行时端点（影响 agent 核心流程）
+
+旧 backend 在 `GET /v1/openapi.json` 返回手写的 OpenAPI JSON，agent 的 `OpenAPIClient` 在初始化时请求此端点，解析后自动生成 LLM Function Calling 工具定义。新 backend 通过 `make api` 生成 `openapi.yaml` 静态文件，但不提供运行时 HTTP 端点。
+
+**影响**：agent 的 `photo_agent.py` 中 `_get_tool_client()` 初始化会失败，整个 function calling 链路中断。
+
+**建议**：在 backend-new 中新增一个 handler 读取 `openapi.yaml`（或 `openapi.json`）并返回，路由注册为 `GET /v1/openapi.json`。此 handler 不纳入 proto，与 embedding 代理类似直接注册原始路由。
+
+决策：✅ 已完成（2026-07-10）。`svc_openapi.go` 读取 `openapi.yaml` 并转换为 JSON 返回，注册为 `GET /v1/openapi.json`。
+
+#### L2：auto-sync 目录扫描
+
+旧 backend 的 `scanner.go` + `sync.go` + `dedup.go` 未迁移。AutoSync 在 server 启动时扫描 `photo_path` 目录，对比 SQLite 做增量导入（新照片入库、已有照片描述更新）。
+
+**影响**：仅影响非上传途径的照片入库（直接放文件到 photo_path 目录的场景）。Web 上传流程已在 `svc_photo.go` 中实现，不受影响。
+
+**建议**：可后续迁移到新 backend 的 service 层，或在确认"仅通过 Web 上传入库"后删除。
+
+决策：✅ 已完成（2026-07-10）。`svc_auto_sync.go` 实现目录扫描、MD5 去重、增量导入/更新，在 server 启动时后台执行。
+
+#### L2：batch_vlm / init_dify CLI
+
+两个 CLI 工具未迁移到新 backend。它们依赖旧 service 层（VLM client、descriptions 等）。
+
+**建议**：batch_vlm 的核心逻辑（调用 VLM API 生成 descriptions.json）需要在新 backend 中重建，VLM client 包也需要迁移。init_dify 如已废弃可跳过。
+
+决策：忽略，完全替换backend后，web入口可以承载，并且核心处理代码已完成，重新开发入口即可。
+
+#### L3：health 端点
+
+`GET /api/v1/health` 未在新 backend 中实现。Python agent 有自己的 `/api/chat/health`，web 也不直接调用 Go 后端 health。优先级低，可在部署监控需要时再补。
+
+决策：✅ 已完成（2026-07-10）。`svc_health.go` 注册 `GET /api/v1/health`，返回 `{"status": "ok"}`。
+
+### 9.4 URL 变更影响
+
+以下 3 个 URL 在新 backend 中有意调整了路径（从 `/api/v1/` 分散挂载改为 `/api/v1/sql/` 统一前缀）：
+
+- `/api/v1/query/sql` → `/api/v1/sql/query`
+- `/api/v1/schema/photos` → `/api/v1/sql/photos/schema`
+- `/api/v1/photos/attribute-values` → `/api/v1/sql/photos/attribute-values`
+
+**agent 中硬编码这些 URL 的位置**：
+
+- `agent/db/sqlite_client.py:64` — `POST /api/v1/query/sql`
+- `agent/db/sqlite_client.py:116` — `GET /api/v1/schema/photos`
+- `agent/chain/text_to_sql.py:180` — `GET /api/v1/photos/attribute-values`
+
+**建议**：切换时将上述 3 处 URL 同步更新，或改为从配置读取。
+
+决策：当前不关注，下一步将通过openapi生成sdk，然后调用方调用sdk。
+
+### 9.5 业务逻辑覆盖确认
+
+新 backend 已迁移的业务逻辑：
+
+- 照片 CRUD + 复杂过滤查询（17 个筛选维度 + 分页 + 排序）✅
+- 七维度综合统计（总数/描述/品牌/镜头/焦距段/GPS/月度/时段）✅
+- 照片上传（含冲突检测：overwrite/skip/keep_both）✅
+- 照片删除（含物理文件清理）✅
+- 标签 CRUD + 批量绑定/解绑（比以前更完善）✅
+- 时间线列表 + 匹配（含文件顺序排序 + 窗口匹配算法）✅
+- SQL 查询 + 表结构 + 属性值（含只读连接安全加固）✅
+- VLM 队列控制 + 单张描述同步 ✅
+- Embedding 代理 ✅
+- EXIF 读取 / 品牌归一化 ✅
+- Timeline JSON 解析 / 缓存 ✅
+- descriptions.json 加载 / 多级 fallback 查找 ✅
+
+### 9.6 总结
+
+**HTTP API 覆盖度**：18/18 旧端点 + 3 新端点 + genCURD 标准 CRUD。URL 变更 3 处（设计内允许）。
+
+**未迁移模块**：auto-sync（scanner/sync/dedup，非 agent/web 调用）、batch_vlm CLI、init_dify CLI、VLM client 包。
+
+**阻塞项**：仅 `GET /v1/openapi.json` 运行时端点缺失会阻塞 agent function calling。其余缺失项不影响 agent/web 正常使用。

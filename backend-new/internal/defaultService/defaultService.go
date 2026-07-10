@@ -36,6 +36,10 @@ func main() {
 	var tagSvr service.TagServer
 	var querySvr service.QueryServer
 	var embeddingSvr service.EmbeddingServer
+	openapiSvr := service.NewOpenAPIServer("./openapi.yaml")
+	var healthSvr service.HealthServer
+	var autoSyncSvr service.AutoSyncServer
 
-	papp.RunKratosApp(&defaultSvr, &photoSvr, &vlmSvr, &timelineSvr, &tagSvr, &querySvr, &embeddingSvr)
+	papp.RunKratosApp(&defaultSvr, &photoSvr, &vlmSvr, &timelineSvr, &tagSvr, &querySvr, &embeddingSvr,
+		openapiSvr, &healthSvr, &autoSyncSvr)
 }
