@@ -11,6 +11,14 @@ type Config struct {
 	}
 	VLM struct {
 		MaxImageSizeMB float64 `default:"1"`
+		APIKey         string  // fallback when Embedding.APIKey is empty
+		Model          string
+		BaseURL        string
+	}
+	Embedding struct {
+		APIKey  string
+		Model   string `default:"doubao-embedding-vision-251215"`
+		BaseURL string `default:"https://ark.cn-beijing.volces.com/api/v3"`
 	}
 }
 

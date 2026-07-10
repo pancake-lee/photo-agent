@@ -661,7 +661,7 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *model.Photo {
     - [X] 补全tag小闭环，绑定/解绑/查询tag/查询photo
   - [X] `query_service.proto` — SQL 查询 + 表结构 + 属性值
     - [X] 在pgo实现只读连接的封装，绕开sql审计问题
-- [ ] Embedding 代理（保持特殊处理，不纳入 proto）
+- [X] Embedding 代理（保持特殊处理，不纳入 proto）
 
 #### 阶段 4：SDK 集成 + 清理 + 文档
 

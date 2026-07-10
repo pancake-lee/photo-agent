@@ -35,6 +35,7 @@ func main() {
 	var timelineSvr service.TimelineServer
 	var tagSvr service.TagServer
 	var querySvr service.QueryServer
+	var embeddingSvr service.EmbeddingServer
 
-	papp.RunKratosApp(&defaultSvr, &photoSvr, &vlmSvr, &timelineSvr, &tagSvr, &querySvr)
+	papp.RunKratosApp(&defaultSvr, &photoSvr, &vlmSvr, &timelineSvr, &tagSvr, &querySvr, &embeddingSvr)
 }
