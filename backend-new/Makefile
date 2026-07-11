@@ -119,6 +119,11 @@ curd:
 build: 
 	go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(git rev-parse HEAD) -X main.date=$(date +%Y-%m-%dT%H:%M:%S)" -o ./bin/ ./...
 
+.PHONY: dev
+# run dev server
+dev:
+	go run ./internal/defaultService/defaultService.go -c ../.local/pancake.yaml -l
+
 .PHONY: precommit
 # 提交生成的代码[*.pb.go, ./cmd/pgo/swagger/*, *.gen.go, *.gen.proto]
 # 该命令执行后，剩下的就是手动修改的代码，方便分开审查，也方便分开提交

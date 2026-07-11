@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -17,18 +18,12 @@ import (
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
-
-	"github.com/go-kratos/kratos/v2/transport/grpc"
-	khttp "github.com/go-kratos/kratos/v2/transport/http"
 )
 
 // --------------------------------------------------
 // AutoSyncServer 启动时后台自动同步照片数据。
 // 扫描 photo_path 目录，对比 SQLite 做增量导入。
 // --------------------------------------------------
-
-// AutoSyncServer 自动同步服务（仅在 Reg 时触发一次后台同步，不暴露 HTTP 接口）。
-type AutoSyncServer struct{}
 
 // dedupRegistry MD5 去重注册表，持久化到 JSON 文件。
 // key 为文件 MD5（hex），value 为首次出现的 relPath。
@@ -39,21 +34,8 @@ type dedupRegistry struct {
 	modified bool
 }
 
-// Reg 启动后台自动同步 goroutine。
-func (s *AutoSyncServer) Reg(_ *grpc.Server, _ *khttp.Server) {
-	go func() {
-		if err := runAutoSync(); err != nil {
-			plogger.Warnf("AutoSync failed: %v", err)
-		}
-	}()
-}
-
-// --------------------------------------------------
-// auto-sync 主逻辑
-// --------------------------------------------------
-
 // runAutoSync 执行自动同步。
-func runAutoSync() error {
+func AutoSync() error {
 	photoPath := conf.C.Storage.PhotoPath
 	if photoPath == "" {
 		plogger.Info("AutoSync: photo_path not configured, skipping")
@@ -85,7 +67,7 @@ func runAutoSync() error {
 	}
 
 	// 加载现有照片（file_path → PhotoDO）
-	ctx := papp.NewAppCtx(nil)
+	ctx := papp.NewAppCtx(context.Background())
 	allPhotos, err := data.PhotoDAO.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("query existing photos failed: %w", err)
@@ -149,7 +131,7 @@ func runAutoSync() error {
 		plogger.Warnf("Dedup registry save failed: %v", err)
 	}
 
-	plogger.Infof("AutoSync done: new=%d, updated=%d, skipped=%d", newCount, updateCount, skipCount)
+	plogger.Debugf("AutoSync done: new=%d, updated=%d, skipped=%d", newCount, updateCount, skipCount)
 	return nil
 }
 

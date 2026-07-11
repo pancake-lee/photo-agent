@@ -20,6 +20,7 @@ func main() {
 
 	pconfig.MustInitConfig(*c)
 	plogger.InitFromConfig(*l)
+	pconfig.Log()
 	pdb.MustInitSqliteByConfig()
 
 	// 加载服务配置
@@ -27,6 +28,8 @@ func main() {
 	if err != nil {
 		plogger.Fatalf("scan config failed: %v", err)
 	}
+
+	service.AutoSync() // 阻塞，同步
 
 	// 注册所有服务：genCURD 标准 CRUD + 业务扩展服务
 	var defaultSvr service.DefaultCURDServer
@@ -38,8 +41,16 @@ func main() {
 	var embeddingSvr service.EmbeddingServer
 	openapiSvr := service.NewOpenAPIServer("./openapi.yaml")
 	var healthSvr service.HealthServer
-	var autoSyncSvr service.AutoSyncServer
 
-	papp.RunKratosApp(&defaultSvr, &photoSvr, &vlmSvr, &timelineSvr, &tagSvr, &querySvr, &embeddingSvr,
-		openapiSvr, &healthSvr, &autoSyncSvr)
+	papp.SetIgnoreAuth() // 开发阶段，忽略 auth 验证
+	papp.RunKratosApp(
+		&defaultSvr,
+		&photoSvr,
+		&vlmSvr,
+		&timelineSvr,
+		&tagSvr,
+		&querySvr,
+		&embeddingSvr,
+		openapiSvr,
+		&healthSvr)
 }
