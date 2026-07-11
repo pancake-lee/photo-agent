@@ -1,0 +1,5 @@
+syntax = "proto3";
+package api;
+option go_package = "backend/internal/pkg/api;api";
+
+message Empty {}

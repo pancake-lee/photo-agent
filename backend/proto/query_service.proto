@@ -1,0 +1,76 @@
+syntax = "proto3";
+package api;
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "common.proto";
+option go_package = "backend/internal/pkg/api;api";
+
+// QueryService 通用 SQL 查询 + 表结构 + 属性值
+service QueryService {
+    // 执行 SELECT SQL 查询
+    rpc ExecuteSQL (ExecuteSQLRequest) returns (ExecuteSQLResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/sql/query"
+            body: "*"
+        };
+    }
+    // 返回 photos 表结构
+    rpc GetPhotoSchema (Empty) returns (GetPhotoSchemaResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/sql/photos/schema"
+        };
+    }
+    // 返回所有结构化属性的去重值（供 Text-to-SQL prompt 拼接）
+    rpc GetAttributeValues (Empty) returns (GetAttributeValuesResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/sql/photos/attribute-values"
+        };
+    }
+}
+
+// --------------------------------------------------
+// ExecuteSQL
+
+message ExecuteSQLRequest {
+    string sql = 1;
+    int32 limit = 2;
+}
+
+message ExecuteSQLResponse {
+    repeated string columns = 1;
+    repeated google.protobuf.Struct rows = 2;
+    int32 count = 3;
+}
+
+// --------------------------------------------------
+// GetPhotoSchema
+
+message SchemaField {
+    string name = 1;
+    string go_type = 2;
+    string sql_type = 3;
+    string json_tag = 4;
+    string gorm_tag = 5;
+    bool nullable = 6;
+}
+
+message GetPhotoSchemaResponse {
+    string table_name = 1;
+    repeated SchemaField fields = 2;
+}
+
+// --------------------------------------------------
+// GetAttributeValues
+
+message AttributeValues {
+    repeated string objects = 1;
+    repeated string colors = 2;
+    repeated string scene = 3;
+    repeated string lighting = 4;
+    repeated string mood = 5;
+    repeated string composition = 6;
+}
+
+message GetAttributeValuesResponse {
+    AttributeValues values = 1;
+}
