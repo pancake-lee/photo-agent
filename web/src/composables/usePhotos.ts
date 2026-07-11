@@ -1,8 +1,92 @@
 import { ref, computed } from 'vue'
-import { API_BASE, DEFAULT_PAGE_SIZE } from '../config'
+import { DEFAULT_PAGE_SIZE } from '../config'
+import { photoApi, timelineApi } from '../backend-sdk-client'
+import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse, ApiGetPhotoStatsResponse, ApiDeletePhotoResponse, ApiListTimelinesResponse } from '../../backend-sdk/api'
 import type { PhotoListItem, PhotoDetail, PhotoListResponse, PhotoStats } from '../types/photo'
 
-// 全局照片列表状态
+// ------------------------------------------------------------------ #
+// 适配器：SDK camelCase → 现有 snake_case 类型
+// ------------------------------------------------------------------ #
+
+function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
+  return {
+    id: item.id ?? '',
+    filename: item.filename ?? '',
+    file_path: item.filePath ?? '',
+    timeline: item.timeline ?? '',
+    tags: item.tags ?? '',
+    description: item.description ?? '',
+    shot_at: item.shotAt ?? null,
+    width: item.width ?? 0,
+    height: item.height ?? 0,
+    brand: item.brand ?? '',
+    model: item.model ?? '',
+    lens: item.lens ?? '',
+    focal_length: item.focalLength ?? '',
+    aperture: item.aperture ?? '',
+    iso: item.iso ?? 0,
+    exposure_time: item.exposureTime ?? '',
+    latitude: item.latitude ?? null,
+    longitude: item.longitude ?? null,
+    altitude: item.altitude ?? null,
+    imported_at: item.importedAt ?? '',
+    has_description: item.hasDescription ?? false,
+    thumbnail_url: item.thumbnailUrl ?? '',
+  }
+}
+
+function adaptPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetail {
+  const photo = resp.photo
+  return {
+    id: photo?.id ?? '',
+    filename: photo?.filename ?? '',
+    file_path: photo?.filePath ?? '',
+    timeline: photo?.timeline ?? '',
+    tags: photo?.tags ?? '',
+    description: photo?.description ?? '',
+    shot_at: photo?.shotAt ?? null,
+    width: photo?.width ?? 0,
+    height: photo?.height ?? 0,
+    brand: photo?.brand ?? '',
+    model: photo?.model ?? '',
+    lens: photo?.lens ?? '',
+    focal_length: photo?.focalLength ?? '',
+    aperture: photo?.aperture ?? '',
+    iso: photo?.iso ?? 0,
+    exposure_time: photo?.exposureTime ?? '',
+    latitude: photo?.latitude ?? null,
+    longitude: photo?.longitude ?? null,
+    altitude: photo?.altitude ?? null,
+    imported_at: photo?.importedAt ?? '',
+    has_description: photo?.hasDescription ?? false,
+    thumbnail_url: photo?.thumbnailUrl ?? '',
+    image_url: resp.imageUrl ?? '',
+    description_model: resp.descriptionModel ?? '',
+    description_time: resp.descriptionTime ?? '',
+  }
+}
+
+function adaptStats(s: ApiGetPhotoStatsResponse): PhotoStats {
+  return {
+    total: parseInt(s.total ?? '0', 10),
+    with_description: parseInt(s.withDescription ?? '0', 10),
+    without_description: parseInt(s.withoutDescription ?? '0', 10),
+    brands: (s.brands ?? []).map(b => ({ name: b.name ?? '', count: parseInt(b.count ?? '0', 10) })),
+    lens: (s.lens ?? []).map(l => ({ name: l.name ?? '', count: parseInt(l.count ?? '0', 10) })),
+    focal_ranges: (s.focalRanges ?? []).map(f => ({ range: f.range ?? '', label: f.label ?? '', count: parseInt(f.count ?? '0', 10) })),
+    gps: {
+      with_gps: parseInt(s.gps?.withGps ?? '0', 10),
+      without_gps: parseInt(s.gps?.withoutGps ?? '0', 10),
+    },
+    monthly: (s.monthly ?? []).map(m => ({ month: m.month ?? '', count: parseInt(m.count ?? '0', 10) })),
+    hourly: (s.hourly ?? []).map(h => ({ hour: h.hour ?? 0, count: parseInt(h.count ?? '0', 10) })),
+  }
+}
+
+// ------------------------------------------------------------------ #
+// 全局状态
+// ------------------------------------------------------------------ #
+
 const photos = ref<PhotoListItem[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -39,23 +123,25 @@ export function usePhotos() {
     error.value = null
 
     try {
-      const params = new URLSearchParams({
-        page: String(page.value),
-        page_size: String(pageSize.value),
-      })
-      if (filterTimeline.value) params.set('timeline', filterTimeline.value)
-      if (filterShotAtStart.value) params.set('shot_at_start', filterShotAtStart.value)
-      if (filterShotAtEnd.value) params.set('shot_at_end', filterShotAtEnd.value)
-      if (searchFilename.value) params.set('keyword', searchFilename.value)
-      params.set('sort_by', sortBy.value)
-      params.set('sort_order', sortOrder.value)
-
-      const resp = await fetch(`${API_BASE}/photos?${params}`)
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-
-      const data: PhotoListResponse = await resp.json()
-      photos.value = data.items
-      total.value = data.total
+      const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
+        page.value,
+        pageSize.value,
+        filterTimeline.value || undefined,
+        undefined, // tag
+        searchFilename.value || undefined, // keyword
+        undefined, // brand
+        undefined, // lens
+        undefined, // focalMin
+        undefined, // focalMax
+        undefined, // isoMin
+        undefined, // isoMax
+        filterShotAtStart.value || undefined,
+        filterShotAtEnd.value || undefined,
+        sortBy.value,
+        sortOrder.value,
+      )
+      photos.value = (resp.items ?? []).map(adaptPhotoItem)
+      total.value = parseInt(resp.total ?? '0', 10)
     } catch (e) {
       error.value = e instanceof Error ? e.message : '加载失败'
     } finally {
@@ -65,9 +151,8 @@ export function usePhotos() {
 
   async function fetchStats() {
     try {
-      const resp = await fetch(`${API_BASE}/photos/stats`)
-      if (!resp.ok) return
-      stats.value = await resp.json()
+      const resp = await photoApi.photoServiceGetPhotoStats()
+      stats.value = adaptStats(resp)
     } catch (e) {
       console.warn('获取统计信息失败', e)
     }
@@ -75,9 +160,8 @@ export function usePhotos() {
 
   async function fetchTimelines() {
     try {
-      const resp = await fetch(`${API_BASE}/timelines`)
-      if (!resp.ok) return
-      timelines.value = await resp.json()
+      const resp: ApiListTimelinesResponse = await timelineApi.timelineServiceListTimelines()
+      timelines.value = resp.timelines ?? []
     } catch (e) {
       console.warn('获取时间线列表失败', e)
     }
@@ -86,9 +170,8 @@ export function usePhotos() {
   async function fetchPhotoDetail(id: string) {
     detailLoading.value = true
     try {
-      const resp = await fetch(`${API_BASE}/photos/${id}`)
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      selectedPhoto.value = await resp.json()
+      const resp = await photoApi.photoServiceGetPhotoDetail(id)
+      selectedPhoto.value = adaptPhotoDetail(resp)
       showDetail.value = true
     } catch (e) {
       error.value = e instanceof Error ? e.message : '获取详情失败'
@@ -136,9 +219,8 @@ export function usePhotos() {
   // 刷新单张照片状态
   async function refreshPhoto(photoId: string) {
     try {
-      const resp = await fetch(`${API_BASE}/photos/${photoId}`)
-      if (!resp.ok) return
-      const detail: PhotoDetail = await resp.json()
+      const resp = await photoApi.photoServiceGetPhotoDetail(photoId)
+      const detail = adaptPhotoDetail(resp)
       // 更新列表中的对应项
       const idx = photos.value.findIndex((p) => p.id === photoId)
       if (idx !== -1) {
@@ -159,13 +241,8 @@ export function usePhotos() {
 
   // 删除照片
   async function deletePhoto(photoId: string): Promise<void> {
-    const resp = await fetch(`${API_BASE}/photos/${photoId}`, {
-      method: 'DELETE',
-    })
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({ error: '删除失败' }))
-      throw new Error(data.error || `HTTP ${resp.status}`)
-    }
+    const resp: ApiDeletePhotoResponse = await photoApi.photoServiceDeletePhoto(photoId)
+    // SDK 调用成功即表示删除成功（异常由 SDK 抛出）
     // 从本地列表移除
     photos.value = photos.value.filter((p) => p.id !== photoId)
     total.value = Math.max(0, total.value - 1)

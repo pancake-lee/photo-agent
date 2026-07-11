@@ -1,7 +1,7 @@
 """
-    SQLite 查询客户端（通过 Go 后端 API 代理）。
+    SQLite 查询客户端（通过 Go 后端 SDK 代理）。
 
-    不直接连接 SQLite 数据库，而是通过 HTTP 调用 Go 后端 /api/v1/query/sql 接口，
+    不直接连接 SQLite 数据库，而是通过 Swagger SDK 调用 Go 后端 API，
     由 Go 后端统一执行查询并返回结果。Python 层保留 SQL 安全校验作为客户端双重保险。
 
     用法:
@@ -9,20 +9,20 @@
 
         client = sqlite_client.QueryClient("http://localhost:10000")
         result = client.query("SELECT * FROM photos WHERE brand = 'Canon' LIMIT 5")
-        print(result["rows"])
+        print(result.rows)
 """
 
 import re
 
-import httpx
-import utils.http_client as http_utils
+import swagger_client as sdk
+import utils.backend_sdk as bksdk
 
 
 DEFAULT_TIMEOUT = 30.0
 
 
 class QueryClient:
-    """通过 Go 后端 API 执行 SQL 查询的客户端。"""
+    """通过 Go 后端 SDK 执行 SQL 查询的客户端。"""
 
     def __init__(self, base_url: str, timeout: float = DEFAULT_TIMEOUT):
         """
@@ -34,12 +34,13 @@ class QueryClient:
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self._api = bksdk.get_query_api(base_url)
 
     def query(
         self,
         sql: str,
         limit: int = 100,
-    ) -> dict:
+    ):
         """
         执行 SELECT 查询。
 
@@ -48,43 +49,27 @@ class QueryClient:
             limit: 最大返回行数
 
         返回:
-            {
-                "columns": [...],
-                "rows":    [{col: val, ...}, ...],
-                "count":   N,
-            }
+            ApiExecuteSQLResponse（含 columns, rows, count 属性）
 
         异常:
             ValueError: SQL 安全校验失败
-            httpx.HTTPError: HTTP 请求失败
+            Exception: SDK 调用失败
         """
         if not validate_select_only(sql):
             raise ValueError(f"SQL 校验失败: 仅允许 SELECT 查询。SQL: {sql[:100]}")
 
-        url = f"{self.base_url}/api/v1/query/sql"
-        payload = {"sql": sql}
-        params = {"limit": limit}
-
-        with http_utils.create_client(timeout=self.timeout) as client:
-            response = client.post(url, json=payload, params=params)
-            response.raise_for_status()
-            return response.json()
+        req = sdk.ApiExecuteSQLRequest(sql=sql, limit=limit)
+        return self._api.query_service_execute_sql(req)
 
     def safe_query(
         self,
         sql: str,
         limit: int = 100,
-    ) -> dict:
+    ):
         """
-        安全执行 SQL（带错误处理，返回统一结构）。
+        安全执行 SQL（带错误处理）。
 
-        返回:
-            {
-                "columns": [...],
-                "rows":    [...],
-                "count":   N,
-                "error":   None | str,
-            }
+        成功时返回 ApiExecuteSQLResponse，失败时返回含 error 字段的 dict。
         """
         try:
             return self.query(sql, limit=limit)
@@ -96,28 +81,17 @@ class QueryClient:
                 "error": str(e),
             }
 
-    def fetch_schema(self) -> dict:
+    def fetch_schema(self):
         """
         从 Go 后端获取 photos 表结构。
 
         返回:
-            {
-                "table_name": "photos",
-                "fields": [
-                    {"name": "id", "go_type": "string", "sql_type": "TEXT", ...},
-                    ...
-                ],
-                "notes": [...],
-            }
+            ApiGetPhotoSchemaResponse（含 table_name, fields 属性）
 
         异常:
-            httpx.HTTPError: HTTP 请求失败
+            Exception: SDK 调用失败
         """
-        url = f"{self.base_url}/api/v1/schema/photos"
-        with http_utils.create_client(timeout=self.timeout) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            return response.json()
+        return self._api.query_service_get_photo_schema()
 
 
 def validate_select_only(sql: str) -> bool:
@@ -193,7 +167,7 @@ def safe_execute(
     base_url: str,
     sql: str,
     limit: int = 100,
-) -> dict:
+):
     """
     安全执行 SQL：先校验，再调用 Go 后端 API。
 
@@ -203,15 +177,11 @@ def safe_execute(
         limit:    最大返回行数
 
     返回:
-        {
-            "columns": [...],
-            "rows":    [...],
-            "count":   N,
-        }
+        ApiExecuteSQLResponse（含 columns, rows, count 属性）
 
     异常:
         ValueError: SQL 校验失败
-        httpx.HTTPError: HTTP 请求失败
+        Exception: SDK 调用失败
     """
     if not validate_select_only(sql):
         raise ValueError(f"SQL 校验失败: 仅允许 SELECT 查询。SQL: {sql[:100]}")

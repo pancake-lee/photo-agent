@@ -19,9 +19,6 @@ import re
 import sys
 import typing
 
-
-import httpx
-import utils.http_client as http_utils
 import langchain_core.prompts as lc_prompts
 
 import config
@@ -176,21 +173,21 @@ def _fetch_attribute_values(base_url: str) -> dict:
         return _attr_cache[base_url]
 
     try:
-        with http_utils.create_client(timeout=5.0) as client:
-            resp = client.get(f"{base_url}/api/v1/photos/attribute-values")
-            resp.raise_for_status()
-            data = resp.json()
-            _attr_cache[base_url] = data
-            logger.info(
-                "获取属性值: objects=%d colors=%d scene=%d lighting=%d mood=%d composition=%d",
-                len(data.get("objects") or []),
-                len(data.get("colors") or []),
-                len(data.get("scene") or []),
-                len(data.get("lighting") or []),
-                len(data.get("mood") or []),
-                len(data.get("composition") or []),
-            )
-            return data
+        import utils.backend_sdk as bksdk
+        query_api = bksdk.get_query_api(base_url)
+        resp = query_api.query_service_get_attribute_values()
+        values = resp.values or {}
+        _attr_cache[base_url] = values
+        logger.info(
+            "获取属性值: objects=%d colors=%d scene=%d lighting=%d mood=%d composition=%d",
+            len(values.get("objects") or []),
+            len(values.get("colors") or []),
+            len(values.get("scene") or []),
+            len(values.get("lighting") or []),
+            len(values.get("mood") or []),
+            len(values.get("composition") or []),
+        )
+        return values
     except Exception:
         logger.warning("获取属性值失败，将使用空值列表", exc_info=True)
         return {}
@@ -248,35 +245,28 @@ def _fetch_schema(base_url: str) -> dict:
     return client.fetch_schema()
 
 
-def _format_schema(schema_data: dict) -> str:
+def _format_schema(schema_data) -> str:
     """
-    将 API 返回的 JSON schema 格式化为 LLM 可用的文本。
+    将 API 返回的 schema 格式化为 LLM 可用的文本。
 
     参数:
-        schema_data: Go 后端 /api/v1/schema/photos 返回的 JSON
+        schema_data: Go 后端 /api/v1/schema/photos 返回的 ApiGetPhotoSchemaResponse
 
     返回:
         格式化后的 schema 文本
     """
     lines: list[str] = []
-    lines.append(f"表名: {schema_data.get('table_name', 'photos')}")
+    lines.append(f"表名: {schema_data.table_name or 'photos'}")
     lines.append("")
     lines.append("字段说明:")
 
-    for field in schema_data.get("fields", []):
-        name = field.get("name", "")
-        sql_type = field.get("sql_type", "TEXT")
-        json_tag = field.get("json_tag", "")
-        nullable = field.get("nullable", False)
+    for field in (schema_data.fields or []):
+        name = field.name or ""
+        sql_type = field.sql_type or "TEXT"
+        json_tag = field.json_tag or ""
+        nullable = field.nullable or False
         null_str = "，可能为 NULL" if nullable else ""
         lines.append(f"- {name} ({sql_type}): JSON tag = {json_tag}{null_str}")
-
-    notes = schema_data.get("notes", [])
-    if notes:
-        lines.append("")
-        lines.append("注意事项:")
-        for note in notes:
-            lines.append(f"- {note}")
 
     return "\n".join(lines)
 
@@ -397,7 +387,7 @@ def execute_sql(
         查询结果列表（result["rows"]）
     """
     result = sqlite_client.safe_execute(base_url, sql, limit=limit)
-    return result.get("rows") or []
+    return result.rows or []
 
 
 def execute_sql_for_ids(

@@ -12,8 +12,6 @@ import pathlib
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-import utils.http_client as http_utils
 import langchain_core.prompts as lc_prompts
 
 import utils.llm_factory as llm_factory
@@ -98,18 +96,18 @@ def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
             seen.add(pid)
             photo_ids.append(pid)
 
+    import utils.backend_sdk as bksdk
+    photo_api = bksdk.get_photo_api(cfg.go_backend_url)
+
     # 并行获取原始文件名
     filename_map: dict[str, str] = {}
 
     def _fetch_filename(pid: str) -> tuple[str, str]:
         try:
-            with http_utils.create_client(timeout=5.0) as client:
-                resp = client.get(
-                    f"{cfg.go_backend_url}/api/v1/photos/{pid}"
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return pid, data.get("filename", pid)
+            resp = photo_api.photo_service_get_photo_detail(pid)
+            photo = resp.photo
+            filename = photo.filename if photo and photo.filename else pid
+            return pid, filename
         except Exception:
             logger.debug("获取照片文件名失败: %s", pid)
             return pid, pid

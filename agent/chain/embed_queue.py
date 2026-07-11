@@ -22,9 +22,7 @@ import threading
 import sys
 import pathlib
 
-import utils.http_client as http_utils
-
-
+import utils.backend_sdk as bksdk
 import config as cfg_module
 import embedding.chunking as chunking
 import embedding.embedder as embedder
@@ -46,7 +44,6 @@ class EmbedQueue:
         self._cfg = cfg
         self._store = store
         self._go_url = cfg.go_backend_url.rstrip("/")
-        self._http = http_utils.create_client(timeout=30.0)
         self._embedder = embedder.Embedder(
             base_url=self._go_url,
             model=cfg.embedding_model,
@@ -195,7 +192,7 @@ class EmbedQueue:
             logger.warning("EmbedQueue: 获取 Go 照片列表失败: %s", e)
             return {"error": f"获取 Go 照片列表失败: {e}"}
 
-        go_ids = {p["id"] for p in go_photos}
+        go_ids = {p.id for p in go_photos}
         chroma_ids = self._store.get_embedded_photo_ids()
 
         # 有效嵌入 = Go 中存在且 Chroma 中有 embedding
@@ -232,7 +229,7 @@ class EmbedQueue:
             logger.warning("EmbedQueue: 无法获取 Go 照片列表，跳过清理: %s", e)
             return 0
 
-        valid_ids = {p["id"] for p in go_photos}
+        valid_ids = {p.id for p in go_photos}
         return self._store.cleanup_orphans(valid_ids)
 
     # ------------------------------------------------------------------ #
@@ -265,19 +262,19 @@ class EmbedQueue:
         流程：Go API 获取照片 → chunk → embed → ChromaDB 写入。
         """
         try:
-            # 1. 从 Go API 获取照片数据
-            resp = self._http.get(f"{self._go_url}/api/v1/photos/{photo_id}")
-            resp.raise_for_status()
-            photo = resp.json()
+            # 1. 从 Go API 获取照片数据（通过 SDK）
+            photo_api = bksdk.get_photo_api(self._go_url)
+            resp = photo_api.photo_service_get_photo_detail(photo_id)
+            photo = resp.photo
 
-            description = photo.get("description", "") or ""
+            description = (photo and photo.description) or ""
             if not description.strip():
                 logger.warning("EmbedQueue: photo %s has no description, skip", photo_id)
                 self._inc_failed()
                 return
 
             # 2. 设置当前文件名
-            filename = photo.get("filename", photo_id)
+            filename = photo.filename if photo and photo.filename else photo_id
             self._set_current(filename)
 
             # 3. 清理旧 Chroma 数据
@@ -320,7 +317,7 @@ class EmbedQueue:
     # ------------------------------------------------------------------ #
 
     def _prepare_chunks(
-        self, photo: dict, description: str
+        self, photo, description: str
     ) -> tuple[list[str], list[dict]]:
         """
         对单张照片描述分片，返回 (chunks, metadatas)。
@@ -347,7 +344,7 @@ class EmbedQueue:
         else:
             raise ValueError(f"未知的分块策略: {strategy}")
 
-        photo_id = photo.get("id", "")
+        photo_id = photo.id or ""
         metadatas: list[dict] = []
         for idx, _ in enumerate(chunks):
             metadatas.append({
@@ -361,20 +358,17 @@ class EmbedQueue:
     # Go API 交互
     # ------------------------------------------------------------------ #
 
-    def _fetch_all_photos(self) -> list[dict]:
-        """分页获取 Go 后端全部照片数据。"""
-        all_photos: list[dict] = []
+    def _fetch_all_photos(self):
+        """分页获取 Go 后端全部照片数据（通过 SDK），返回 ApiPhotoItem 列表。"""
+        photo_api = bksdk.get_photo_api(self._go_url)
+        all_photos = []
         page = 1
         while True:
-            resp = self._http.get(
-                f"{self._go_url}/api/v1/photos",
-                params={"page": page, "page_size": 100},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            items = data.get("items", [])
+            resp = photo_api.photo_service_search_photos(page=page, page_size=100)
+            items = resp.items or []
             all_photos.extend(items)
-            if page >= data.get("total_pages", 0):
+            total_pages = resp.total_pages or 0
+            if page >= total_pages:
                 break
             page += 1
         return all_photos
@@ -385,15 +379,15 @@ class EmbedQueue:
         embedded_ids = self._store.get_embedded_photo_ids()
         result = []
         for p in photos:
-            desc = p.get("description", "") or ""
-            if desc.strip() and p["id"] not in embedded_ids:
-                result.append(p["id"])
+            desc = p.description or ""
+            if desc.strip() and p.id not in embedded_ids:
+                result.append(p.id)
         return result
 
     def _fetch_embeddable_ids(self) -> list[str]:
         """获取所有有描述的照片 ID 列表（force 模式使用）。"""
         photos = self._fetch_all_photos()
-        return [p["id"] for p in photos if (p.get("description") or "").strip()]
+        return [p.id for p in photos if (p.description or "").strip()]
 
     # ------------------------------------------------------------------ #
     # 内部辅助

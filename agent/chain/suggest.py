@@ -26,9 +26,9 @@ import dataclasses
 import typing
 import collections
 
-import utils.http_client as http_utils
 import langchain_core.messages as lc_messages
 
+import utils.backend_sdk as bksdk
 import chain.cluster as cluster_mod
 import utils.llm_factory as llm_factory
 
@@ -83,40 +83,30 @@ _SUGGEST_SYSTEM_PROMPT = (
 # 数据采集
 # ============================================================================
 
-def _fetch_all_photos(go_backend_url: str) -> list[dict]:
-    """从 Go 后端分页获取全部照片数据。"""
-    all_photos: list[dict] = []
-    client = http_utils.create_client(timeout=30.0)
-    try:
-        page = 1
-        while True:
-            resp = client.get(
-                f"{go_backend_url}/api/v1/photos",
-                params={"page": page, "page_size": 500},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            items = data.get("items", data if isinstance(data, list) else [])
-            if not items:
-                break
-            all_photos.extend(items)
-            page += 1
-    finally:
-        client.close()
+def _fetch_all_photos(go_backend_url: str):
+    """从 Go 后端分页获取全部照片数据（通过 SDK），返回 ApiPhotoItem 列表。"""
+    photo_api = bksdk.get_photo_api(go_backend_url)
+    all_photos = []
+    page = 1
+    while True:
+        resp = photo_api.photo_service_search_photos(page=page, page_size=500)
+        items = resp.items or []
+        if not items:
+            break
+        all_photos.extend(items)
+        total_pages = resp.total_pages or 0
+        if page >= total_pages:
+            break
+        page += 1
 
     logger.info("从 Go 后端获取 %d 张照片", len(all_photos))
     return all_photos
 
 
-def _fetch_stats(go_backend_url: str) -> dict:
-    """获取照片库统计信息（含月度分布）。"""
-    client = http_utils.create_client(timeout=10.0)
-    try:
-        resp = client.get(f"{go_backend_url}/api/v1/photos/stats")
-        resp.raise_for_status()
-        return resp.json()
-    finally:
-        client.close()
+def _fetch_stats(go_backend_url: str):
+    """获取照片库统计信息（通过 SDK），返回 ApiGetPhotoStatsResponse。"""
+    photo_api = bksdk.get_photo_api(go_backend_url)
+    return photo_api.photo_service_get_photo_stats()
 
 
 def _load_cluster_results(cluster_dir: pathlib.Path) -> list[cluster_mod.ClusterResult]:
@@ -149,7 +139,7 @@ def _parse_attr_values(value_str: str) -> list[str]:
     return [v.strip() for v in value_str.split(",") if v.strip()]
 
 
-def _count_attribute_frequencies(photos: list[dict]) -> dict[str, dict[str, int]]:
+def _count_attribute_frequencies(photos) -> dict[str, dict[str, int]]:
     """统计各属性维度的值频率。
 
     返回: {dimension: {value: count}}
@@ -160,7 +150,7 @@ def _count_attribute_frequencies(photos: list[dict]) -> dict[str, dict[str, int]
 
     for p in photos:
         for dim in dims:
-            raw = (p.get(dim, "") or "").strip()
+            raw = (getattr(p, dim, "") or "").strip()
             if dim in ("objects", "colors"):
                 values = _parse_attr_values(raw)
             else:
@@ -192,7 +182,7 @@ def _collect_cluster_keywords(cluster_results: list[cluster_mod.ClusterResult]) 
 def _find_high_freq_ungrouped(
     freq: dict[str, dict[str, int]],
     cluster_keywords: set[str],
-    photos: list[dict],
+    photos,
     min_frequency: int = 3,
 ) -> list[CandidateGroup]:
     """找出高频但未被聚类覆盖的属性值，构建候选组。"""
@@ -209,9 +199,9 @@ def _find_high_freq_ungrouped(
                 continue
 
             # 找出具有此属性的照片
-            matching: list[dict] = []
+            matching = []
             for p in photos:
-                raw = (p.get(dim, "") or "").strip()
+                raw = (getattr(p, dim, "") or "").strip()
                 if dim in ("objects", "colors"):
                     pvals = _parse_attr_values(raw)
                 else:
@@ -224,11 +214,11 @@ def _find_high_freq_ungrouped(
                 continue
 
             # 按质量排序：有描述优先
-            matching.sort(key=lambda p: (1 if (p.get("description") or "") else 0), reverse=True)
+            matching.sort(key=lambda p: (1 if (p.description or "") else 0), reverse=True)
 
-            photo_ids = [p["id"] for p in matching[:15]]
+            photo_ids = [p.id for p in matching[:15]]
             sample_descs = [
-                (p.get("description") or "无描述")[:120]
+                (p.description or "无描述")[:120]
                 for p in matching[:5]
             ]
 
@@ -254,17 +244,17 @@ def _find_high_freq_ungrouped(
 
 
 def _find_temporal_patterns(
-    photos: list[dict],
-    stats: dict,
+    photos,
+    stats,
     freq: dict[str, dict[str, int]],
 ) -> list[CandidateGroup]:
     """发现时间线规律：跨年份的季节性拍摄模式。"""
     candidates: list[CandidateGroup] = []
 
     # 按月份分组照片
-    monthly_photos: dict[int, list[dict]] = collections.defaultdict(list)
+    monthly_photos: dict[int, list] = collections.defaultdict(list)
     for p in photos:
-        shot_at = p.get("shot_at", "")
+        shot_at = p.shot_at or ""
         if not shot_at:
             continue
         try:
@@ -301,13 +291,13 @@ def _find_temporal_patterns(
                 years_with_attr: set[int] = set()
                 all_years: set[int] = set()
                 for p in month_pics:
-                    shot_at = p.get("shot_at", "")
+                    shot_at = p.shot_at or ""
                     if not shot_at:
                         continue
                     try:
                         dt = datetime.datetime.fromisoformat(shot_at.replace("Z", "+00:00"))
                         all_years.add(dt.year)
-                        raw = (p.get(dim, "") or "").strip()
+                        raw = (getattr(p, dim, "") or "").strip()
                         if dim in ("objects", "colors"):
                             pvals = _parse_attr_values(raw)
                         else:
@@ -339,13 +329,13 @@ def _find_temporal_patterns(
 
                 matching = [p for p in month_pics if _photo_has_attr(p, dim, value)]
                 matching.sort(
-                    key=lambda p: (1 if (p.get("description") or "") else 0),
+                    key=lambda p: (1 if (p.description or "") else 0),
                     reverse=True,
                 )
 
-                photo_ids = [p["id"] for p in matching[:15]]
+                photo_ids = [p.id for p in matching[:15]]
                 sample_descs = [
-                    (p.get("description") or "无描述")[:120]
+                    (p.description or "无描述")[:120]
                     for p in matching[:5]
                 ]
 
@@ -387,9 +377,9 @@ def _find_temporal_patterns(
     return deduped[:10]
 
 
-def _photo_has_attr(photo: dict, dim: str, value: str) -> bool:
+def _photo_has_attr(photo, dim: str, value: str) -> bool:
     """检查照片是否具有指定属性值。"""
-    raw = (photo.get(dim, "") or "").strip()
+    raw = (getattr(photo, dim, "") or "").strip()
     if dim in ("objects", "colors"):
         return value in _parse_attr_values(raw)
     return raw == value
@@ -398,7 +388,7 @@ def _photo_has_attr(photo: dict, dim: str, value: str) -> bool:
 def _find_scarce_quality(
     freq: dict[str, dict[str, int]],
     cluster_results: list[cluster_mod.ClusterResult],
-    photos: list[dict],
+    photos,
     max_frequency: int = 5,
 ) -> list[CandidateGroup]:
     """找出现频率低但可能在聚类中凝聚度较高的属性，建议发展。"""
@@ -426,9 +416,9 @@ def _find_scarce_quality(
             quality_scores: list[float] = []
             for p in matching:
                 score = 0.0
-                if (p.get("description") or "").strip():
+                if (p.description or "").strip():
                     score += 0.3
-                pid = p.get("id", "")
+                pid = p.id or ""
                 if pid in photo_coherence:
                     score += photo_coherence[pid]
                 quality_scores.append(score)
@@ -444,9 +434,9 @@ def _find_scarce_quality(
             paired.sort(key=lambda x: x[1], reverse=True)
             matching_sorted = [p for p, _ in paired]
 
-            photo_ids = [p["id"] for p in matching_sorted[:15]]
+            photo_ids = [p.id for p in matching_sorted[:15]]
             sample_descs = [
-                (p.get("description") or "无描述")[:120]
+                (p.description or "无描述")[:120]
                 for p in matching_sorted[:5]
             ]
 
