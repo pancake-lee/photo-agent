@@ -5,8 +5,11 @@
  * 统一 GoldenQueryManagement / ClusterView 中重复的照片缩略图渲染逻辑。
  * 默认展示前 maxPreview 张缩略图，超出部分以文件名标签展示。
  * maxPreview 设为 0 表示展开全部。
+ *
+ * autoFit 模式：开启后通过 ResizeObserver 动态计算容器一行能容纳多少张缩略图，
+ * 自动调整实际展示数量。maxPreview 仅作为测量前的初始兜底值。
  */
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { NIcon } from 'naive-ui'
 import { ImageOutline } from '@vicons/ionicons5'
 
@@ -21,9 +24,12 @@ interface PhotoRef {
 const props = withDefaults(defineProps<{
   photos: PhotoRef[]
   maxPreview?: number
+  /** 开启后自动测量容器宽度，计算一行能容纳的缩略图数量 */
+  autoFit?: boolean
   emptyText?: string
 }>(), {
   maxPreview: 3,
+  autoFit: false,
   emptyText: '无照片',
 })
 
@@ -40,14 +46,48 @@ function getUuid(p: PhotoRef): string {
   return p.uuid || p.photo_id
 }
 
+// ── autoFit：动态计算一行能容纳的缩略图数量 ──
+const containerRef = ref<HTMLElement>()
+const fittedCount = ref(props.maxPreview)
+
+const THUMB_WIDTH = 64
+const THUMB_GAP = 8
+
+let observer: ResizeObserver | null = null
+
+function recalcFit() {
+  if (!containerRef.value) return
+  const w = containerRef.value.clientWidth
+  fittedCount.value = Math.max(1, Math.floor((w + THUMB_GAP) / (THUMB_WIDTH + THUMB_GAP)) - 1)
+}
+
+onMounted(() => {
+  if (!props.autoFit) return
+  if (containerRef.value) {
+    observer = new ResizeObserver(recalcFit)
+    observer.observe(containerRef.value)
+    recalcFit()
+  }
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+})
+
+const effectiveMax = computed(() => {
+  if (props.maxPreview === 0) return 0 // 展开全部
+  if (props.autoFit) return fittedCount.value
+  return props.maxPreview
+})
+
 const previewPhotos = computed(() => {
-  if (props.maxPreview === 0) return props.photos
-  return props.photos.slice(0, props.maxPreview)
+  if (effectiveMax.value === 0) return props.photos
+  return props.photos.slice(0, effectiveMax.value)
 })
 
 const restPhotos = computed(() => {
-  if (props.maxPreview === 0) return []
-  return props.photos.slice(props.maxPreview)
+  if (effectiveMax.value === 0) return []
+  return props.photos.slice(effectiveMax.value)
 })
 </script>
 
@@ -56,7 +96,7 @@ const restPhotos = computed(() => {
     v-if="!photos || photos.length === 0"
     class="photo-thumb-empty"
   >{{ emptyText }}</span>
-  <div v-else class="photo-thumb-list">
+  <div v-else ref="containerRef" class="photo-thumb-list">
     <!-- 缩略图行 -->
     <div v-if="previewPhotos.length" class="photo-thumb-row">
       <span
@@ -76,7 +116,7 @@ const restPhotos = computed(() => {
       </span>
     </div>
     <!-- 文件名标签行（超过 maxPreview 的部分） -->
-    <div v-if="restPhotos.length" class="photo-thumb-row">
+    <div v-if="restPhotos.length" class="photo-name-row">
       <span
         v-for="p in restPhotos"
         :key="p.photo_id"
@@ -99,6 +139,13 @@ const restPhotos = computed(() => {
   gap: 8px;
 }
 .photo-thumb-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: center;
+  overflow-x: auto;
+}
+.photo-name-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

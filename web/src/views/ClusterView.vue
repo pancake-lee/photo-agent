@@ -754,7 +754,7 @@ const columns = [
       v-model:show="detailVisible"
       preset="card"
       title="聚类结果详情"
-      style="width: 900px; max-width: 95vw;"
+      style="width: calc(100vw - 80px); max-width: 1600px; min-width: 880px; max-height: calc(100vh - 80px);"
     >
       <NSpin :show="detailLoading">
         <div v-if="detailItem" class="detail-body">
@@ -894,7 +894,8 @@ const columns = [
 
               <PhotoThumbList
                 :photos="c.photos"
-                :max-preview="expandedClusters.has(c.cluster_id) ? 0 : 3"
+                :max-preview="expandedClusters.has(c.cluster_id) ? 0 : 10"
+                auto-fit
                 @preview="openPreview"
               />
             </div>
@@ -1066,7 +1067,7 @@ const columns = [
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 500px;
+  max-height: calc(100vh - 380px);
   overflow-y: auto;
 }
 .cluster-card {
