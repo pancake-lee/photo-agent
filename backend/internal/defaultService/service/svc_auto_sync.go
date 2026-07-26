@@ -190,14 +190,6 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		ei = &exifInfo{}
 	}
 
-	// descriptions.json 中的 shot_at 优先
-	if descMap != nil {
-		if entry := findDescInMap(descMap, img.relPath); entry.ShotAt != "" {
-			if t := parseShotAt(entry.ShotAt); t != nil {
-				ei.ShotAt = t
-			}
-		}
-	}
 
 	// 匹配时间线
 	timeline := ""
@@ -207,17 +199,11 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 
 	width, height := getImageSize(img.absPath)
 
-	// 从 descriptions.json 获取描述和结构化属性
-	var description, objects, colors, scene, lighting, mood, composition string
+	// 从 descriptions.json 获取描述
+	var description string
 	if descMap != nil {
 		if entry := findDescInMap(descMap, img.relPath); entry.Description != "" {
 			description = entry.Description
-			objects = entry.Objects
-			colors = entry.Colors
-			scene = entry.Scene
-			lighting = entry.Lighting
-			mood = entry.Mood
-			composition = entry.Composition
 		}
 	}
 
@@ -227,12 +213,6 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		FilePath:     img.relPath,
 		Timeline:     timeline,
 		Description:  description,
-		Objects:      objects,
-		Colors:       colors,
-		Scene:        scene,
-		Lighting:     lighting,
-		Mood:         mood,
-		Composition:  composition,
 		Width:        int32(width),
 		Height:       int32(height),
 		Brand:        ei.Brand,
@@ -268,20 +248,14 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 // 已有照片更新
 // --------------------------------------------------
 
-// syncUpdatePhoto 更新已有照片的描述、时间线和结构化属性。
+// syncUpdatePhoto 更新已有照片的描述和时间线。
 // 返回 true 表示有实际更新。
 func syncUpdatePhoto(ctx *papp.AppCtx, existing *data.PhotoDO, img imageEntry, descMap descriptionMap, entries []TimelineEntry) bool {
-	// 从 descriptions.json 获取最新数据
-	var newDesc, objects, colors, scene, lighting, mood, composition string
+	// 从 descriptions.json 获取最新描述
+	var newDesc string
 	if descMap != nil {
 		if entry := findDescInMap(descMap, img.relPath); entry.Description != "" {
 			newDesc = entry.Description
-			objects = entry.Objects
-			colors = entry.Colors
-			scene = entry.Scene
-			lighting = entry.Lighting
-			mood = entry.Mood
-			composition = entry.Composition
 		}
 	}
 
@@ -295,25 +269,13 @@ func syncUpdatePhoto(ctx *papp.AppCtx, existing *data.PhotoDO, img imageEntry, d
 
 	// 检查是否有变化
 	if existing.Description == newDesc &&
-		existing.Timeline == newTimeline &&
-		existing.Objects == objects &&
-		existing.Colors == colors &&
-		existing.Scene == scene &&
-		existing.Lighting == lighting &&
-		existing.Mood == mood &&
-		existing.Composition == composition {
+		existing.Timeline == newTimeline {
 		return false
 	}
 
 	updates := map[string]any{
 		"description": newDesc,
 		"timeline":    newTimeline,
-		"objects":     objects,
-		"colors":      colors,
-		"scene":       scene,
-		"lighting":    lighting,
-		"mood":        mood,
-		"composition": composition,
 	}
 
 	q := db.GetQuery().Photo

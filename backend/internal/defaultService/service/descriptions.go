@@ -15,14 +15,6 @@ type descriptionEntry struct {
 	Description string `json:"description"`
 	Model       string `json:"model"`
 	ProcessedAt string `json:"processed_at"`
-	ShotAt      string `json:"shot_at"`
-	// 结构化 VLM 字段（batch_vlm 可选输出）
-	Objects     string `json:"objects"`
-	Colors      string `json:"colors"`
-	Scene       string `json:"scene"`
-	Lighting    string `json:"lighting"`
-	Mood        string `json:"mood"`
-	Composition string `json:"composition"`
 }
 
 // descriptionMap 预描述数据

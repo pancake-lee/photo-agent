@@ -18,6 +18,7 @@
 | 待规划  | Phase 2  | 2.2  | 聚类标题生成效果差        | 聚类标题常出现"内容未识别""一组未经标注的照片"等无意义输出，需排查是聚类质量还是标题生成步骤的问题                 |
 | 待规划  | Phase 1  | 1.4  | 黄金用例评估体系扩展      | 当前评估仅覆盖 RAG，需探索更多 use case（Text-to-SQL / Combined / Tool / 多轮对话）并建立对应评估方法              |
 | Done    | 工程     | E4   | 网页 Favicon             | 仓库根目录 favicon/ 放置 SVG favicon，web/public 通过 symlink 引用，其他模块也可复用                                 |
+| Done    | 工程     | E5   | 清理遗留代码与数据       | 删除 extract_attributes.py，清理 descriptions.json 的 shot_at 字段，清理 Go/Python 中结构化属性传递代码               |
 
 ---
 
