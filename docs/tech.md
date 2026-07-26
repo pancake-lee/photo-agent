@@ -497,3 +497,222 @@ npm run build     # 生产构建
   - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag），用于单独测试各模块
   - `scripts/index_photos.py`：批量将 descriptions.json 分块嵌入 ChromaDB
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护
+
+---
+
+## 10. 评估系统
+
+> 方案设计见 `docs/design/2026-07-26-eval-system-design.md`，本节记录具体技术细节。
+
+### 10.1 结构化日志格式
+
+Go（plogger `SetJsonLog`）和 Python（自建）统一输出以下 JSON 结构：
+
+```json
+{
+  "ts": "2026-07-26T17:19:04.123Z",
+  "level": "INFO",
+  "trace_id": "uuid",
+  "module": "cluster.generate_theme",
+  "event": "llm.call.end",
+  "data": {
+    "model": "deepseek-v4-flash",
+    "cluster_id": 18,
+    "duration_ms": 3200,
+    "token_usage": {"prompt": 450, "completion": 80},
+    "payload_ref": "data/traces/payloads/2026-07-26/uuid-llm-resp.txt"
+  }
+}
+```
+
+- `trace_id`：每个请求/操作生成一个 UUID，全链路透传
+- `payload_ref`：大体积内容（LLM prompt/response 全文）写入独立文件，日志行只记路径引用
+- Go → Python 通过 HTTP header `X-Trace-Id` 传递 trace_id
+
+### 10.2 Trace 事件节点定义
+
+**聚类标题生成全链路事件**：
+
+```
+cluster.run.start       → 聚类参数、照片总数
+  umap.reduce            → 输入/输出矩阵 shape、耗时
+  hdbscan.cluster        → labels 分布、噪声点数、耗时
+  cluster.save           → 结果 ID、簇数量
+cluster.run.end          → 总耗时
+
+cluster.theme.start      → trace_id, cluster_id, 代表照片 ID 列表
+  llm.call.start         → model, temperature, prompt 字符数
+  llm.call.end           → 耗时, token 用量, response 字符数
+    (payload_ref → llm request messages 全文)
+    (payload_ref → llm response 原文)
+  parse.theme            → 解析路径 (json_direct / regex_extract / fallback / failed)
+cluster.theme.end        → 最终 label, description, 耗时
+```
+
+**Agent 对话链路事件**（后续扩展）：
+
+```
+chat.request.start       → session_id, query_text
+  classify.start/end     → 分类结果 (sql/rag/tool/combined)
+  sql.generate/execute   → 生成的 SQL, 执行耗时, 返回行数
+  rag.retrieve           → Top-K photo_ids, 距离值, 断层过滤结果
+  combined.intersection  → sql_ids 数, rag_ids 数, 交集大小, 降级标记
+  llm.answer             → token 用量, 耗时
+chat.request.end         → 总耗时, 引用照片数
+```
+
+### 10.3 启发式规则引擎
+
+#### 规则定义
+
+简单规则用 YAML 配置文件，复杂规则用 Python 函数注册。配置文件位于 `agent/data/eval_rules.yaml`：
+
+```yaml
+# 聚类标题质量规则
+cluster_theme:
+  - id: label_length
+    description: "标题长度 6-16 字"
+    severity: error
+    check:
+      field: label
+      op: length_between
+      min: 6
+      max: 16
+  - id: no_placeholder
+    description: "标题不含兜底文本"
+    severity: error
+    check:
+      field: label
+      op: not_contains_any
+      values: ["未识别", "聚类", "无描述", "未知"]
+  - id: no_markdown_residue
+    description: "标题无 markdown 残留"
+    severity: error
+    check:
+      field: label
+      op: not_contains_any
+      values: ["**", "#", "`"]
+  - id: has_description
+    description: "描述至少 10 字"
+    severity: warning
+    check:
+      field: theme_description
+      op: min_length
+      min: 10
+  - id: diverse_labels
+    description: "簇间标题不重复"
+    severity: error
+    scope: all_clusters
+    check:
+      op: all_unique
+      field: label
+
+# 结构化属性可用性规则
+attribute_availability:
+  - id: objects_non_empty
+    description: "objects 字段非空率 ≥ 60%"
+    severity: warning
+    check:
+      field: objects
+      op: non_empty_ratio
+      min: 0.6
+  - id: scene_non_empty
+    description: "scene 字段非空率 ≥ 50%"
+    severity: warning
+    check:
+      field: scene
+      op: non_empty_ratio
+      min: 0.5
+```
+
+#### 规则引擎
+
+新增 `agent/chain/eval_engine.py`：
+
+- `load_rules(yaml_path)` — 加载规则配置
+- `run_rules(rules, context)` — 执行规则，返回通过/失败列表
+- `format_report(results)` — 格式化评估报告
+
+#### 统一入口
+
+- CLI：`python chain/eval_engine.py --rules cluster_theme --result-id <id>`
+- API：`POST /api/cluster/results/{id}/evaluate-themes`
+- Web UI：聚类页面"评估标题"按钮
+
+### 10.4 评估 API
+
+所有评估 API 挂在 Python Agent FastAPI 服务下（`:10005`）：
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| POST | `/api/cluster/results/{result_id}/evaluate-themes` | 对聚类结果的所有簇标题执行启发式规则评估 |
+| GET | `/api/eval/reports` | 历史评估报告列表 |
+| GET | `/api/eval/reports/{report_id}` | 单份评估报告详情 |
+
+### 10.5 评估报告格式
+
+评估报告以 JSON 文件存储在 `data/eval_reports/`，每个报告一个文件：
+
+```json
+{
+  "report_id": "uuid",
+  "created_at": "2026-07-26T...",
+  "result_id": "9966666038e0",
+  "total_clusters": 15,
+  "heuristic": {
+    "passed": 12,
+    "failed": 3,
+    "failures": [
+      {"cluster_id": 5, "rule": "label_length", "value": "照片", "expected": ">=6 chars"}
+    ]
+  },
+  "attribute_availability": {
+    "photos_with_objects": 0.92,
+    "photos_with_colors": 0.88,
+    "photos_with_scene": 0.75
+  }
+}
+```
+
+LLM-judge 评分暂缓，后续引入时在此结构中扩展 `llm_judge` 字段。
+
+### 10.6 LLM-judge 方案（暂缓）
+
+Judge prompt 已设计完成，包含准确性、具体性、可记忆性三个维度 1-5 分的 rubric。待人工评估流程跑通后引入。Judge 模型先用 deepseek-v4-flash 自评跑通，积累数据后交叉验证是否需要换用更强的 judge 模型。
+
+### 10.7 黄金用例数据结构扩展
+
+当前 golden_queries.json 条目格式仅含 RAG 相关字段。扩展后：
+
+```json
+{
+  "id": "uuid",
+  "query_text": "ISO大于1600的照片",
+  "category": "EXIF查询",
+  "notes": "",
+  "created_at": "2026-07-26T...",
+  "updated_at": "2026-07-26T...",
+  "rag_photos": ["photo_001"],
+  "expected_sql": "SELECT id FROM photos WHERE iso > 1600",
+  "expected_route": "sql"
+}
+```
+
+- `rag_photos`：已有字段，RAG 检索相关照片 ID
+- `expected_sql`：新增，Text-to-SQL 的期望 SQL
+- `expected_route`：新增，路由分类的期望结果（sql/rag/tool/combined）
+
+Web 对话页保存黄金用例时，弹出框让用户选择填写哪些维度。评估脚本按维度分别计算指标。
+
+### 10.8 文件存储路径
+
+```
+data/
+├── traces/
+│   ├── YYYY-MM-DD.jsonl          # trace 事件（保留 7 天）
+│   └── payloads/YYYY-MM-DD/      # 大体积 payload（同日清理）
+├── eval_reports/
+│   └── {report_id}.json           # 评估报告
+├── golden_queries.json            # 黄金用例
+└── eval_rules.yaml                # 启发式规则配置
+```
