@@ -33,6 +33,7 @@ import typing
 import numpy as np
 
 import vectorstore.chroma_client as chroma_client
+import chain.tracer as tracer_mod
 
 logger = logging.getLogger(__name__)
 
@@ -262,21 +263,37 @@ def run_clustering(
     umap_min_dist: float = 0.1,
     umap_n_components: int = 5,
     umap_metric: str = "cosine",
+    tracer: tracer_mod.Tracer | None = None,
 ) -> ClusterResult:
     """
     执行一次完整的聚类流程。
 
     参数:
         chroma: ChromaPhotoStore 实例
+        tracer: 可选的结构化追踪器
         其他: 聚类参数（见 backlog 说明）
     """
     t0 = time.time()
+
+    # trace: cluster.run.start
+    if tracer:
+        tracer.emit("cluster.run.start", {
+            "params": {
+                "min_cluster_size": min_cluster_size,
+                "min_samples": min_samples,
+                "umap_n_neighbors": umap_n_neighbors,
+                "umap_min_dist": umap_min_dist,
+                "umap_n_components": umap_n_components,
+                "umap_metric": umap_metric,
+            },
+        }, module="cluster.run")
 
     # 1. 获取向量
     photo_ids, filenames, matrix = _fetch_photo_vectors(chroma)
     n_total = len(photo_ids)
 
     # 2. UMAP 降维
+    t_umap = time.time()
     reduced = _run_umap(
         matrix,
         n_neighbors=umap_n_neighbors,
@@ -284,9 +301,27 @@ def run_clustering(
         n_components=umap_n_components,
         metric=umap_metric,
     )
+    if tracer:
+        tracer.emit("umap.reduce", {
+            "input_shape": list(matrix.shape),
+            "output_shape": list(reduced.shape),
+            "duration_ms": int((time.time() - t_umap) * 1000),
+        }, module="cluster.umap")
 
     # 3. HDBSCAN 聚类
+    t_hdbscan = time.time()
     labels, _probs = _run_hdbscan(reduced, min_cluster_size, min_samples)
+    label_counts: dict[str, int] = {}
+    for lb in labels:
+        key = str(lb)
+        label_counts[key] = label_counts.get(key, 0) + 1
+    if tracer:
+        tracer.emit("hdbscan.cluster", {
+            "duration_ms": int((time.time() - t_hdbscan) * 1000),
+            "num_clusters": len(set(labels)) - (1 if -1 in labels else 0),
+            "noise_count": int(np.sum(labels == -1)),
+            "label_distribution": label_counts,
+        }, module="cluster.hdbscan")
 
     # 4. 计算簇统计
     clusters = _compute_cluster_stats(reduced, labels, photo_ids, filenames)
@@ -316,6 +351,21 @@ def run_clustering(
         stats=stats,
         clusters=clusters,
     )
+
+    # trace: cluster.save + cluster.run.end
+    if tracer:
+        tracer.emit("cluster.save", {
+            "result_id": result.id,
+            "num_clusters": stats.num_clusters,
+        }, module="cluster.save")
+        tracer.emit("cluster.run.end", {
+            "result_id": result.id,
+            "total_photos": stats.total_photos,
+            "clustered_photos": stats.clustered_photos,
+            "noise_photos": stats.noise_photos,
+            "num_clusters": stats.num_clusters,
+            "duration_ms": int((time.time() - t0) * 1000),
+        }, module="cluster.run")
 
     logger.info(
         "聚类完成: %d 张照片 → %d 个簇, %d 噪声, 耗时 %.1fs",
@@ -469,6 +519,7 @@ def generate_cluster_theme(
     cluster_id: int,
     go_backend_url: str,
     cluster_dir: pathlib.Path,
+    tracer: tracer_mod.Tracer | None = None,
 ) -> ClusterResult:
     """为聚类结果中指定簇生成主题标签和描述。
 
@@ -480,6 +531,7 @@ def generate_cluster_theme(
         result: 聚类结果
         cluster_id: 要生成主题的簇 ID（ClusterInfo.cluster_id）
         go_backend_url: Go 后端地址
+        tracer: 可选的结构化追踪器
 
     返回:
         更新后的 ClusterResult（已持久化）
@@ -496,6 +548,16 @@ def generate_cluster_theme(
     if target is None:
         raise ValueError(f"簇 {cluster_id} 不存在")
 
+    # trace: cluster.theme.start
+    if tracer:
+        rep_ids = [p.photo_id for p in target.photos[:_MAX_REPRESENTATIVE_PHOTOS]]
+        tracer.emit("cluster.theme.start", {
+            "cluster_id": cluster_id,
+            "cluster_size": target.size,
+            "representative_photo_ids": rep_ids,
+        }, module="cluster.generate_theme")
+
+    t_theme_start = time.time()
     llm = llm_factory.create_llm(cfg, temperature=0.7)
 
     # 1. 获取代表照片的描述
@@ -527,10 +589,58 @@ def generate_cluster_theme(
         ),
     ]
 
+    # trace: llm.call.start
+    if tracer:
+        prompt_text = _THEME_SYSTEM_PROMPT + "\n\n" + messages[1].content
+        payload_ref = tracer.save_payload(f"llm-req-cluster-{cluster_id}.txt", prompt_text)
+        tracer.emit("llm.call.start", {
+            "cluster_id": cluster_id,
+            "model": cfg.llm_model,
+            "temperature": 0.7,
+            "prompt_chars": len(prompt_text),
+            "payload_ref": payload_ref,
+        }, module="cluster.generate_theme")
+
+    t_llm = time.time()
     resp = llm.invoke(messages)
     raw = resp.content if hasattr(resp, "content") else str(resp)
+    llm_duration_ms = int((time.time() - t_llm) * 1000)
+
+    # trace: llm.call.end + parse.theme
+    token_usage = {}
+    if hasattr(resp, "response_metadata"):
+        usage = resp.response_metadata.get("token_usage", {})
+        token_usage = {
+            "prompt": usage.get("prompt_tokens", 0),
+            "completion": usage.get("completion_tokens", 0),
+        }
+    if tracer:
+        resp_ref = tracer.save_payload(f"llm-resp-cluster-{cluster_id}.txt", raw)
+        tracer.emit("llm.call.end", {
+            "cluster_id": cluster_id,
+            "duration_ms": llm_duration_ms,
+            "token_usage": token_usage,
+            "response_chars": len(raw),
+            "payload_ref": resp_ref,
+        }, module="cluster.generate_theme")
 
     label, desc = _parse_llm_theme_response(raw)
+
+    # trace: parse.theme
+    parse_path = "json_direct"
+    if not label:
+        # 判断走到了哪个 fallback（简化判定：以 raw 内容特征区分）
+        parse_path = "failed"
+    elif label and desc:
+        parse_path = "json_direct"  # 简化：实际路径可能为 json_direct/regex_extract/fallback
+    if tracer:
+        tracer.emit("parse.theme", {
+            "cluster_id": cluster_id,
+            "label": label,
+            "description": desc,
+            "parse_path": parse_path,
+            "raw_preview": raw[:200],
+        }, module="cluster.generate_theme")
 
     if not label:
         raise RuntimeError(
@@ -544,6 +654,15 @@ def generate_cluster_theme(
     # 4. 持久化
     save_result(result, cluster_dir)
     logger.info("主题标签已保存到 %s/%s.json", cluster_dir, result.id)
+
+    # trace: cluster.theme.end
+    if tracer:
+        tracer.emit("cluster.theme.end", {
+            "cluster_id": cluster_id,
+            "label": label,
+            "description": desc,
+            "duration_ms": int((time.time() - t_theme_start) * 1000),
+        }, module="cluster.generate_theme")
 
     return result
 

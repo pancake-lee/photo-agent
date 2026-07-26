@@ -27,6 +27,8 @@ import chain.embed_queue as embed_queue
 import chain.evaluation as evaluation_mod
 import chain.cluster as cluster_mod
 import chain.suggest as suggest_mod
+import chain.tracer as tracer_mod
+import chain.eval_engine as eval_engine
 import vectorstore.chroma_client as chroma_client
 import config as config_mod
 
@@ -653,6 +655,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         def _run_in_thread():
             try:
+                _tracer = tracer_mod.Tracer(cfg.project_root)
                 result = cluster_mod.run_clustering(
                     chroma,
                     min_cluster_size=body.min_cluster_size,
@@ -661,9 +664,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     umap_min_dist=body.umap_min_dist,
                     umap_n_components=body.umap_n_components,
                     umap_metric=body.umap_metric,
+                    tracer=_tracer,
                 )
                 cluster_mod.save_result(result, _cluster_dir)
-                logger.info("聚类结果已保存: %s", result.id)
+                logger.info("聚类结果已保存: %s (trace_id=%s)", result.id, _tracer.trace_id)
                 _cluster_tasks[task_id] = {"status": "done", "result_id": result.id, "error": ""}
             except Exception as exc:
                 logger.exception("聚类计算失败")
@@ -716,9 +720,11 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
 
         cfg = req.app.state.cfg
+        _tracer = tracer_mod.Tracer(cfg.project_root)
         try:
             updated = cluster_mod.generate_cluster_theme(
                 cfg, result, cluster_id, cfg.go_backend_url, cluster_dir,
+                tracer=_tracer,
             )
         except ValueError as exc:
             raise fastapi.HTTPException(status_code=404, detail=str(exc))
@@ -729,6 +735,39 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=500, detail="主题标签生成失败，请稍后重试")
 
         return cluster_mod._result_to_dict(updated)
+
+    # ── 评估 API 模型 ─────────────────────────────────────
+
+    class EvalRuleResult(pydantic.BaseModel):
+        rule_id: str
+        severity: str
+        passed: bool
+        value: str = ""
+        expected: str = ""
+        message: str = ""
+        cluster_id: int | None = None
+
+    class EvalHeuristicSummary(pydantic.BaseModel):
+        total_checks: int = 0
+        passed: int = 0
+        failed: int = 0
+        failures: list[EvalRuleResult] = []
+
+    class EvalReportResponse(pydantic.BaseModel):
+        report_id: str
+        created_at: str
+        result_id: str
+        total_clusters: int
+        heuristic: EvalHeuristicSummary
+
+    class EvalReportSummary(pydantic.BaseModel):
+        report_id: str
+        created_at: str
+        result_id: str
+        total_clusters: int
+        heuristic_passed: int
+        heuristic_failed: int
+        has_attribute_check: bool = False
 
     # ── 选题建议 API ─────────────────────────────────────
 
@@ -774,6 +813,99 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "error": meta.get("error", ""),
         }
         return result
+
+    # ── 评估 API ─────────────────────────────────────────
+
+    @app.post("/api/cluster/results/{result_id}/evaluate-themes", response_model=EvalReportResponse)
+    async def eval_cluster_themes(result_id: str, req: fastapi.Request):
+        """对聚类结果的所有簇标题执行启发式规则评估。
+
+        加载 eval_rules.yaml 中的 cluster_theme 规则，
+        检查标题长度、兜底文本、markdown 残留、描述长度、簇间多样性。
+        评估报告保存到 data/eval_reports/。
+        """
+        cluster_dir = req.app.state.cluster_dir
+        result = cluster_mod.load_result(result_id, cluster_dir)
+        if result is None:
+            raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
+
+        cfg = req.app.state.cfg
+        rules_path = cfg.resolve_path("./data/eval_rules.yaml")
+        if not rules_path.exists():
+            raise fastapi.HTTPException(status_code=500, detail="规则配置文件不存在")
+
+        all_rules = eval_engine.load_rules(rules_path)
+        theme_rules = all_rules.get("cluster_theme", [])
+        if not theme_rules:
+            raise fastapi.HTTPException(status_code=500, detail="未找到 cluster_theme 规则")
+
+        try:
+            report = eval_engine.evaluate_cluster_themes(result, theme_rules)
+            eval_engine.save_report(report, cfg.project_root)
+        except Exception:
+            logger.exception("评估执行失败")
+            raise fastapi.HTTPException(status_code=500, detail="评估执行失败")
+
+        return {
+            "report_id": report["report_id"],
+            "created_at": report["created_at"],
+            "result_id": report["result_id"],
+            "total_clusters": report["total_clusters"],
+            "heuristic": {
+                "total_checks": report["heuristic"]["total_checks"],
+                "passed": report["heuristic"]["passed"],
+                "failed": report["heuristic"]["failed"],
+                "failures": [
+                    {
+                        "rule_id": f["rule_id"],
+                        "severity": f["severity"],
+                        "passed": f["passed"],
+                        "value": f.get("value", ""),
+                        "expected": f.get("expected", ""),
+                        "message": f.get("message", ""),
+                        "cluster_id": f.get("cluster_id"),
+                    }
+                    for f in report["heuristic"]["failures"]
+                ],
+            },
+        }
+
+    @app.get("/api/eval/reports", response_model=list[EvalReportSummary])
+    async def eval_list_reports(req: fastapi.Request):
+        """列出所有评估报告摘要。"""
+        cfg = req.app.state.cfg
+        return eval_engine.list_reports(cfg.project_root)
+
+    @app.get("/api/eval/reports/{report_id}", response_model=EvalReportResponse)
+    async def eval_get_report(report_id: str, req: fastapi.Request):
+        """获取单份评估报告详情。"""
+        cfg = req.app.state.cfg
+        report = eval_engine.load_report(report_id, cfg.project_root)
+        if report is None:
+            raise fastapi.HTTPException(status_code=404, detail="评估报告不存在")
+        return {
+            "report_id": report["report_id"],
+            "created_at": report["created_at"],
+            "result_id": report["result_id"],
+            "total_clusters": report["total_clusters"],
+            "heuristic": {
+                "total_checks": report["heuristic"]["total_checks"],
+                "passed": report["heuristic"]["passed"],
+                "failed": report["heuristic"]["failed"],
+                "failures": [
+                    {
+                        "rule_id": f["rule_id"],
+                        "severity": f["severity"],
+                        "passed": f["passed"],
+                        "value": f.get("value", ""),
+                        "expected": f.get("expected", ""),
+                        "message": f.get("message", ""),
+                        "cluster_id": f.get("cluster_id"),
+                    }
+                    for f in report["heuristic"]["failures"]
+                ],
+            },
+        }
 
     return app
 

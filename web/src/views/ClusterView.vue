@@ -26,6 +26,7 @@ import {
   GitNetworkOutline,
   PlayOutline,
   AppsOutline,
+  CheckmarkCircleOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
@@ -72,6 +73,31 @@ interface ClusterResultDetail {
   clusters: ClusterItem[]
 }
 
+interface EvalRuleResult {
+  rule_id: string
+  severity: string
+  passed: boolean
+  value: string
+  expected: string
+  message: string
+  cluster_id: number | null
+}
+
+interface EvalHeuristicSummary {
+  total_checks: number
+  passed: number
+  failed: number
+  failures: EvalRuleResult[]
+}
+
+interface EvalReport {
+  report_id: string
+  created_at: string
+  result_id: string
+  total_clusters: number
+  heuristic: EvalHeuristicSummary
+}
+
 // ── 状态 ──
 
 const message = useMessage()
@@ -106,6 +132,11 @@ const generatingThemeId = ref<number | null>(null)
 
 // 全部展开的簇 ID 集合
 const expandedClusters = ref<Set<number>>(new Set())
+
+// 评估状态
+const evalRunning = ref(false)
+const evalReport = ref<EvalReport | null>(null)
+const showEvalResult = ref(false)
 
 // 图片预览
 const previewShow = ref(false)
@@ -213,6 +244,29 @@ async function handleGenerateTheme(resultId: string, clusterId: number) {
     message.error(e instanceof Error ? e.message : '主题生成请求失败')
   } finally {
     generatingThemeId.value = null
+  }
+}
+
+// ── 评估标题 ──
+
+async function handleEvaluateThemes(resultId: string) {
+  evalRunning.value = true
+  evalReport.value = null
+  try {
+    const resp = await fetch(`${AGENT_BASE}/cluster/results/${resultId}/evaluate-themes`, {
+      method: 'POST',
+    })
+    if (resp.ok) {
+      evalReport.value = await resp.json()
+      showEvalResult.value = true
+    } else {
+      const err = await resp.json()
+      message.error(err.detail || '评估失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '评估请求失败')
+  } finally {
+    evalRunning.value = false
   }
 }
 
@@ -502,6 +556,19 @@ const columns = [
       title="聚类结果详情"
       style="width: 800px; max-width: 95vw;"
     >
+      <template #header-extra>
+        <NButton
+          size="small"
+          type="warning"
+          :loading="evalRunning"
+          @click="handleEvaluateThemes(detailItem!.id)"
+        >
+          <template #icon>
+            <NIcon><CheckmarkCircleOutline /></NIcon>
+          </template>
+          评估标题
+        </NButton>
+      </template>
       <NSpin :show="detailLoading">
         <div v-if="detailItem" class="detail-body">
           <!-- 统计摘要 -->
@@ -588,6 +655,35 @@ const columns = [
                 :max-preview="expandedClusters.has(c.cluster_id) ? 0 : 3"
                 @preview="openPreview"
               />
+            </div>
+          </div>
+
+          <!-- 评估结果区域 -->
+          <div v-if="evalReport" class="eval-result-section">
+            <div class="eval-result-header">
+              <span class="eval-result-title">标题评估结果</span>
+              <NTag :bordered="false" size="small" :type="evalReport.heuristic.failed === 0 ? 'success' : 'warning'">
+                {{ evalReport.heuristic.passed }}/{{ evalReport.heuristic.total_checks }} 通过
+              </NTag>
+            </div>
+            <div v-if="evalReport.heuristic.failed > 0" class="eval-failures">
+              <div
+                v-for="f in evalReport.heuristic.failures"
+                :key="`${f.rule_id}-${f.cluster_id}`"
+                class="eval-failure-item"
+              >
+                <NTag :bordered="false" size="tiny" :type="f.severity === 'error' ? 'error' : 'warning'">
+                  {{ f.severity === 'error' ? '错误' : '警告' }}
+                </NTag>
+                <span v-if="f.cluster_id !== null && f.cluster_id !== undefined" class="eval-failure-cluster">
+                  簇 {{ f.cluster_id }}
+                </span>
+                <span class="eval-failure-msg">{{ f.message }}</span>
+              </div>
+            </div>
+            <div v-else class="eval-all-passed">
+              <NIcon color="var(--n-color-success)"><CheckmarkCircleOutline /></NIcon>
+              <span>全部检查通过</span>
             </div>
           </div>
         </div>
@@ -726,5 +822,54 @@ const columns = [
   font-size: 12px;
   color: var(--n-text-color-3);
   line-height: 1.4;
+}
+
+/* 评估结果 */
+.eval-result-section {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--n-color-embedded);
+  border-radius: 8px;
+  border: 1px solid var(--n-border-color);
+}
+.eval-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.eval-result-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.eval-failures {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eval-failure-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--n-color-action);
+  border-radius: 4px;
+}
+.eval-failure-cluster {
+  font-weight: 600;
+  color: var(--n-color-text-2);
+  white-space: nowrap;
+}
+.eval-failure-msg {
+  color: var(--n-color-text-3);
+  flex: 1;
+}
+.eval-all-passed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--n-color-success);
 }
 </style>

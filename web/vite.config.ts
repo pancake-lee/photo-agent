@@ -24,6 +24,10 @@ export default defineConfig({
         target: 'http://localhost:10005',
         changeOrigin: true,
       },
+      '/api/eval': {
+        target: 'http://localhost:10005',
+        changeOrigin: true,
+      },
       '/api/suggest': {
         target: 'http://localhost:10005',
         changeOrigin: true,
