@@ -2,7 +2,7 @@
     启发式规则评估引擎。
 
     加载 eval_rules.yaml 配置，对聚类结果执行启发式规则检查，
-    生成评估报告并以 JSON 文件存储在 data/eval_reports/。
+    生成评估报告并以 JSONL 行追加到 data/traces/YYYY-MM-DD.jsonl（按天拆分）。
 
     用法:
         import chain.eval_engine as eval_engine
@@ -301,51 +301,79 @@ def evaluate_cluster_themes(
 
 # ── 报告文件读写 ──
 
-def _reports_dir(project_root: str | pathlib.Path) -> pathlib.Path:
-    d = pathlib.Path(project_root) / "data" / "eval_reports"
+def _traces_dir(project_root: str | pathlib.Path) -> pathlib.Path:
+    d = pathlib.Path(project_root) / "data" / "traces"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
+def _daily_jsonl_path(project_root: str | pathlib.Path) -> pathlib.Path:
+    """当前日期的 JSONL 文件路径。"""
+    today = datetime.date.today().isoformat()  # YYYY-MM-DD
+    return _traces_dir(project_root) / f"{today}.jsonl"
+
+
 def save_report(report: EvalReport, project_root: str | pathlib.Path) -> pathlib.Path:
-    """保存评估报告到 JSON 文件。返回文件路径。"""
-    d = _reports_dir(project_root)
-    fp = d / f"{report['report_id']}.json"
-    fp.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
-    logger.info("评估报告已保存: %s", fp)
+    """以 JSONL 行追加评估报告到按天拆分的 trace 文件。返回文件路径。"""
+    fp = _daily_jsonl_path(project_root)
+    trace_line = {
+        "ts": report.get("created_at", datetime.datetime.now().isoformat()),
+        "level": "INFO",
+        "trace_id": report.get("report_id", ""),
+        "module": "eval_engine",
+        "event": "eval.report",
+        "data": report,
+    }
+    with open(fp, "a", encoding="utf-8") as f:
+        f.write(json.dumps(trace_line, ensure_ascii=False, default=str) + "\n")
+    logger.info("评估报告已追加: %s (report_id=%s)", fp, report.get("report_id"))
     return fp
 
 
 def load_report(report_id: str, project_root: str | pathlib.Path) -> EvalReport | None:
-    """加载单份评估报告。"""
-    fp = _reports_dir(project_root) / f"{report_id}.json"
-    if not fp.exists():
+    """从每日 JSONL trace 文件中加载指定 ID 的评估报告。"""
+    d = _traces_dir(project_root)
+    if not d.exists():
         return None
-    return json.loads(fp.read_text(encoding="utf-8"))
+    for fp in sorted(d.glob("*.jsonl"), reverse=True):
+        try:
+            for line in fp.read_text(encoding="utf-8").strip().split("\n"):
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                if entry.get("trace_id") == report_id and entry.get("event") == "eval.report":
+                    return entry.get("data", entry)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
 
 
 def list_reports(project_root: str | pathlib.Path) -> list[dict]:
-    """列出所有评估报告摘要（按创建时间倒序）。"""
-    d = _reports_dir(project_root)
+    """列出所有评估报告摘要（从每日 JSONL trace 读取，按时间倒序）。"""
+    d = _traces_dir(project_root)
     if not d.exists():
         return []
     results: list[dict] = []
-    for fp in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for fp in sorted(d.glob("*.jsonl"), reverse=True):
         try:
-            data = json.loads(fp.read_text(encoding="utf-8"))
-            summary = {
-                "report_id": data.get("report_id", fp.stem),
-                "created_at": data.get("created_at", ""),
-                "result_id": data.get("result_id", ""),
-                "total_clusters": data.get("total_clusters", 0),
-                "heuristic_passed": data.get("heuristic", {}).get("passed", 0),
-                "heuristic_failed": data.get("heuristic", {}).get("failed", 0),
-                "has_attribute_check": "attribute_availability" in data,
-            }
-            results.append(summary)
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning("跳过损坏的评估报告 %s: %s", fp.name, e)
+            for line in fp.read_text(encoding="utf-8").strip().split("\n"):
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                if entry.get("event") != "eval.report":
+                    continue
+                data = entry.get("data", entry)
+                results.append({
+                    "report_id": data.get("report_id", entry.get("trace_id", "")),
+                    "created_at": data.get("created_at", entry.get("ts", "")),
+                    "result_id": data.get("result_id", ""),
+                    "total_clusters": data.get("total_clusters", 0),
+                    "heuristic_passed": data.get("heuristic", {}).get("passed", 0),
+                    "heuristic_failed": data.get("heuristic", {}).get("failed", 0),
+                    "has_attribute_check": "attribute_availability" in data,
+                })
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("跳过损坏的 trace 文件 %s: %s", fp.name, e)
+    # 按创建时间倒序
+    results.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     return results

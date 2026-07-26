@@ -278,6 +278,11 @@ descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go
 | GET | `/api/cluster/results/:id` | 聚类结果详情（含每个 cluster 的照片列表） |
 | DELETE | `/api/cluster/results/:id` | 删除聚类结果 |
 | POST | `/api/cluster/results/:id/clusters/:cid/generate-theme` | 为指定聚类生成主题标签 |
+| POST | `/api/cluster/results/:id/generate-all-themes` | 批量生成所有（或指定）簇的主题 |
+| POST | `/api/cluster/results/:id/evaluate-themes` | 批量评估簇标题（支持 cluster_ids 筛选） |
+| POST | `/api/cluster/results/:id/clusters/:cid/evaluate-theme` | 单簇标题评估（不含跨簇规则） |
+| GET | `/api/eval/reports` | 历史评估报告列表 |
+| GET | `/api/eval/reports/:id` | 单份评估报告详情 |
 
 ### 4.3 Web 前端路由
 
@@ -565,116 +570,37 @@ chat.request.end         → 总耗时, 引用照片数
 
 #### 规则定义
 
-简单规则用 YAML 配置文件，复杂规则用 Python 函数注册。配置文件位于 `agent/data/eval_rules.yaml`：
-
-```yaml
-# 聚类标题质量规则
-cluster_theme:
-  - id: label_length
-    description: "标题长度 6-16 字"
-    severity: error
-    check:
-      field: label
-      op: length_between
-      min: 6
-      max: 16
-  - id: no_placeholder
-    description: "标题不含兜底文本"
-    severity: error
-    check:
-      field: label
-      op: not_contains_any
-      values: ["未识别", "聚类", "无描述", "未知"]
-  - id: no_markdown_residue
-    description: "标题无 markdown 残留"
-    severity: error
-    check:
-      field: label
-      op: not_contains_any
-      values: ["**", "#", "`"]
-  - id: has_description
-    description: "描述至少 10 字"
-    severity: warning
-    check:
-      field: theme_description
-      op: min_length
-      min: 10
-  - id: diverse_labels
-    description: "簇间标题不重复"
-    severity: error
-    scope: all_clusters
-    check:
-      op: all_unique
-      field: label
-
-# 结构化属性可用性规则
-attribute_availability:
-  - id: objects_non_empty
-    description: "objects 字段非空率 ≥ 60%"
-    severity: warning
-    check:
-      field: objects
-      op: non_empty_ratio
-      min: 0.6
-  - id: scene_non_empty
-    description: "scene 字段非空率 ≥ 50%"
-    severity: warning
-    check:
-      field: scene
-      op: non_empty_ratio
-      min: 0.5
-```
+规则配置文件：`agent/data/eval_rules.yaml`。支持的操作类型：`length_between`、`not_contains_any`、`min_length`、`all_unique`（跨簇）、`non_empty_ratio`。跨簇规则通过 `scope: all_clusters` 标记。
 
 #### 规则引擎
 
-新增 `agent/chain/eval_engine.py`：
-
-- `load_rules(yaml_path)` — 加载规则配置
-- `run_rules(rules, context)` — 执行规则，返回通过/失败列表
-- `format_report(results)` — 格式化评估报告
+实现位于 `agent/chain/eval_engine.py`，核心函数：`load_rules()`、`run_theme_rules()`、`evaluate_cluster_themes()`、`save_report()`（追加 JSONL 到每日 trace）、`list_reports()` / `load_report()`（从 JSONL 扫描）。
 
 #### 统一入口
 
 - CLI：`python chain/eval_engine.py --rules cluster_theme --result-id <id>`
-- API：`POST /api/cluster/results/{id}/evaluate-themes`
-- Web UI：聚类页面"评估标题"按钮
+- API：见 4.2 聚类分析段
+- Web UI：聚类详情弹窗内「评估标题」按钮（单簇）和「重新评估」按钮（批量）
 
 ### 10.4 评估 API
 
-所有评估 API 挂在 Python Agent FastAPI 服务下（`:10005`）：
+评估相关 API 路由见 4.2 聚类分析段。核心端点：
 
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | `/api/cluster/results/{result_id}/evaluate-themes` | 对聚类结果的所有簇标题执行启发式规则评估 |
-| GET | `/api/eval/reports` | 历史评估报告列表 |
-| GET | `/api/eval/reports/{report_id}` | 单份评估报告详情 |
+- `POST /api/cluster/results/{id}/evaluate-themes`：批量评估，支持 `cluster_ids` 参数筛选范围
+- `POST /api/cluster/results/{id}/clusters/{cid}/evaluate-theme`：单簇评估，跳过跨簇规则
+- `GET /api/eval/reports` / `GET /api/eval/reports/{id}`：历史报告查询
 
-### 10.5 评估报告格式
+### 10.5 评估报告存储
 
-评估报告以 JSON 文件存储在 `data/eval_reports/`，每个报告一个文件：
+评估报告不生成独立文件，而是以 JSONL 行追加到 `data/traces/YYYY-MM-DD.jsonl`（与其他 trace 事件统一管理）。每行格式：
 
 ```json
-{
-  "report_id": "uuid",
-  "created_at": "2026-07-26T...",
-  "result_id": "9966666038e0",
-  "total_clusters": 15,
-  "heuristic": {
-    "passed": 12,
-    "failed": 3,
-    "failures": [
-      {"cluster_id": 5, "rule": "label_length", "value": "照片", "expected": ">=6 chars"}
-    ]
-  },
-  "attribute_availability": {
-    "photos_with_objects": 0.92,
-    "photos_with_colors": 0.88,
-    "photos_with_scene": 0.75
-  }
-}
+{"ts": "2026-07-26T...", "level": "INFO", "trace_id": "uuid", "module": "eval_engine", "event": "eval.report", "data": {<报告体>}}
 ```
 
-LLM-judge 评分暂缓，后续引入时在此结构中扩展 `llm_judge` 字段。
+`list_reports` / `load_report` API 从每日 JSONL 文件流式扫描，按 `event == "eval.report"` 过滤。
+
+LLM-judge 评分暂缓，后续引入时在报告 `data` 中扩展 `llm_judge` 字段。
 
 ### 10.6 LLM-judge 方案（暂缓）
 
@@ -709,10 +635,8 @@ Web 对话页保存黄金用例时，弹出框让用户选择填写哪些维度�
 ```
 data/
 ├── traces/
-│   ├── YYYY-MM-DD.jsonl          # trace 事件（保留 7 天）
+│   ├── YYYY-MM-DD.jsonl          # trace 事件（含 eval.report，保留 7 天）
 │   └── payloads/YYYY-MM-DD/      # 大体积 payload（同日清理）
-├── eval_reports/
-│   └── {report_id}.json           # 评估报告
 ├── golden_queries.json            # 黄金用例
 └── eval_rules.yaml                # 启发式规则配置
 ```

@@ -736,6 +736,46 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         return cluster_mod._result_to_dict(updated)
 
+    # ── 批量操作请求模型 ───────────────────────────────
+
+    class BatchClusterIdsRequest(pydantic.BaseModel):
+        cluster_ids: list[int] | None = None
+
+    @app.post("/api/cluster/results/{result_id}/generate-all-themes", response_model=ClusterResultDetail)
+    async def cluster_generate_all_themes(result_id: str, body: BatchClusterIdsRequest, req: fastapi.Request):
+        """批量为聚类结果的所有/指定簇生成主题标签和描述。
+
+        Body: { "cluster_ids": [1, 2, 3] | null }
+        - cluster_ids 为 null 或不传时，生成所有簇的主题
+        - cluster_ids 为数组时，仅生成指定簇的主题
+        """
+        cluster_dir = req.app.state.cluster_dir
+        result = cluster_mod.load_result(result_id, cluster_dir)
+        if result is None:
+            raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
+
+        target_ids = body.cluster_ids
+        if target_ids is None:
+            target_ids = [c.cluster_id for c in result.clusters]
+
+        cfg = req.app.state.cfg
+        _tracer = tracer_mod.Tracer(cfg.project_root)
+
+        for cid in target_ids:
+            try:
+                result = cluster_mod.generate_cluster_theme(
+                    cfg, result, cid, cfg.go_backend_url, cluster_dir,
+                    tracer=_tracer,
+                )
+            except ValueError as exc:
+                raise fastapi.HTTPException(status_code=404, detail=str(exc))
+            except RuntimeError:
+                logger.warning("簇 %d 主题生成失败，继续处理下一个", cid)
+            except Exception:
+                logger.exception("簇 %d 主题生成异常", cid)
+
+        return cluster_mod._result_to_dict(result)
+
     # ── 评估 API 模型 ─────────────────────────────────────
 
     class EvalRuleResult(pydantic.BaseModel):
@@ -752,6 +792,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         passed: int = 0
         failed: int = 0
         failures: list[EvalRuleResult] = []
+
+    class SingleClusterEvalResponse(pydantic.BaseModel):
+        cluster_id: int
+        checks: list[EvalRuleResult]
+        passed: int
+        failed: int
 
     class EvalReportResponse(pydantic.BaseModel):
         report_id: str
@@ -817,12 +863,15 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     # ── 评估 API ─────────────────────────────────────────
 
     @app.post("/api/cluster/results/{result_id}/evaluate-themes", response_model=EvalReportResponse)
-    async def eval_cluster_themes(result_id: str, req: fastapi.Request):
-        """对聚类结果的所有簇标题执行启发式规则评估。
+    async def eval_cluster_themes(result_id: str, body: BatchClusterIdsRequest, req: fastapi.Request):
+        """对聚类结果的所有/指定簇标题执行启发式规则评估。
 
         加载 eval_rules.yaml 中的 cluster_theme 规则，
         检查标题长度、兜底文本、markdown 残留、描述长度、簇间多样性。
-        评估报告保存到 data/eval_reports/。
+
+        Body: { "cluster_ids": [1, 2, 3] | null }
+        - cluster_ids 为 null 或不传时，评估所有簇（含跨簇规则）
+        - cluster_ids 为数组时，仅评估指定簇，且跳过跨簇规则
         """
         cluster_dir = req.app.state.cluster_dir
         result = cluster_mod.load_result(result_id, cluster_dir)
@@ -839,8 +888,23 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if not theme_rules:
             raise fastapi.HTTPException(status_code=500, detail="未找到 cluster_theme 规则")
 
+        target_ids = body.cluster_ids
+
         try:
-            report = eval_engine.evaluate_cluster_themes(result, theme_rules)
+            if target_ids is not None:
+                # 部分簇评估：过滤 clusters + 跳过跨簇规则
+                filtered_clusters = [c for c in result.clusters if c.cluster_id in target_ids]
+                result_with_filtered = cluster_mod.ClusterResult(
+                    id=result.id,
+                    created_at=result.created_at,
+                    params=result.params,
+                    stats=result.stats,
+                    clusters=filtered_clusters,
+                )
+                non_cross_rules = [r for r in theme_rules if r.get("scope") != "all_clusters"]
+                report = eval_engine.evaluate_cluster_themes(result_with_filtered, non_cross_rules)
+            else:
+                report = eval_engine.evaluate_cluster_themes(result, theme_rules)
             eval_engine.save_report(report, cfg.project_root)
         except Exception:
             logger.exception("评估执行失败")
@@ -868,6 +932,70 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     for f in report["heuristic"]["failures"]
                 ],
             },
+        }
+
+    @app.post("/api/cluster/results/{result_id}/clusters/{cluster_id}/evaluate-theme",
+              response_model=SingleClusterEvalResponse)
+    async def eval_single_cluster_theme(result_id: str, cluster_id: int, req: fastapi.Request):
+        """对单个簇的标题和主题描述执行单簇启发式规则。
+
+        不执行跨簇规则（diverse_labels）。
+        返回该簇的评估结果。
+        """
+        cluster_dir = req.app.state.cluster_dir
+        result = cluster_mod.load_result(result_id, cluster_dir)
+        if result is None:
+            raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
+
+        target = None
+        for c in result.clusters:
+            if c.cluster_id == cluster_id:
+                target = c
+                break
+        if target is None:
+            raise fastapi.HTTPException(status_code=404, detail=f"簇 {cluster_id} 不存在")
+
+        cfg = req.app.state.cfg
+        rules_path = cfg.resolve_path("./data/eval_rules.yaml")
+        if not rules_path.exists():
+            raise fastapi.HTTPException(status_code=500, detail="规则配置文件不存在")
+
+        all_rules = eval_engine.load_rules(rules_path)
+        theme_rules = all_rules.get("cluster_theme", [])
+        # 排除跨簇规则
+        non_cross_rules = [r for r in theme_rules if r.get("scope") != "all_clusters"]
+        if not non_cross_rules:
+            raise fastapi.HTTPException(status_code=500, detail="未找到可用规则")
+
+        try:
+            results = eval_engine.run_theme_rules(
+                [{"cluster_id": cluster_id, "label": target.label,
+                  "theme_description": target.theme_description, "size": target.size}],
+                non_cross_rules,
+            )
+        except Exception:
+            logger.exception("单簇评估执行失败")
+            raise fastapi.HTTPException(status_code=500, detail="评估执行失败")
+
+        passed = sum(1 for r in results if r["passed"])
+        failed = sum(1 for r in results if not r["passed"])
+
+        return {
+            "cluster_id": cluster_id,
+            "checks": [
+                {
+                    "rule_id": r["rule_id"],
+                    "severity": r["severity"],
+                    "passed": r["passed"],
+                    "value": r.get("value", ""),
+                    "expected": r.get("expected", ""),
+                    "message": r.get("message", ""),
+                    "cluster_id": r.get("cluster_id"),
+                }
+                for r in results
+            ],
+            "passed": passed,
+            "failed": failed,
         }
 
     @app.get("/api/eval/reports", response_model=list[EvalReportSummary])

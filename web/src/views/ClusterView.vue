@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { formatDate } from '../utils/format'
 import {
   NLayout,
@@ -26,7 +26,6 @@ import {
   GitNetworkOutline,
   PlayOutline,
   AppsOutline,
-  CheckmarkCircleOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
@@ -136,7 +135,55 @@ const expandedClusters = ref<Set<number>>(new Set())
 // 评估状态
 const evalRunning = ref(false)
 const evalReport = ref<EvalReport | null>(null)
-const showEvalResult = ref(false)
+
+// 批量操作
+const batchRunning = ref<'generate' | 'eval' | null>(null)
+const confirmVisible = ref(false)
+const confirmAction = ref<'generate' | 'eval'>('generate')
+const confirmScope = ref<'all' | 'errors_only'>('all')
+const perClusterEvalRunning = ref<Set<number>>(new Set())
+
+// 从 evalReport 计算每簇评估摘要
+const clusterEvalMap = computed(() => {
+  const map = new Map<number, { passed: number; failed: number; failures: EvalRuleResult[] }>()
+  if (!evalReport.value) return map
+
+  const clusterCount = evalReport.value.total_clusters
+  if (clusterCount === 0) return map
+
+  const perClusterChecks = Math.floor(evalReport.value.heuristic.total_checks / clusterCount)
+
+  // 从 detailItem 获取实际的 cluster_id 列表，初始化所有簇
+  if (detailItem.value?.clusters) {
+    for (const c of detailItem.value.clusters) {
+      map.set(c.cluster_id, { passed: perClusterChecks, failed: 0, failures: [] })
+    }
+  }
+
+  // 从 failures 更新有问题的簇
+  for (const f of evalReport.value.heuristic.failures) {
+    if (f.cluster_id !== null && f.cluster_id !== undefined) {
+      let entry = map.get(f.cluster_id)
+      if (!entry) {
+        entry = { passed: 0, failed: 0, failures: [] }
+        map.set(f.cluster_id, entry)
+      }
+      entry.failed++
+      entry.failures.push(f)
+      entry.passed = Math.max(0, perClusterChecks - entry.failed)
+    }
+  }
+
+  return map
+})
+
+// 跨簇规则失败列表
+const crossClusterFailures = computed(() => {
+  if (!evalReport.value) return []
+  return evalReport.value.heuristic.failures.filter(
+    f => f.cluster_id === null || f.cluster_id === undefined
+  )
+})
 
 // 图片预览
 const previewShow = ref(false)
@@ -249,16 +296,23 @@ async function handleGenerateTheme(resultId: string, clusterId: number) {
 
 // ── 评估标题 ──
 
-async function handleEvaluateThemes(resultId: string) {
+async function handleEvaluateThemes(resultId: string, clusterIds?: number[]) {
   evalRunning.value = true
   evalReport.value = null
   try {
+    const body: Record<string, any> = {}
+    if (clusterIds && clusterIds.length > 0) {
+      body.cluster_ids = clusterIds
+    } else {
+      body.cluster_ids = null
+    }
     const resp = await fetch(`${AGENT_BASE}/cluster/results/${resultId}/evaluate-themes`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     })
     if (resp.ok) {
       evalReport.value = await resp.json()
-      showEvalResult.value = true
     } else {
       const err = await resp.json()
       message.error(err.detail || '评估失败')
@@ -270,12 +324,158 @@ async function handleEvaluateThemes(resultId: string) {
   }
 }
 
+// ── 单簇评估 ──
+
+async function handleSingleEval(resultId: string, clusterId: number) {
+  const nextSet = new Set(perClusterEvalRunning.value)
+  nextSet.add(clusterId)
+  perClusterEvalRunning.value = nextSet
+
+  try {
+    const resp = await fetch(
+      `${AGENT_BASE}/cluster/results/${resultId}/clusters/${clusterId}/evaluate-theme`,
+      { method: 'POST' },
+    )
+    if (resp.ok) {
+      const singleResult = await resp.json()
+      // 将单簇结果合并到 evalReport 中
+      if (evalReport.value) {
+        // 计算旧有该簇失败条数
+        const oldFailuresForCluster = evalReport.value.heuristic.failures
+          .filter(f => f.cluster_id === clusterId).length
+
+        // 构建新 failures 列表：移除旧有该簇的 failures，加入新的 failures
+        const newFailures: EvalRuleResult[] = evalReport.value.heuristic.failures
+          .filter(f => f.cluster_id !== clusterId)
+        for (const check of singleResult.checks) {
+          if (!check.passed) {
+            newFailures.push(check)
+          }
+        }
+
+        // total_checks 不变，因为规则数不变
+        const totalChecks = evalReport.value.heuristic.total_checks
+        const adjustedPassed = totalChecks - newFailures.length
+
+        evalReport.value = {
+          ...evalReport.value,
+          heuristic: {
+            total_checks: totalChecks,
+            passed: adjustedPassed,
+            failed: newFailures.length,
+            failures: newFailures,
+          },
+        }
+      } else {
+        // 没有旧报告，直接从单簇结果构造
+        const newFailures: EvalRuleResult[] = []
+        for (const check of singleResult.checks) {
+          if (!check.passed) {
+            newFailures.push(check)
+          }
+        }
+        evalReport.value = {
+          report_id: '',
+          created_at: '',
+          result_id: resultId,
+          total_clusters: detailItem.value?.clusters.length ?? 0,
+          heuristic: {
+            total_checks: singleResult.checks.length,
+            passed: singleResult.passed,
+            failed: singleResult.failed,
+            failures: newFailures,
+          },
+        }
+      }
+      message.success(`簇 ${clusterId} 评估完成`)
+    } else {
+      const err = await resp.json()
+      message.error(err.detail || '单簇评估失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '评估请求失败')
+  } finally {
+    const nextSet2 = new Set(perClusterEvalRunning.value)
+    nextSet2.delete(clusterId)
+    perClusterEvalRunning.value = nextSet2
+  }
+}
+
+// ── 批量操作 ──
+
+function handleBatchGenerate() {
+  confirmAction.value = 'generate'
+  confirmScope.value = 'all'
+  confirmVisible.value = true
+}
+
+function handleBatchEvaluate() {
+  confirmAction.value = 'eval'
+  confirmScope.value = 'all'
+  confirmVisible.value = true
+}
+
+async function handleConfirm() {
+  if (!detailItem.value) return
+  confirmVisible.value = false
+
+  if (confirmAction.value === 'generate') {
+    batchRunning.value = 'generate'
+    try {
+      const clusterIds = confirmScope.value === 'errors_only'
+        ? Array.from(clusterEvalMap.value.keys())
+        : null
+      const body: Record<string, any> = { cluster_ids: clusterIds }
+      const resp = await fetch(
+        `${AGENT_BASE}/cluster/results/${detailItem.value.id}/generate-all-themes`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      )
+      if (resp.ok) {
+        detailItem.value = await resp.json()
+        // 同步更新列表
+        const idx = results.value.findIndex(r => r.id === detailItem.value!.id)
+        if (idx >= 0 && detailItem.value.clusters) {
+          results.value[idx].cluster_labels = detailItem.value.clusters.map((c: ClusterItem) => ({
+            cluster_id: c.cluster_id,
+            label: c.label,
+            size: c.size,
+          }))
+        }
+        message.success('批量主题生成完成')
+      } else {
+        const err = await resp.json()
+        message.error(err.detail || '批量主题生成失败')
+      }
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '请求失败')
+    } finally {
+      batchRunning.value = null
+    }
+  } else {
+    // eval
+    batchRunning.value = 'eval'
+    try {
+      const clusterIds = confirmScope.value === 'errors_only'
+        ? Array.from(clusterEvalMap.value.keys())
+        : undefined
+      await handleEvaluateThemes(detailItem.value.id, clusterIds)
+    } finally {
+      batchRunning.value = null
+    }
+  }
+}
+
 // ── 详情 ──
 
 async function showDetail(row: ClusterResultSummary) {
   detailVisible.value = true
   detailLoading.value = true
   detailItem.value = null
+  evalReport.value = null
   expandedClusters.value = new Set()
   try {
     const resp = await fetch(`${AGENT_BASE}/cluster/results/${row.id}`)
@@ -554,50 +754,62 @@ const columns = [
       v-model:show="detailVisible"
       preset="card"
       title="聚类结果详情"
-      style="width: 800px; max-width: 95vw;"
+      style="width: 900px; max-width: 95vw;"
     >
-      <template #header-extra>
-        <NButton
-          size="small"
-          type="warning"
-          :loading="evalRunning"
-          @click="handleEvaluateThemes(detailItem!.id)"
-        >
-          <template #icon>
-            <NIcon><CheckmarkCircleOutline /></NIcon>
-          </template>
-          评估标题
-        </NButton>
-      </template>
       <NSpin :show="detailLoading">
         <div v-if="detailItem" class="detail-body">
-          <!-- 统计摘要 -->
+          <!-- 统计摘要 + 工具栏（同一行） -->
           <div class="detail-summary">
-            <div class="detail-metric">
-              <span class="detail-metric-value">{{ detailItem.stats.num_clusters }}</span>
-              <span class="detail-metric-label">聚类簇数</span>
+            <div class="detail-summary-left">
+              <div class="detail-metric">
+                <span class="detail-metric-value">{{ detailItem.stats.num_clusters }}</span>
+                <span class="detail-metric-label">聚类簇数</span>
+              </div>
+              <div class="detail-metric">
+                <span class="detail-metric-value">{{ detailItem.stats.clustered_photos }}</span>
+                <span class="detail-metric-label">已聚类</span>
+              </div>
+              <div class="detail-metric">
+                <span class="detail-metric-value">{{ detailItem.stats.noise_photos }}</span>
+                <span class="detail-metric-label">噪声</span>
+              </div>
+              <div class="detail-metric">
+                <span class="detail-metric-value">{{ detailItem.stats.total_photos }}</span>
+                <span class="detail-metric-label">总计</span>
+              </div>
+              <div class="detail-metric">
+                <span class="detail-metric-value">{{ detailItem.stats.duration_seconds }}s</span>
+                <span class="detail-metric-label">耗时</span>
+              </div>
+              <div class="detail-metric">
+                <span class="detail-metric-value">
+                  {{ detailItem.stats.total_photos > 0 ? (detailItem.stats.clustered_photos / detailItem.stats.total_photos * 100).toFixed(0) : 0 }}%
+                </span>
+                <span class="detail-metric-label">聚类率</span>
+              </div>
             </div>
-            <div class="detail-metric">
-              <span class="detail-metric-value">{{ detailItem.stats.clustered_photos }}</span>
-              <span class="detail-metric-label">已聚类</span>
-            </div>
-            <div class="detail-metric">
-              <span class="detail-metric-value">{{ detailItem.stats.noise_photos }}</span>
-              <span class="detail-metric-label">噪声</span>
-            </div>
-            <div class="detail-metric">
-              <span class="detail-metric-value">{{ detailItem.stats.total_photos }}</span>
-              <span class="detail-metric-label">总计</span>
-            </div>
-            <div class="detail-metric">
-              <span class="detail-metric-value">{{ detailItem.stats.duration_seconds }}s</span>
-              <span class="detail-metric-label">耗时</span>
-            </div>
-            <div class="detail-metric">
-              <span class="detail-metric-value">
-                {{ detailItem.stats.total_photos > 0 ? (detailItem.stats.clustered_photos / detailItem.stats.total_photos * 100).toFixed(0) : 0 }}%
+            <div class="detail-summary-right">
+              <span v-if="crossClusterFailures.length > 0" class="toolbar-cross-warn">
+                ⚠️ {{ crossClusterFailures.length }} 条跨簇规则失败
               </span>
-              <span class="detail-metric-label">聚类率</span>
+              <div class="toolbar-eval-metric">
+                <span class="toolbar-eval-value">{{ evalReport ? evalReport.heuristic.passed + '/' + evalReport.heuristic.total_checks : '0/0' }}</span>
+                <span class="toolbar-eval-label">标题通过</span>
+              </div>
+              <div class="toolbar-btn-stack">
+                <NButton
+                  size="small"
+                  type="primary"
+                  :loading="batchRunning === 'generate'"
+                  @click="handleBatchGenerate"
+                >重新生成</NButton>
+                <NButton
+                  size="small"
+                  type="warning"
+                  :loading="batchRunning === 'eval'"
+                  @click="handleBatchEvaluate"
+                >重新评估</NButton>
+              </div>
             </div>
           </div>
 
@@ -627,6 +839,14 @@ const columns = [
                   <span v-if="c.theme_description" class="cluster-theme-desc">{{ c.theme_description }}</span>
                 </div>
                 <NSpace size="small">
+                  <NTag
+                    v-if="clusterEvalMap.has(c.cluster_id)"
+                    size="tiny"
+                    :bordered="false"
+                    :type="clusterEvalMap.get(c.cluster_id)!.failed > 0 ? 'warning' : 'success'"
+                  >
+                    标题校验 {{ clusterEvalMap.get(c.cluster_id)!.passed }}/{{ clusterEvalMap.get(c.cluster_id)!.passed + clusterEvalMap.get(c.cluster_id)!.failed }} 通过
+                  </NTag>
                   <NTag size="tiny" :bordered="false" type="info">{{ c.size }} 张</NTag>
                   <NTag size="tiny" :bordered="false">凝聚度 {{ (c.coherence_score * 100).toFixed(0) }}%</NTag>
                   <NButton
@@ -645,11 +865,33 @@ const columns = [
                     :type="c.theme_description ? 'default' : 'primary'"
                     :loading="generatingThemeId === c.cluster_id"
                     @click.stop="handleGenerateTheme(detailItem!.id, c.cluster_id)"
-                  >
-                    {{ c.theme_description ? '重新生成' : '生成主题' }}
-                  </NButton>
+                  >生成标题</NButton>
+                  <NButton
+                    size="tiny"
+                    :disabled="!c.label"
+                    :loading="perClusterEvalRunning.has(c.cluster_id)"
+                    @click.stop="handleSingleEval(detailItem!.id, c.cluster_id)"
+                  >评估标题</NButton>
                 </NSpace>
               </div>
+
+              <!-- 评估详情（仅当有未通过条目时显示） -->
+              <div
+                v-if="clusterEvalMap.has(c.cluster_id) && clusterEvalMap.get(c.cluster_id)!.failed > 0"
+                class="cluster-eval-block"
+              >
+                <div
+                  v-for="f in clusterEvalMap.get(c.cluster_id)!.failures"
+                  :key="`${f.rule_id}-${f.cluster_id}`"
+                  class="cluster-eval-item"
+                >
+                  <NTag :bordered="false" size="tiny" :type="f.severity === 'error' ? 'error' : 'warning'">
+                    {{ f.severity === 'error' ? '错误' : '警告' }}
+                  </NTag>
+                  <span class="cluster-eval-msg">{{ f.message }}</span>
+                </div>
+              </div>
+
               <PhotoThumbList
                 :photos="c.photos"
                 :max-preview="expandedClusters.has(c.cluster_id) ? 0 : 3"
@@ -658,36 +900,55 @@ const columns = [
             </div>
           </div>
 
-          <!-- 评估结果区域 -->
-          <div v-if="evalReport" class="eval-result-section">
-            <div class="eval-result-header">
-              <span class="eval-result-title">标题评估结果</span>
-              <NTag :bordered="false" size="small" :type="evalReport.heuristic.failed === 0 ? 'success' : 'warning'">
-                {{ evalReport.heuristic.passed }}/{{ evalReport.heuristic.total_checks }} 通过
-              </NTag>
-            </div>
-            <div v-if="evalReport.heuristic.failed > 0" class="eval-failures">
-              <div
-                v-for="f in evalReport.heuristic.failures"
-                :key="`${f.rule_id}-${f.cluster_id}`"
-                class="eval-failure-item"
-              >
-                <NTag :bordered="false" size="tiny" :type="f.severity === 'error' ? 'error' : 'warning'">
-                  {{ f.severity === 'error' ? '错误' : '警告' }}
-                </NTag>
-                <span v-if="f.cluster_id !== null && f.cluster_id !== undefined" class="eval-failure-cluster">
-                  簇 {{ f.cluster_id }}
-                </span>
-                <span class="eval-failure-msg">{{ f.message }}</span>
-              </div>
-            </div>
-            <div v-else class="eval-all-passed">
-              <NIcon color="var(--n-color-success)"><CheckmarkCircleOutline /></NIcon>
-              <span>全部检查通过</span>
-            </div>
-          </div>
         </div>
       </NSpin>
+    </NModal>
+
+    <!-- 批量操作确认弹窗 -->
+    <NModal
+      v-model:show="confirmVisible"
+      preset="card"
+      :title="confirmAction === 'generate' ? '确认批量生成主题' : '确认批量评估'"
+      style="width: 460px; max-width: 90vw;"
+    >
+      <div class="confirm-body">
+        <p class="confirm-desc">
+          {{ confirmAction === 'generate' ? '将为聚类结果批量生成主题描述。' : '将对聚类结果批量执行启发式规则检查。' }}
+          共 {{ detailItem?.clusters.length ?? 0 }} 个聚类簇。
+        </p>
+        <div class="confirm-options">
+          <div
+            class="confirm-option"
+            :class="{ active: confirmScope === 'all' }"
+            @click="confirmScope = 'all'"
+          >
+            <span class="confirm-radio">{{ confirmScope === 'all' ? '●' : '○' }}</span>
+            <span>全部处理 — 对所有 {{ detailItem?.clusters.length ?? 0 }} 个聚类执行</span>
+          </div>
+          <div
+            class="confirm-option"
+            :class="{ active: confirmScope === 'errors_only', disabled: !evalReport || clusterEvalMap.size === 0 }"
+            @click="evalReport && clusterEvalMap.size > 0 ? confirmScope = 'errors_only' : null"
+          >
+            <span class="confirm-radio">{{ confirmScope === 'errors_only' ? '●' : '○' }}</span>
+            <span>仅处理含错误的结果 — 对 {{ clusterEvalMap.size }} 个当前评估含错误的聚类执行</span>
+          </div>
+        </div>
+        <p v-if="!evalReport" class="confirm-hint">
+          ⚠️ 尚未评估，无法筛选含错误的结果。请先执行「全部评估」。
+        </p>
+      </div>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="confirmVisible = false">取消</NButton>
+          <NButton
+            type="primary"
+            @click="handleConfirm"
+          >
+            {{ confirmAction === 'generate' ? '确认生成' : '确认评估' }}
+          </NButton>
+        </NSpace>
+      </template>
     </NModal>
 
     <!-- 图片预览弹窗 -->
@@ -761,9 +1022,19 @@ const columns = [
 }
 .detail-summary {
   display: flex;
-  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
   padding: 12px 0;
   border-bottom: 1px solid var(--n-border-color);
+}
+.detail-summary-left {
+  display: flex;
+  gap: 20px;
+}
+.detail-summary-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .detail-metric {
   display: flex;
@@ -824,52 +1095,94 @@ const columns = [
   line-height: 1.4;
 }
 
-/* 评估结果 */
-.eval-result-section {
-  margin-top: 8px;
-  padding: 12px;
-  background: var(--n-color-embedded);
-  border-radius: 8px;
-  border: 1px solid var(--n-border-color);
-}
-.eval-result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.eval-result-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-.eval-failures {
+.toolbar-eval-metric {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 2px;
 }
-.eval-failure-item {
+.toolbar-eval-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--n-color-primary);
+}
+.toolbar-eval-label {
+  font-size: 11px;
+  color: var(--n-text-color-3);
+}
+.toolbar-btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.toolbar-cross-warn {
+  font-size: 12px;
+  color: var(--n-color-warning);
+}
+
+/* 簇卡片内评估区块 */
+.cluster-eval-block {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--n-color-embedded);
+  border-radius: 6px;
+  border: 1px dashed var(--n-border-color);
+}
+.cluster-eval-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  padding: 4px 8px;
-  background: var(--n-color-action);
-  border-radius: 4px;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 0;
 }
-.eval-failure-cluster {
-  font-weight: 600;
-  color: var(--n-color-text-2);
-  white-space: nowrap;
-}
-.eval-failure-msg {
+.cluster-eval-msg {
   color: var(--n-color-text-3);
   flex: 1;
 }
-.eval-all-passed {
+
+/* 确认弹窗 */
+.confirm-body {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 12px;
+}
+.confirm-desc {
   font-size: 13px;
-  color: var(--n-color-success);
+  color: var(--n-text-color-2);
+  margin: 0;
+}
+.confirm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.confirm-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--n-border-color);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.confirm-option.active {
+  border-color: var(--n-color-primary);
+  background: var(--n-color-primary-hover);
+}
+.confirm-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.confirm-radio {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.confirm-hint {
+  font-size: 12px;
+  color: var(--n-color-warning);
+  margin: 0;
 }
 </style>

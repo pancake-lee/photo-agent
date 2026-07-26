@@ -16,6 +16,7 @@
 | 待规划  | 工程    | R4   | 重构-agent和web的调用代码 | 生成相应语言的 sdk，然后替换调用代码                                                                               |
 | 待规划  | 缺陷修复 | B1   | 主题发现返回空结果        | 点击"生成选题建议"提示"未发现候选选题方向"，疑似结构化属性未正确填充导致三个分析维度全空                            |
 | 已规划  | Phase 2  | 2.2  | 聚类标题生成效果差        | 根因：①SQLite 结构化属性空（Go 未解析 VLM JSON）；②cluster.py 模板只拼属性不用描述。方案见详细说明              |
+| 已规划  | Phase 2  | 2.3  | 聚类详情页 UI 优化        | 评估结果内嵌到每个簇卡片，新增批量生成/批量评估按钮（含二次确认），汇总信息区展示评估通过率。方案见详细说明       |
 | 待规划  | Phase 1  | 1.4  | 黄金用例评估体系扩展      | 当前评估仅覆盖 RAG，需探索更多 use case（Text-to-SQL / Combined / Tool / 多轮对话）并建立对应评估方法              |
 | Done    | 工程     | E4   | 网页 Favicon             | 仓库根目录 favicon/ 放置 SVG favicon，web/public 通过 symlink 引用，其他模块也可复用                                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据       | 删除 extract_attributes.py，清理 descriptions.json 的 shot_at 字段，清理 Go/Python 中结构化属性传递代码               |
@@ -136,6 +137,36 @@
 - [ ] AutoSync 后照片的 objects/colors/scene/lighting/mood 字段有值
 - [ ] 聚类标题不再是"内容未识别"类无意义输出
 - [ ] 已有照片批量补齐（重跑 AutoSync 即可）
+
+---
+
+### Phase 2.3 聚类详情页 UI 优化
+
+**现状**：详情弹窗中「评估标题」按钮触发全局评估，评估结果展示在弹窗底部独立区域，用户需要在簇卡片和底部评估结果之间来回对照。
+
+**目标**：评估结果内嵌到每个簇卡片内部，新增批量操作入口，优化交互流程。
+
+**设计要点**：
+
+1. **评估结果内嵌**：从 evalReport 按 cluster_id 分组，每个簇卡片内部展示自己的评估结果（通过/未通过项），不再保留底部全局评估列表
+2. **批量操作**：弹窗顶部「全部生成」「全部评估」两个按钮，点击后弹出二次确认弹窗，可选择处理范围（全部 / 仅含错误的簇）
+3. **汇总信息**：工具栏行展示评估通过率概览，跨簇规则（diverse_labels）结果也展示在汇总区
+4. **单簇重评**：每个簇卡片评估区内有「重新评估此标题」按钮，独立评估当前簇
+
+**相关 API**：
+
+- 新增 `POST /api/cluster/results/{id}/generate-all-themes`（批量生成主题）
+- 已有 `POST /api/cluster/results/{id}/evaluate-themes` 扩展支持 `cluster_ids` 参数
+- 新增 `POST /api/cluster/results/{id}/clusters/{clusterId}/evaluate-theme`（单簇评估）
+
+**方案文档**：[2026-07-26-cluster-detail-ui-redesign.md](design/2026-07-26-cluster-detail-ui-redesign.md)
+
+**验收**：
+- [ ] 评估结果展示在每个簇卡片内部，不再在弹窗底部独立列出
+- [ ] 「全部生成」「全部评估」按钮在弹窗顶部工具栏可见，含二次确认弹窗
+- [ ] 确认弹窗支持"全部处理"和"仅处理含错误的结果"两种范围选择
+- [ ] 每个簇卡片可独立重新评估标题
+- [ ] 评估通过率在汇总信息区可见
 
 ---
 
