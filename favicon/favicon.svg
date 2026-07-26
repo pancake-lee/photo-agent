@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 相机 body -->
+  <rect x="8" y="20" width="48" height="34" rx="6" ry="6" fill="#4A90D9" stroke="#2C5F8A" stroke-width="2"/>
+  <!-- 镜头 -->
+  <circle cx="32" cy="37" r="12" fill="#1A1A2E" stroke="#2C5F8A" stroke-width="2"/>
+  <circle cx="32" cy="37" r="8" fill="#2C5F8A"/>
+  <circle cx="32" cy="37" r="4" fill="#4A90D9"/>
+  <!-- 镜头反光 -->
+  <ellipse cx="29" cy="34" rx="2" ry="1.5" fill="#7AB8F5" opacity="0.6"/>
+  <!-- 闪光灯/取景器 -->
+  <rect x="18" y="14" width="16" height="8" rx="3" ry="3" fill="#4A90D9" stroke="#2C5F8A" stroke-width="1.5"/>
+  <!-- AI 星标 -->
+  <text x="42" y="18" font-size="14" font-weight="bold" fill="#FFD700">✦</text>
+</svg>

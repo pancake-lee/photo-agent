@@ -17,7 +17,7 @@
 | 待规划  | 缺陷修复 | B1   | 主题发现返回空结果        | 点击"生成选题建议"提示"未发现候选选题方向"，疑似结构化属性未正确填充导致三个分析维度全空                            |
 | 待规划  | Phase 2  | 2.2  | 聚类标题生成效果差        | 聚类标题常出现"内容未识别""一组未经标注的照片"等无意义输出，需排查是聚类质量还是标题生成步骤的问题                 |
 | 待规划  | Phase 1  | 1.4  | 黄金用例评估体系扩展      | 当前评估仅覆盖 RAG，需探索更多 use case（Text-to-SQL / Combined / Tool / 多轮对话）并建立对应评估方法              |
-| Done    | 工程     | E4   | 网页 Favicon             | 在 web/public/favicon/ 放置 SVG favicon，后续用户自行替换                                                          |
+| Done    | 工程     | E4   | 网页 Favicon             | 仓库根目录 favicon/ 放置 SVG favicon，web/public 通过 symlink 引用，其他模块也可复用                                 |
 
 ---
 
