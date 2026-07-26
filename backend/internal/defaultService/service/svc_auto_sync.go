@@ -190,7 +190,6 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		ei = &exifInfo{}
 	}
 
-
 	// 匹配时间线
 	timeline := ""
 	if ei.ShotAt != nil {
@@ -207,12 +206,19 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		}
 	}
 
+	objects, colors, scene, lighting, mood := parseVlmAttrs(description)
+
 	photoDO := &data.PhotoDO{
 		ID:           putil.UUID(),
 		Filename:     img.filename,
 		FilePath:     img.relPath,
 		Timeline:     timeline,
 		Description:  description,
+		Objects:      objects,
+		Colors:       colors,
+		Scene:        scene,
+		Lighting:     lighting,
+		Mood:         mood,
 		Width:        int32(width),
 		Height:       int32(height),
 		Brand:        ei.Brand,
@@ -276,6 +282,14 @@ func syncUpdatePhoto(ctx *papp.AppCtx, existing *data.PhotoDO, img imageEntry, d
 	updates := map[string]any{
 		"description": newDesc,
 		"timeline":    newTimeline,
+	}
+	if newDesc != "" {
+		objects, colors, scene, lighting, mood := parseVlmAttrs(newDesc)
+		updates["objects"] = objects
+		updates["colors"] = colors
+		updates["scene"] = scene
+		updates["lighting"] = lighting
+		updates["mood"] = mood
 	}
 
 	q := db.GetQuery().Photo
@@ -378,6 +392,96 @@ func (r *dedupRegistry) save() error {
 	r.modified = false
 	plogger.Infof("DedupRegistry saved: %d hashes", len(r.hashes))
 	return nil
+}
+
+// --------------------------------------------------
+// VLM JSON 解析
+// --------------------------------------------------
+
+// vlmJSON VLM 输出的结构化 JSON（description 内 ```json ... ``` 代码块）。
+type vlmJSON struct {
+	Subject struct {
+		MainObjects []string `json:"main_objects"`
+	} `json:"subject"`
+	Scene struct {
+		Environment string `json:"environment"`
+		Setting     string `json:"setting"`
+		TimeOfDay   string `json:"time_of_day"`
+	} `json:"scene"`
+	Lighting struct {
+		Source string `json:"source"`
+	} `json:"lighting"`
+	ColorPalette struct {
+		DominantColors []string `json:"dominant_colors"`
+	} `json:"color_palette"`
+	Mood string `json:"mood"`
+}
+
+// parseVlmAttrs 从 VLM 输出的 description 文本中提取结构化属性。
+// description 形如 ```json\n{...}\n```，解析后映射为 objects/colors/scene/lighting/mood。
+func parseVlmAttrs(description string) (objects, colors, scene, lighting, mood string) {
+	if description == "" {
+		return
+	}
+
+	jsonStr := extractJSONBlock(description)
+	if jsonStr == "" {
+		return
+	}
+
+	var v vlmJSON
+	if err := json.Unmarshal([]byte(jsonStr), &v); err != nil {
+		return
+	}
+
+	objects = strings.Join(v.Subject.MainObjects, "、")
+	colors = strings.Join(v.ColorPalette.DominantColors, "、")
+
+	var sceneParts []string
+	if v.Scene.Environment != "" {
+		sceneParts = append(sceneParts, v.Scene.Environment)
+	}
+	if v.Scene.Setting != "" {
+		sceneParts = append(sceneParts, v.Scene.Setting)
+	}
+	scene = strings.Join(sceneParts, "，")
+
+	var lightingParts []string
+	if v.Lighting.Source != "" {
+		lightingParts = append(lightingParts, v.Lighting.Source)
+	}
+	if v.Scene.TimeOfDay != "" && v.Scene.TimeOfDay != "不确定" {
+		lightingParts = append(lightingParts, v.Scene.TimeOfDay)
+	}
+	lighting = strings.Join(lightingParts, "，")
+
+	mood = v.Mood
+
+	return
+}
+
+// extractJSONBlock 从 markdown 代码围栏中提取 JSON 内容。
+func extractJSONBlock(text string) string {
+	start := strings.Index(text, "```json")
+	if start == -1 {
+		start = strings.Index(text, "```")
+	}
+	if start == -1 {
+		return text // 无代码围栏，当作纯 JSON 处理
+	}
+
+	lineEnd := strings.Index(text[start:], "\n")
+	if lineEnd == -1 {
+		return ""
+	}
+	contentStart := start + lineEnd + 1
+
+	end := strings.Index(text[contentStart:], "```")
+	if end == -1 {
+		return strings.TrimSpace(text[contentStart:])
+	}
+
+	return strings.TrimSpace(text[contentStart : contentStart+end])
 }
 
 // computeFileMD5 计算文件的 MD5 哈希（hex 字符串）。

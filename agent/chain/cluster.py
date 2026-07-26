@@ -333,13 +333,16 @@ _THEME_SYSTEM_PROMPT = (
     "你需要为这组照片生成一个主题标签和一句话描述。\n\n"
     "规则：\n"
     "- 主题标签 6-12 个字，精炼有记忆点（如\"云南雪山系列\"\"城市蓝调时刻\"\"逆光人像合集\"）\n"
-    "- 一句话描述 15-30 字，概括这组照片的核心特征和视觉风格\n\n"
+    "- 一句话描述 15-30 字，概括这组照片的核心特征和视觉风格\n"
+    "- 优先从「描述」字段理解照片的视觉内容和主题，结构化属性（主体/场景/色调/光线/情绪）作为辅助索引\n\n"
     "你必须严格返回一行合法 JSON，不得包含任何其他文字、注释或 markdown 标记。\n"
     '输出格式：{"label":"主题标签","description":"一句话描述"}'
 )
 
 _PHOTO_INFO_TEMPLATE = (
-    "- {filename} | 主体: {objects} | 场景: {scene} | 色调: {colors} | 光线: {lighting} | 情绪: {mood}"
+    "- {filename}\n"
+    "  描述: {description}\n"
+    "  属性: 主体={objects} 场景={scene} 色调={colors} 光线={lighting} 情绪={mood}"
 )
 
 
@@ -387,9 +390,14 @@ def _fetch_photo_descriptions(
 
 
 def _build_photo_info_text(photo: dict) -> str:
-    """将单张照片的结构化属性格式化为一行描述文本。"""
+    """将单张照片的结构化属性和描述格式化为 LLM 可读的文本块。"""
+    desc = (photo.get("description") or "").strip()
+    if not desc:
+        desc = "无描述"
+
     return _PHOTO_INFO_TEMPLATE.format(
         filename=photo.get("filename", "未知"),
+        description=desc,
         objects=photo.get("objects") or "未识别",
         scene=photo.get("scene") or "未识别",
         colors=photo.get("colors") or "未识别",

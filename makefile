@@ -9,6 +9,7 @@ start:
 	make stop
 
 	@mkdir -p $(PID_DIR)
+	@mkdir -p $(LOG_DIR)
 	@echo "🚀 启动全部服务..."
 
 	@# Backend (Go)
