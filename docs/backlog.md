@@ -15,7 +15,7 @@
 | 待规划  | Phase 4 | 4.2  | 系列感维护                | 跨时间线主题提取，发现"对比/延续/变奏"系列（如雨天 vs 晴天、2023 vs 2024 同一地点）                               |
 | 待规划  | 工程    | R4   | 重构-agent和web的调用代码 | 生成相应语言的 sdk，然后替换调用代码                                                                               |
 | 待规划  | 缺陷修复 | B1   | 主题发现返回空结果        | 点击"生成选题建议"提示"未发现候选选题方向"，疑似结构化属性未正确填充导致三个分析维度全空                            |
-| 待规划  | Phase 2  | 2.2  | 聚类标题生成效果差        | 聚类标题常出现"内容未识别""一组未经标注的照片"等无意义输出，需排查是聚类质量还是标题生成步骤的问题                 |
+| 已规划  | Phase 2  | 2.2  | 聚类标题生成效果差        | 根因：①SQLite 结构化属性空（Go 未解析 VLM JSON）；②cluster.py 模板只拼属性不用描述。方案见详细说明              |
 | 待规划  | Phase 1  | 1.4  | 黄金用例评估体系扩展      | 当前评估仅覆盖 RAG，需探索更多 use case（Text-to-SQL / Combined / Tool / 多轮对话）并建立对应评估方法              |
 | Done    | 工程     | E4   | 网页 Favicon             | 仓库根目录 favicon/ 放置 SVG favicon，web/public 通过 symlink 引用，其他模块也可复用                                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据       | 删除 extract_attributes.py，清理 descriptions.json 的 shot_at 字段，清理 Go/Python 中结构化属性传递代码               |
@@ -110,6 +110,32 @@
 - [ ] 黄金用例管理页可列表查看、展开详情、删除用例
 - [ ] 评估脚本从 `golden_queries.json` 加载用例并正常运行
 - [ ] 评估基线指标记录到 `docs/eval/baseline.md`
+
+---
+
+### Phase 2.2 聚类标题生成效果差
+
+**根因**（2026-07-26 诊断）：
+
+1. SQLite 中照片的 objects/colors/scene/lighting/mood 字段全为空 —— VLM 预处理输出了结构化 JSON（含 `subject.main_objects`、`color_palette.dominant_colors`、`scene.environment/setting`、`lighting.source`、`mood` 等字段），但 Go 后端 AutoSync 只把原始文本存为 `description`，未解析 JSON 提取这些字段写入数据库
+2. `cluster.py` 的 `_build_photo_info_text()` 仅拼结构化属性字段，`_fetch_photo_descriptions()` 已取到了 `description` 但模板没用它
+
+**方案**：
+
+**改动 1 — Go 后端解析 VLM JSON**：
+- 新增 `parseVlmAttrs(description string) (objects, colors, scene, lighting, mood string)` 函数
+  - 从描述文本中提取 ` ```json ... ``` ` 代码块
+  - 解析 JSON，映射：`subject.main_objects`→objects（逗号拼接）、`color_palette.dominant_colors`→colors（逗号拼接）、`scene.environment`+`scene.setting`→scene、`lighting.source`+`scene.time_of_day`→lighting、`mood`→mood
+- 在 `syncImportPhoto` 和 `syncUpdatePhoto` 中调用，写入 PhotoDO
+
+**改动 2 — cluster.py 标题生成优化**：
+- `_build_photo_info_text()` 模板同时纳入结构化属性 + 截断的描述文本（前 200 字）
+- `_THEME_SYSTEM_PROMPT` 增加引导：优先从描述文本理解视觉内容，结构化属性作为辅助索引
+
+**验收**：
+- [ ] AutoSync 后照片的 objects/colors/scene/lighting/mood 字段有值
+- [ ] 聚类标题不再是"内容未识别"类无意义输出
+- [ ] 已有照片批量补齐（重跑 AutoSync 即可）
 
 ---
 
