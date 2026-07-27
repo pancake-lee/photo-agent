@@ -206,7 +206,7 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		}
 	}
 
-	objects, colors, scene, lighting, mood := parseVlmAttrs(description)
+	objects, colors, scene, lighting, mood, composition := parseVlmAttrs(description)
 
 	photoDO := &data.PhotoDO{
 		ID:           putil.UUID(),
@@ -219,6 +219,7 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		Scene:        scene,
 		Lighting:     lighting,
 		Mood:         mood,
+		Composition:  composition,
 		Width:        int32(width),
 		Height:       int32(height),
 		Brand:        ei.Brand,
@@ -273,23 +274,34 @@ func syncUpdatePhoto(ctx *papp.AppCtx, existing *data.PhotoDO, img imageEntry, d
 		newTimeline = findEventByTime(existing.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
-	// 检查是否有变化
-	if existing.Description == newDesc &&
-		existing.Timeline == newTimeline {
+	// 检查是否有变化，以及是否需要回填结构化属性
+	descChanged := existing.Description != newDesc
+	timelineChanged := existing.Timeline != newTimeline
+	needAttrBackfill := newDesc != "" &&
+		existing.Objects == "" && existing.Colors == "" &&
+		existing.Scene == "" && existing.Lighting == "" &&
+		existing.Mood == ""
+
+	if !descChanged && !timelineChanged && !needAttrBackfill {
 		return false
 	}
 
-	updates := map[string]any{
-		"description": newDesc,
-		"timeline":    newTimeline,
+	updates := map[string]any{}
+	if descChanged {
+		updates["description"] = newDesc
 	}
-	if newDesc != "" {
-		objects, colors, scene, lighting, mood := parseVlmAttrs(newDesc)
+	if timelineChanged {
+		updates["timeline"] = newTimeline
+	}
+	// 解析结构化属性：description 有变化，或需要回填已有照片
+	if (descChanged || needAttrBackfill) && newDesc != "" {
+		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(newDesc)
 		updates["objects"] = objects
 		updates["colors"] = colors
 		updates["scene"] = scene
 		updates["lighting"] = lighting
 		updates["mood"] = mood
+		updates["composition"] = composition
 	}
 
 	q := db.GetQuery().Photo
@@ -414,12 +426,17 @@ type vlmJSON struct {
 	ColorPalette struct {
 		DominantColors []string `json:"dominant_colors"`
 	} `json:"color_palette"`
-	Mood string `json:"mood"`
+	Mood        string `json:"mood"`
+	Composition struct {
+		Focus    string `json:"focus"`
+		Depth    string `json:"depth"`
+		Symmetry string `json:"symmetry"`
+	} `json:"composition"`
 }
 
 // parseVlmAttrs 从 VLM 输出的 description 文本中提取结构化属性。
-// description 形如 ```json\n{...}\n```，解析后映射为 objects/colors/scene/lighting/mood。
-func parseVlmAttrs(description string) (objects, colors, scene, lighting, mood string) {
+// description 形如 ```json\n{...}\n```，解析后映射为 objects/colors/scene/lighting/mood/composition。
+func parseVlmAttrs(description string) (objects, colors, scene, lighting, mood, composition string) {
 	if description == "" {
 		return
 	}
@@ -456,6 +473,19 @@ func parseVlmAttrs(description string) (objects, colors, scene, lighting, mood s
 	lighting = strings.Join(lightingParts, "，")
 
 	mood = v.Mood
+
+	// 拼接构图属性
+	var compParts []string
+	if v.Composition.Focus != "" {
+		compParts = append(compParts, v.Composition.Focus)
+	}
+	if v.Composition.Depth != "" {
+		compParts = append(compParts, v.Composition.Depth)
+	}
+	if v.Composition.Symmetry != "" {
+		compParts = append(compParts, v.Composition.Symmetry)
+	}
+	composition = strings.Join(compParts, "，")
 
 	return
 }

@@ -606,6 +606,13 @@ def run_suggest(
     # 2. 分析
     logger.info("开始数据分析...")
     freq = _count_attribute_frequencies(photos)
+    # 诊断日志：统计各维度属性值分布
+    for dim, values in freq.items():
+        if values:
+            top3 = sorted(values.items(), key=lambda x: -x[1])[:3]
+            logger.info("属性维度 [%s]: %d 个不同值, top3=%s", dim, len(values), top3)
+        else:
+            logger.warning("属性维度 [%s]: 无数据", dim)
     cluster_keywords = _collect_cluster_keywords(cluster_results)
 
     all_candidates: list[CandidateGroup] = []
@@ -613,17 +620,26 @@ def run_suggest(
     # 2a. 高频未成组
     high_freq = _find_high_freq_ungrouped(freq, cluster_keywords, photos)
     all_candidates.extend(high_freq)
-    logger.info("高频未成组候选: %d 个", len(high_freq))
+    if high_freq:
+        logger.info("高频未成组候选: %d 个", len(high_freq))
+    else:
+        logger.warning("高频未成组: 无候选，可能原因：属性值为空、频率不足 min_frequency=3、或均被已有聚类覆盖")
 
     # 2b. 时间线规律
     temporal = _find_temporal_patterns(photos, stats, freq)
     all_candidates.extend(temporal)
-    logger.info("时间线规律候选: %d 个", len(temporal))
+    if temporal:
+        logger.info("时间线规律候选: %d 个", len(temporal))
+    else:
+        logger.warning("时间线规律: 无候选，可能原因：缺少 shot_at 时间信息、月份照片不足 3 张、或无跨年份规律")
 
     # 2c. 稀缺优质
     scarce = _find_scarce_quality(freq, cluster_results, photos)
     all_candidates.extend(scarce)
-    logger.info("稀缺优质候选: %d 个", len(scarce))
+    if scarce:
+        logger.info("稀缺优质候选: %d 个", len(scarce))
+    else:
+        logger.warning("稀缺优质: 无候选，可能原因：属性值为空、频率不在 [2, max_frequency=5] 范围、或照片质量分不足 0.2")
 
     # 合并去重，选 top 15 送给 LLM
     all_candidates.sort(key=lambda c: c.score, reverse=True)

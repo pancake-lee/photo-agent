@@ -271,12 +271,13 @@ func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *descriptio
 		"description": entry.Description,
 	}
 	if entry.Description != "" {
-		objects, colors, scene, lighting, mood := parseVlmAttrs(entry.Description)
+		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(entry.Description)
 		updates["objects"] = objects
 		updates["colors"] = colors
 		updates["scene"] = scene
 		updates["lighting"] = lighting
 		updates["mood"] = mood
+		updates["composition"] = composition
 	}
 
 	q := db.GetQuery().Photo
