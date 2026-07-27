@@ -496,5 +496,7 @@ Agent 自主循环：
 - 提示词：评估`主题发现选题相似度过高”
   - 评估并不通过，4.2/10分，报告已保存至 data/eval_reports/eval-3.4-2026-07-27.json
   - 主要问题已经在backlog.md追加了任务
-  - 提交 ``
-  
+  - 提交 `b7c8ac883aac86ac6b88cf5a95c999efe6d8ad3c`
+  - 规划 `c2b198886f4d860bb2bb11240e4da74f98b0fafe`
+  - 处理 `8f8c88620204b0186ba1a15056878e90be8e8c7f`
+  - 评估 ``
