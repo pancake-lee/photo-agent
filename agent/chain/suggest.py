@@ -26,6 +26,7 @@ import typing
 import collections
 import random
 
+import httpx
 import langchain_core.messages as lc_messages
 
 import utils.backend_sdk as bksdk
@@ -201,8 +202,10 @@ def _build_stage1_prompt(photos) -> str:
     return "\n".join(lines)
 
 
-def _parse_intuitions_response(raw: str) -> list[dict]:
-    """解析 Stage 1 LLM 返回的主题直觉 JSON。"""
+def _parse_llm_json_response(raw: str, context_label: str = "") -> list[dict]:
+    """通用 LLM JSON 响应解析：直接解析 → 去 markdown → 正则提取数组 → 逐对象提取。"""
+    import re
+
     raw = raw.strip()
 
     attempts: list[str] = [raw]
@@ -222,7 +225,6 @@ def _parse_intuitions_response(raw: str) -> list[dict]:
             pass
 
     # 正则提取 JSON 数组
-    import re
     m = re.search(r'\[\s*\{.*?\}\s*\]', raw, re.DOTALL)
     if m:
         try:
@@ -246,8 +248,14 @@ def _parse_intuitions_response(raw: str) -> list[dict]:
         if results:
             return results
 
-    logger.warning("无法解析 Stage 1 LLM 主题直觉响应: %s", raw[:300])
+    prefix = f"{context_label} " if context_label else ""
+    logger.warning("无法解析 %sLLM 响应: %s", prefix, raw[:300])
     return []
+
+
+def _parse_intuitions_response(raw: str) -> list[dict]:
+    """解析 Stage 1 LLM 返回的主题直觉 JSON。"""
+    return _parse_llm_json_response(raw, "Stage 1 主题直觉")
 
 
 def _stage1_generate_intuitions(cfg, photos) -> list[TopicIntuition]:
@@ -905,50 +913,7 @@ def _build_legacy_prompt(
 
 def _parse_legacy_response(raw: str) -> list[dict]:
     """解析备选路径 LLM 返回的选题建议 JSON。"""
-    import re
-
-    raw = raw.strip()
-
-    attempts: list[str] = [raw]
-    if raw.startswith("```"):
-        lines_raw = raw.split("\n")
-        lines_raw = [ln for ln in lines_raw if not ln.startswith("```")]
-        attempts.append("\n".join(lines_raw).strip())
-
-    for attempt in attempts:
-        try:
-            parsed = json.loads(attempt)
-            if isinstance(parsed, list):
-                return parsed
-            if isinstance(parsed, dict) and "title" in parsed:
-                return [parsed]
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    m = re.search(r'\[\s*\{.*?\}\s*\]', raw, re.DOTALL)
-    if m:
-        try:
-            parsed = json.loads(m.group())
-            if isinstance(parsed, list):
-                return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    objects = re.findall(r'\{[^{}]*\}', raw)
-    if objects:
-        results: list[dict] = []
-        for obj_str in objects:
-            try:
-                obj = json.loads(obj_str)
-                if isinstance(obj, dict) and "title" in obj:
-                    results.append(obj)
-            except (json.JSONDecodeError, TypeError):
-                continue
-        if results:
-            return results
-
-    logger.warning("无法解析备选路径 LLM 响应: %s", raw[:300])
-    return []
+    return _parse_llm_json_response(raw, "备选路径选题建议")
 
 
 # 向后兼容别名
@@ -966,7 +931,7 @@ def _fetch_all_photos(go_backend_url: str):
     all_photos = []
     page = 1
     while True:
-        resp = photo_api.photo_service_search_photos(page=page, page_size=500)
+        resp = photo_api.photo_service_search_photos(page=page, page_size=100)
         items = resp.items or []
         if not items:
             break
@@ -1003,6 +968,25 @@ def _load_cluster_results(cluster_dir: pathlib.Path) -> list[cluster_mod.Cluster
 
     logger.info("加载 %d 个聚类结果", len(results))
     return results
+
+
+def _check_embedding_health(go_backend_url: str) -> tuple[bool, str]:
+    """检查 embedding 服务配置可用性。返回 (available, reason)。"""
+    url = go_backend_url.rstrip("/") + "/v1/embeddings/health"
+    try:
+        resp = httpx.get(url, timeout=5.0)
+        data = resp.json()
+        status = data.get("status", "")
+        if status == "ok":
+            return True, f"model={data.get('model', 'unknown')}"
+        reason = data.get("reason", "unknown")
+        return False, reason
+    except httpx.HTTPStatusError as e:
+        return False, "HTTP error: %s" % e
+    except httpx.RequestError as e:
+        return False, "request failed: %s" % e
+    except Exception as e:
+        return False, "unexpected error: %s" % e
 
 
 # ============================================================================
@@ -1066,24 +1050,32 @@ def run_suggest(
     # 主路径：三阶段编辑视角提案
     # ════════════════════════════════════════════════════════════════════
 
-    logger.info("=== 主路径：三阶段编辑视角提案 ===")
-
-    # Stage 1: 随机采样 → LLM 主题直觉
-    intuitions = _stage1_generate_intuitions(cfg, photos)
-
-    if intuitions:
-        # Stage 2+3: 扩展选片 → 完整选题提案
-        proposals = _stage3_generate_proposals(cfg, intuitions, photos)
-
-        if proposals:
-            meta["pipeline"] = "editorial_three_stage"
-            meta["candidates_found"] = len(proposals)
-            logger.info("主路径成功：生成 %d 个选题建议", len(proposals))
-            return proposals, meta
-
-        logger.warning("主路径 Stage 3 未产出有效提案，回退到备选路径")
+    embedding_ok, embedding_reason = _check_embedding_health(go_backend_url)
+    if not embedding_ok:
+        logger.warning(
+            "Embedding 服务不可用（%s），跳过三阶段主路径，直接走回退路径",
+            embedding_reason,
+        )
     else:
-        logger.warning("主路径 Stage 1 未产出主题直觉，回退到备选路径")
+        logger.info("Embedding 服务可用（%s），进入三阶段主路径", embedding_reason)
+        logger.info("=== 主路径：三阶段编辑视角提案 ===")
+
+        # Stage 1: 随机采样 → LLM 主题直觉
+        intuitions = _stage1_generate_intuitions(cfg, photos)
+
+        if intuitions:
+            # Stage 2+3: 扩展选片 → 完整选题提案
+            proposals = _stage3_generate_proposals(cfg, intuitions, photos)
+
+            if proposals:
+                meta["pipeline"] = "editorial_three_stage"
+                meta["candidates_found"] = len(proposals)
+                logger.info("主路径成功：生成 %d 个选题建议", len(proposals))
+                return proposals, meta
+
+            logger.warning("主路径 Stage 3 未产出有效提案，回退到备选路径")
+        else:
+            logger.warning("主路径 Stage 1 未产出主题直觉，回退到备选路径")
 
     # ════════════════════════════════════════════════════════════════════
     # 回退路径：原有三维度属性分析

@@ -28,7 +28,10 @@ Storage:
 
 VLM:
   # 单张图片最大尺寸（超过自动压缩）
-  MaxImageSizeMB: 0.2 
+  MaxImageSizeMB: 0.2
+
+Embedding:
+  APIKey: ""
 # --------------------------------------------------
 
 server:

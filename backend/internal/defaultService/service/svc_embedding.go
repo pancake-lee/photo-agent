@@ -3,6 +3,8 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 
 	"backend/internal/defaultService/conf"
 
@@ -25,6 +27,7 @@ func (s *EmbeddingServer) Reg(_ *grpc.Server, httpSrv *khttp.Server) {
 	if httpSrv != nil {
 		r := httpSrv.Route("/")
 		r.POST("/v1/embeddings", s.handleEmbedding)
+		r.GET("/v1/embeddings/health", s.handleEmbeddingHealth)
 	}
 }
 
@@ -97,6 +100,10 @@ func (s *EmbeddingServer) handleEmbedding(ctx khttp.Context) error {
 	}
 
 	cfg := getEmbeddingConfig()
+	if cfg.BaseURL == "" {
+		_ = ctx.Result(500, map[string]string{"error": "embedding not configured: BaseURL is empty"})
+		return nil
+	}
 
 	// 逐条请求火山引擎 API，合并结果
 	resp := embeddingResp{
@@ -145,6 +152,21 @@ func getEmbeddingConfig() embedConfig {
 		Model:   conf.C.VLM.Model,
 		BaseURL: conf.C.VLM.BaseURL,
 	}
+}
+
+// handleEmbeddingHealth 处理 GET /v1/embeddings/health，检查 embedding 服务配置可用性。
+func (s *EmbeddingServer) handleEmbeddingHealth(ctx khttp.Context) error {
+	cfg := getEmbeddingConfig()
+	if cfg.BaseURL == "" {
+		return ctx.Result(200, map[string]string{
+			"status": "unconfigured",
+			"reason": "BaseURL is empty",
+		})
+	}
+	return ctx.Result(200, map[string]string{
+		"status": "ok",
+		"model":  cfg.Model,
+	})
 }
 
 // extractTexts 从 OpenAI 格式的 input 字段提取文本列表。
@@ -196,9 +218,19 @@ func callVolcengineEmbedding(cfg embedConfig, model, text string) (*embedResult,
 		return nil, fmt.Errorf("build request failed: %w", err)
 	}
 
-	body, err := putil.HttpDo(httpReq)
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed: status code %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var volcResp volcEmbeddingResp

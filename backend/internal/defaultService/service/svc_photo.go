@@ -76,6 +76,14 @@ func (s *PhotoServer) SearchPhotos(
 		return nil, ctx.Log.LogErr(err)
 	}
 
+	// 规范化 page_size（与 DAO 层截断一致），确保 totalPages 计算正确
+	if params.PageSize < 1 {
+		params.PageSize = 20
+	}
+	if params.PageSize > 100 {
+		params.PageSize = 100
+	}
+
 	items := make([]*api.PhotoItem, len(photos))
 	for i, p := range photos {
 		items[i] = photoDO2Item(p)
