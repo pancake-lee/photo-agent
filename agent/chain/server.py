@@ -824,15 +824,14 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         candidates_found: int
         suggestions: list[dict] = []
         error: str = ""
+        pipeline: str = ""
 
     @app.post("/api/suggest/run", response_model=SuggestResponse)
     async def suggest_run(req: fastapi.Request):
         """运行潜在主题识别，返回选题建议列表。
 
-        通过数据分析 + LLM 生成选题建议，识别三类潜在主题：
-        - 高频未成组
-        - 时间线规律
-        - 稀缺优质
+        主路径：三阶段编辑视角提案（随机采样 → RAG 扩展 → LLM 提案）
+        回退路径：三维度属性分析（高频未成组 / 时间线规律 / 稀缺优质）
         """
         cfg = req.app.state.cfg
         cluster_dir = cfg.resolve_path("./data/clusters")
@@ -857,6 +856,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 for s in suggestions
             ],
             "error": meta.get("error", ""),
+            "pipeline": meta.get("pipeline", ""),
         }
         return result
 
