@@ -52,6 +52,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 
 - **L1** `CLAUDE.md` — 全局协作规则、文档索引、工作模式触发。禁区：产品需求、技术细节、任务进度
 - **L1.5** `docs/handbook/work-modes.md` — 四种模式的完整流程、路由规则、handoff 协议
+- **L1.5** `docs/handbook/eval-guide.md` — AI 评估模式操作指南（工具使用、检查流程）
 - **L1.5** `docs/handbook/coding-conventions.md` — 各语言编码规范（Go/Python/Web/Markdown）
 - **L1.5** `docs/handbook/doc-review.md` — 文档审阅规范（两版流程）
 - **L2** `README.md` — 项目简介、核心价值、快速开始、文档索引。禁区：详细技术方案、任务拆解
@@ -59,7 +60,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - **L4** `docs/tech.md` — "怎么做"：架构设计、API 契约、数据模型、技术选型。禁区：任务拆分、估时
 - **L5** `docs/task_*.md` — 开发计划、每日里程碑、完成情况。禁区：产品需求定义、技术架构设计
 - **L6** `docs/note.md` — 被否决的方案、踩坑记录、决策变更历史。禁区：当前生效的方案
-- **L6** `docs/eval/baseline.md` — 量化评估基线（黄金用例指标 + 模块质量评分趋势）
+- **L6** `docs/eval/baseline.md` — 量化评估基线（RAG 检索 + 模块质量 + 管道正确性）
 - **L7** `docs/backlog.md` — 产品演进路线图、Phase 规划、拒绝清单。禁区：API 设计、数据模型
 - **L8** `docs/ui-rules.md` — 前端 UI 美学规则
 - **L8** `docs/code_review.md` — 历史 code review 报告
@@ -83,6 +84,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - [docs/deploy.md](docs/deploy.md) — 部署指南
 - [docs/ui-rules.md](docs/ui-rules.md) — 前端 UI 美学规则
 - [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — 工作模式完整流程
+- [docs/handbook/eval-guide.md](docs/handbook/eval-guide.md) — AI 评估模式操作指南
 - [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范
 - [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — 文档审阅规范
 - [docs/eval/baseline.md](docs/eval/baseline.md) — 评估基线指标

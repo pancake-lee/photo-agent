@@ -96,3 +96,13 @@ status:
 	@echo "📡 端口占用:"
 	@ss -tlnp | grep -E "($(BACKEND_PORT)|$(AGENT_PORT)|$(WEB_PORT))" \
 		| awk '{print "  " $$4 " → " $$NF}' || echo "  (无)"
+
+		@# HTTP 健康检查
+		@echo ""
+		@echo "🏥 HTTP 健康检查:"
+		@curl -sf -o /dev/null http://localhost:$(BACKEND_PORT)/api/v1/health \
+			&& echo "  ● backend  ✓" || echo "  ○ backend  ✕"
+		@curl -sf -o /dev/null http://localhost:$(AGENT_PORT)/api/chat/health \
+			&& echo "  ● agent    ✓" || echo "  ○ agent    ✕"
+		@curl -sf -o /dev/null http://localhost:$(WEB_PORT) \
+			&& echo "  ● web      ✓" || echo "  ○ web      ✕"
