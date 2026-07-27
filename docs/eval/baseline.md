@@ -35,6 +35,8 @@
 
 > 数据管道各环节的正确性指标，跟踪属性解析、选题发现等流程的数据质量。
 > 指标来源：AI 评估模式下的 `sqlite3` 直接查询 + suggest API 调用。
+>
+> 📋 3.4 专题中枢：[design/2026-07-27-topic-discovery-hub.md](../design/2026-07-27-topic-discovery-hub.md)
 
 ### 2026-07-27 — 3.4 config 补齐后评估（三阶段主路径首次激活）
 
