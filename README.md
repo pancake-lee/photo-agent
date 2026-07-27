@@ -124,11 +124,9 @@ cd web && pnpm dev
 
 ## 🏗️ 三栈架构，各取所长
 
-| 层                | 技术栈                                   | 职责                                                 |
-| :---------------- | :--------------------------------------- | :--------------------------------------------------- |
-| **Web 前端**      | Vue 3 + NaiveUI                          | 照片管理、对话界面、聚类浏览、黄金用例管理           |
-| **Python 推理层** | FastAPI + LangChain/LangGraph + ChromaDB | Agent 编排、向量检索、Text-to-SQL、聚类分析          |
-| **Go 后端**       | Gin + GORM + SQLite                      | 照片元数据管理、文件服务、VLM 预处理、Embedding 代理 |
+- **Web 前端**：Vue 3 + NaiveUI — 照片管理、对话界面、聚类浏览、黄金用例管理
+- **Python 推理层**：FastAPI + LangChain/LangGraph + ChromaDB — Agent 编排、向量检索、Text-to-SQL、聚类分析
+- **Go 后端**：Gin + GORM + SQLite — 照片元数据管理、文件服务、VLM 预处理、Embedding 代理
 
 **为什么不用单一框架？**
 
@@ -161,26 +159,26 @@ photo-agent/
 
 ## 📚 文档索引
 
-| 文档                               | 内容                         |
-| :--------------------------------- | :--------------------------- |
-| [docs/prd.md](docs/prd.md)         | 产品需求、用户故事、验收标准 |
-| [docs/tech.md](docs/tech.md)       | 架构设计、API 契约、数据模型 |
-| [docs/backlog.md](docs/backlog.md) | 演进路线图、拒绝清单         |
-| [docs/deploy.md](docs/deploy.md)   | 部署指南                     |
-| [docs/note.md](docs/note.md)       | 决策备忘、踩坑记录           |
+- [docs/prd.md](docs/prd.md) — 产品需求、用户故事、验收标准
+- [docs/tech.md](docs/tech.md) — 架构设计、API 契约、数据模型
+- [docs/backlog.md](docs/backlog.md) — 需求池、演进路线图、拒绝清单
+- [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录
+- [docs/deploy.md](docs/deploy.md) — 部署指南
+- [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — AI 工作模式完整流程
+- [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范
+- [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — 文档审阅规范
+- [docs/eval/baseline.md](docs/eval/baseline.md) — 评估基线指标
 
 ---
 
 ## 📊 当前状态
 
-| 能力                       | 状态      |
-| :------------------------- | :-------- |
-| 自然语言检索（RAG + SQL）  | ✅ 已上线 |
-| 聚类相册（HDBSCAN + UMAP） | ✅ 已上线 |
-| 黄金用例评估               | ✅ 已上线 |
-| Web 交互界面               | ✅ 已上线 |
-| Text-to-SQL 混合路由       | ✅ 已上线 |
-| 多轮对话记忆               | 🚧 开发中 |
+- ✅ 自然语言检索（RAG + SQL）
+- ✅ 聚类相册（HDBSCAN + UMAP）
+- ✅ 黄金用例评估
+- ✅ Web 交互界面
+- ✅ Text-to-SQL 混合路由
+- 🚧 多轮对话记忆
 
 ---
 

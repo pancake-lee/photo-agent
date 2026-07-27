@@ -37,12 +37,10 @@ Web 前端 (Vue 3 + NaiveUI, :5173)
 
 ## 2. 技术栈
 
-| 层 | 技术 |
-|---|---|
-| Web 前端 | Vue 3 (Composition API + TypeScript) + NaiveUI + Vite |
-| Python Agent | FastAPI + LangChain + LangGraph + ChromaDB + httpx |
-| Go 后端 | Gin + GORM + SQLite + ImageMagick |
-| AI 模型 | GPT-4o-mini / Qwen / 火山引擎 Doubao（LLM + VLM + Embedding） |
+- **Web 前端**：Vue 3 (Composition API + TypeScript) + NaiveUI + Vite
+- **Python Agent**：FastAPI + LangChain + LangGraph + ChromaDB + httpx
+- **Go 后端**：Gin + GORM + SQLite + ImageMagick
+- **AI 模型**：GPT-4o-mini / Qwen / 火山引擎 Doubao（LLM + VLM + Embedding）
 
 ---
 
@@ -194,104 +192,93 @@ descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go
 ### 4.1 Go Backend API(`/api/v1`)
 
 **照片管理**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| GET | `/photos` | 照片列表（分页、timeline/tag/keyword/brand/lens/focal/iso 筛选、排序） |
-| GET | `/photos/stats` | 综合统计（total/brands/lens/focal/gps/monthly/hourly） |
-| GET | `/photos/:id` | 单张详情（含 6 个结构化属性） |
-| GET | `/photos/:id/image` | 图片文件（?size=thumb 缩略图） |
-| PUT | `/photos/:id/tags` | 更新标签 |
-| DELETE | `/photos/:id` | 删除照片（DB + 文件） |
-| POST | `/photos/upload` | 上传照片（冲突检测：overwrite/skip/keep_both） |
+
+- `GET /photos` — 照片列表（分页、timeline/tag/keyword/brand/lens/focal/iso 筛选、排序）
+- `GET /photos/stats` — 综合统计（total/brands/lens/focal/gps/monthly/hourly）
+- `GET /photos/:id` — 单张详情（含 6 个结构化属性）
+- `GET /photos/:id/image` — 图片文件（?size=thumb 缩略图）
+- `PUT /photos/:id/tags` — 更新标签
+- `DELETE /photos/:id` — 删除照片（DB + 文件）
+- `POST /photos/upload` — 上传照片（冲突检测：overwrite/skip/keep_both）
 
 **VLM 队列**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | `/vlm/queue/start` | 启动批量 VLM（支持 force 重新处理） |
-| POST | `/vlm/queue/stop` | 停止队列 |
-| GET | `/vlm/queue/status` | 队列进度（total/completed/failed/current） |
-| POST | `/photos/:id/describe` | 单张入队 |
+
+- `POST /vlm/queue/start` — 启动批量 VLM（支持 force 重新处理）
+- `POST /vlm/queue/stop` — 停止队列
+- `GET /vlm/queue/status` — 队列进度（total/completed/failed/current）
+- `POST /photos/:id/describe` — 单张入队
 
 **查询 & Schema**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | `/query/sql` | 执行 SELECT SQL（双重安全校验） |
-| GET | `/schema/photos` | 表结构（反射自 model.Photo） |
-| GET | `/photos/attribute-values` | 6 个结构化字段的 distinct 值 |
+
+- `POST /query/sql` — 执行 SELECT SQL（双重安全校验）
+- `GET /schema/photos` — 表结构（反射自 model.Photo）
+- `GET /photos/attribute-values` — 6 个结构化字段的 distinct 值
 
 **其他**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| GET | `/timelines` | 时间线列表 |
-| GET | `/timelines/:name/photos` | 某时间线下照片 |
-| GET | `/tags` | 标签列表 |
-| GET | `/tags/:name/photos` | 某标签下照片 |
-| POST | `/import/jobs` | 创建导入任务 |
-| GET | `/import/jobs/:id` | 导入进度 |
-| GET | `/health` | 健康检查 |
+
+- `GET /timelines` — 时间线列表
+- `GET /timelines/:name/photos` — 某时间线下照片
+- `GET /tags` — 标签列表
+- `GET /tags/:name/photos` — 某标签下照片
+- `POST /import/jobs` — 创建导入任务
+- `GET /import/jobs/:id` — 导入进度
+- `GET /health` — 健康检查
 
 **独立路由**（非 `/api/v1` 前缀）：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | `/v1/embeddings` | Embedding 代理（OpenAI 格式 → 火山引擎） |
-| GET | `/v1/openapi.json` | OpenAPI 3.0 自描述（Python Agent 工具解析） |
+
+- `POST /v1/embeddings` — Embedding 代理（OpenAI 格式 → 火山引擎）
+- `GET /v1/openapi.json` — OpenAPI 3.0 自描述（Python Agent 工具解析）
 
 ### 4.2 Python Agent API（FastAPI, :10005）
 
 **对话**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| GET | `/api/chat/health` | 健康检查 |
-| POST | `/api/chat/sessions` | 创建会话 |
-| GET | `/api/chat/sessions` | 会话列表 |
-| GET | `/api/chat/sessions/:id` | 会话详情 + 消息 |
-| PATCH | `/api/chat/sessions/:id` | 更新标题 |
-| DELETE | `/api/chat/sessions/:id` | 删除会话 |
-| POST | `/api/chat/sessions/:id/messages` | 发送消息 → AI 回复 |
+
+- `GET /api/chat/health` — 健康检查
+- `POST /api/chat/sessions` — 创建会话
+- `GET /api/chat/sessions` — 会话列表
+- `GET /api/chat/sessions/:id` — 会话详情 + 消息
+- `PATCH /api/chat/sessions/:id` — 更新标题
+- `DELETE /api/chat/sessions/:id` — 删除会话
+- `POST /api/chat/sessions/:id/messages` — 发送消息 → AI 回复
 
 **Embedding 管理**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| GET | `/api/embed/stats` | 嵌入统计（对比 Go DB 照片数） |
-| POST | `/api/embed/cleanup` | 清理孤儿文档 |
-| POST | `/api/embed/photos/status` | 批量查询嵌入状态 |
-| POST | `/api/embed/queue/start` | 启动批量嵌入 |
-| POST | `/api/embed/queue/stop` | 停止队列 |
-| GET | `/api/embed/queue/status` | 嵌入进度 |
-| POST | `/api/embed/photos/:id` | 单张嵌入 |
-| GET | `/api/embed/photos/:id` | 嵌入详情 |
+
+- `GET /api/embed/stats` — 嵌入统计（对比 Go DB 照片数）
+- `POST /api/embed/cleanup` — 清理孤儿文档
+- `POST /api/embed/photos/status` — 批量查询嵌入状态
+- `POST /api/embed/queue/start` — 启动批量嵌入
+- `POST /api/embed/queue/stop` — 停止队列
+- `GET /api/embed/queue/status` — 嵌入进度
+- `POST /api/embed/photos/:id` — 单张嵌入
+- `GET /api/embed/photos/:id` — 嵌入详情
 
 **黄金查询用例**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| GET | `/api/golden-queries` | 用例列表 |
-| POST | `/api/golden-queries` | 创建用例 |
-| POST | `/api/golden-queries/import` | 批量导入 |
-| DELETE | `/api/golden-queries/:id` | 删除用例 |
-| POST | `/api/golden-queries/evaluate` | 运行评估，返回 P@10/R@10/MRR |
+
+- `GET /api/golden-queries` — 用例列表
+- `POST /api/golden-queries` — 创建用例
+- `POST /api/golden-queries/import` — 批量导入
+- `DELETE /api/golden-queries/:id` — 删除用例
+- `POST /api/golden-queries/evaluate` — 运行评估，返回 P@10/R@10/MRR
 
 **聚类分析**：
-| 方法 | 路径 | 用途 |
-|------|------|------|
-| POST | `/api/cluster/run` | 执行聚类（参数：min_cluster_size 等） |
-| GET | `/api/cluster/results` | 历史聚类结果列表 |
-| GET | `/api/cluster/results/:id` | 聚类结果详情（含每个 cluster 的照片列表） |
-| DELETE | `/api/cluster/results/:id` | 删除聚类结果 |
-| POST | `/api/cluster/results/:id/clusters/:cid/generate-theme` | 为指定聚类生成主题标签 |
-| POST | `/api/cluster/results/:id/generate-all-themes` | 批量生成所有（或指定）簇的主题 |
-| POST | `/api/cluster/results/:id/evaluate-themes` | 批量评估簇标题（支持 cluster_ids 筛选） |
-| POST | `/api/cluster/results/:id/clusters/:cid/evaluate-theme` | 单簇标题评估（不含跨簇规则） |
-| GET | `/api/eval/reports` | 历史评估报告列表 |
-| GET | `/api/eval/reports/:id` | 单份评估报告详情 |
+
+- `POST /api/cluster/run` — 执行聚类（参数：min_cluster_size 等）
+- `GET /api/cluster/results` — 历史聚类结果列表
+- `GET /api/cluster/results/:id` — 聚类结果详情（含每个 cluster 的照片列表）
+- `DELETE /api/cluster/results/:id` — 删除聚类结果
+- `POST /api/cluster/results/:id/clusters/:cid/generate-theme` — 为指定聚类生成主题标签
+- `POST /api/cluster/results/:id/generate-all-themes` — 批量生成所有（或指定）簇的主题
+- `POST /api/cluster/results/:id/evaluate-themes` — 批量评估簇标题（支持 cluster_ids 筛选）
+- `POST /api/cluster/results/:id/clusters/:cid/evaluate-theme` — 单簇标题评估（不含跨簇规则）
+- `GET /api/eval/reports` — 历史评估报告列表
+- `GET /api/eval/reports/:id` — 单份评估报告详情 |
 
 ### 4.3 Web 前端路由
 
-| 路径 | 组件 | 用途 |
-|------|------|------|
-| `#/photos` | PhotoManagement | 照片管理主页（浏览/筛选/上传/删除） |
-| `#/chat/:sessionId?` | ChatView | AI 对话界面 |
-| `#/golden-queries` | GoldenQueryManagement | 黄金查询用例管理 |
-| `#/cluster` | ClusterView | 聚类分析与组图发现 |
+- `#/photos` (PhotoManagement) — 照片管理主页（浏览/筛选/上传/删除）
+- `#/chat/:sessionId?` (ChatView) — AI 对话界面
+- `#/golden-queries` (GoldenQueryManagement) — 黄金查询用例管理
+- `#/cluster` (ClusterView) — 聚类分析与组图发现
 
 Vite 开发代理：
 - `/api/v1/*` → Go Backend (:10004)
@@ -343,14 +330,12 @@ type Photo struct {
 
 **结构化属性值域（Go mapping 函数产出）**：
 
-| 字段 | 来源 | 典型值 |
-|------|------|--------|
-| objects | VLM `main_objects` 直出 | 原始值，逗号分隔 |
-| colors | VLM `dominant_colors` 直出 | 原始值，逗号分隔 |
-| scene | `mapScene()` 中文→英文 | indoor, night, street, mountain, water, nature, urban, outdoor |
-| lighting | `mapLighting()` 中文→英文 | dim, harsh, artificial, backlit, soft, bright |
-| mood | `mapMood()` 中文→英文 | warm, calm, dramatic, melancholy, joyful, serious, mysterious |
-| composition | VLM 直出（focus/depth/symmetry） | 原始值，逗号分隔 |
+- **objects**：VLM `main_objects` 直出 — 原始值，逗号分隔
+- **colors**：VLM `dominant_colors` 直出 — 原始值，逗号分隔
+- **scene**：`mapScene()` 中文→英文 — indoor, night, street, mountain, water, nature, urban, outdoor
+- **lighting**：`mapLighting()` 中文→英文 — dim, harsh, artificial, backlit, soft, bright
+- **mood**：`mapMood()` 中文→英文 — warm, calm, dramatic, melancholy, joyful, serious, mysterious
+- **composition**：VLM 直出（focus/depth/symmetry）— 原始值，逗号分隔
 
 ### 5.2 ChromaDB 文档
 
@@ -434,18 +419,16 @@ photo-agent/
 
 ## 7. 关键设计决策
 
-| 决策 | 选择 | 理由 |
-|------|------|------|
-| Agent 编排 | LangGraph StateGraph | 4 类查询灵活路由，节点可独立测试，支持条件边 |
-| 向量检索 vs 结构化过滤 | ChromaDB 仅做语义，结构化走 Text-to-SQL | 职责边界清晰，避免 Chroma metadata 与 SQLite 冗余同步 |
-| 属性值提示词 | 动态从 DB 获取 distinct 值拼入 | 避免 LLM 生成不存在的值（backlight/baklit 不匹配） |
-| Combined 降级 | SQL 失败/过宽/交集空 → 纯 RAG | 保证任何情况下都有结果返回 |
-| Embedding 代理 | Go `/v1/embeddings` 转发至火山引擎 | 屏蔽火山多模态 URL 与 OpenAI 格式差异 |
-| 图片 URL 拼接 | Agent prompt 硬编码 URL 模板 | 确定性 URL，减少一次工具调用 |
-| 前端状态管理 | composables 内 module-level ref | 规模小无需 Pinia/Vuex |
-| 会话持久化 | Python SQLite（session_store） | 轻量，无需额外服务 |
-| ChromaDB 元数据 | 仅存 photo_id + chunk_index | Route B 决策，Go SQLite 是唯一数据源 |
-| 图片压缩 | ImageMagick convert | 保留完整 EXIF，统一 JPG 输出 |
+- **Agent 编排** → LangGraph StateGraph：4 类查询灵活路由，节点可独立测试，支持条件边
+- **向量检索 vs 结构化过滤** → ChromaDB 仅做语义，结构化走 Text-to-SQL：职责边界清晰，避免 Chroma metadata 与 SQLite 冗余同步
+- **属性值提示词** → 动态从 DB 获取 distinct 值拼入：避免 LLM 生成不存在的值（backlight/baklit 不匹配）
+- **Combined 降级** → SQL 失败/过宽/交集空 → 纯 RAG：保证任何情况下都有结果返回
+- **Embedding 代理** → Go `/v1/embeddings` 转发至火山引擎：屏蔽火山多模态 URL 与 OpenAI 格式差异
+- **图片 URL 拼接** → Agent prompt 硬编码 URL 模板：确定性 URL，减少一次工具调用
+- **前端状态管理** → composables 内 module-level ref：规模小无需 Pinia/Vuex
+- **会话持久化** → Python SQLite（session_store）：轻量，无需额外服务
+- **ChromaDB 元数据** → 仅存 photo_id + chunk_index：Route B 决策，Go SQLite 是唯一数据源
+- **图片压缩** → ImageMagick convert：保留完整 EXIF，统一 JPG 输出
 
 ### 已明确拒绝的技术方向
 

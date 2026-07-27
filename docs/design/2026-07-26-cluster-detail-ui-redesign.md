@@ -188,14 +188,12 @@ POST /api/cluster/results/{result_id}/clusters/{cluster_id}/evaluate-theme
 
 在现有状态基础上新增/调整：
 
-| 变量 | 类型 | 用途 |
-|------|------|------|
-| `batchRunning` | `'generate' \| 'eval' \| null` | 当前正在执行的批量操作 |
-| `confirmVisible` | `boolean` | 确认弹窗显隐 |
-| `confirmAction` | `'generate' \| 'eval'` | 确认弹窗对应的操作类型 |
-| `confirmScope` | `'all' \| 'errors_only'` | 确认弹窗中选择的处理范围 |
-| `perClusterEvalRunning` | `Set<number>` | 正在执行单簇评估的 cluster_id 集合 |
-| `clusterEvalMap` | `computed: Map<number, {passed, failed, failures}>` | 从 evalReport 计算得到的每簇评估摘要 |
+- `batchRunning` (`'generate' | 'eval' | null`) — 当前正在执行的批量操作
+- `confirmVisible` (`boolean`) — 确认弹窗显隐
+- `confirmAction` (`'generate' | 'eval'`) — 确认弹窗对应的操作类型
+- `confirmScope` (`'all' | 'errors_only'`) — 确认弹窗中选择的处理范围
+- `perClusterEvalRunning` (`Set<number>`) — 正在执行单簇评估的 cluster_id 集合
+- `clusterEvalMap` (`computed: Map<number, {passed, failed, failures}>`) — 从 evalReport 计算得到的每簇评估摘要
 
 移除：
 

@@ -75,28 +75,24 @@ LangGraph StateGraph 编排清晰（6 节点 + 条件路由），Combined 查询
 
 ### 做得好的 ✅
 
-| 实践                             | 实现情况                                                        |
-| -------------------------------- | --------------------------------------------------------------- |
-| 查询路由（LangGraph StateGraph） | ✅ 4 类路由 + Combined 交集策略，设计优秀                       |
-| 降级策略                         | ✅ Combined 5 层降级（SQL 异常/过宽/空/交集空/整体异常 → RAG） |
-| Temperature 控制                 | ✅ classify/SQL 用 0.0，RAG 用 0.5，主题生成用 0.7              |
-| Few-shot 示例                    | ✅ Text-to-SQL 有 6 个精心设计的 NL→SQL 示例                   |
-| 结构化输出解析                   | ✅ 3 层 fallback 策略（JSON → regex → 中文模式匹配）          |
-| Token 追踪                       | ✅ LangChain Callback 自动记录，按模型和日期分组                |
-| 动态属性值注入                   | ✅ 从 DB 获取 distinct 值拼入 prompt，避免 LLM 幻觉值           |
-| VLM prompt 外置                  | ✅ 通过配置文件引用外部 prompt 文件                             |
-| ChromaDB 元数据最小化            | ✅ Route B 策略，Go SQLite 是唯一数据源                         |
+- ✅ 查询路由（LangGraph StateGraph）：4 类路由 + Combined 交集策略，设计优秀
+- ✅ 降级策略：Combined 5 层降级（SQL 异常/过宽/空/交集空/整体异常 → RAG）
+- ✅ Temperature 控制：classify/SQL 用 0.0，RAG 用 0.5，主题生成用 0.7
+- ✅ Few-shot 示例：Text-to-SQL 有 6 个精心设计的 NL→SQL 示例
+- ✅ 结构化输出解析：3 层 fallback 策略（JSON → regex → 中文模式匹配）
+- ✅ Token 追踪：LangChain Callback 自动记录，按模型和日期分组
+- ✅ 动态属性值注入：从 DB 获取 distinct 值拼入 prompt，避免 LLM 幻觉值
+- ✅ VLM prompt 外置：通过配置文件引用外部 prompt 文件
+- ✅ ChromaDB 元数据最小化：Route B 策略，Go SQLite 是唯一数据源
 
 ### 需要改进的 ⚠️
 
-| 实践            | 问题                                                            |
-| --------------- | --------------------------------------------------------------- |
-| Prompt 管理     | 所有 prompt 硬编码在 Python 源码中，无版本控制、无 A/B 测试能力 |
-| 流式输出        | 仅 CLI 支持，API 端点不支持 SSE 流式                            |
-| Prompt 注入防护 | Chat API 无任何输入过滤或 guardrails                            |
-| API 安全        | 无认证、无速率限制，LLM 预算暴露给网络                          |
-| 评估体系        | 黄金查询用例管理已建立，但评估脚本未接入 CI，缺少自动化回归     |
-| 可观测性        | 无 LLM 调用的 latency/error rate 监控，无 tracing               |
+- ⚠️ Prompt 管理：所有 prompt 硬编码在 Python 源码中，无版本控制、无 A/B 测试能力
+- ⚠️ 流式输出：仅 CLI 支持，API 端点不支持 SSE 流式
+- ⚠️ Prompt 注入防护：Chat API 无任何输入过滤或 guardrails
+- ⚠️ API 安全：无认证、无速率限制，LLM 预算暴露给网络
+- ⚠️ 评估体系：黄金查询用例管理已建立，但评估脚本未接入 CI，缺少自动化回归
+- ⚠️ 可观测性：无 LLM 调用的 latency/error rate 监控，无 tracing
 
 ### 架构模式评价
 

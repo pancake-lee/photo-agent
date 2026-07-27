@@ -338,20 +338,18 @@ message GetVlmQueueStatusResponse {
 
 根据当前路由表整理：
 
-| 服务                     | 接口                                                            | 当前文件                   | 目标 proto                                |
-| ------------------------ | --------------------------------------------------------------- | -------------------------- | ----------------------------------------- |
-| **照片列表+详情**  | `GET /photos`, `GET /photos/:id`, `GET /photos/:id/image` | `api/photo.go`           | 部分融入 genCURD，复杂过滤手写扩展        |
-| **照片上传**       | `POST /photos/upload`                                         | `api/upload.go`          | `proto/photo_service.proto` 手写 RPC    |
-| **标签更新**       | `PUT /photos/:id/tags`                                        | `api/photo.go`           | 手写扩展                                  |
-| **VLM 队列**       | `POST /vlm/queue/start`, `/stop`, `GET /status`           | `api/vlm.go`             | `proto/vlm_service.proto`               |
-| **单张描述**       | `POST /photos/:id/describe`                                   | `api/vlm.go`             | `proto/vlm_service.proto`               |
-| **SQL 查询**       | `POST /query/sql`                                             | `api/query.go`           | `proto/query_service.proto`             |
-| **表结构**         | `GET /schema/photos`                                          | `api/schema.go`          | `proto/query_service.proto`             |
-| **属性值**         | `GET /photos/attribute-values`                                | `api/schema.go`          | `proto/query_service.proto` 或 stats    |
-| **统计**           | `GET /photos/stats`                                           | `api/photo.go`           | `proto/stats_service.proto`             |
-| **时间线**         | `GET /timelines`, `GET /timelines/:name/photos`             | `api/timeline.go`        | `proto/timeline_service.proto`          |
-| **标签**           | `GET /tags`, `GET /tags/:name/photos`                       | `api/tag.go`             | `proto/tag_service.proto`               |
-| **Embedding 代理** | `POST /v1/embeddings`                                         | `api/embedding_proxy.go` | 保持独立注册（纯代理，与业务 proto 分离） |
+- **照片列表+详情**：`GET /photos`, `GET /photos/:id`, `GET /photos/:id/image` — `api/photo.go` → 部分融入 genCURD，复杂过滤手写扩展
+- **照片上传**：`POST /photos/upload` — `api/upload.go` → `proto/photo_service.proto` 手写 RPC
+- **标签更新**：`PUT /photos/:id/tags` — `api/photo.go` → 手写扩展
+- **VLM 队列**：`POST /vlm/queue/start`, `/stop`, `GET /status` — `api/vlm.go` → `proto/vlm_service.proto`
+- **单张描述**：`POST /photos/:id/describe` — `api/vlm.go` → `proto/vlm_service.proto`
+- **SQL 查询**：`POST /query/sql` — `api/query.go` → `proto/query_service.proto`
+- **表结构**：`GET /schema/photos` — `api/schema.go` → `proto/query_service.proto`
+- **属性值**：`GET /photos/attribute-values` — `api/schema.go` → `proto/query_service.proto` 或 stats
+- **统计**：`GET /photos/stats` — `api/photo.go` → `proto/stats_service.proto`
+- **时间线**：`GET /timelines`, `GET /timelines/:name/photos` — `api/timeline.go` → `proto/timeline_service.proto`
+- **标签**：`GET /tags`, `GET /tags/:name/photos` — `api/tag.go` → `proto/tag_service.proto`
+- **Embedding 代理**：`POST /v1/embeddings` — `api/embedding_proxy.go` → 保持独立注册（纯代理，与业务 proto 分离）
 
 ### 4.4 搬运业务代码的策略
 

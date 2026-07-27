@@ -54,11 +54,9 @@ Go Backend (:10004)
 
 ### 1.1 基础工具
 
-| 工具 | 版本要求 | 用途 |
-|------|---------|------|
-| Go | ≥ 1.23 | 编译 Go 后端 |
-| Python | 3.12 | AI 服务层 |
-| uv | 最新版 | Python 环境和包管理 |
+- **Go** ≥ 1.23 — 编译 Go 后端
+- **Python** 3.12 — AI 服务层
+- **uv** 最新版 — Python 环境和包管理
 
 ### 1.2 Python 环境
 
@@ -182,13 +180,11 @@ cd /root/code/photo-agent
 
 参数：
 
-| 参数 | 说明 |
-|------|------|
-| `-c` | 配置文件路径 |
-| `-input` | 照片目录（覆盖 `photo_src`） |
-| `-force` | 强制重新处理全部 |
-| `-no-dedup` | 禁用 MD5 去重 |
-| `-dry-run` | 仅测试配置，不调用 VLM |
+- `-c` — 配置文件路径
+- `-input` — 照片目录（覆盖 `photo_src`）
+- `-force` — 强制重新处理全部
+- `-no-dedup` — 禁用 MD5 去重
+- `-dry-run` — 仅测试配置，不调用 VLM
 
 运行细节：
 - 并发调用 VLM，每张照片生成一段结构化视觉描述（JSON 格式）
@@ -274,11 +270,9 @@ Agent 启动时初始化以下组件：
 
 LangGraph 自动将用户问题分发到三个分支：
 
-| 路由 | 触发条件 | 示例 |
-|------|---------|------|
-| `sql` | 统计、EXIF 筛选 | "Nikon 拍了几张？""ISO 大于 800 的照片" |
-| `rag` | 内容描述、场景、情绪 | "找一下日落的照片""有猫咪的吗" |
-| `tool` | 列表、详情、时间线 | "列出所有时间线""看看最近的照片" |
+- **`sql`**：统计、EXIF 筛选 — "Nikon 拍了几张？""ISO 大于 800 的照片"
+- **`rag`**：内容描述、场景、情绪 — "找一下日落的照片""有猫咪的吗"
+- **`tool`**：列表、详情、时间线 — "列出所有时间线""看看最近的照片"
 
 ### 5.3 其他模式
 
@@ -305,15 +299,13 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --serve
 
 API 端点：
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/chat/sessions` | 创建会话 |
-| GET | `/api/chat/sessions` | 会话列表（按更新时间倒序） |
-| GET | `/api/chat/sessions/{id}` | 会话详情（含消息历史） |
-| PATCH | `/api/chat/sessions/{id}` | 更新会话标题 |
-| DELETE | `/api/chat/sessions/{id}` | 删除会话 |
-| POST | `/api/chat/sessions/{id}/messages` | 发送消息 |
-| GET | `/api/chat/health` | 健康检查 |
+- `POST /api/chat/sessions` — 创建会话
+- `GET /api/chat/sessions` — 会话列表（按更新时间倒序）
+- `GET /api/chat/sessions/{id}` — 会话详情（含消息历史）
+- `PATCH /api/chat/sessions/{id}` — 更新会话标题
+- `DELETE /api/chat/sessions/{id}` — 删除会话
+- `POST /api/chat/sessions/{id}/messages` — 发送消息
+- `GET /api/chat/health` — 健康检查
 
 会话标题命名规则：
 - 创建时：`YYMMDD-hh:mm:ss`（如 `250623-14:30:00`）
@@ -339,16 +331,14 @@ Agent 启动后提供 Embedding 管理 API，Web 界面可进行批量/单张 Em
 
 **端点**：
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/embed/queue/start` | 启动批量 Embedding（body: `{"force": false}`） |
-| POST | `/api/embed/queue/stop` | 中止批量 Embedding |
-| GET | `/api/embed/queue/status` | 查询队列运行状态 |
-| POST | `/api/embed/photos/{id}` | 单张照片入队 |
-| GET | `/api/embed/photos/{id}` | 单张 embedding 详情 |
-| POST | `/api/embed/photos/status` | 批量查询是否已嵌入 |
-| GET | `/api/embed/stats` | Embedding 统计 |
-| POST | `/api/embed/cleanup` | 清理孤立数据 |
+- `POST /api/embed/queue/start` — 启动批量 Embedding（body: `{"force": false}`）
+- `POST /api/embed/queue/stop` — 中止批量 Embedding
+- `GET /api/embed/queue/status` — 查询队列运行状态
+- `POST /api/embed/photos/{id}` — 单张照片入队
+- `GET /api/embed/photos/{id}` — 单张 embedding 详情
+- `POST /api/embed/photos/status` — 批量查询是否已嵌入
+- `GET /api/embed/stats` — Embedding 统计
+- `POST /api/embed/cleanup` — 清理孤立数据
 
 **启动流程**：`/api/embed/queue/start` 在启动处理前会自动清理 ChromaDB 中孤立文档（Go 中已删除的照片），然后从 Go API 获取待嵌入列表并启动后台 worker。
 
