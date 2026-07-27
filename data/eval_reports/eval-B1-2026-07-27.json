@@ -1,0 +1,166 @@
+{
+  "report_id": "eval-4f2a9b7c1d3e",
+  "backlog_id": "B1",
+  "created_at": "2026-07-27T17:30:00+08:00",
+  "target": "B1 主题发现返回空结果修复",
+  "scorecard": {
+    "overall": 7.4,
+    "dimensions": [
+      {
+        "name": "正确性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "根因定位准确：needAttrBackfill 条件精确捕获了「description 非空但结构化属性全空」的 1177 张已有照片",
+          "回填逻辑触发后，所有验收条件通过：属性非空率 99.7%+，suggest API 返回 5 条选题建议",
+          "composition 字段新增覆盖了 syncImportPhoto、syncUpdatePhoto、applyDescriptionToPhoto 三个调用点，无遗漏"
+        ],
+        "weaknesses": [
+          "needAttrBackfill 使用 5 字段 AND 判断：若某照片仅部分字段有值（如 objects 有值但 mood 为空），其余空字段不会被回填。当前数据全部为空所以未暴露，但条件逻辑不够精细"
+        ]
+      },
+      {
+        "name": "健壮性",
+        "category": "代码质量",
+        "score": 6,
+        "max": 10,
+        "strengths": [
+          "needAttrBackfill 有恰当的 guard 条件（newDesc 非空 + 5 字段全空），避免无意义的空 description 解析",
+          "updates map 按条件逐字段构建，description/timeline 未变时不重复写入"
+        ],
+        "weaknesses": [
+          "parseVlmAttrs 在正则匹配失败或 JSON 解析失败时静默返回空字符串，无任何日志记录——已记录为 B3",
+          "回填失败的照片（如 VLM JSON 格式异常）每次 AutoSync 都会重试：属性仍为空 → needAttrBackfill 仍为 true → 产生无意义的 DB UPDATE"
+        ]
+      },
+      {
+        "name": "可维护性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "变量命名清晰：needAttrBackfill、descChanged、timelineChanged 自解释",
+          "suggest.py 诊断日志格式统一，每条 warning 附带可能原因列表，后续排查时可直接定位",
+          "composition 的拼接逻辑沿用 scene/lighting 的已有模式，风格一致"
+        ],
+        "weaknesses": [
+          "syncUpdatePhoto 从约 20 行增长到约 45 行，三个条件分支增加了一层心智负担。当前规模尚可接受，但函数职责已接近拆分临界点"
+        ]
+      },
+      {
+        "name": "简洁性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "无 dead code 或过度抽象，改动精准聚焦根因",
+          "needAttrBackfill 计算一次、使用两次（guard + 解析触发），无冗余",
+          "suggest.py 诊断日志替代了此前缺失的可观测性，没有引入额外数据结构"
+        ],
+        "weaknesses": [
+          "解析条件 (descChanged || needAttrBackfill) && newDesc != '' 中 newDesc != '' 的检查 needAttrBackfill 定义已隐含，存在微小的逻辑冗余"
+        ]
+      },
+      {
+        "name": "准确性",
+        "category": "功能效果",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "API 返回 5 条合法选题建议，每条含 title/angle/rationale/category/photo_ids，结构完整",
+          "属性非空率：objects 99.8%、colors 99.7%、scene 99.8%、lighting 99.8%、mood 99.7%、composition 99.7%，远超设计验收的 ≥90% 标准",
+          "高频未成组和稀缺优质两个维度正常产出候选（各 10 个），合并去重后送 LLM 15 个候选"
+        ],
+        "weaknesses": [
+          "3 张照片存在至少一个属性字段为空（1177 中的 0.25%），可能是 VLM JSON 格式异常导致 parseVlmAttrs 解析失败，属数据质量问题"
+        ]
+      },
+      {
+        "name": "完整性",
+        "category": "功能效果",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "设计文档列出的 6 个属性字段全部填充（含 composition 超额项）",
+          "三个分析维度均有诊断日志覆盖，空结果时输出 warning + 可能原因",
+          "已有照片无需重新 VLM，仅重新 AutoSync 即完成回填，零额外成本"
+        ],
+        "weaknesses": [
+          "时间线规律维度始终为 0 候选，虽非本次修复范围（已记录为 B2），但作为 suggest 功能三个维度之一，缺失影响选题多样性——当前 5 条建议中 4 条为 high_freq_ungrouped、1 条为 scarce_quality，缺少时间维度的选题角度"
+        ]
+      },
+      {
+        "name": "一致性",
+        "category": "功能效果",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "API 输出 JSON 结构与现有 API 约定一致",
+          "parseVlmAttrs 各字段均使用中文顿号/逗号拼接，风格统一",
+          "composition 的 focus/depth/symmetry 拼接逻辑与 scene（environment+setting）、lighting（source+time_of_day）完全一致",
+          "诊断日志格式与 suggest.py 现有 logger 用法一致"
+        ],
+        "weaknesses": []
+      },
+      {
+        "name": "惊喜度",
+        "category": "用户价值",
+        "score": 4,
+        "max": 10,
+        "strengths": [
+          "稀缺优质维度产出了「藏地庄园印象」这类小众题材（仅 2 张但质量分 1.23），相比高频维度有差异化价值"
+        ],
+        "weaknesses": [
+          "5 条建议全部是同一属性值的照片集合（同一 mood 或同一 scene），没有跨场景、跨时间的非显性关联。用户自己翻照片库按情绪/场景分组也能得到同样结果",
+          "B1 修复恢复了功能可用性（从零到有），但未改变 suggest 算法本身——惊喜度低是算法设计层面的问题，非修复引入"
+        ]
+      },
+      {
+        "name": "可用性",
+        "category": "用户价值",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "每条建议包含具体可执行的信息：标题、发布角度、推荐理由、关联照片 ID 列表",
+          "角度描述有具体细节（如「高海拔山地雪景11张」「搭配登山故事，吸引户外爱好者」），用户可直接据此规划发布内容",
+          "photo_ids 可追溯，用户能在应用中查看对应照片后决定是否采纳建议"
+        ],
+        "weaknesses": [
+          "部分标题泛化（如「静谧时刻合集」可套在任何安静照片组上），缺乏与具体照片内容的强绑定",
+          "建议的推荐理由偏模板化（高频未成组类统一用「X张，未覆盖，情绪统一，有故事感」），差异主要在属性值替换"
+        ]
+      },
+      {
+        "name": "交互体验",
+        "category": "用户价值",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "B1 修复后，用户点击「生成选题建议」能从「未发现候选」恢复到正常返回 5 条建议，核心交互路径已打通",
+          "API 响应结构清晰（generated_at / total_photos / cluster_count / candidates_found / suggestions / error），前端可据此做状态展示"
+        ],
+        "weaknesses": [
+          "API 调用期间无进度反馈（LLM 调用约 30s），用户不知道系统在「分析中」还是「卡死」——这是 suggest 功能的交互设计问题，B1 修复未涉及",
+          "本次修复未改动前端代码，用户侧的交互体验变化仅为「从报错到有结果」，中间过程的体验未改善"
+        ]
+      },
+      {
+        "name": "AI 增量",
+        "category": "用户价值",
+        "score": 5,
+        "max": 10,
+        "strengths": [
+          "LLM 在表达层有实际价值：将「scene=室外高海拔山地，11 张」转化为「雪山之巅系列」+「可发为冰雪风光专题，搭配登山故事」的自然语言标题和角度，比直接展示属性值更可读",
+          "角度描述中的受众定位（如「吸引户外爱好者」）和发布策略建议（如「分批发布，主题生活碎片」）是 LLM 基于常识的增值输出"
+        ],
+        "weaknesses": [
+          "核心「发现」逻辑是规则驱动的频率统计（_count_attribute_frequencies + _find_high_freq_ungrouped），AI 只在最后一步做文字润色。发现的智能工作（跨维度关联、意外组合识别）AI 没有参与",
+          "suggest 的价值高度依赖属性标签的质量（VLM 标注），AI 本身不会纠正或质疑标签的准确性"
+        ]
+      }
+    ]
+  },
+  "summary": "B1 修复有效，根因定位准确、实现精准、验收全部通过。代码质量（7.5）和功能效果（8.7）表现良好，属性填充率 99.7%+ 远超设计标准，suggest API 从「未发现候选选题方向」恢复为正常输出 5 条选题建议。\n\n用户价值维度（5.5）偏低，但这反映的是 suggest 功能当前的设计阶段，而非修复质量问题：惊喜度低是因为算法本质是「按属性值分组 + LLM 润色」，没有跨场景发现能力；AI 增量有限是因为核心发现逻辑是规则驱动的频率统计而非 AI 推理。B1 修复在用户价值上的贡献是「从零到一」——恢复了功能可用性，而非「从一到十」——提升输出质量。这是正确的分工：修复负责跑通，质量提升留给后续迭代。\n\n主要扣分项仍在健壮性（parseVlmAttrs 静默失败，B3）和功能完整性（时间线规律维度始终为空，B2），两项均已记录在 backlog。",
+  "findings_for_backlog": []
+}

@@ -23,6 +23,10 @@
 | Done    | 缺陷修复 | B1   | 主题发现返回空结果           |
 | 待规划  | 缺陷修复 | B2   | 时间线规律维度无候选         |
 | 待规划  | 缺陷修复 | B3   | parseVlmAttrs 解析失败静默   |
+| 待规划  | 缺陷修复 | B4   | 三阶段主路径 Stage 2 RAG 检索失败 |
+| 待规划  | 缺陷修复 | B5   | 三阶段主路径前置检查缺失     |
+| 待规划  | 缺陷修复 | B6   | _fetch_all_photos 仅返回 300 张 |
+| 待规划  | 工程     | R5   | 选题模块 JSON 解析逻辑重复   |
 | Done    | 工程     | E4   | 网页 Favicon                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据           |
 
@@ -153,7 +157,7 @@
 - **状态**：Done
 - **背景**：主题发现（`suggest.py`）产出的选题建议中，每组照片都是时间接近、场景接近、风格接近的高相似度组合。不符合功能设计初心——发现用户在图库中没轻易看到的角度。
 - **方案**：[2026-07-27-suggest.md](design/2026-07-27-suggest.md)——三阶段编辑视角提案：① 随机采样 → LLM 主题直觉；② RAG + 多样性约束扩展选片；③ LLM 提案。原有三维度保留为备选回退路径。
-- **分析**：核心矛盾是算法在找共同点，但选题发现的价值在对比/连接。
+- **分析**：核心矛盾是算法在找共同点，但选题发现的价值在对比/连接。2026-07-27 评估（[eval-3.4-2026-07-27.json](../data/eval_reports/eval-3.4-2026-07-27.json)）：总分 4.2/10，评估不通过。主路径因 Go 后端 embedding 代理不可用而 100% 回退到旧版三维度，实际选题建议与改进前一致。相关问题已记录为 B4/B5/B6/R5。
 - **验收**：
   - [x] 选题提案中至少包含 5 张照片（代码侧 `_STAGE2_MIN_PHOTOS = 5` 约束）
   - [x] 照片时间跨度 > 7 天（Stage 2 多样性采样按日期分组，至多每日期 2 张）
@@ -229,6 +233,45 @@
 - **验收**：-
   - [ ] parseVlmAttrs 解析失败时输出 warning 日志（含 photo ID）
   - [ ] 异常照片不会每次 AutoSync 都重复尝试
+
+### B4 三阶段主路径 Stage 2 RAG 检索失败
+
+- **状态**：待规划
+- **背景**：评估 3.4「主题发现选题相似度过高」时发现，三阶段编辑视角提案的主路径运行时 100% 回退到旧版三维度。根因是 Stage 2 的 RAG 检索调用 Go 后端 `/v1/embeddings` 代理接口，该接口因 Go 端 `Embedding` 配置段不存在（且 VLM 回退的 BaseURL 也为空）而恒定返回 500。
+- **方案**：-
+- **分析**：Python agent 侧的 `embedding` 配置段（含 APIKey/BaseURL/Model）已配置，但 Go 后端的 embedding 代理读取的是 Go 端配置（`conf.C.Embedding`）。Go 配置文件中只有 VLM 段且缺少 APIKey/BaseURL，导致 `getEmbeddingConfig()` 回退到的值全为空。当前 3 个主题直觉的 3 次 RAG 检索全部失败，用户实际看到的选题建议与改进前完全一致。
+- **验收**：-
+  - [ ] Go 后端 `/v1/embeddings` 可正常调用并返回 embedding 向量
+  - [ ] Stage 2 RAG 检索不再返回 500
+
+### B5 三阶段主路径前置检查缺失
+
+- **状态**：待规划
+- **背景**：评估 3.4 时发现，Stage 1 会在 embedding 服务不可用时仍然消耗 LLM token 生成主题直觉（本次评估中 3 个直觉的 LLM 调用白白浪费），然后因 Stage 2 RAG 全部失败而丢弃。当前代码只在 RAG 调用失败时 catch 异常，但没有在进入三阶段流程前做前置可用性检查。
+- **方案**：-
+- **分析**：三阶段主路径的 LLM 调用次数 = Stage 1（1 次）+ Stage 3（最多 intuition 数量次）。如果 embedding 不可用，所有这些 LLM 调用都浪费了。应在进入 Stage 1 之前先做一个轻量的 embedding 健康检查。
+- **验收**：-
+  - [ ] embedding 不可用时，跳过三阶段主路径直接走回退，不消耗 LLM token
+  - [ ] 日志中明确记录跳过原因
+
+### B6 _fetch_all_photos 仅返回 300 张照片
+
+- **状态**：待规划
+- **背景**：评估 3.4 时发现，suggest API 的 `_fetch_all_photos` 仅返回 300 张照片，而数据库实际有 1,177 张。Stage 1 的随机采样池缩小到 300 张（实际可用 1,177 张），降低了采样的日期覆盖度和偶然发现能力。
+- **方案**：-
+- **分析**：`_fetch_all_photos` 使用 SDK 的 `photo_service_search_photos(page=1, page_size=500)` 分页获取，日志显示两个分页 request 返回后总计 300 张。可能是 Go 后端 `SearchPhotos` API 有默认 limit，或 SDK 的分页参数未正确传递。需要排查 Go 后端或 SDK 的分页逻辑。
+- **验收**：-
+  - [ ] `_fetch_all_photos` 返回的照片数量与数据库实际数量一致
+
+### R5 选题模块 JSON 解析逻辑重复
+
+- **状态**：待规划
+- **背景**：评估 3.4 时发现，`_parse_intuitions_response`（Stage 1 用）和 `_parse_legacy_response`（回退路径用）约 80% 逻辑相同（直接解析 → strip markdown → 正则提取数组 → 逐对象提取），各自约 40 行。
+- **方案**：-
+- **分析**：两份函数的核心差异仅在日志前缀和返回类型推断（list vs dict），可提取公共 `_parse_llm_json_response(raw, context)` 减少约 50 行重复代码。当前 `suggest.py` 共 1249 行，其中约 100 行是 JSON 解析相关。
+- **验收**：-
+  - [ ] 合并后的公共函数覆盖所有现有解析场景
+  - [ ] 现有 suggest API 测试通过
 
 ---
 

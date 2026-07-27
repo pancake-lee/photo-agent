@@ -1,12 +1,3 @@
-# Build outputs
-bin/
-backend/server
-backend/batch_vlm
-
-# Data
-data/*
-backend/data/
-
 # IDE
 .vscode/
 .idea/
@@ -22,7 +13,8 @@ Thumbs.db
 *.dylib
 *.test
 *.out
-vendor/
+backend/go.work
+backend/go.work.sum
 
 # Python
 __pycache__/
@@ -37,14 +29,24 @@ env/
 dist/
 build/
 
+# Web
+node_modules
+package-lock.json
+
+
+# Build outputs
+bin/
+backend/server
+backend/batch_vlm
 backend/init_dify
 
-.local
-.env
+# Data
+backend/data/
+data/*
+!data/eval_reports
 
-logs
-backend/go.work
-backend/go.work.sum
-node_modules
+# anything
+.local
 .pids
-package-lock.json
+.env
+logs
