@@ -19,7 +19,7 @@
 | 待规划  | Phase 4  | 4.1  | 发布历史分析                 |
 | 待规划  | Phase 4  | 4.2  | 系列感维护                   |
 | 待规划  | 工程     | R4   | 重构 agent 和 web 的调用代码 |
-| 待规划  | 缺陷修复 | B1   | 主题发现返回空结果           |
+| 已开发  | 缺陷修复 | B1   | 主题发现返回空结果           |
 | Done    | 工程     | E4   | 网页 Favicon                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据           |
 
@@ -186,7 +186,7 @@
 
 ### B1 主题发现返回空结果
 
-- **状态**：已规划
+- **状态**：已开发（待部署验证）
 - **背景**：点击"生成选题建议"提示"未发现候选选题方向"，疑似结构化属性未正确填充导致三个分析维度全空。
 - **方案**：[2026-07-27-b1-topic-discovery-empty-fix.md](design/2026-07-27-b1-topic-discovery-empty-fix.md)
 - **分析**：2026-07-27 诊断确认根因。SQLite 中 1177 张照片的 objects/colors/scene/lighting/mood 全部为空，但 descriptions.json 中 VLM JSON 块完整。因果链：AutoSync 首次运行时 parseVlmAttrs 尚未实现 → 仅写入 description 文本 → 后续 commit 增加了 parseVlmAttrs 但 syncUpdatePhoto 仅在 description 变化时触发 → 已有照片 description 未变 → 永不会回填属性。与 B2.2 同源但 B1 无 fallback（suggest.py 只能读结构化属性，cluster.py 可读 description 文本）。

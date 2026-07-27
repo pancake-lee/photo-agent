@@ -153,8 +153,8 @@ for dim, values in freq.items():
 
 ## 实现步骤
 
-1. 修改 `svc_auto_sync.go`：`syncUpdatePhoto` 回填逻辑 + `vlmJSON` 扩展 + `parseVlmAttrs` 扩展
-2. 修改 `svc_vlm.go`：`applyDescriptionToPhoto` 适配 `parseVlmAttrs` 新返回值（composition）
-3. 修改 `suggest.py`：增加诊断日志
+1. ✅ 修改 `svc_auto_sync.go`：`syncUpdatePhoto` 回填逻辑 + `vlmJSON` 扩展 + `parseVlmAttrs` 扩展
+2. ✅ 修改 `svc_vlm.go`：`applyDescriptionToPhoto` 适配 `parseVlmAttrs` 新返回值（composition）
+3. ✅ 修改 `suggest.py`：增加诊断日志
 4. 编译 Go 后端，重启服务，触发 AutoSync
 5. 验证 DB 数据，运行 suggest 验收
