@@ -144,17 +144,17 @@ for dim, values in freq.items():
 
 ## 验收
 
-- [ ] AutoSync 后，SQLite 中 objects/colors/scene/lighting/mood 字段有值（≥ 90% 的照片）
-- [ ] composition 字段有值（≥ 90% 的照片）
-- [ ] suggest.py 日志中三个维度不再全空
-- [ ] `POST /api/suggest/run` 返回 3-5 个选题建议，而非"未发现候选选题方向"
-- [ ] CLI `--suggest` 输出正常的选题建议列表
-- [ ] 已有照片无需重新 VLM（仅重新 AutoSync 即可）
+- [x] AutoSync 后，SQLite 中 objects/colors/scene/lighting/mood 字段有值（≥ 90% 的照片）
+- [x] composition 字段有值（≥ 90% 的照片）
+- [x] suggest.py 日志中三个维度不再全空
+- [x] `POST /api/suggest/run` 返回 3-5 个选题建议，而非"未发现候选选题方向"
+- [x] CLI `--suggest` 输出正常的选题建议列表
+- [x] 已有照片无需重新 VLM（仅重新 AutoSync 即可）
 
 ## 实现步骤
 
 1. ✅ 修改 `svc_auto_sync.go`：`syncUpdatePhoto` 回填逻辑 + `vlmJSON` 扩展 + `parseVlmAttrs` 扩展
 2. ✅ 修改 `svc_vlm.go`：`applyDescriptionToPhoto` 适配 `parseVlmAttrs` 新返回值（composition）
 3. ✅ 修改 `suggest.py`：增加诊断日志
-4. 编译 Go 后端，重启服务，触发 AutoSync
-5. 验证 DB 数据，运行 suggest 验收
+4. ✅ 编译 Go 后端，重启服务，触发 AutoSync
+5. ✅ 验证 DB 数据，运行 suggest 验收

@@ -19,7 +19,9 @@
 | 待规划  | Phase 4  | 4.1  | 发布历史分析                 |
 | 待规划  | Phase 4  | 4.2  | 系列感维护                   |
 | 待规划  | 工程     | R4   | 重构 agent 和 web 的调用代码 |
-| 已开发  | 缺陷修复 | B1   | 主题发现返回空结果           |
+| Done    | 缺陷修复 | B1   | 主题发现返回空结果           |
+| 待规划  | 缺陷修复 | B2   | 时间线规律维度无候选         |
+| 待规划  | 缺陷修复 | B3   | parseVlmAttrs 解析失败静默   |
 | Done    | 工程     | E4   | 网页 Favicon                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据           |
 
@@ -186,7 +188,7 @@
 
 ### B1 主题发现返回空结果
 
-- **状态**：已开发（待部署验证）
+- **状态**：Done
 - **背景**：点击"生成选题建议"提示"未发现候选选题方向"，疑似结构化属性未正确填充导致三个分析维度全空。
 - **方案**：[2026-07-27-b1-topic-discovery-empty-fix.md](design/2026-07-27-b1-topic-discovery-empty-fix.md)
 - **分析**：2026-07-27 诊断确认根因。SQLite 中 1177 张照片的 objects/colors/scene/lighting/mood 全部为空，但 descriptions.json 中 VLM JSON 块完整。因果链：AutoSync 首次运行时 parseVlmAttrs 尚未实现 → 仅写入 description 文本 → 后续 commit 增加了 parseVlmAttrs 但 syncUpdatePhoto 仅在 description 变化时触发 → 已有照片 description 未变 → 永不会回填属性。与 B2.2 同源但 B1 无 fallback（suggest.py 只能读结构化属性，cluster.py 可读 description 文本）。
@@ -194,6 +196,26 @@
   - [ ] AutoSync 后结构化属性字段有值
   - [ ] suggest API 返回 3-5 个选题建议
   - [ ] CLI `--suggest` 正常输出
+
+### B2 时间线规律维度无候选
+
+- **状态**：待规划
+- **背景**：B1 修复后，suggest API 的高频未成组和稀缺优质维度正常产出候选，但时间线规律维度始终返回 0 个候选。诊断日志提示「缺少 shot_at 时间信息、月份照片不足 3 张、或无跨年份规律」。
+- **方案**：-
+- **分析**：当前 photos 表中 shot_at 字段可能大量为空，导致 `_find_temporal_patterns` 无法按月份分组统计。需要先确认 shot_at 的数据覆盖率，再判断是数据导入问题还是 EXIF 元数据缺失。
+- **验收**：-
+  - [ ] 确认 shot_at 字段覆盖率
+  - [ ] 如数据可用，时间线规律维度产出 ≥ 1 个候选
+
+### B3 parseVlmAttrs 解析失败静默
+
+- **状态**：待规划
+- **背景**：评估 B1 修复时发现，`parseVlmAttrs` 在正则匹配失败或 JSON 解析失败时静默返回空字符串，不记录任何日志。异常照片每次 AutoSync 都会重试解析失败，产生无意义的数据库 UPDATE，但运维人员无法从日志中发现。
+- **方案**：-
+- **分析**：当前 1177 张照片中约 3-4 张属性为空（填充率 99.7%），可能是 VLM JSON 格式异常导致解析失败。静默失败让这类问题不可观测。
+- **验收**：-
+  - [ ] parseVlmAttrs 解析失败时输出 warning 日志（含 photo ID）
+  - [ ] 异常照片不会每次 AutoSync 都重复尝试
 
 ---
 
