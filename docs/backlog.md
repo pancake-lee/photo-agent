@@ -27,6 +27,9 @@
 | Done    | 缺陷修复 | B5   | 三阶段主路径前置检查缺失     |
 | Done    | 缺陷修复 | B6   | _fetch_all_photos 仅返回 300 张 |
 | Done    | 工程     | R5   | 选题模块 JSON 解析逻辑重复   |
+| Done    | 缺陷修复 | B7   | 三阶段主路径 Embedding 配置部署缺失 |
+| 待规划  | 缺陷修复 | B8   | Stage 3 LLM photo_id 无校验（幻觉风险） |
+| 待规划  | 缺陷修复 | B9   | 三阶段选题时间跨度约束未强制执行 |
 | 待规划  | 工程     | R6   | suggest.py 内联 import re 提升到模块级别 |
 | Done    | 工程     | E4   | 网页 Favicon                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据           |
@@ -275,6 +278,37 @@
 - **验收**：
   - [ ] 合并后的公共函数覆盖所有现有解析场景
   - [ ] 现有 suggest API 测试通过
+
+### B7 三阶段主路径 Embedding 配置部署缺失
+
+- **状态**：Done
+- **背景**：2026-07-27 重新评估 3.4（eval-3.4-v2-2026-07-27.json，总评 5.8/10）后发现，三阶段主路径仍无法运行。根因是 `.local/pancake.yaml` 的 Go 配置段缺少 `Embedding.APIKey` 字段，且 VLM 回退的 `APIKey`/`Model`/`BaseURL` 在 Go 段也为空，导致 `getEmbeddingConfig()` 两次回退后 `BaseURL` 为空字符串。Go 代码的 `Embedding.Model` 和 `Embedding.BaseURL` 已有正确默认值（`doubao-embedding-vision-251215` / `https://ark.cn-beijing.volces.com/api/v3`），仅缺少 `APIKey`。
+- **方案**：（用户）在 `.local/pancake.yaml` Go 段添加 Embedding 配置段（含 APIKey/Model/BaseURL）
+- **分析**：Python 配置段已有完整的 `embedding.api_key: ark-d4a72e66-...`，只需在 `.local/pancake.yaml` 的 Go 段添加 Embedding 配置即可。这是一个单行配置修复，不属于代码缺陷。
+- **验收**：
+  - [x] `.local/pancake.yaml` Go 段添加 `Embedding.APIKey`
+  - [x] Go 后端 `/v1/embeddings/health` 返回 `{"status":"ok"}`
+  - [x] suggest API 三阶段主路径可正常执行（meta.pipeline = editorial_three_stage）
+
+### B8 Stage 3 LLM photo_id 无校验（幻觉风险）
+
+- **状态**：待规划
+- **背景**：2026-07-27 第三次评估 3.4（eval-3.4-v3-2026-07-27.json，总评 7.0/10）时发现，'水岸的生命剧场'选题中 LLM 将 photo_id `a2393959-2fb2-41f8-8299-b2a4f973be8c` 误输出为 `a2393959-2fb2-41f8-8299-b2a4f3be8c`（UUID 倒数第二段 `973be8c` 被截断为 `3be8c`），导致 API 响应中包含无效的照片引用。Stage 3 代码（`_stage3_generate_proposals`）对 LLM 返回的 photo_ids 未做任何数据库存在性校验。
+- **方案**：-
+- **分析**：LLM 在精确复制 UUID 上存在固有弱点。应在 `_stage3_generate_proposals` 中对 LLM 返回的每个 photo_id 做校验：存在于 expanded 列表中则保留，不存在则从 expanded 中取未使用的真实 ID 替换。
+- **验收**：-
+  - [ ] Stage 3 返回的 photo_ids 全部经过数据库存在性校验
+  - [ ] 无效 ID 有明确的修复策略（替换而非丢弃）
+
+### B9 三阶段选题时间跨度约束未强制执行
+
+- **状态**：待规划
+- **背景**：2026-07-27 第三次评估 3.4 时发现两个时间跨度问题：(1) '水边的独白' 6 张照片仅跨越约 22 小时（Feb 2-3），不满足设计方案验收标准「> 7 天」；(2) '人鸥之间' 中 3 张海鸥照来自同一拍摄会话（同一上午 21 分钟内）。Stage 2 多样性约束（`_STAGE2_MAX_PER_DATE=2`）保证了 RAG 候选的日期分散，但 Stage 3 LLM 在从 30 张候选中选择最终照片序列时不受时间跨度约束。此外，时间跨度验收标准目前仅为日志输出，未作为硬约束。
+- **方案**：-
+- **分析**：根因在于约束位置——Stage 2 做了日期多样性，但 Stage 3 的 LLM 自由选择最终序列时可以绕过。可能的改进方向：在 Stage 3 prompt 中增加时间多样性要求，或在后处理阶段对 LLM 返回的 photo_sequence 做时间跨度校验。
+- **验收**：-
+  - [ ] 每条选题的照片时间跨度 ≥ 设计标准
+  - [ ] 同日期照片在最终序列中的数量有上限约束
 
 ### R6 suggest.py 内联 import re 提升到模块级别
 

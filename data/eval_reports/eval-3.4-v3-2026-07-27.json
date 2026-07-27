@@ -1,0 +1,159 @@
+{
+  "report_id": "eval-3d4e2v3-20260727",
+  "backlog_id": "3.4",
+  "created_at": "2026-07-27T23:10:00",
+  "target": "3.4 主题发现选题相似度过高 — 三阶段编辑视角路径激活后评估（config 部署完成）",
+  "design_doc": "docs/design/2026-07-27-suggest.md",
+  "method": "runtime + code_review",
+  "note": "用户已在 .local/pancake.yaml Go 段添加 Embedding 配置（APIKey/Model/BaseURL）。Embedding 健康检查通过，三阶段主路径首次端到端运行成功。",
+  "scorecard": {
+    "overall": 7.0,
+    "dimensions": [
+      {
+        "name": "正确性",
+        "category": "代码质量",
+        "score": 6,
+        "max": 10,
+        "strengths": [
+          "Embedding 配置正确部署：Go 段 Embedding.APIKey/Model/BaseURL 已填写，getEmbeddingConfig() 返回完整配置",
+          "三阶段管道端到端跑通：Stage 1 随机采样 9 张（9 个不同日期）→ Stage 2 RAG 检索扩展 → Stage 3 LLM 提案，pipeline 字段确认为 editorial_three_stage",
+          "B4/B5/B6/R5 修复全部验证通过：PageSize 1177 张、健康检查正确拦截、JSON 解析统一"
+        ],
+        "weaknesses": [
+          "Stage 3 LLM 输出了错误的 photo_id：'水岸的生命剧场' 中 a2393959-2fb2-41f8-8299-b2a4f3be8c 实际应为 a2393959-2fb2-41f8-8299-b2a4f973be8c，LLM 将 UUID 倒数第二段从 973be8c 截断为 3be8c。代码未对 LLM 返回的 photo_id 做数据库校验",
+          "'水边的独白'（提案 1）6 张照片仅跨越约 22 小时（2026-02-02 09:20 至 2026-02-03 07:46），不满足设计方案验收标准「照片时间跨度 > 7 天」",
+          "'人鸥之间'（提案 2）中 3 张海鸥照片来自同一拍摄会话（2026-02-02 09:23/09:41/09:44，跨度 21 分钟），_STAGE2_MAX_PER_DATE=2 的多样性约束被 Stage 3 LLM 的最终选择绕过"
+        ]
+      },
+      {
+        "name": "健壮性",
+        "category": "代码质量",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "健康检查机制正确工作：embedding 可用时走三阶段主路径，不可用时走 legacy 回退",
+          "Stage 2 RAG 检索失败有异常捕获和日志记录，不会导致整个 suggest 崩溃",
+          "Stage 3 扩展选片不足 _STAGE2_MIN_PHOTOS(5) 时正确跳过并记录 warning"
+        ],
+        "weaknesses": [
+          "Stage 3 LLM 返回的 photo_id 无校验：LLM 可能产生幻觉 ID（已验证发生 1 次），TopicSuggestion.photo_ids 中包含不存在的照片引用",
+          "时间跨度计算在 Stage 2 日志中出现异常值（5603 天），疑为日期解析问题或脏数据，但未被标记为 WARNING",
+          "_check_embedding_health 中 except httpx.HTTPStatusError 分支仍为死代码（与上次评估一致，R6 未涉及）"
+        ]
+      },
+      {
+        "name": "可维护性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "三阶段函数职责清晰：_random_sample_photos / _stage1_generate_intuitions / _stage2_expand_selection / _stage3_generate_proposals",
+          "日志锚点完整：每个阶段的输入/输出均有 INFO 日志，便于追踪管道执行路径",
+          "常量集中定义（_STAGE1_SAMPLE_MIN/MAX, _STAGE2_MAX_PER_DATE 等），调参时一目了然"
+        ],
+        "weaknesses": [
+          "import re 仍在 _parse_llm_json_response 和 _parse_proposal_response 两处函数体内联（R6 仍未执行）"
+        ]
+      },
+      {
+        "name": "简洁性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "多样性采样算法简洁：按日期分组 → 每组取前 N → 不足则补充，约 25 行实现",
+          "无过度抽象或新增依赖"
+        ],
+        "weaknesses": [
+          "与上次评估一致：_check_embedding_health 中 except httpx.HTTPStatusError 为死代码"
+        ]
+      },
+      {
+        "name": "准确性",
+        "category": "功能效果",
+        "score": 6,
+        "max": 10,
+        "strengths": [
+          "3 条选题建议均为 editorial_proposal 类别，格式正确（title/angle/rationale/photo_ids/category）",
+          "meta.pipeline 字段准确反映 editorial_three_stage 执行路径",
+          "输出量合理：3 条建议 vs 旧版 5 条，每条 5-6 张照片，更聚焦"
+        ],
+        "weaknesses": [
+          "1 条选题包含不存在的 photo_id（LLM 幻觉），该引用为死链接",
+          "'水边的独白' 选题时间跨度仅约 1 天，不满足设计方案「> 7 天」验收标准",
+          "'人鸥之间' 选题中 3 张海鸥照片来自同一拍摄会话（同一上午 21 分钟内），与旧版「同场景连拍」问题性质相同"
+        ]
+      },
+      {
+        "name": "完整性",
+        "category": "功能效果",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "设计方案三阶段工作流完整实现并已验证可运行",
+          "随机采样日期多样性有效：Stage 1 从 9 个不同日期采样",
+          "meta 中 candidates_found/cluster_count/pipeline 字段完整"
+        ],
+        "weaknesses": [
+          "设计方案验收标准「照片时间跨度 > 7 天」：3 条中 1 条不满足（水边的独白），且该验收标准仅为日志输出，未在代码中作为硬约束强制执行",
+          "设计方案中「照片顺序按叙事逻辑排列」因 Stage 3 未在最终响应中返回 role_in_narrative 字段而无法评估",
+          "仅产出 3 条建议（设计方案预期 2-4 条），处于下限"
+        ]
+      },
+      {
+        "name": "惊喜度",
+        "category": "用户价值",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "「人鸥之间·偶伴同行」连接企鹅玩偶（2025 年 8 月旅行）与真实海鸥喂食（2026 年 2 月公园），发现了跨半年的「人与动物的陪伴关系」——这是用户自己不太可能主动发现的关联",
+          "「水岸的生命剧场」跨越 173 天（渔船女子/水鸟群/持花女子/枯树剪影），以水岸为舞台串联不同情绪，选题视角有编辑感",
+          "相比旧版 5 条「高频情绪词归类」（静谧时光集/轻松一刻等），新输出不再是简单属性聚合"
+        ],
+        "weaknesses": [
+          "「水边的独白」6 张照片实际来自同一周末的两次湖边散步（Feb 2-3），本质上仍是同场景同主题的连续拍摄组合，惊喜度有限",
+          "3 条选题中有 2 条围绕「水岸/水边」主题，选题角度存在一定重叠（人鸥之间也是水边场景）"
+        ]
+      },
+      {
+        "name": "可用性",
+        "category": "用户价值",
+        "score": 6,
+        "max": 10,
+        "strengths": [
+          "输出格式与之前一致，API 消费者无需改动",
+          "pipeline 字段明确告知执行路径，便于运维排查",
+          "响应时间约 62 秒（3 次 Stage 3 LLM 调用），在可接受范围"
+        ],
+        "weaknesses": [
+          "photo_id 为后端 SDK 内部 ID，用户无法直接判断照片内容，需前端额外拼接 URL",
+          "1 个 photo_id 是 LLM 幻觉的无效引用，前端展示时会出现找不到照片的情况",
+          "选题角度描述仍有泛化倾向，如「通过水面串联人间百态」可套用在多组照片上"
+        ]
+      },
+      {
+        "name": "AI 增量",
+        "category": "用户价值",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "Stage 1（随机采样 → LLM 编辑直觉）是真正的 AI 增量：随机性引入意外发现，LLM 做跨上下文的模式识别，而非简单统计聚合",
+          "Stage 3（LLM 叙事排序 + 角度撰写）是 LLM 独有能力：从「真实海鸥 + 企鹅玩偶」中发现「陪伴与自然的关系」，这是规则引擎无法产出的洞察",
+          "对比旧版：旧版 LLM 仅做标题润色（「静谧出现 45 次」→「静谧时光集」），新版 LLM 是核心发现引擎"
+        ],
+        "weaknesses": [
+          "LLM 的 UUID 复制错误暴露了 LLM 处理精确结构化数据的固有弱点——在「AI 增量」和「数据准确性」之间存在权衡",
+          "Stage 3 输出的 photo_sequence 中 role_in_narrative 字段未在 API 响应中透出，LLM 的叙事设计能力未完全传递给前端"
+        ]
+      }
+    ]
+  },
+  "summary": "config 补齐后，三阶段编辑视角管道首次端到端运行成功，选题质量相比旧版（5.8→7.0）有质的提升：从「按情绪属性归类」升级为「编辑视角提案」，AI 从润色工具变成了核心发现引擎。'人鸥之间'连接了企鹅玩偶和真实海鸥这两个用户自己不会想到的组合，'水岸的生命剧场'用 173 天跨度的照片构建了多情绪叙事。但存在三个具体问题：(1) LLM 幻觉了一个 photo_id（UUID 截断 7 个字符），代码未做校验；(2) '水边的独白'时间跨度仅约 1 天，不满足设计方案 > 7 天的验收标准；(3) '人鸥之间'中 3 张海鸥照来自同一拍摄会话，多样性约束被 Stage 3 LLM 的最终选择绕过。整体评分 7.0/10，评估通过。",
+  "findings_for_backlog": [
+    "Stage 3 LLM 返回的 photo_id 未做数据库校验：已验证 LLM 将 a2393959-2fb2-41f8-8299-b2a4f973be8c 误输出为 a2393959-2fb2-41f8-8299-b2a4f3be8c（UUID 倒数第二段截断），导致选题 3 包含 1 个无效照片引用。建议在 _stage3_generate_proposals 中对 LLM 返回的 photo_ids 做数据库存在性校验，不存在时回退到 expanded 列表的真实 ID",
+    "'水边的独白'选题 6 张照片仅跨越约 22 小时（2026-02-02/03），不满足设计方案验收标准「时间跨度 > 7 天」。Stage 2 多样性约束（_STAGE2_MAX_PER_DATE=2）保证了 RAG 候选的日期分散，但 Stage 3 LLM 在选择最终照片序列时未受时间跨度约束",
+    "'人鸥之间'选题中 3 张海鸥照片来自同一拍摄会话（2026-02-02 09:23/09:41/09:44，21 分钟内），说明即使 RAG 候选已经过多样性过滤，Stage 3 LLM 仍可能集中选择同日照片。考虑在 Stage 3 prompt 中增加时间多样性指引",
+    "Stage 2 日志中 '人鸥之间' 的 RAG 结果时间跨度显示 5603 天（远超图库实际跨度 455 天），疑为日期解析异常或脏数据。图库中有 1 张照片 shot_at 为空，需排查是否影响了计算",
+    "API 响应中 photo_sequence 的 role_in_narrative 字段未透出，LLM 为每张照片设计的叙事角色信息丢失"
+  ]
+}
