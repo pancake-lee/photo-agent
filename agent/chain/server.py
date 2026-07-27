@@ -15,6 +15,7 @@ import json
 import uuid
 import datetime
 import os
+import threading
 
 
 import fastapi
@@ -116,6 +117,39 @@ def _save_golden_queries(items: list[dict], dir_path: pathlib.Path) -> None:
         json.dumps(items, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
+
+
+# ── 选题历史 JSON 存储 ─────────────────────────────────────
+
+
+def _suggest_history_path(dir_path: pathlib.Path) -> pathlib.Path:
+    """返回 suggest_history.json 的路径。"""
+    return dir_path / "suggest_history.json"
+
+
+def _load_suggest_history(dir_path: pathlib.Path) -> list[dict]:
+    """加载所有选题历史。文件不存在时返回空列表。"""
+    fp = _suggest_history_path(dir_path)
+    if not fp.exists():
+        return []
+    try:
+        return json.loads(fp.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_suggest_history(items: list[dict], dir_path: pathlib.Path) -> None:
+    """保存选题历史列表到 JSON 文件。"""
+    fp = _suggest_history_path(dir_path)
+    fp.parent.mkdir(parents=True, exist_ok=True)
+    fp.write_text(
+        json.dumps(items, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+
+# 选题历史文件的读写锁，防止并发请求时读-改-写竞态丢失记录。
+_suggest_history_lock = threading.Lock()
 
 
 # ── Pydantic 模型 ──────────────────────────────────────────
@@ -317,6 +351,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     # 初始化聚类结果存储路径（存入 app.state，避免模块级全局变量）
     app.state.cluster_dir = cfg.resolve_path("./data/clusters")
     app.state.cluster_dir.mkdir(parents=True, exist_ok=True)
+
+    # 初始化选题历史存储路径
+    app.state.suggest_history_dir = cfg.resolve_path("./data")
 
     # ── 注册路由 ──────────────────────────────────────────
 
@@ -817,21 +854,39 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
     # ── 选题建议 API ─────────────────────────────────────
 
-    class SuggestResponse(pydantic.BaseModel):
+    class SuggestHistoryItem(pydantic.BaseModel):
+        id: str
         generated_at: str
-        total_photos: int
-        cluster_count: int
-        candidates_found: int
-        suggestions: list[dict] = []
-        error: str = ""
         pipeline: str = ""
+        total_photos: int = 0
+        cluster_count: int = 0
+        rating: int = 0
+        title: str = ""
+        angle: str = ""
+        rationale: str = ""
+        category: str = ""
+        photo_ids: list[str] = []
+        error: str = ""
 
-    @app.post("/api/suggest/run", response_model=SuggestResponse)
+
+    class SuggestRatingRequest(pydantic.BaseModel):
+        rating: int
+
+
+    class SuggestBatchResponse(pydantic.BaseModel):
+        items: list[SuggestHistoryItem]
+        count: int
+        error: str = ""
+
+    @app.post("/api/suggest/run", response_model=SuggestBatchResponse)
     async def suggest_run(req: fastapi.Request):
         """运行潜在主题识别，返回选题建议列表。
 
         主路径：三阶段编辑视角提案（随机采样 → RAG 扩展 → LLM 提案）
         回退路径：三维度属性分析（高频未成组 / 时间线规律 / 稀缺优质）
+
+        每个主题作为独立记录持久化到 suggest_history.json，
+        一次生成 N 个主题即写入 N 条独立记录。
         """
         cfg = req.app.state.cfg
         cluster_dir = cfg.resolve_path("./data/clusters")
@@ -840,25 +895,80 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             cfg, cfg.go_backend_url, cluster_dir,
         )
 
-        result = {
-            "generated_at": meta.get("generated_at", ""),
-            "total_photos": meta.get("total_photos", 0),
-            "cluster_count": meta.get("cluster_count", 0),
-            "candidates_found": meta.get("candidates_found", 0),
-            "suggestions": [
-                {
-                    "title": s.title,
-                    "angle": s.angle,
-                    "rationale": s.rationale,
-                    "category": s.category,
-                    "photo_ids": s.photo_ids,
-                }
-                for s in suggestions
-            ],
-            "error": meta.get("error", ""),
-            "pipeline": meta.get("pipeline", ""),
-        }
-        return result
+        generated_at = meta.get("generated_at", "")
+        pipeline = meta.get("pipeline", "")
+        total_photos = meta.get("total_photos", 0)
+        cluster_count = meta.get("cluster_count", 0)
+        error = meta.get("error", "")
+
+        items: list[dict] = []
+        for s in suggestions:
+            item = {
+                "id": uuid.uuid4().hex[:12],
+                "generated_at": generated_at,
+                "pipeline": pipeline,
+                "total_photos": total_photos,
+                "cluster_count": cluster_count,
+                "rating": 0,
+                "title": s.title,
+                "angle": s.angle,
+                "rationale": s.rationale,
+                "category": s.category,
+                "photo_ids": s.photo_ids,
+                "error": error,
+            }
+            items.append(item)
+
+        # 持久化保存（最新的插入列表头部），加锁防止并发写丢失
+        with _suggest_history_lock:
+            history = _load_suggest_history(req.app.state.suggest_history_dir)
+            for item in reversed(items):
+                history.insert(0, item)
+            _save_suggest_history(history, req.app.state.suggest_history_dir)
+
+        return {"items": items, "count": len(items), "error": error}
+
+    @app.get("/api/suggest/history", response_model=list[SuggestHistoryItem])
+    async def suggest_history(req: fastapi.Request):
+        """获取选题历史列表（时间倒序，含完整数据）。"""
+        return _load_suggest_history(req.app.state.suggest_history_dir)
+
+    @app.get("/api/suggest/history/{item_id}")
+    async def suggest_history_detail(item_id: str, req: fastapi.Request):
+        """获取单条选题历史详情。"""
+        items = _load_suggest_history(req.app.state.suggest_history_dir)
+        for it in items:
+            if it["id"] == item_id:
+                return it
+        raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
+
+    @app.delete("/api/suggest/history/{item_id}", response_model=dict)
+    async def suggest_history_delete(item_id: str, req: fastapi.Request):
+        """删除单条选题历史。"""
+        hist_dir = req.app.state.suggest_history_dir
+        with _suggest_history_lock:
+            items = _load_suggest_history(hist_dir)
+            before = len(items)
+            items = [it for it in items if it["id"] != item_id]
+            if len(items) == before:
+                raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
+            _save_suggest_history(items, hist_dir)
+        return {"ok": True}
+
+    @app.patch("/api/suggest/history/{item_id}/rating", response_model=dict)
+    async def suggest_history_rating(item_id: str, body: SuggestRatingRequest, req: fastapi.Request):
+        """更新选题历史的评分（0-5）。"""
+        if not 0 <= body.rating <= 5:
+            raise fastapi.HTTPException(status_code=400, detail="评分必须在 0-5 之间")
+        hist_dir = req.app.state.suggest_history_dir
+        with _suggest_history_lock:
+            items = _load_suggest_history(hist_dir)
+            for it in items:
+                if it["id"] == item_id:
+                    it["rating"] = body.rating
+                    _save_suggest_history(items, hist_dir)
+                    return {"id": item_id, "rating": body.rating}
+            raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
 
     # ── 评估 API ─────────────────────────────────────────
 

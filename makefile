@@ -22,11 +22,13 @@ start:
 	@setsid sh -c 'cd backend && make dev' \
 		> $(LOG_DIR)/backend.log 2>&1 & echo $$! > $(PID_DIR)/backend.pid
 	@echo "  ✓ backend  (pgid $$(cat $(PID_DIR)/backend.pid))"
+	sleep 1
 
 	@# Agent (Python)
 	@setsid sh -c 'cd agent && make dev' \
 		> $(LOG_DIR)/agent.log 2>&1 & echo $$! > $(PID_DIR)/agent.pid
 	@echo "  ✓ agent    (pgid $$(cat $(PID_DIR)/agent.pid))"
+	sleep 1
 
 	@# Web (Vite)
 	@setsid sh -c 'cd web && pnpm dev' \

@@ -48,6 +48,27 @@
 - **已知问题**：1 张照片 shot_at=0（1970, EXIF 缺失），1/9 提案仍有颜色属性归类倾向
 - **评估报告**：`data/eval_reports/eval-B10-2026-07-28.json`
 
+### 2026-07-28 — 3.5 设计方案 + 实现第二轮评估（评估对象：design 文档质量 + 数据兼容性）
+
+- **总体评分**：7.5/10 ✅ 通过（阈值 6.0）
+- **设计文档质量**：9/10 — 结构清晰、决策有据、范围边界明确、验收标准可执行
+- **代码与设计对齐**：5 个 API 端点完整覆盖 CRUD + 评分，数据模型与设计 3.2 节对齐
+- **新发现问题**：
+  - 旧数据格式不兼容：suggest_history.json 使用嵌套 suggestions 数组格式，新前端期望扁平 records，旧数据渲染为空白卡片
+  - 服务未重启 + 前端未重编：staged 代码尚未部署生效
+- **修正前次误判**：SuggestHistoryItem 并非 dead code，已正确用做 GET /api/suggest/history 的 response_model；并发写锁（threading.Lock）已实现
+- **遗留问题**：星级 hover 预览、数字分值标签、loadHistory 静默失败三项体验问题仍未修复
+- **评估报告**：`data/eval_reports/eval-3.5-design-2026-07-28.json`
+
+### 2026-07-28 — 3.5 持久化存储 + 五星打分 + 删除（第一轮评估）
+
+- **总体评分**：7.9/10 ✅ 通过（阈值 6.0）
+- **测试内容**：5 个 API 端点全链路验证 + 代码质量审查
+- **API 验证**：POST run（含自动保存）/ GET history（时间倒序）/ GET detail / DELETE / PATCH rating（含边界校验）全部通过
+- **代码质量**：遵循项目 JSON 存储模式，前端 NaiveUI 组件风格一致。并发写锁已实现（threading.Lock），SuggestHistoryItem 已用做 response_model（非 dead code，首轮评估此条为误判）
+- **交互**：五星打分（乐观更新+回滚）、NPopconfirm 删除确认、自动展开最新记录
+- **评估报告**：`data/eval_reports/eval-3.5-2026-07-28.json`
+
 ### 2026-07-27 — B10 修复后验证（shot_at Unix 时间戳 → 日期转换）
 
 - **修复范围**：新增 `_parse_shot_date` 统一处理函数，全链路 8 处调用点修复
