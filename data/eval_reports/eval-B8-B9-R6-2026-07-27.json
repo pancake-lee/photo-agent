@@ -1,0 +1,154 @@
+{
+  "report_id": "eval-b8b9r6-20260727",
+  "backlog_id": "B8/B9/R6",
+  "created_at": "2026-07-27T23:45:00",
+  "target": "B8 photo_id 校验 + B9 时间跨度强制 + R6 import cleanup",
+  "scorecard": {
+    "overall": 6.5,
+    "dimensions": [
+      {
+        "name": "正确性",
+        "category": "代码质量",
+        "score": 6,
+        "max": 10,
+        "strengths": [
+          "B8 photo_id 校验正确捕获 6 个幻觉 ID（5 个数字索引 + 1 个 UUID），全部替换为有效 ID",
+          "B9 prompt 层在 2/3 提案中生效（295 天、230 天）",
+          "R6 import re 提升到模块级别，功能无回归"
+        ],
+        "weaknesses": [
+          "B9 后处理完全不工作：shot_at 是 Unix 时间戳字符串（如 '1780733203'）而非 ISO 日期，datetime.date.fromisoformat() 始终抛 ValueError 被静默捕获，date_map 始终为空",
+          "B8 对 'aff0bed7-6685-4158-b796-332405faf77f' 误报为无效（该 UUID 确实存在于数据库和 all_photos 列表中），替换为了自身——功能无害但表明 valid_ids 构建有 bug",
+          "Stage 2 日期跨度计算同样因时间戳问题始终输出 0 天（三组扩展列表均如此）"
+        ]
+      },
+      {
+        "name": "健壮性",
+        "category": "代码质量",
+        "score": 5,
+        "max": 10,
+        "strengths": [
+          "B8 多层降级：无效 ID 替换 → 不足 5 张补充 → 完全为空时回退到扩展列表前 5 张",
+          "B8 区分'不存在'和'重复'两种无效原因，日志信息明确"
+        ],
+        "weaknesses": [
+          "B9 date_map 构建时 ValueError 被静默捕获（except pass），导致 B9 整个后处理静默跳过——没有任何日志表明 date_map 为空或解析失败",
+          "B9 扩展候选池时间跨度不足时记录 warning 的分支实际上永远不会执行到（因为 date_map 为空，selected_dates 为空，len < 2 跳过整个 B9 块）",
+          "Unix 时间戳转换失败没有在日志中暴露，使问题难以排查"
+        ]
+      },
+      {
+        "name": "可维护性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "B8/B9 逻辑分块清晰，注释标记明确（═══ B8 / B9 ═══）",
+          "常量 _STAGE2_MIN_PHOTOS 复用避免魔法数字",
+          "日志信息包含选题标题和具体 photo_id，便于追踪问题"
+        ],
+        "weaknesses": [
+          "B9 后处理块约 40 行，逻辑较复杂（时间跨度计算 + 候选池排序 + 两头替换），可提取为独立函数提升可读性"
+        ]
+      },
+      {
+        "name": "简洁性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "R6 移除两处重复的 import re，减少代码重复",
+          "B8 替换逻辑用 for-else 避免额外标志变量"
+        ],
+        "weaknesses": [
+          "B9 中 list(expanded) + list(all_photos) 构造了两个新列表，all_photos 可能很大（1177 张），可改用 itertools.chain 避免全量拷贝"
+        ]
+      },
+      {
+        "name": "准确性",
+        "category": "功能效果",
+        "score": 6,
+        "max": 10,
+        "strengths": [
+          "B8 输出 16/16 photo_id 全部有效，API 响应中无幻觉 ID",
+          "B9 prompt 层有效：2/3 提案时间跨度远超 7 天（295d、230d），选题质量较改进前明显提升"
+        ],
+        "weaknesses": [
+          "B9 后处理不工作：'蓝色的线条' 提案时间跨度仅 1 天（同一次拍摄的 5 张照片），未被修复",
+          "Stage 3 prompt 中传给了 LLM 的'日期'是 Unix 时间戳数字（如 '1780733203'），LLM 无法据此做日期多样性判断——2/3 提案跨度好是 LLM 从照片内容推断的，而非利用了日期信息"
+        ]
+      },
+      {
+        "name": "完整性",
+        "category": "功能效果",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "三阶段主路径端到端跑通，3 条提案均为编辑视角，各有 5-6 张照片",
+          "原始四项验收标准中 photo_id 校验和时间跨度要求已有代码实现"
+        ],
+        "weaknesses": [
+          "时间跨度约束在 1/3 提案中未满足（'蓝色的线条' 仅 1 天），原因是 B9 后处理依赖的 shot_at 日期解析路径断裂"
+        ]
+      },
+      {
+        "name": "一致性",
+        "category": "功能效果",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "输出 JSON 结构与之前版本完全兼容",
+          "pipeline 字段正确标记为 'editorial_three_stage'",
+          "提案格式（title/angle/rationale/photo_ids/category）保持不变"
+        ],
+        "weaknesses": []
+      },
+      {
+        "name": "惊喜度",
+        "category": "用户价值",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "'目光的风景'：连接仰望天空、凝视婴儿、专注作画等不同场景的'目光'主题，跨度 295 天，有编辑巧思",
+          "'手的无声故事'：从家庭呵护到自然互动，以手势为媒介跨越 230 天，有情感深度"
+        ],
+        "weaknesses": [
+          "'蓝色的线条'：5 张照片全部来自同一拍摄会话（8月13-14日），缺乏跨场景惊喜感，与旧版'共享属性选片'的效果无异",
+          "三条提案中有一条仍是同场景连拍组合（33%），未完全达到'发现用户没想到的角度'的初心"
+        ]
+      },
+      {
+        "name": "可用性",
+        "category": "用户价值",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "标题精炼有记忆点（'目光的风景'、'手的无声故事'、'蓝色的线条'）",
+          "叙事角度具体可操作，不只是泛化归类",
+          "发布理由有说服力"
+        ],
+        "weaknesses": [
+          "'蓝色的线条'本质上仍是按颜色属性归类（与旧版'共享属性'范式类似），角度描述偏泛化"
+        ]
+      },
+      {
+        "name": "AI 增量",
+        "category": "用户价值",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "Stage 1 随机采样引入意外组合，LLM 从中发现跨上下文线索（如'目光'和'手'作为叙事媒介），这是纯统计方法做不到的",
+          "Stage 3 按叙事逻辑排列照片序列，体现编辑思维"
+        ],
+        "weaknesses": [
+          "当 Stage 2 扩展列表时间跨度不足时（如同一拍摄日的照片），LLM 没有能力突破候选池限制——此时 AI 增量有限"
+        ]
+      }
+    ]
+  },
+  "summary": "B8 photo_id 校验工作正常，捕获并替换了 6 个幻觉 ID，最终 16/16 photo_id 全部有效。B9 的 prompt 层改进有效（2/3 提案时间跨度远超 7 天），但后处理强制约束完全不工作——根因是 shot_at 字段为 Unix 时间戳字符串而代码按 ISO 日期字符串处理，导致 datetime.date.fromisoformat() 始终失败、date_map 始终为空、B9 后处理逻辑被静默跳过。此外，此问题也影响 Stage 2 日期跨度计算（始终为 0）和 Stage 3 prompt 中传给 LLM 的日期信息（LLM 看到的是无意义的数字）。R6 清理正确无回归。整体评分 6.5/10，建议优先修复 shot_at 时间戳→日期转换后重新评估。",
+  "findings_for_backlog": [
+    "shot_at 字段为 Unix 时间戳字符串（如 '1780733203'），但 suggest.py 中所有日期处理代码均按 ISO 日期字符串（如 '2025-05-02'）操作：Stage 1 随机采样按日期分组失效（实际按时间戳前缀分组）、Stage 2 日期跨度始终为 0、Stage 3 prompt 日期信息对 LLM 无意义、B9 后处理 date_map 始终为空导致时间跨度强制约束静默跳过",
+    "B8 valid_ids 对有效 UUID 'aff0bed7-6685-4158-b796-332405faf77f' 误报为'不存在'（但被 expanded_ids 中的同 ID 替换，功能无害），需排查 valid_ids set 构建逻辑"
+  ]
+}

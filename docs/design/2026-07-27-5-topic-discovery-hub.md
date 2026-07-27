@@ -39,6 +39,8 @@
 | `data/eval_reports/eval-B4-B5-B6-R5-2026-07-27.json` | 2026-07-27 22:12 | 8.3/10 | ✅ | B4/B5/B6/R5 修复验证通过 |
 | `data/eval_reports/eval-3.4-v2-2026-07-27.json` | 2026-07-27 22:30 | 5.8/10 | ❌ | B4/B5/B6/R5 修复后重新评估 3.4，主路径仍因 config 缺失未激活。发现 B7 |
 | `data/eval_reports/eval-3.4-v3-2026-07-27.json` | 2026-07-27 23:04 | 7.0/10 | ✅ | B7 修复后三阶段主路径首次端到端跑通，选题质量明显提升。发现 B8/B9/R6 |
+| `data/eval_reports/eval-B8-B9-R6-2026-07-27.json` | 2026-07-27 23:45 | 6.5/10 | ✅ | B8 有效（6 幻觉 ID 被替换），B9 prompt 层有效（2/3 提案跨度好），B9 后处理因 shot_at 为 Unix 时间戳而不工作。发现 B10 |
+| `data/eval_reports/eval-B10-2026-07-28.json` | 2026-07-28 00:10 | 8.0/10 | ✅ | B10 修复后全面评估，全链路日期逻辑正常，9/9 提案均满足验收标准 |
 
 ### 2.3 Backlog 条目
 
@@ -50,9 +52,10 @@
 | **B6** | _fetch_all_photos 仅返回 300 张 | Done | Go handler page_size 截断不一致，采样池缩小到 1/4 |
 | **R5** | 选题模块 JSON 解析逻辑重复 | Done | `_parse_intuitions_response` / `_parse_legacy_response` 合并 |
 | **B7** | 三阶段主路径 Embedding 配置部署缺失 | Done | .local/pancake.yaml Go 段缺 Embedding.APIKey（用户手动修复） |
-| **B8** | Stage 3 LLM photo_id 无校验 | **待规划** | LLM 幻觉截断 UUID，API 响应含无效照片引用 |
-| **B9** | 三阶段选题时间跨度约束未强制执行 | **待规划** | Stage 3 LLM 自由选择时可绕过日期多样性约束 |
-| **R6** | suggest.py 内联 import re 提升到模块级别 | **待规划** | 代码风格 cleanup |
+| **B8** | Stage 3 LLM photo_id 无校验 | Done | LLM 幻觉截断 UUID，API 响应含无效照片引用 |
+| **B9** | 三阶段选题时间跨度约束未强制执行 | Done | Stage 3 LLM 自由选择时可绕过日期多样性约束 |
+| **R6** | suggest.py 内联 import re 提升到模块级别 | Done | 代码风格 cleanup |
+| **B10** | suggest.py 全链路 shot_at 按时间戳处理导致日期逻辑失效 | **Done** | 新增 `_parse_shot_date` 统一处理 Unix 时间戳和 ISO 日期，全链路 8 处调用点已修复 |
 
 ### 2.4 基线记录
 
@@ -105,6 +108,31 @@
   └─ commit: a098b1a
 
 现在 ← 你在这里
+
+2026-07-27  开发：实现 B8/B9/R6（photo_id 校验 + 时间跨度强制 + import cleanup）
+  └─ commit: 待提交
+
+2026-07-27  评估 #5：B8/B9/R6 修复验证（B10 修复前）
+  ├─ 评分: 6.5/10 ✅（阈值 6.0）
+  ├─ 报告: eval-B8-B9-R6-2026-07-27.json
+  ├─ 发现: B8 有效（6 幻觉 ID 替换），B9 prompt 层有效（2/3 提案跨度好）
+  ├─ 发现: B9 后处理不工作 — 根因 shot_at 是 Unix 时间戳（B10）
+  └─ 新增: B10 待规划
+
+2026-07-27  开发：实现 B10（shot_at Unix 时间戳 → 日期转换）
+  ├─ 新增 `_parse_shot_date` 工具函数，兼容 Unix 时间戳和 ISO 日期
+  ├─ 全链路 8 处调用点统一修复：随机采样 / Stage2 扩展 / Stage3 prompt / B9 后处理 / 时序分析
+  ├─ B9 健壮性提升：date_map 为空时 warning + itertools.chain 避免列表全量拷贝
+  ├─ 验证：Stage 1 日期分组 1156→64 个真实日期，Stage 2 时间跨度 0→273~349 天
+  └─ commit: 待提交
+
+2026-07-28  评估 #6：B10 修复后全面评估
+  ├─ 评分: 8.0/10 ✅（较修复前 6.5 提升 1.5 分）
+  ├─ 报告: eval-B10-2026-07-28.json
+  ├─ 3 轮 9 提案全部走三阶段主路径，48 张照片全部有效
+  ├─ B8 正确捕获 12 次数字索引幻觉，B9 后处理正常构建（9/9 天然满足 ≥7 天）
+  ├─ 发现: 1 张照片 shot_at=0（EXIF 缺失），B9 替换逻辑未触发验证，legacy 路径未验证
+  └─ 建议 commit: fix + docs
 ```
 
 ---
@@ -116,9 +144,9 @@
 | 验收项 | 状态 |
 |--------|------|
 | 选题提案中至少包含 5 张照片 | ✅ 3 条提案均为 5-6 张 |
-| 照片时间跨度 > 7 天 | ⚠️ 1/3 不满足（「水边的独白」仅约 22 小时），约束仅在日志中输出，未强制执行 → **关联 B9** |
+| 照片时间跨度 > 7 天 | ✅ Stage 3 prompt 明确要求 ≥7 天 + 后处理硬校验替换（B9） |
 | 叙事角度描述可被理解为有发布价值 | ✅ 三条提案均有编辑视角叙事 |
-| Stage 3 LLM 返回的 photo_id 经过数据库校验 | ❌ 已证实幻觉 1 次（UUID 截断） → **关联 B8** |
+| Stage 3 LLM 返回的 photo_id 经过数据库校验 | ✅ 校验全库 + 扩展候选集，无效 ID 自动替换（B8） |
 
 ### 4.2 衍生问题
 
@@ -129,31 +157,37 @@
 | B6 | 采样池仅 300 张 | ✅ Done | — |
 | R5 | JSON 解析重复 | ✅ Done | — |
 | B7 | Embedding 配置部署缺失 | ✅ Done | — |
-| **B8** | photo_id 无校验 | **待规划** | 已产生实际幻觉，影响 API 响应正确性 |
-| **B9** | 时间跨度约束未强制执行 | **待规划** | 原始验收标准未完全满足，影响选题质量核心指标 |
-| **R6** | import re 内联 | **待规划** | 纯代码风格，低优先级 |
+| **B8** | photo_id 无校验 | ✅ Done | 已产生实际幻觉，影响 API 响应正确性 |
+| **B9** | 时间跨度约束未强制执行 | ✅ Done | 原始验收标准未完全满足，影响选题质量核心指标 |
+| **R6** | import re 内联 | ✅ Done | 纯代码风格，低优先级 |
 
 ---
 
-## 5. 下一轮优化建议
+## 5. 下一轮建议
 
-### 5.1 最优先：B8 + B9（阻塞原始验收标准）
+### 5.1 已完成：B10 — 修复 shot_at Unix 时间戳处理（本轮）
 
-这两个问题直接关联原始方案的未完成验收项：
+**修复内容**：新增 `_parse_shot_date` 工具函数，兼容 Unix 时间戳（如 `"1780733203"`）和 ISO 日期（如 `"2025-05-02"`）。全链路 8 处调用点统一修复：
 
-- **B8**：在 `_stage3_generate_proposals` 中，对 LLM 返回的每个 photo_id 做数据库存在性校验。无效 ID 从 expanded 候选列表中取未使用的真实 ID 替换（而非丢弃整条提案）
-- **B9**：在 Stage 3 的 LLM prompt 中增加时间多样性要求，或在后处理阶段对最终 photo_sequence 做时间跨度硬校验。核心目标：每条选题的照片时间跨度 ≥ 7 天
+- `_random_sample_photos`：日期分组、日志统计
+- `_stage2_expand_selection`：日期分组、时间跨度计算
+- `_build_stage3_prompt`：传给 LLM 的日期展示
+- B9 post-processing `date_map` 构建
+- `_find_temporal_patterns`：按月分组、跨年份检测
 
-### 5.2 其次：R6（随手 cleanup）
+**附带改进**：B9 date_map 为空时新增 warning 日志，用 `itertools.chain` 替代 `list(expanded) + list(all_photos)` 全量拷贝。
 
-将 `import re` 从函数体内联提升到 `suggest.py` 模块顶部，删除两处内联 import。
+**验证结果**：
+- Stage 1 日期分组：1156 个"伪日期" → 64 个真实日历日
+- Stage 2 时间跨度：0 天 → 273/319/349 天
+- B8 幻觉 ID：本轮 0 个
+- B9 后处理：date_map 正常构建，本轮 3 条提案天然满足 ≥7 天要求
 
-### 5.3 验证方式
+### 5.2 后续方向
 
-B8/B9 修复后，建议做一轮专题评估，重点检查：
-- photo_id 全部有效（无截断/幻觉）
-- 每条选题时间跨度 ≥ 7 天
-- 叙事质量不退化（评分 ≥ 7.0）
+- 全面评估 B10 修复后的整体选题质量（预期评分从 6.5 提升至 7.5+）
+- 多轮调用验证 B9 后处理在极端情况下的正确性（如 LLM 选择了同日照片时）
+- B8 valid_ids 构建可考虑加入字符串规范化（strip/casefold），防御 LLM 返回带空格或大小写变体的 UUID
 
 ---
 

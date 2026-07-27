@@ -25,6 +25,8 @@ import dataclasses
 import typing
 import collections
 import random
+import re
+import itertools
 
 import httpx
 import langchain_core.messages as lc_messages
@@ -93,6 +95,30 @@ _STAGE2_MAX_PER_DATE = 2
 _STAGE2_RAG_TOP_N = 30
 
 
+def _parse_shot_date(shot_at: str) -> datetime.date | None:
+    """将 shot_at 字符串解析为日期，兼容 Unix 时间戳和 ISO 日期格式。
+
+    Go 后端 API 返回的 shotAt 是 Unix 时间戳字符串（如 "1780733203"），
+    但代码历史上有按 ISO 日期字符串（如 "2025-05-02"）处理的假设。
+    此函数统一处理两种格式。
+    """
+    if not shot_at or not shot_at.strip():
+        return None
+    val = shot_at.strip()
+    # Unix 时间戳（纯数字字符串）
+    if val.isdigit():
+        try:
+            return datetime.datetime.fromtimestamp(int(val)).date()
+        except (ValueError, OSError):
+            pass
+    # ISO 日期格式（YYYY-MM-DD...）
+    try:
+        return datetime.date.fromisoformat(val[:10])
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
 # ============================================================================
 # Stage 1: 随机采样 → 主题直觉
 # ============================================================================
@@ -132,8 +158,8 @@ def _random_sample_photos(
 
     date_groups: dict[str, list] = collections.defaultdict(list)
     for p in photos:
-        shot_at = (getattr(p, "shot_at", "") or "").strip()
-        date_key = shot_at[:10] if shot_at else "__unknown__"
+        shot_date = _parse_shot_date(getattr(p, "shot_at", "") or "")
+        date_key = shot_date.isoformat() if shot_date else "__unknown__"
         date_groups[date_key].append(p)
 
     dates = list(date_groups.keys())
@@ -155,7 +181,7 @@ def _random_sample_photos(
 
     logger.info(
         "随机采样第一轮: %d 个日期 → %d 张 (%d 个不同日期)",
-        len(dates), len(sampled), len({getattr(p, "shot_at", "") or "" for p in sampled}),
+        len(dates), len(sampled), len({_parse_shot_date(getattr(p, "shot_at", "") or "") for p in sampled}),
     )
 
     # 第二轮：不足 min_n 则从剩余补充
@@ -173,7 +199,7 @@ def _random_sample_photos(
 
     logger.info("Stage 1 随机采样: %d 张照片（共 %d 个不同日期）",
                  len(result),
-                 len({(getattr(p, "shot_at", "") or "")[:10] for p in result}))
+                 len({_parse_shot_date(getattr(p, "shot_at", "") or "") for p in result}))
     return result
 
 
@@ -204,8 +230,6 @@ def _build_stage1_prompt(photos) -> str:
 
 def _parse_llm_json_response(raw: str, context_label: str = "") -> list[dict]:
     """通用 LLM JSON 响应解析：直接解析 → 去 markdown → 正则提取数组 → 逐对象提取。"""
-    import re
-
     raw = raw.strip()
 
     attempts: list[str] = [raw]
@@ -369,8 +393,8 @@ def _stage2_expand_selection(
     # ═══ 多样性采样：按日期分组，每组至多选 _STAGE2_MAX_PER_DATE 张 ═══
     date_groups: dict[str, list] = collections.defaultdict(list)
     for p in matched:
-        shot_at = (getattr(p, "shot_at", "") or "").strip()
-        date_key = shot_at[:10] if shot_at else "__unknown__"
+        shot_date = _parse_shot_date(getattr(p, "shot_at", "") or "")
+        date_key = shot_date.isoformat() if shot_date else "__unknown__"
         date_groups[date_key].append(p)
 
     diverse: list = []
@@ -392,12 +416,9 @@ def _stage2_expand_selection(
     # 验证时间跨度
     dates = []
     for p in diverse:
-        shot_at = (getattr(p, "shot_at", "") or "").strip()
-        if shot_at:
-            try:
-                dates.append(datetime.date.fromisoformat(shot_at[:10]))
-            except (ValueError, TypeError):
-                pass
+        shot_date = _parse_shot_date(getattr(p, "shot_at", "") or "")
+        if shot_date:
+            dates.append(shot_date)
 
     date_span = 0
     if len(dates) >= 2:
@@ -426,7 +447,9 @@ _STAGE3_SYSTEM_PROMPT = (
     "- photo_sequence: 照片序列数组，按叙事逻辑排列（不按时间或相似度）\n"
     "  - photo_id: 照片 ID\n"
     "  - role_in_narrative: 这张照片在叙事中的角色（8-15字），如'开篇定调'、'对比过渡'、'情感高点'\n"
-    "- 序列中至少包含 5 张照片，优先选择不同场景的照片以体现叙事跨度\n\n"
+    "- 序列中至少包含 5 张照片，优先选择不同场景的照片以体现叙事跨度\n"
+    "- **时间跨度**：选中的照片拍摄日期必须跨度至少 7 天，请利用候选照片的日期信息，"
+    "避免选择集中在同一天或相邻几天的照片\n\n"
     "你必须严格返回一行合法 JSON，不得包含任何其他文字、注释或 markdown 标记：\n"
     '{"title":"...","angle":"...","rationale":"...",'
     '"photo_sequence":[{"photo_id":"...","role_in_narrative":"..."}]}'
@@ -445,6 +468,8 @@ def _build_stage3_prompt(intuition: TopicIntuition, expanded_photos) -> str:
     lines.append("## 候选照片\n")
     for i, p in enumerate(expanded_photos):
         pid = getattr(p, "id", f"unknown_{i}")
+        shot_date = _parse_shot_date(getattr(p, "shot_at", "") or "")
+        date_str = shot_date.isoformat() if shot_date else "未知日期"
         desc = (getattr(p, "description", "") or "").strip()
         if desc:
             desc_short = desc[:250] + ("..." if len(desc) > 250 else "")
@@ -452,6 +477,7 @@ def _build_stage3_prompt(intuition: TopicIntuition, expanded_photos) -> str:
             desc_short = "（无描述）"
         lines.append(f"### 候选 {i}")
         lines.append(f"ID: {pid}")
+        lines.append(f"日期: {date_str}")
         lines.append(f"描述: {desc_short}")
         lines.append("")
 
@@ -478,7 +504,6 @@ def _parse_proposal_response(raw: str) -> dict | None:
             pass
 
     # 正则提取
-    import re
     m = re.search(r'\{.*"title".*\}', raw, re.DOTALL)
     if m:
         try:
@@ -531,12 +556,120 @@ def _stage3_generate_proposals(
         if not parsed:
             continue
 
-        # 提取照片序列中的 photo_id
+        # ═══ 提取 LLM 返回的 photo_sequence ═══
         sequence = parsed.get("photo_sequence", [])
         if isinstance(sequence, list):
-            photo_ids = [s.get("photo_id", "") for s in sequence if s.get("photo_id")]
+            raw_ids = [s.get("photo_id", "") for s in sequence if s.get("photo_id")]
         else:
-            photo_ids = [getattr(p, "id", "") for p in expanded[:10]]
+            raw_ids = []
+
+        # ═══ B8: 校验 photo_id 有效性，过滤幻觉/截断 ID ═══
+        valid_ids: set[str] = {getattr(p, "id", "") for p in all_photos}
+        valid_ids.update(getattr(p, "id", "") for p in expanded)
+        valid_ids.discard("")
+
+        expanded_ids = [getattr(p, "id", "") for p in expanded if getattr(p, "id", "")]
+        used_ids: set[str] = set()
+        photo_ids: list[str] = []
+        hallucinated = 0
+
+        for pid in raw_ids:
+            if pid in valid_ids and pid not in used_ids:
+                photo_ids.append(pid)
+                used_ids.add(pid)
+            else:
+                hallucinated += 1
+                for alt_id in expanded_ids:
+                    if alt_id not in used_ids and alt_id in valid_ids:
+                        photo_ids.append(alt_id)
+                        used_ids.add(alt_id)
+                        logger.warning(
+                            "Stage 3: photo_id '%s' 无效（%s），替换为 '%s'",
+                            pid,
+                            "不存在" if pid not in valid_ids else "重复",
+                            alt_id,
+                        )
+                        break
+                else:
+                    logger.warning(
+                        "Stage 3: 选题 '%s' photo_id '%s' 无效且无可用替换",
+                        parsed.get("title", ""), pid,
+                    )
+
+        if hallucinated:
+            logger.warning(
+                "Stage 3: 选题 '%s' 共 %d 个 photo_id 无效，已替换",
+                parsed.get("title", ""), hallucinated,
+            )
+
+        # 校验后不足 5 张则从扩展列表补充
+        if len(photo_ids) < _STAGE2_MIN_PHOTOS:
+            for alt_id in expanded_ids:
+                if alt_id not in used_ids and alt_id in valid_ids:
+                    photo_ids.append(alt_id)
+                    used_ids.add(alt_id)
+                    if len(photo_ids) >= _STAGE2_MIN_PHOTOS:
+                        break
+        if not photo_ids:
+            photo_ids = expanded_ids[:_STAGE2_MIN_PHOTOS]
+
+        # ═══ B9: 强制时间跨度 ≥ 7 天 ═══
+        date_map: dict[str, datetime.date] = {}
+        for p in itertools.chain(expanded, all_photos):
+            pid = getattr(p, "id", "")
+            shot_date = _parse_shot_date(getattr(p, "shot_at", "") or "")
+            if pid and shot_date:
+                date_map[pid] = shot_date
+
+        if not date_map:
+            logger.warning(
+                "Stage 3: 选题 '%s' date_map 为空，无法校验时间跨度",
+                parsed.get("title", ""),
+            )
+
+        selected_dates = [date_map[pid] for pid in photo_ids if pid in date_map]
+        if len(selected_dates) >= 2:
+            selected_dates.sort()
+            span = (selected_dates[-1] - selected_dates[0]).days
+            if span < 7:
+                logger.warning(
+                    "Stage 3: 选题 '%s' 时间跨度仅 %d 天（需 ≥7），尝试扩展",
+                    parsed.get("title", ""), span,
+                )
+                # 从扩展候选池中找最早/最晚日期的照片来替换
+                expanded_dated = [
+                    (getattr(p, "id", ""), date_map.get(getattr(p, "id", "")))
+                    for p in expanded
+                    if getattr(p, "id", "") in date_map
+                ]
+                expanded_dated.sort(key=lambda x: x[1])
+                if expanded_dated and (expanded_dated[-1][1] - expanded_dated[0][1]).days >= 7:
+                    for extreme_pid, extreme_date in (expanded_dated[0], expanded_dated[-1]):
+                        if extreme_pid not in used_ids:
+                            for i, pid in enumerate(photo_ids):
+                                if pid in date_map and date_map[pid] not in (
+                                    expanded_dated[0][1], expanded_dated[-1][1],
+                                ):
+                                    used_ids.discard(photo_ids[i])
+                                    photo_ids[i] = extreme_pid
+                                    used_ids.add(extreme_pid)
+                                    logger.info(
+                                        "Stage 3: 替换 '%s' → '%s'（扩展时间跨度）",
+                                        pid, extreme_pid,
+                                    )
+                                    break
+                    new_dates = [date_map[pid] for pid in photo_ids if pid in date_map]
+                    if len(new_dates) >= 2:
+                        new_dates.sort()
+                        new_span = (new_dates[-1] - new_dates[0]).days
+                        logger.info(
+                            "Stage 3: 选题 '%s' 时间跨度 %d → %d 天",
+                            parsed.get("title", ""), span, new_span,
+                        )
+                else:
+                    logger.warning(
+                        "Stage 3: 扩展候选池时间跨度不足 7 天，无法强制约束",
+                    )
 
         proposals.append(TopicSuggestion(
             title=parsed.get("title", intuition.title),
@@ -678,14 +811,10 @@ def _find_temporal_patterns(
 
     monthly_photos: dict[int, list] = collections.defaultdict(list)
     for p in photos:
-        shot_at = p.shot_at or ""
-        if not shot_at:
+        shot_date = _parse_shot_date(p.shot_at or "")
+        if not shot_date:
             continue
-        try:
-            dt = datetime.datetime.fromisoformat(shot_at.replace("Z", "+00:00"))
-            monthly_photos[dt.month].append(p)
-        except (ValueError, TypeError):
-            continue
+        monthly_photos[shot_date.month].append(p)
 
     if not monthly_photos:
         return candidates
@@ -709,20 +838,16 @@ def _find_temporal_patterns(
 
                 years_with_attr: set[int] = set()
                 for p in month_pics:
-                    shot_at = p.shot_at or ""
-                    if not shot_at:
+                    shot_date = _parse_shot_date(p.shot_at or "")
+                    if not shot_date:
                         continue
-                    try:
-                        dt = datetime.datetime.fromisoformat(shot_at.replace("Z", "+00:00"))
-                        raw = (getattr(p, dim, "") or "").strip()
-                        if dim in ("objects", "colors"):
-                            pvals = _parse_attr_values(raw)
-                        else:
-                            pvals = [raw] if raw else []
-                        if value in pvals:
-                            years_with_attr.add(dt.year)
-                    except (ValueError, TypeError):
-                        continue
+                    raw = (getattr(p, dim, "") or "").strip()
+                    if dim in ("objects", "colors"):
+                        pvals = _parse_attr_values(raw)
+                    else:
+                        pvals = [raw] if raw else []
+                    if value in pvals:
+                        years_with_attr.add(shot_date.year)
 
                 if len(years_with_attr) < 2:
                     continue
