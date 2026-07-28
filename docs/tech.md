@@ -7,25 +7,25 @@
 
 ## 1. 整体架构
 
-```
-Web 前端 (Vue 3 + NaiveUI, :10006)
-    ├─ /api/v1/*  →  Go Backend (:10004)
-    └─ /api/chat/*,/api/embed/*,/api/suggest/*,/api/golden-queries/*,/api/cluster/*  →  Python Agent API (:10005)
-          │                              │
-          │  Text-to-SQL ────────────────→ Go /api/v1/query/sql
-          │  Function Calling ───────────→ Go /v1/openapi.json → 工具调用
-          │  RAG ←── ChromaDB (本地向量库)
-          │  Embedding ←── Go /v1/embeddings (代理)
-          │  聚类分析 ←── ChromaDB 向量聚类 (HDBSCAN + UMAP)
-          │  选题建议 ←── suggest.py (三阶段编辑视角提案)
-          │  黄金用例 ←── agent/data/golden_queries.json
-          │
-    Go Backend (:10004)
-        ├── 照片 CRUD / 文件服务 / 统计 API
-        ├── AutoSync: 磁盘 → descriptions.json → SQLite
-        ├── VLM Queue: 异步批量图片描述
-        ├── Embedding HTTP 代理 (OpenAI 格式 → 火山引擎)
-        └── SQLite (照片元数据 + 结构化属性)
+```mermaid
+flowchart LR
+    A["Web 前端<br>Vue 3 + NaiveUI, :10006"]
+    A -->|"/api/v1/*"| B["Go Backend<br>:10004"]
+    A -->|"/api/chat/* 等"| C["Python Agent API<br>:10005"]
+
+    C -->|Text-to-SQL| D["Go /api/v1/query/sql"]
+    C -->|Function Calling| E["Go /v1/openapi.json → 工具调用"]
+    C -->|RAG| F["ChromaDB<br>本地向量库"]
+    C -->|Embedding| G["Go /v1/embeddings<br>代理"]
+    C -->|聚类分析| H["ChromaDB 向量聚类<br>HDBSCAN + UMAP"]
+    C -->|选题建议| I["suggest.py<br>三阶段编辑视角提案"]
+    C -->|黄金用例| J["agent/data/golden_queries.json"]
+
+    B --> K["照片 CRUD / 文件服务 / 统计 API"]
+    B --> L["AutoSync: 磁盘 → descriptions.json → SQLite"]
+    B --> M["VLM Queue: 异步批量图片描述"]
+    B --> N["Embedding HTTP 代理<br>OpenAI 格式 → 火山引擎"]
+    B --> O["SQLite<br>照片元数据 + 结构化属性"]
 ```
 
 ### 1.1 职责边界
@@ -49,115 +49,91 @@ Web 前端 (Vue 3 + NaiveUI, :10006)
 
 ### 3.1 照片导入流程
 
-```
-用户上传 / 目录放置照片
-    ↓
-Go Backend 接收
-    ├─ 上传路径：POST /api/v1/photos/upload → 保存原图 → 压缩缩略图 → 写入 SQLite
-    └─ 目录路径：server 启动时 AutoSync 扫描 photo_path
-    ↓
-VLM 预处理（获取描述）
-    ├─ Web 触发：POST /api/v1/vlm/queue/start → VlmQueue 异步处理
-    └─ CLI 触发：batch_vlm 命令扫描目录 → 输出 descriptions.json
-    ↓
-VLM 描述 → descriptions.json
-    ├─ raw description: Markdown 文本（含 ```json 结构化块）
-    └─ ParseStructuredAttributes(): 提取 objects/colors/scene/lighting/mood/composition
-    ↓
-AutoSync 或 VlmQueue.ProcessAndSave
-    ├─ 新照片：写入 SQLite photos 表（含 6 个结构化属性字段）
-    └─ 已存在：对比变化 → 更新 SQLite
-    ↓
-Python 侧：index_photos.py / EmbedQueue
-    └─ 通过 Go Embedding 代理获取向量 → 写入 ChromaDB（仅存 photo_id + chunk_index）
+```mermaid
+flowchart TD
+    A[用户上传 / 目录放置照片] --> B[Go Backend 接收]
+    B -->|上传路径| C["POST /api/v1/photos/upload<br>保存原图 → 压缩缩略图 → 写入 SQLite"]
+    B -->|目录路径| D["server 启动时 AutoSync<br>扫描 photo_path"]
+    C --> E[VLM 预处理<br>获取描述]
+    D --> E
+    E -->|Web 触发| F["POST /api/v1/vlm/queue/start<br>VlmQueue 异步处理"]
+    E -->|CLI 触发| G["batch_vlm 命令扫描目录<br>输出 descriptions.json"]
+    F --> H["VLM 描述 → descriptions.json"]
+    G --> H
+    H --> I["raw description: Markdown 文本<br>含 json 结构化块"]
+    H --> J["ParseStructuredAttributes<br>提取 objects/colors/scene/lighting/mood/composition"]
+    I --> K[AutoSync 或 VlmQueue.ProcessAndSave]
+    J --> K
+    K --> L["新照片: 写入 SQLite photos 表<br>含 6 个结构化属性字段"]
+    K --> M["已存在: 对比变化 → 更新 SQLite"]
+    L --> N["Python 侧: index_photos.py / EmbedQueue"]
+    M --> N
+    N --> O["通过 Go Embedding 代理获取向量<br>写入 ChromaDB<br>仅存 photo_id + chunk_index"]
 ```
 
 ### 3.2 Agent 查询路由（LangGraph）
 
-```
-用户问题（自然语言）
-    ↓
-[classify] LLM 零样本分类 → query_type: sql | rag | tool | combined
-    │
-    ├─ sql ───────────────→ [_sql_node]
-    │   NL → generate_sql() → LLM 生成 SQL
-    │   → Go POST /api/v1/query/sql 执行
-    │   → 结果格式化为自然语言
-    │
-    ├─ rag ───────────────→ [_rag_node]
-    │   问题 → Embedding → ChromaDB 向量检索 Top-K
-    │   → 按 photo_id 聚合去重 → 比值断层过滤
-    │   → 拼接上下文 → LLM 生成回答
-    │
-    ├─ tool ──────────────→ [_tool_node]
-    │   LLM.bind_tools(Go OpenAPI spec)
-    │   → LLM 自主决策调用哪个 API
-    │   → 执行 HTTP 请求 → 结果返回 LLM → 生成回答
-    │
-    └─ combined ─────────→ [_combined_node]
-        ├─ generate_filter_sql() → LLM 生成结构化过滤 SQL
-        ├─ execute_sql_for_ids() → sql_ids (必须含 id 字段)
-        ├─ retrieve_photo_ids() → rag_ids (纯向量语义检索)
-        ├─ intersection = sql_ids ∩ rag_ids (保持 RAG 相似度排序)
-        ├─ _fetch_photos_batch() → 并行获取照片详情
-        └─ LLM 生成最终回答
-        │
-        └─ 降级策略（任一失败 → 纯 RAG）:
-           SQL异常 / SQL>50条(过滤太宽) / SQL空 / 交集空 / 整体异常
-    │
-    ↓
-[_answer_node] 聚合结果 → answer + photos
+```mermaid
+flowchart TD
+    A["用户问题（自然语言）"] --> B["[classify] LLM 零样本分类<br>query_type: sql | rag | tool | combined"]
+
+    B -->|sql| C["[_sql_node]<br>NL → generate_sql() → LLM 生成 SQL<br>→ Go POST /api/v1/query/sql 执行<br>→ 结果格式化为自然语言"]
+
+    B -->|rag| D["[_rag_node]<br>问题 → Embedding → ChromaDB 向量检索 Top-K<br>→ 按 photo_id 聚合去重 → 比值断层过滤<br>→ 拼接上下文 → LLM 生成回答"]
+
+    B -->|tool| E["[_tool_node]<br>LLM.bind_tools(Go OpenAPI spec)<br>→ LLM 自主决策调用哪个 API<br>→ 执行 HTTP 请求 → 结果返回 LLM → 生成回答"]
+
+    B -->|combined| F["[_combined_node]"]
+    F --> G["generate_filter_sql()<br>LLM 生成结构化过滤 SQL"]
+    G --> H["execute_sql_for_ids()<br>sql_ids（必须含 id 字段）"]
+    F --> I["retrieve_photo_ids()<br>rag_ids（纯向量语义检索）"]
+    H --> J["intersection = sql_ids ∩ rag_ids<br>保持 RAG 相似度排序"]
+    I --> J
+    J --> K["_fetch_photos_batch()<br>并行获取照片详情"]
+    K --> L["LLM 生成最终回答"]
+
+    J -.->|"降级策略（任一失败 → 纯 RAG）<br>SQL异常 / SQL>50条 / SQL空 / 交集空 / 整体异常"| D
+
+    C --> M["[_answer_node]<br>聚合结果 → answer + photos"]
+    D --> M
+    E --> M
+    L --> M
 ```
 
 ### 3.3 Combined 组合查询详解
 
 这是 `"蓝调时刻的街拍"` 一类复合查询的核心流程：
 
-```
-用户: "逆光的雪山照片"
-    ↓
-classify → "combined" (同时涉及结构化维度"逆光" + 语义内容"雪山")
-    ↓
-1. SQL 结构化过滤
-   generate_filter_sql("逆光的雪山照片")
-   → LLM 根据实际 DB 属性值生成: SELECT id FROM photos WHERE lighting LIKE '%backlit%' AND scene IN ('mountain','nature')
-   → Go 执行 → sql_ids: [p1, p3, p5, p7, ...]
-    ↓
-2. RAG 语义检索
-   retrieve_photo_ids("逆光的雪山照片")
-   → Embedding → ChromaDB Top-20 → 聚合 → 断层过滤
-   → rag_ids: [p3, p7, p1, p10, p2, ...]  (相似度排序)
-    ↓
-3. 交集（保持 RAG 排序）
-   intersection = [p3, p7, p1]  (从 rag_ids 中筛选同时在 sql_ids 中的)
-    ↓
-4. 批量获取照片详情
-   _fetch_photos_batch([p3, p7, p1]) → 并行 GET /api/v1/photos/{id}
-    ↓
-5. LLM 生成回答
+```mermaid
+flowchart TD
+    A["用户: 逆光的雪山照片"] --> B["classify → combined<br>结构化维度 逆光 + 语义内容 雪山"]
+
+    B --> C["1. SQL 结构化过滤<br>generate_filter_sql<br>LLM 根据实际 DB 属性值生成 SQL<br>→ Go 执行"]
+    C --> D["sql_ids: p1, p3, p5, p7, ..."]
+
+    D --> E["2. RAG 语义检索<br>retrieve_photo_ids<br>Embedding → ChromaDB Top-20<br>→ 聚合 → 断层过滤"]
+    E --> F["rag_ids: p3, p7, p1, p10, p2, ...<br>（相似度排序）"]
+
+    F --> G["3. 交集（保持 RAG 排序）<br>intersection = p3, p7, p1<br>从 rag_ids 中筛选同时在 sql_ids 中的"]
+
+    G --> H["4. 批量获取照片详情<br>_fetch_photos_batch<br>并行 GET /api/v1/photos/id"]
+
+    H --> I["5. LLM 生成回答"]
 ```
 
 **SQL 值动态获取**：每次 `generate_sql()` / `generate_filter_sql()` 调用前，先从 Go `GET /api/v1/photos/attribute-values` 获取数据库中实际存在的属性值，拼入 System Prompt。LLM 只能使用实际值构造 LIKE 模式，避免生成 `backlight` 而 DB 存的是 `backlit` 这类不匹配。
 
 ### 3.4 Text-to-SQL 链路细节
 
-```
-用户问题
-    ↓
-1. 获取 Schema:     GET /api/v1/schema/photos → 字段名/类型/可空性
-2. 获取属性值:      GET /api/v1/photos/attribute-values → 6 个字段的 distinct 值
-3. 构建 Prompt:
-   System: 表结构 + 实际属性值列表 + 12 条规则
-   Few-shot: 12 个 NL→SQL 示例（含 EXIF + 结构化属性过滤）
-   Human: {question}
-    ↓
-4. LLM 生成 SQL (temperature=0)
-    ↓
-5. 提取 SQL（处理 Markdown 代码块包裹）
-    ↓
-6. 安全校验: 仅允许 SELECT
-    ↓
-7. Go POST /api/v1/query/sql 执行 → 返回 rows
+```mermaid
+flowchart TD
+    A[用户问题] --> B["1. 获取 Schema<br>GET /api/v1/schema/photos<br>字段名/类型/可空性"]
+    B --> C["2. 获取属性值<br>GET /api/v1/photos/attribute-values<br>6 个字段的 distinct 值"]
+    C --> D["3. 构建 Prompt<br>System: 表结构 + 属性值 + 12 条规则<br>Few-shot: 12 个 NL→SQL 示例<br>Human: question"]
+    D --> E["4. LLM 生成 SQL<br>temperature=0"]
+    E --> F["5. 提取 SQL<br>处理 Markdown 代码块包裹"]
+    F --> G["6. 安全校验<br>仅允许 SELECT"]
+    G --> H["7. Go 执行<br>POST /api/v1/query/sql<br>返回 rows"]
 ```
 
 ### 3.5 VLM 预处理
@@ -172,11 +148,13 @@ classify → "combined" (同时涉及结构化维度"逆光" + 语义内容"雪�
 **存储策略（Route B）**：ChromaDB 仅存最小元数据（`photo_id` + `chunk_index`），结构化属性全部在 Go SQLite 中。
 
 **索引流程**：
+
 ```
 descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go代理) → ChromaDB
 ```
 
 **检索流程**：
+
 ```
 问题 → Embedding → ChromaDB.query(Top-K chunks) → _aggregate_by_photo()
 → _filter_by_ratio_gap() → 构建上下文 → LLM 回答
@@ -290,6 +268,7 @@ descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go
 - `#/cluster` (ClusterView) — 聚类分析与组图发现
 
 Vite 开发代理：
+
 - `/api/v1/*` → Go Backend (:10004)
 - `/api/chat/*`, `/api/embed/*` → Python Agent (:10005)
 
@@ -469,4 +448,3 @@ photo-agent/
   - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag），用于单独测试各模块
   - `scripts/index_photos.py`：批量将 descriptions.json 分块嵌入 ChromaDB
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护
-

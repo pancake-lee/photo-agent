@@ -64,25 +64,15 @@ Visit `http://localhost:10006` to start using.
 
 ## 🧭 Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Web Frontend (Vue 3 + NaiveUI)                           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-         ┌────────────────────┼────────────────────┐
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│  Chat / Clusters │  │  Semantic Search │  │  Structured     │
-│  (Python API)   │  │  (ChromaDB)      │  │  Query (Go API) │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-         │                    │                    │
-         └────────────────────┼────────────────────┘
-                              ▼
-                    ┌─────────────────────┐
-                    │  LangGraph Router    │
-                    │  SQL / RAG / Combined│
-                    └─────────────────────┘
+```mermaid
+flowchart TD
+    A["Web Frontend<br>（Vue 3 + NaiveUI）"]
+    A --> B["Chat / Clusters<br>（Python API）"]
+    A --> C["Semantic Search<br>（ChromaDB）"]
+    A --> D["Structured Query<br>（Go API）"]
+    B --> E["LangGraph Router<br>SQL / RAG / Combined"]
+    C --> E
+    D --> E
 ```
 
 **Core Decision**: User queries are automatically routed by LangGraph —

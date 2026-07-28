@@ -7,14 +7,11 @@
 
 ## 部署全景
 
-```
-1. 环境准备（Go + Python + Node.js）
-   ↓
-2. 配置文件（.local/my-config.yaml）
-   ↓
-3. VLM 预处理（batch_vlm → descriptions.json）
-   ↓
-4. 启动服务（Go 后端 + Python Agent + Web 前端）
+```mermaid
+flowchart TD
+    A[1. 环境准备<br>Go + Python + Node.js] --> B[2. 配置文件<br>.local/my-config.yaml]
+    B --> C[3. VLM 预处理<br>batch_vlm → descriptions.json]
+    C --> D[4. 启动服务<br>Go 后端 + Python Agent + Web 前端]
 ```
 
 ---
