@@ -56,7 +56,7 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --serve
 cd web && pnpm dev
 ```
 
-Visit `http://localhost:5173` to start using.
+Visit `http://localhost:10006` to start using.
 
 > All service ports are configured in `config.yaml` — no hardcoding required.
 
@@ -74,13 +74,13 @@ Visit `http://localhost:5173` to start using.
          ▼                    ▼                    ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
 │  Chat / Clusters │  │  Semantic Search │  │  Structured     │
-│  (Python API)   │  │  (RAG / ChromaDB)│  │  Query (Go API) │
+│  (Python API)   │  │  (ChromaDB)      │  │  Query (Go API) │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
          │                    │                    │
          └────────────────────┼────────────────────┘
                               ▼
                     ┌─────────────────────┐
-                    │  LangGraph Router   │
+                    │  LangGraph Router    │
                     │  SQL / RAG / Combined│
                     └─────────────────────┘
 ```
@@ -117,18 +117,16 @@ See [`docs/tech.md`](docs/tech.md) for detailed architecture.
 
 ### 4. Retrieval Quality Evaluation
 
-- Built-in "Golden Cases" test set for ongoing Precision@K / Recall / MRR monitoring
-- Current baseline: `Precision@10 = 0.93`, `MRR = 1.0`
+- Built-in "Golden Cases" test set — run evaluations in real-time on the web page, displaying P@10 / R@10 / MRR
+- Baseline records in `docs/eval/baseline.md`
 
 ---
 
 ## 🏗️ Three-Stack Architecture, Best of Both Worlds
 
-| Layer                | Tech Stack                               | Responsibilities                                                            |
-| :------------------- | :--------------------------------------- | :-------------------------------------------------------------------------- |
-| **Web Frontend**     | Vue 3 + NaiveUI                          | Photo management, chat interface, cluster browsing, golden case management  |
-| **Python Inference** | FastAPI + LangChain/LangGraph + ChromaDB | Agent orchestration, vector search, Text-to-SQL, cluster analysis           |
-| **Go Backend**       | Gin + GORM + SQLite                      | Photo metadata management, file serving, VLM preprocessing, Embedding proxy |
+- **Web Frontend**: Vue 3 + NaiveUI — photo management, chat interface, cluster browsing, golden case management
+- **Python Inference**: FastAPI + LangChain/LangGraph + ChromaDB — agent orchestration, vector search, Text-to-SQL, cluster analysis
+- **Go Backend**: Gin + GORM + SQLite — photo metadata management, file serving, VLM preprocessing, Embedding proxy
 
 **Why Not a Single Framework?**
 
@@ -161,26 +159,28 @@ photo-agent/
 
 ## 📚 Documentation Index
 
-| Document                           | Content                                                 |
-| :--------------------------------- | :------------------------------------------------------ |
-| [docs/prd.md](docs/prd.md)         | Product requirements, user stories, acceptance criteria |
-| [docs/tech.md](docs/tech.md)       | Architecture design, API contracts, data models         |
-| [docs/backlog.md](docs/backlog.md) | Roadmap, rejected items                                 |
-| [docs/deploy.md](docs/deploy.md)   | Deployment guide                                        |
-| [docs/note.md](docs/note.md)       | Decision memos, lessons learned                         |
+- [docs/prd.md](docs/prd.md) — Product requirements, user stories
+- [docs/tech.md](docs/tech.md) — Architecture design, API contracts, data models
+- [docs/backlog.md](docs/backlog.md) — Roadmap, rejected items
+- [docs/deploy.md](docs/deploy.md) — Deployment guide
+- [docs/harness.md](docs/harness.md) — Harness engineering architecture overview
+- [docs/note.md](docs/note.md) — Decision memos, lessons learned
+- [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — AI work mode workflows
+- [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — Coding conventions
+- [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — Document review guidelines
+- [docs/eval/baseline.md](docs/eval/baseline.md) — Evaluation baseline metrics
 
 ---
 
 ## 📊 Current Status
 
-| Feature                             | Status         |
-| :---------------------------------- | :------------- |
-| Natural Language Search (RAG + SQL) | ✅ Live        |
-| Smart Albums (HDBSCAN + UMAP)       | ✅ Live        |
-| Golden Case Evaluation              | ✅ Live        |
-| Web UI                              | ✅ Live        |
-| Text-to-SQL Hybrid Routing          | ✅ Live        |
-| Multi-turn Conversation Memory      | 🚧 In Progress |
+- ✅ Natural Language Search (RAG + SQL)
+- ✅ Smart Albums (HDBSCAN + UMAP)
+- ✅ Topic Suggestions (AI-powered push + review & rating)
+- ✅ Golden Case Evaluation
+- ✅ Web UI
+- ✅ Text-to-SQL Hybrid Routing
+- 🚧 Multi-turn Conversation Memory
 
 ---
 

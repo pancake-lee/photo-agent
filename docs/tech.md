@@ -8,15 +8,16 @@
 ## 1. 整体架构
 
 ```
-Web 前端 (Vue 3 + NaiveUI, :5173)
+Web 前端 (Vue 3 + NaiveUI, :10006)
     ├─ /api/v1/*  →  Go Backend (:10004)
-    └─ /api/chat/*,/api/embed/*,/api/golden-queries/*,/api/cluster/*  →  Python Agent API (:10005)
+    └─ /api/chat/*,/api/embed/*,/api/suggest/*,/api/golden-queries/*,/api/cluster/*  →  Python Agent API (:10005)
           │                              │
           │  Text-to-SQL ────────────────→ Go /api/v1/query/sql
           │  Function Calling ───────────→ Go /v1/openapi.json → 工具调用
           │  RAG ←── ChromaDB (本地向量库)
           │  Embedding ←── Go /v1/embeddings (代理)
           │  聚类分析 ←── ChromaDB 向量聚类 (HDBSCAN + UMAP)
+          │  选题建议 ←── suggest.py (三阶段编辑视角提案)
           │  黄金用例 ←── agent/data/golden_queries.json
           │
     Go Backend (:10004)
@@ -260,6 +261,14 @@ descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go
 - `DELETE /api/golden-queries/:id` — 删除用例
 - `POST /api/golden-queries/evaluate` — 运行评估，返回 P@10/R@10/MRR
 
+**选题建议（主题发现）**：
+
+- `POST /api/suggest/run` — 生成选题建议（三阶段编辑视角提案管道），结果自动保存
+- `GET /api/suggest/history` — 历史选题列表（时间倒序）
+- `GET /api/suggest/history/:id` — 单条选题详情
+- `DELETE /api/suggest/history/:id` — 删除选题记录
+- `PATCH /api/suggest/history/:id/rating` — 更新评分（1-5 星）
+
 **聚类分析**：
 
 - `POST /api/cluster/run` — 执行聚类（参数：min_cluster_size 等）
@@ -385,6 +394,7 @@ photo-agent/
 │   │   ├── text_to_sql.py        # Text-to-SQL（Schema + Few-shot + 动态属性值）
 │   │   ├── photo_rag.py          # RAG 检索（ChromaDB 向量检索 + 聚合 + 断层过滤）
 │   │   ├── server.py             # FastAPI 对话 API（含会话管理）
+│   │   ├── suggest.py            # 选题建议（三阶段编辑视角提案）
 │   │   ├── session_store.py      # 会话持久化（SQLite）
 │   │   └── embed_queue.py        # 批量 Embedding 队列
 │   ├── embedding/                # 分块策略 + Embedding 客户端
@@ -406,6 +416,7 @@ photo-agent/
 │   ├── photos/                   # 照片文件
 │   ├── sqlite/                   # SQLite 数据库
 │   ├── chroma/                   # ChromaDB 向量库
+│   ├── suggest_history.json      # 选题建议历史（持久化存储）
 │   └── descriptions.json         # VLM 描述中间文件
 └── docs/                         # 项目文档
     ├── tech.md                   # 本文档
@@ -441,34 +452,7 @@ photo-agent/
 
 ## 8. 部署
 
-### Go Backend
-
-```bash
-cd backend
-go build -o ../bin/server ./cmd/server
-./bin/server -c .local/my-config.yaml          # -clearDB 可选重建
-# 默认端口 :10004
-```
-
-### Python Agent
-
-```bash
-cd agent
-source .venv/bin/activate
-python chain/photo_agent.py -c ../.local/my-config.yaml --serve 10005
-```
-
-### Web 前端
-
-```bash
-cd web
-npm run dev       # Vite 开发服务器 :5173，自动代理到 Go/Python
-npm run build     # 生产构建
-```
-
-### 配置文件
-
-三层共用 YAML 配置，主要段：`server`, `db`, `storage`, `llm`, `vlm`, `embedding`。模板位于 `configs/config.yaml`，个人配置放在 `.local/my-config.yaml`（gitignore）。
+详细部署步骤见 [docs/deploy.md](deploy.md)。三层共用 YAML 配置，主要段：`server`, `db`, `storage`, `llm`, `vlm`, `embedding`。模板位于 `configs/config.yaml`，个人配置放在 `.local/my-config.yaml`（gitignore）。
 
 ---
 
@@ -486,140 +470,3 @@ npm run build     # 生产构建
   - `scripts/index_photos.py`：批量将 descriptions.json 分块嵌入 ChromaDB
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护
 
----
-
-## 10. 评估系统
-
-> 方案设计见 `docs/design/2026-07-26-eval-system-design.md`，本节记录具体技术细节。
-
-### 10.1 结构化日志格式
-
-Go（plogger `SetJsonLog`）和 Python（自建）统一输出以下 JSON 结构：
-
-```json
-{
-  "ts": "2026-07-26T17:19:04.123Z",
-  "level": "INFO",
-  "trace_id": "uuid",
-  "module": "cluster.generate_theme",
-  "event": "llm.call.end",
-  "data": {
-    "model": "deepseek-v4-flash",
-    "cluster_id": 18,
-    "duration_ms": 3200,
-    "token_usage": {"prompt": 450, "completion": 80},
-    "payload_ref": "data/traces/payloads/2026-07-26/uuid-llm-resp.txt"
-  }
-}
-```
-
-- `trace_id`：每个请求/操作生成一个 UUID，全链路透传
-- `payload_ref`：大体积内容（LLM prompt/response 全文）写入独立文件，日志行只记路径引用
-- Go → Python 通过 HTTP header `X-Trace-Id` 传递 trace_id
-
-### 10.2 Trace 事件节点定义
-
-**聚类标题生成全链路事件**：
-
-```
-cluster.run.start       → 聚类参数、照片总数
-  umap.reduce            → 输入/输出矩阵 shape、耗时
-  hdbscan.cluster        → labels 分布、噪声点数、耗时
-  cluster.save           → 结果 ID、簇数量
-cluster.run.end          → 总耗时
-
-cluster.theme.start      → trace_id, cluster_id, 代表照片 ID 列表
-  llm.call.start         → model, temperature, prompt 字符数
-  llm.call.end           → 耗时, token 用量, response 字符数
-    (payload_ref → llm request messages 全文)
-    (payload_ref → llm response 原文)
-  parse.theme            → 解析路径 (json_direct / regex_extract / fallback / failed)
-cluster.theme.end        → 最终 label, description, 耗时
-```
-
-**Agent 对话链路事件**（后续扩展）：
-
-```
-chat.request.start       → session_id, query_text
-  classify.start/end     → 分类结果 (sql/rag/tool/combined)
-  sql.generate/execute   → 生成的 SQL, 执行耗时, 返回行数
-  rag.retrieve           → Top-K photo_ids, 距离值, 断层过滤结果
-  combined.intersection  → sql_ids 数, rag_ids 数, 交集大小, 降级标记
-  llm.answer             → token 用量, 耗时
-chat.request.end         → 总耗时, 引用照片数
-```
-
-### 10.3 启发式规则引擎
-
-#### 规则定义
-
-规则配置文件：`agent/data/eval_rules.yaml`。支持的操作类型：`length_between`、`not_contains_any`、`min_length`、`all_unique`（跨簇）、`non_empty_ratio`。跨簇规则通过 `scope: all_clusters` 标记。
-
-#### 规则引擎
-
-实现位于 `agent/chain/eval_engine.py`，核心函数：`load_rules()`、`run_theme_rules()`、`evaluate_cluster_themes()`、`save_report()`（追加 JSONL 到每日 trace）、`list_reports()` / `load_report()`（从 JSONL 扫描）。
-
-#### 统一入口
-
-- CLI：`python chain/eval_engine.py --rules cluster_theme --result-id <id>`
-- API：见 4.2 聚类分析段
-- Web UI：聚类详情弹窗内「评估标题」按钮（单簇）和「重新评估」按钮（批量）
-
-### 10.4 评估 API
-
-评估相关 API 路由见 4.2 聚类分析段。核心端点：
-
-- `POST /api/cluster/results/{id}/evaluate-themes`：批量评估，支持 `cluster_ids` 参数筛选范围
-- `POST /api/cluster/results/{id}/clusters/{cid}/evaluate-theme`：单簇评估，跳过跨簇规则
-- `GET /api/eval/reports` / `GET /api/eval/reports/{id}`：历史报告查询
-
-### 10.5 评估报告存储
-
-评估报告不生成独立文件，而是以 JSONL 行追加到 `data/traces/YYYY-MM-DD.jsonl`（与其他 trace 事件统一管理）。每行格式：
-
-```json
-{"ts": "2026-07-26T...", "level": "INFO", "trace_id": "uuid", "module": "eval_engine", "event": "eval.report", "data": {<报告体>}}
-```
-
-`list_reports` / `load_report` API 从每日 JSONL 文件流式扫描，按 `event == "eval.report"` 过滤。
-
-LLM-judge 评分暂缓，后续引入时在报告 `data` 中扩展 `llm_judge` 字段。
-
-### 10.6 LLM-judge 方案（暂缓）
-
-Judge prompt 已设计完成，包含准确性、具体性、可记忆性三个维度 1-5 分的 rubric。待人工评估流程跑通后引入。Judge 模型先用 deepseek-v4-flash 自评跑通，积累数据后交叉验证是否需要换用更强的 judge 模型。
-
-### 10.7 黄金用例数据结构扩展
-
-当前 golden_queries.json 条目格式仅含 RAG 相关字段。扩展后：
-
-```json
-{
-  "id": "uuid",
-  "query_text": "ISO大于1600的照片",
-  "category": "EXIF查询",
-  "notes": "",
-  "created_at": "2026-07-26T...",
-  "updated_at": "2026-07-26T...",
-  "rag_photos": ["photo_001"],
-  "expected_sql": "SELECT id FROM photos WHERE iso > 1600",
-  "expected_route": "sql"
-}
-```
-
-- `rag_photos`：已有字段，RAG 检索相关照片 ID
-- `expected_sql`：新增，Text-to-SQL 的期望 SQL
-- `expected_route`：新增，路由分类的期望结果（sql/rag/tool/combined）
-
-Web 对话页保存黄金用例时，弹出框让用户选择填写哪些维度。评估脚本按维度分别计算指标。
-
-### 10.8 文件存储路径
-
-```
-data/
-├── traces/
-│   ├── YYYY-MM-DD.jsonl          # trace 事件（含 eval.report，保留 7 天）
-│   └── payloads/YYYY-MM-DD/      # 大体积 payload（同日清理）
-├── golden_queries.json            # 黄金用例
-└── eval_rules.yaml                # 启发式规则配置
-```

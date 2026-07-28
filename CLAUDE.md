@@ -66,6 +66,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - **L2** `README.md` — 项目简介、核心价值、快速开始、文档索引。禁区：详细技术方案、任务拆解
 - **L3** `docs/prd.md` — 产品"做什么"：功能范围、用户故事、验收标准、P0/P1/P2。禁区：API 设计、数据模型、部署命令
 - **L4** `docs/tech.md` — "怎么做"：架构设计、API 契约、数据模型、技术选型。禁区：任务拆分、估时
+- **L4** `docs/harness.md` — Harness 工程架构索引：工作模式、评估系统、Trace 日志的高层概览和文档入口。禁区：实现细节
 - **L5** `docs/task_*.md` — 开发计划、每日里程碑、完成情况。禁区：产品需求定义、技术架构设计
 - **L5** `docs/design/*-hub.md` — 专题中枢文档：串联同一需求及其衍生需求在多次评估/规划/生成轮次中散落的所有文档、评估报告、backlog 条目、提交记录。是专题的唯一入口
 - **L6** `docs/note.md` — 被否决的方案、踩坑记录、决策变更历史。禁区：当前生效的方案
@@ -92,6 +93,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录
 - [docs/deploy.md](docs/deploy.md) — 部署指南
 - [docs/ui-rules.md](docs/ui-rules.md) — 前端 UI 美学规则
+- [docs/harness.md](docs/harness.md) — Harness 工程架构索引
 - [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — 工作模式完整流程
 - [docs/handbook/eval-guide.md](docs/handbook/eval-guide.md) — AI 评估模式操作指南
 - [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范

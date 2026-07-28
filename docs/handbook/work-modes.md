@@ -125,7 +125,7 @@
 1. 确认任务类型：版本归档、里程碑规划、还是 backlog 治理
 2. 读 `docs/backlog.md` + `docs/archive/` 了解当前版本状态
 3. 按任务类型执行：
-   - **版本归档**：识别 Done 条目 → 创建 `docs/archive/vX.Y.Z-completed-backlog.md` → 精简 backlog 至仅剩未完成条目 → 更新决策历史
+   - **版本归档**：识别 Done 条目 → 创建 `docs/archive/vX.Y.Z.md` → 精简 backlog 至仅剩未完成条目 → 更新决策历史
    - **里程碑规划**：梳理剩余 backlog → 评估优先级和依赖关系 → 排定下一版本范围建议 → 更新 backlog 状态
    - **backlog 治理**：交叉比对 backlog.md 和实际代码 → 识别过时/遗漏条目 → 给出清理建议
 4. 给出执行结果和变更摘要，等用户确认

@@ -56,7 +56,7 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --serve
 cd web && pnpm dev
 ```
 
-访问 `http://localhost:5173` 开始使用。
+访问 `http://localhost:10006` 开始使用。
 
 > 所有服务端口统一在 `config.yaml` 中配置，无需硬编码。
 
@@ -117,8 +117,8 @@ cd web && pnpm dev
 
 ### 4. 检索质量评估
 
-- 内置“黄金用例”测试集，持续监控 Precision@K / Recall / MRR
-- 当前基线：`Precision@10 = 0.93`，`MRR = 1.0`
+- 内置”黄金用例”测试集，Web 页面实时运行评估并展示 P@10 / R@10 / MRR
+- 评估基线数据见 `docs/eval/baseline.md`
 
 ---
 
@@ -162,8 +162,9 @@ photo-agent/
 - [docs/prd.md](docs/prd.md) — 产品需求、用户故事、验收标准
 - [docs/tech.md](docs/tech.md) — 架构设计、API 契约、数据模型
 - [docs/backlog.md](docs/backlog.md) — 需求池、演进路线图、拒绝清单
-- [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录
 - [docs/deploy.md](docs/deploy.md) — 部署指南
+- [docs/harness.md](docs/harness.md) — Harness 工程架构概览
+- [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录
 - [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — AI 工作模式完整流程
 - [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范
 - [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — 文档审阅规范
@@ -175,6 +176,7 @@ photo-agent/
 
 - ✅ 自然语言检索（RAG + SQL）
 - ✅ 聚类相册（HDBSCAN + UMAP）
+- ✅ 选题建议（AI 主动推送 + 审阅打分）
 - ✅ 黄金用例评估
 - ✅ Web 交互界面
 - ✅ Text-to-SQL 混合路由
