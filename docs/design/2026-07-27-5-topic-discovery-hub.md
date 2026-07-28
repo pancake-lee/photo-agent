@@ -33,6 +33,7 @@
 | [2026-07-27-4-b4-b5-b6-r5-fixes.md](2026-07-27-4-b4-b5-b6-r5-fixes.md) | 评估后衍生修复：B4/B5/B6/R5（配置、健康检查、分页、重构） | 已实现 |
 | [2026-07-26-1-harness-design.md](2026-07-26-1-harness-design.md) § 「优化：补上用户视角」段 | 首次记录此问题（当时标记延后处理），后续作为 Harness 闭环测试案例 | 参考 |
 | [2026-07-28-1-suggest-persistence.md](2026-07-28-1-suggest-persistence.md) | 持久化存储 + 五星打分 + 删除 | 已实现 |
+| [2026-07-28-3-suggest-pipeline-observability.md](2026-07-28-3-suggest-pipeline-observability.md) | 全链路可观测性：人工评估操作手册 + 缺失数据开发规划 | **规划中** |
 
 ### 2.2 评估报告
 
