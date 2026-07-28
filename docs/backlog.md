@@ -19,7 +19,7 @@
 | Done    | Phase 3  | 3.4  | 主题发现选题相似度过高       |
 | 待规划  | Phase 4  | 4.1  | 发布历史分析                 |
 | 待规划  | Phase 4  | 4.2  | 系列感维护                   |
-| 待规划  | 工程     | R4   | 重构 agent 和 web 的调用代码 |
+| Done    | 工程     | R4   | 重构 agent 和 web 的调用代码 |
 | Done    | 缺陷修复 | B1   | 主题发现返回空结果           |
 | 待规划  | 缺陷修复 | B2   | 时间线规律维度无候选         |
 | 待规划  | 缺陷修复 | B3   | parseVlmAttrs 解析失败静默   |
@@ -35,8 +35,8 @@
 | Done    | 工程     | E4   | 网页 Favicon                 |
 | Done    | 工程     | E5   | 清理遗留代码与数据           |
 | Done    | Phase 3  | 3.5  | 主题发现持久化存储 + 打分    |
-| 待规划  | Phase 3  | 3.6  | 星级评分 hover 预览 + 数字标签 |
-| 待规划  | Phase 3  | 3.7  | 选题历史旧数据格式兼容 + loadHistory 错误提示 |
+| Done    | Phase 3  | 3.6  | 星级评分 hover 预览 + 数字标签 |
+| Done    | Phase 3  | 3.7  | 选题历史 loadHistory 错误提示 |
 
 ---
 
@@ -193,25 +193,24 @@
 
 ### 3.6 星级评分 hover 预览 + 数字标签
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：3.5 评估（7.9/10）中发现两个交互细节可优化。hover 星 N 时没有临时预览效果（第 1-N 颗星临时变亮），移出后无反馈；星星旁无数字分值标签（如"3/5"），用户需数星星确认当前分值。
-- **方案**：-
+- **方案**：`SuggestView.vue` 的 `renderStars` 函数中实现 hover 预览（`hoveredStar` 响应式状态 + `onMouseenter`/`onMouseleave` 事件）。数字分值标签明确拒绝（星数组件已足够直观，数字标签冗余）。
 - **分析**：-
 - **验收**：
-  - [ ] hover 星 N 时 1-N 颗星临时变亮
-  - [ ] 星星旁显示数字分值文本
+  - [x] hover 星 N 时 1-N 颗星临时变亮
+  - [x] ~~星星旁显示数字分值文本~~（否决：星级 UI 本身已足够直观）
 
 ---
 
-### 3.7 选题历史旧数据格式兼容 + loadHistory 错误提示
+### 3.7 选题历史 loadHistory 错误提示
 
-- **状态**：待规划
-- **背景**：3.5 第二轮评估（7.5/10）中发现两个健壮性问题。其一，suggest_history.json 中已有旧格式数据（单条记录含嵌套 suggestions 数组，字段如 candidates_found），与新前端期望的扁平 records 格式（title/angle/photo_ids 等顶层字段）不兼容，旧数据渲染为空白卡片。部署新代码后如需清除旧数据需手动操作，缺少自动检测/迁移机制。其二，前端 loadHistory 在请求失败时静默失败（catch 块无任何用户提示），用户看到的空状态与真实「无历史记录」无法区分。
-- **方案**：-
+- **状态**：Done
+- **背景**：3.5 第二轮评估（7.5/10）中发现，前端 loadHistory 在请求失败时静默失败（catch 块无任何用户提示），用户看到的空状态与真实「无历史记录」无法区分。旧数据格式兼容已否决：当前无实际用户，旧数据由运维手动清除即可。
+- **方案**：`loadHistory` 中 `!resp.ok` 时解析错误体并用 `message.error` 提示，catch 块同样用 `message.error` 提示网络错误。
 - **分析**：-
 - **验收**：
-  - [ ] 旧格式数据在加载时自动迁移为扁平 records，或首次加载时给出清晰提示
-  - [ ] loadHistory 网络失败时显示错误提示（如 message.error），与空历史状态可区分
+  - [x] loadHistory 网络失败时显示错误提示（如 message.error），与空历史状态可区分
 
 ---
 
@@ -242,11 +241,14 @@
 
 ### R4 重构 agent 和 web 的调用代码
 
-- **状态**：待规划
+- **状态**：Done（2026-07-10/11 完成）
 - **背景**：当前 agent 和 web 之间的 API 调用代码为手写，缺乏类型安全和一致性。需生成相应语言的 SDK，替换现有调用代码。
-- **方案**：-
-- **分析**：-
-- **验收**：-
+- **方案**：通过 Swagger Codegen 从 Go 后端 `backend/openapi.yaml` 生成 Web（TypeScript）和 Agent（Python）两侧的 SDK 客户端，替换手写 fetch/httpx 调用。提交 `09f2b59`（生成 SDK）+ `8d74380`（替换调用代码）。Web 端 `usePhotos.ts`、`useVlmQueue.ts` 已切换；Agent 端 `suggest.py`、`embed_queue.py`、`text_to_sql.py` 等已通过 `backend_sdk.py` 工厂使用 SDK。
+- **分析**：Web 端 `useChat.ts`、`useUpload.ts`、`useEmbedQueue.ts`、`useEmbedStatus.ts` 仍用手写 fetch，但这些调用的是 Python Agent 自身接口，不在 Go 后端 OpenAPI 覆盖范围内，不属于 R4 范围。
+- **验收**：
+  - [x] Web 端 Go 后端 API 调用全部替换为类型安全的 SDK
+  - [x] Agent 端 Go 后端 API 调用全部替换为 SDK
+  - [x] SDK 从 OpenAPI 规范自动生成，可重新生成
 
 ---
 

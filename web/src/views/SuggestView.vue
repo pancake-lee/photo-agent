@@ -89,9 +89,12 @@ async function loadHistory() {
     const resp = await fetch(`${AGENT_BASE}/suggest/history`)
     if (resp.ok) {
       history.value = await resp.json()
+    } else {
+      const err = await resp.json().catch(() => ({}))
+      message.error(err.detail || '加载历史记录失败')
     }
   } catch {
-    // 静默失败，保持空列表
+    message.error('网络请求失败，无法加载历史记录')
   }
 }
 
