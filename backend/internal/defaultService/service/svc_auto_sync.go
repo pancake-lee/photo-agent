@@ -206,7 +206,7 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		}
 	}
 
-	objects, colors, scene, lighting, mood, composition := parseVlmAttrs(description)
+	objects, colors, scene, lighting, mood, composition := parseVlmAttrs(img.relPath, description)
 
 	photoDO := &data.PhotoDO{
 		ID:           putil.UUID(),
@@ -295,7 +295,13 @@ func syncUpdatePhoto(ctx *papp.AppCtx, existing *data.PhotoDO, img imageEntry, d
 	}
 	// 解析结构化属性：description 有变化，或需要回填已有照片
 	if (descChanged || needAttrBackfill) && newDesc != "" {
-		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(newDesc)
+		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(img.relPath, newDesc)
+		// 仅因回填触发且解析失败时跳过，避免每次 AutoSync 产生无意义 DB UPDATE
+		if needAttrBackfill && !descChanged && !timelineChanged &&
+			objects == "" && colors == "" && scene == "" &&
+			lighting == "" && mood == "" && composition == "" {
+			return false
+		}
 		updates["objects"] = objects
 		updates["colors"] = colors
 		updates["scene"] = scene
@@ -436,18 +442,20 @@ type vlmJSON struct {
 
 // parseVlmAttrs 从 VLM 输出的 description 文本中提取结构化属性。
 // description 形如 ```json\n{...}\n```，解析后映射为 objects/colors/scene/lighting/mood/composition。
-func parseVlmAttrs(description string) (objects, colors, scene, lighting, mood, composition string) {
+func parseVlmAttrs(photoIdentifier, description string) (objects, colors, scene, lighting, mood, composition string) {
 	if description == "" {
 		return
 	}
 
 	jsonStr := extractJSONBlock(description)
 	if jsonStr == "" {
+		plogger.Warnf("parseVlmAttrs: no JSON block in description, photo=%s", photoIdentifier)
 		return
 	}
 
 	var v vlmJSON
 	if err := json.Unmarshal([]byte(jsonStr), &v); err != nil {
+		plogger.Warnf("parseVlmAttrs: JSON unmarshal failed, photo=%s, err=%v", photoIdentifier, err)
 		return
 	}
 

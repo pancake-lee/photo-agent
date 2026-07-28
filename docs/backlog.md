@@ -22,7 +22,7 @@
 | Done    | 工程     | R4   | 重构 agent 和 web 的调用代码 |
 | Done    | 缺陷修复 | B1   | 主题发现返回空结果           |
 | 待规划  | 缺陷修复 | B2   | 时间线规律维度无候选         |
-| 待规划  | 缺陷修复 | B3   | parseVlmAttrs 解析失败静默   |
+| Done    | 缺陷修复 | B3   | parseVlmAttrs 解析失败静默   |
 | Done    | 缺陷修复 | B4   | 三阶段主路径 Stage 2 RAG 检索失败 |
 | Done    | 缺陷修复 | B5   | 三阶段主路径前置检查缺失     |
 | Done    | 缺陷修复 | B6   | _fetch_all_photos 仅返回 300 张 |
@@ -278,13 +278,13 @@
 
 ### B3 parseVlmAttrs 解析失败静默
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：评估 B1 修复时发现，`parseVlmAttrs` 在正则匹配失败或 JSON 解析失败时静默返回空字符串，不记录任何日志。异常照片每次 AutoSync 都会重试解析失败，产生无意义的数据库 UPDATE，但运维人员无法从日志中发现。
-- **方案**：-
+- **方案**：① `parseVlmAttrs` 新增 `photoIdentifier` 参数，`extractJSONBlock` 返回空 / `json.Unmarshal` 失败时输出 `plogger.Warnf` 日志（含 photo 标识）；② `syncUpdatePhoto` 中仅因 backfill 触发且解析返回全空时跳过 DB 写入，避免重复 UPDATE。
 - **分析**：当前 1177 张照片中约 3-4 张属性为空（填充率 99.7%），可能是 VLM JSON 格式异常导致解析失败。静默失败让这类问题不可观测。
 - **验收**：-
-  - [ ] parseVlmAttrs 解析失败时输出 warning 日志（含 photo ID）
-  - [ ] 异常照片不会每次 AutoSync 都重复尝试
+  - [x] parseVlmAttrs 解析失败时输出 warning 日志（含 photo ID）
+  - [x] 异常照片不会每次 AutoSync 都重复尝试
 
 ### B4 三阶段主路径 Stage 2 RAG 检索失败
 

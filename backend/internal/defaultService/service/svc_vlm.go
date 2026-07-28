@@ -271,7 +271,7 @@ func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *descriptio
 		"description": entry.Description,
 	}
 	if entry.Description != "" {
-		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(entry.Description)
+		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(photoID, entry.Description)
 		updates["objects"] = objects
 		updates["colors"] = colors
 		updates["scene"] = scene
