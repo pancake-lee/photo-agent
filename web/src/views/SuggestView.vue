@@ -136,6 +136,7 @@ async function handleRunSuggest() {
 // ── 打分 ──
 
 async function handleRate(item: HistoryItem, star: number) {
+  hoveredStar.value = null
   const newRating = item.rating === star ? 0 : star
   // 乐观更新
   const oldRating = item.rating
@@ -225,15 +226,46 @@ function renderPhotoThumbs(photoIds: string[], showAll: boolean) {
 
 const hoveredStar = ref<{ itemId: string; star: number } | null>(null)
 
+function getStarState(i: number, currentRating: number, hoverStar: number | null): 'empty' | 'solid' | 'glowing' {
+  if (hoverStar === null) {
+    return i <= currentRating ? 'glowing' : 'empty'
+  }
+  if (hoverStar > currentRating) {
+    if (i <= currentRating) return 'glowing'
+    if (i <= hoverStar) return 'solid'
+    return 'empty'
+  }
+  if (hoverStar < currentRating) {
+    return i <= hoverStar ? 'glowing' : 'empty'
+  }
+  // hoverStar === currentRating: 取消——全部空心
+  return 'empty'
+}
+
+function getStarTooltip(currentRating: number, hoverStar: number | null): string {
+  if (hoverStar !== null) {
+    if (hoverStar === currentRating && currentRating > 0) return '取消评分'
+    return `${hoverStar} 分`
+  }
+  return currentRating > 0 ? `${currentRating} 分` : ''
+}
+
+const STAR_CHARS: Record<string, string> = {
+  empty: '★',
+  solid: '★',
+  glowing: '★',
+}
+
 function renderStars(item: HistoryItem) {
   const stars: any[] = []
-  const effectiveRating =
-    hoveredStar.value?.itemId === item.id ? hoveredStar.value.star : item.rating
+  const currentRating = item.rating
+  const hoverStar = hoveredStar.value?.itemId === item.id ? hoveredStar.value.star : null
+
   for (let i = 1; i <= 5; i++) {
-    const filled = i <= effectiveRating
+    const state = getStarState(i, currentRating, hoverStar)
     stars.push(
       h('span', {
-        class: `star${filled ? ' filled' : ''}`,
+        class: `star ${state}`,
         onClick: (e: MouseEvent) => {
           e.stopPropagation()
           handleRate(item, i)
@@ -241,8 +273,8 @@ function renderStars(item: HistoryItem) {
         onMouseenter: () => {
           hoveredStar.value = { itemId: item.id, star: i }
         },
-        title: `${i} 分`,
-      }, filled ? '★' : '☆'),
+        title: getStarTooltip(currentRating, hoverStar),
+      }, STAR_CHARS[state]),
     )
   }
   return h('span', {
@@ -547,16 +579,27 @@ function formatTime(iso: string): string {
   cursor: pointer;
 }
 .star {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
   font-size: 16px;
-  color: var(--n-border-color);
-  transition: color 0.15s, transform 0.1s;
+  transition: color 0.15s, transform 0.1s, text-shadow 0.15s;
   line-height: 1;
+  color: var(--n-border-color);
+}
+.star.solid,
+.star.glowing {
+  color: #f0a020;
+}
+.star.glowing {
+  transform: scale(1.3);
+  text-shadow:
+    0 0 4px rgba(240, 160, 32, 0.4),
+    0 0 10px rgba(240, 160, 32, 0.3),
+    0 0 16px rgba(240, 160, 32, 0.2);
 }
 .star:hover {
   transform: scale(1.2);
-}
-.star.filled {
-  color: #f0a020;
 }
 
 .field-label {
