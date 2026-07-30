@@ -297,7 +297,8 @@ def retrieve_photo_ids(
     n_results: int = 20,
     distance_threshold: float | None = None,
     auto_distance_ratio: float = 1.8,
-) -> list[str]:
+    with_details: bool = False,
+) -> list[str] | tuple[list[str], list[dict]]:
     """
     纯向量语义检索，仅返回 photo_id 列表（按相似度降序）。
 
@@ -310,9 +311,11 @@ def retrieve_photo_ids(
         n_results:           返回的最大照片数
         distance_threshold:  绝对距离阈值（None 表示不过滤）
         auto_distance_ratio: 自动比值断层阈值（默认 1.8），0 表示关闭
+        with_details:        为 True 时返回 (ids, results) 元组，
+                            results 含 distance 字段用于 trace
 
     返回:
-        按相似度降序排列的 photo_id 列表
+        按相似度降序排列的 photo_id 列表，或 (ids, results) 元组
     """
     # 检索更多 chunk 再聚合到照片级别
     results = _retrieve(cfg, question, n_results=n_results * 3)
@@ -340,6 +343,8 @@ def retrieve_photo_ids(
             ids.append(pid)
 
     logger.info("[组合查询] RAG 检索返回 %d 个 photo_id", len(ids))
+    if with_details:
+        return ids, results
     return ids
 
 

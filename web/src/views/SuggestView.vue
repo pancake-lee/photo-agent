@@ -36,6 +36,7 @@ interface HistoryItem {
   rationale: string
   category: string
   photo_ids: string[]
+  photo_sequence: Array<{ photo_id: string; role_in_narrative: string }>
   error: string
 }
 
@@ -188,9 +189,23 @@ function openPreview(uuid: string) {
 
 // ── 照片缩略图渲染 ──
 
-function renderPhotoThumbs(photoIds: string[], showAll: boolean) {
+function renderPhotoThumbs(
+  photoIds: string[],
+  showAll: boolean,
+  photoSequence?: Array<{ photo_id: string; role_in_narrative: string }>,
+) {
   if (!photoIds || photoIds.length === 0) {
     return h('span', { style: { color: 'var(--n-text-color-3)', fontSize: '13px' } }, '无照片')
+  }
+
+  // 构建 photo_id → role_in_narrative 映射
+  const roleMap: Record<string, string> = {}
+  if (photoSequence && photoSequence.length > 0) {
+    for (const s of photoSequence) {
+      if (s.photo_id && s.role_in_narrative) {
+        roleMap[s.photo_id] = s.role_in_narrative
+      }
+    }
   }
 
   const displayIds = showAll ? photoIds : photoIds.slice(0, 3)
@@ -200,15 +215,22 @@ function renderPhotoThumbs(photoIds: string[], showAll: boolean) {
 
   const thumbChildren: any[] = []
   for (const pid of displayIds) {
+    const role = roleMap[pid] || ''
+    const wrapChildren: any[] = [
+      h('img', { class: 'photo-thumb', src: imageUrl(pid) }),
+    ]
+    if (role) {
+      wrapChildren.push(
+        h('span', { class: 'photo-role-tag' }, role),
+      )
+    }
     thumbChildren.push(
       h('div', {
         class: 'photo-thumb-wrap',
         style: { cursor: 'pointer' },
         onClick: () => openPreview(pid),
-        title: pid,
-      }, [
-        h('img', { class: 'photo-thumb', src: imageUrl(pid) }),
-      ]),
+        title: role ? `${role} — ${pid}` : pid,
+      }, wrapChildren),
     )
   }
   children.push(h('div', { class: 'photo-thumb-row' }, thumbChildren))
@@ -417,7 +439,7 @@ function formatTime(iso: string): string {
                   </span>
                 </div>
                 <component
-                  :is="renderPhotoThumbs(item.photo_ids, true)"
+                  :is="renderPhotoThumbs(item.photo_ids, true, item.photo_sequence)"
                 />
               </div>
             </div>
@@ -645,8 +667,25 @@ function formatTime(iso: string): string {
   align-items: center;
 }
 .photo-thumb-wrap {
-  display: inline-block;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
+}
+.photo-role-tag {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--n-text-color-3);
+  background: var(--n-action-color);
+  padding: 1px 6px;
+  border-radius: 4px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.4;
 }
 .photo-thumb {
   width: 80px;

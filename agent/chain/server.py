@@ -866,6 +866,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         rationale: str = ""
         category: str = ""
         photo_ids: list[str] = []
+        photo_sequence: list[dict] = []    # [{photo_id, role_in_narrative}]
+        trace_id: str = ""
+        intuition_source: list[str] = []   # Stage 1 启发照片 ID
         error: str = ""
 
 
@@ -891,8 +894,11 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         cfg = req.app.state.cfg
         cluster_dir = cfg.resolve_path("./data/clusters")
 
+        # 创建 Tracer 用于全链路可观测
+        tracer = tracer_mod.Tracer(cfg.project_root)
+
         suggestions, meta = suggest_mod.run_suggest(
-            cfg, cfg.go_backend_url, cluster_dir,
+            cfg, cfg.go_backend_url, cluster_dir, tracer=tracer,
         )
 
         generated_at = meta.get("generated_at", "")
@@ -915,6 +921,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 "rationale": s.rationale,
                 "category": s.category,
                 "photo_ids": s.photo_ids,
+                "photo_sequence": s.photo_sequence,
+                "trace_id": s.trace_id or tracer.trace_id,
+                "intuition_source": s.intuition_source,
                 "error": error,
             }
             items.append(item)

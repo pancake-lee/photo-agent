@@ -28,7 +28,7 @@ start:
 	@setsid sh -c 'cd agent && make dev' \
 		> $(LOG_DIR)/agent.log 2>&1 & echo $$! > $(PID_DIR)/agent.pid
 	@echo "  ✓ agent    (pgid $$(cat $(PID_DIR)/agent.pid))"
-	sleep 1
+	sleep 2
 
 	@# Web (Vite)
 	@setsid sh -c 'cd web && pnpm dev' \

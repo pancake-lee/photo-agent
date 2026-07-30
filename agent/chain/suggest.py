@@ -17,6 +17,7 @@
 """
 
 import sys
+import time
 import pathlib
 import json
 import logging
@@ -34,6 +35,7 @@ import langchain_core.messages as lc_messages
 import utils.backend_sdk as bksdk
 import chain.cluster as cluster_mod
 import utils.llm_factory as llm_factory
+import chain.tracer as tracer_mod
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ class TopicIntuition:
     angle: str
     rationale: str
     inspired_indices: list[int]  # 启发该直觉的采样照片索引
+    inspired_photo_ids: list[str] = dataclasses.field(default_factory=list)  # 实际 photo_id
 
 
 @dataclasses.dataclass
@@ -82,6 +85,9 @@ class TopicSuggestion:
     candidate_index: int
     photo_ids: list[str]
     category: str
+    photo_sequence: list[dict] = dataclasses.field(default_factory=list)  # [{photo_id, role_in_narrative}]
+    trace_id: str = ""
+    intuition_source: list[str] = dataclasses.field(default_factory=list)  # Stage 1 启发照片 ID
 
 
 # ============================================================================
@@ -90,9 +96,12 @@ class TopicSuggestion:
 
 _STAGE1_SAMPLE_MIN = 6
 _STAGE1_SAMPLE_MAX = 9
-_STAGE2_MIN_PHOTOS = 5
+_STAGE2_MIN_PHOTOS = 3
+_STAGE3_MIN_POOL = 6   # Stage 3 最少候选数：少于此数量难以独立发现选题
+_STAGE3_TARGET_MIN = 9
+_STAGE3_TARGET_MAX = 18
 _STAGE2_MAX_PER_DATE = 2
-_STAGE2_RAG_TOP_N = 30
+_STAGE2_RAG_TOP_N = 45
 
 
 def _parse_shot_date(shot_at: str) -> datetime.date | None:
@@ -125,19 +134,24 @@ def _parse_shot_date(shot_at: str) -> datetime.date | None:
 
 _STAGE1_SYSTEM_PROMPT = (
     "你是一位摄影编辑和策展人，正在浏览一位摄影师图库中的随机照片。"
-    "你的任务是从中挖掘有发布价值的选题角度，发现那些摄影师自己可能没有意识到的'跨上下文连接'。\n\n"
-    "工作方式：\n"
-    "- 你不是在给照片做标签归类，而是在像一个编辑一样'想选题'\n"
-    "- 寻找视觉呼应、主题共鸣、概念对比、叙事线索——这些线索跨越不同的拍摄时间和场景\n"
-    "- 不必使用全部照片，只需从浏览中获得灵感\n"
+    "你的任务是从这些照片中挖掘有意义的选题视角，发现值得讲述的故事或值得分享的观察。\n\n"
+    "核心原则：\n"
+    "- 每一张照片都可能蕴含一个独特的视角，你不需要在随机照片之间寻找共同点\n"
+    "- 从单张照片中获得灵感就足够了（inspired_indices 可以是 [3]），选题和组图是两个独立的步骤\n"
+    "- 选题的关键不在于'找到了不常见的组合'，而在于这个视角本身是否有价值\n"
     "- 我没有给你拍摄日期和地点信息，请不要按时间线或地点归类\n\n"
+    "选题质量标准（按重要性排序）：\n"
+    "1. 能引发思考：让观众看到照片后产生新的想法、疑问或认知 shift\n"
+    "2. 有趣味性：视角新颖、幽默、出人意料，能抓住注意力\n"
+    "3. 有美学价值：对构图、光影、色彩等方面的独特审美发现\n"
+    "4. 有情感共鸣：能唤起普遍的人类情感、记忆或体验\n\n"
     "输出 2-4 个选题直觉，每个包含：\n"
-    "- title: 标题，6-12 字，精炼有记忆点（如'建筑的两种表情'、'晨昏之间的城市'）\n"
-    "- angle: 角度描述，20-40 字，说明这组照片可以怎么串联\n"
-    "- rationale: 选题理由，15-30 字，说明你从哪些照片中得到的灵感\n"
-    "- inspired_indices: 启发该直觉的照片索引编号列表（整数数组）\n\n"
+    "- title: 标题 6-12 字，精炼有记忆点\n"
+    "- angle: 角度描述 20-40 字，说明这个选题的独特视角和发布价值\n"
+    "- rationale: 选题理由 20-40 字，说明这个视角为什么有意义（而非仅仅描述照片里有什么）\n"
+    "- inspired_indices: 启发该直觉的照片索引编号列表，可以是单元素数组如 [3]\n\n"
     "你必须严格返回一行合法 JSON 数组，不得包含任何其他文字、注释或 markdown 标记：\n"
-    '[{"title":"...","angle":"...","rationale":"...","inspired_indices":[0,2,5]}]'
+    '[{"title":"...","angle":"...","rationale":"...","inspired_indices":[3]}]'
 )
 
 
@@ -282,7 +296,9 @@ def _parse_intuitions_response(raw: str) -> list[dict]:
     return _parse_llm_json_response(raw, "Stage 1 主题直觉")
 
 
-def _stage1_generate_intuitions(cfg, photos) -> list[TopicIntuition]:
+def _stage1_generate_intuitions(
+    cfg, photos, tracer: tracer_mod.Tracer | None = None,
+) -> list[TopicIntuition]:
     """Stage 1: 随机采样照片 → LLM 以编辑视角生成主题直觉。"""
     if len(photos) < _STAGE1_SAMPLE_MIN:
         logger.warning(
@@ -293,6 +309,22 @@ def _stage1_generate_intuitions(cfg, photos) -> list[TopicIntuition]:
 
     sampled = _random_sample_photos(photos)
 
+    # trace: suggest.stage1.sample
+    sample_photo_ids: list[str] = []
+    sample_photo_descs: list[str] = []
+    for p in sampled:
+        pid = getattr(p, "id", "")
+        desc = (getattr(p, "description", "") or "").strip()[:120]
+        sample_photo_ids.append(pid)
+        sample_photo_descs.append(desc)
+    if tracer:
+        tracer.emit("suggest.stage1.sample", {
+            "sample_size": len(sampled),
+            "date_count": len({_parse_shot_date(getattr(p, "shot_at", "") or "") for p in sampled}),
+            "photo_ids": sample_photo_ids,
+            "photo_descs": sample_photo_descs,
+        }, module="suggest")
+
     prompt_text = _build_stage1_prompt(sampled)
 
     llm = llm_factory.create_llm(cfg, temperature=0.8)
@@ -301,12 +333,42 @@ def _stage1_generate_intuitions(cfg, photos) -> list[TopicIntuition]:
         lc_messages.HumanMessage(content=prompt_text),
     ]
 
+    # trace: suggest.stage1.llm.start
+    if tracer:
+        payload_ref = tracer.save_payload(f"s1-prompt.txt", _STAGE1_SYSTEM_PROMPT + "\n\n" + prompt_text)
+        tracer.emit("suggest.stage1.llm.start", {
+            "model": getattr(cfg, "llm_model", "unknown"),
+            "temperature": 0.8,
+            "prompt_chars": len(prompt_text),
+            "payload_ref": payload_ref,
+        }, module="suggest")
+
+    t_start = time.time()
     try:
         resp = llm.invoke(messages)
         raw = resp.content if hasattr(resp, "content") else str(resp)
     except Exception as e:
         logger.exception("Stage 1 LLM 调用失败")
         return []
+    llm_duration_ms = int((time.time() - t_start) * 1000)
+
+    # trace: suggest.stage1.llm.end
+    token_usage: dict = {}
+    if hasattr(resp, "response_metadata"):
+        usage = resp.response_metadata.get("token_usage", {})
+        token_usage = {
+            "prompt": usage.get("prompt_tokens", 0),
+            "completion": usage.get("completion_tokens", 0),
+        }
+    if tracer:
+        resp_ref = tracer.save_payload(f"s1-response.txt", raw)
+        tracer.emit("suggest.stage1.llm.end", {
+            "model": getattr(cfg, "llm_model", "unknown"),
+            "duration_ms": llm_duration_ms,
+            "token_usage": token_usage,
+            "response_chars": len(raw),
+            "payload_ref": resp_ref,
+        }, module="suggest")
 
     parsed = _parse_intuitions_response(raw)
     if not parsed:
@@ -333,7 +395,26 @@ def _stage1_generate_intuitions(cfg, photos) -> list[TopicIntuition]:
             angle=item.get("angle", ""),
             rationale=item.get("rationale", ""),
             inspired_indices=indices if isinstance(indices, list) else [],
+            inspired_photo_ids=photo_ids,
         ))
+
+    # trace: suggest.stage1.intuitions
+    if tracer:
+        tracer.emit("suggest.stage1.intuitions", {
+            "count": len(intuitions),
+            "intuitions": [
+                {
+                    "title": it.title,
+                    "angle": it.angle,
+                    "rationale": it.rationale,
+                    "inspired_photo_ids": [
+                        sample_photo_ids[i] for i in it.inspired_indices
+                        if isinstance(i, int) and 0 <= i < len(sample_photo_ids)
+                    ],
+                }
+                for it in intuitions
+            ],
+        }, module="suggest")
 
     logger.info("Stage 1 生成 %d 个主题直觉", len(intuitions))
     return intuitions
@@ -348,6 +429,7 @@ def _stage2_expand_selection(
     cfg,
     intuition: TopicIntuition,
     all_photos,
+    tracer: tracer_mod.Tracer | None = None,
 ) -> list:
     """Stage 2: 围绕主题直觉，通过 RAG + 多样性约束扩展候选照片。
 
@@ -359,18 +441,41 @@ def _stage2_expand_selection(
     query = f"{intuition.title} {intuition.angle}"
     logger.info("Stage 2 RAG 检索: %s", query[:80])
 
+    # trace: suggest.stage2.rag.start
+    if tracer:
+        tracer.emit("suggest.stage2.rag.start", {
+            "query": query,
+            "intuition_title": intuition.title,
+            "n_results": _STAGE2_RAG_TOP_N,
+        }, module="suggest")
+
     try:
-        rag_ids = photo_rag.retrieve_photo_ids(
+        rag_result = photo_rag.retrieve_photo_ids(
             cfg, query,
             n_results=_STAGE2_RAG_TOP_N,
-            auto_distance_ratio=1.8,
+            auto_distance_ratio=2.5,
+            with_details=bool(tracer),
         )
     except Exception as e:
         logger.warning("Stage 2 RAG 检索失败: %s", e)
         rag_ids = []
+        rag_details: list[dict] = []
+    else:
+        if isinstance(rag_result, tuple):
+            rag_ids, rag_details = rag_result
+        else:
+            rag_ids = rag_result
+            rag_details = []
 
     if not rag_ids:
         logger.warning("Stage 2: RAG 检索 '%s' 无结果", intuition.title)
+        if tracer:
+            tracer.emit("suggest.stage2.rag.end", {
+                "matched_count": 0,
+                "total_retrieved": 0,
+                "photo_ids": [],
+                "distances": [],
+            }, module="suggest")
         return []
 
     # 从全量照片中匹配 RAG 结果
@@ -381,14 +486,47 @@ def _stage2_expand_selection(
             photo_by_id[pid] = p
 
     matched: list = []
+    matched_distances: list[float] = []
     for pid in rag_ids:
         if pid in photo_by_id:
             matched.append(photo_by_id[pid])
+            # 查找对应距离
+            dist = None
+            for rd in rag_details:
+                meta = rd.get("metadata") or {}
+                if meta.get("photo_id") == pid:
+                    dist = rd.get("distance")
+                    break
+            if dist is not None:
+                matched_distances.append(dist)
 
     if not matched:
+        if tracer:
+            tracer.emit("suggest.stage2.rag.end", {
+                "matched_count": 0,
+                "total_retrieved": len(rag_ids),
+                "photo_ids": [],
+                "distances": [],
+            }, module="suggest")
         return []
 
     logger.info("Stage 2: RAG 匹配 %d/%d 张照片", len(matched), len(rag_ids))
+
+    # trace: suggest.stage2.rag.end (before diversity filter)
+    if tracer:
+        # 计算相邻距离比值序列
+        dists = matched_distances if matched_distances else [float("inf")] * len(matched)
+        ratio_gaps: list[float] = []
+        for i in range(len(dists) - 1):
+            if dists[i] and dists[i] > 0 and dists[i + 1]:
+                ratio_gaps.append(round(dists[i + 1] / dists[i], 2))
+        tracer.emit("suggest.stage2.rag.end", {
+            "matched_count": len(matched),
+            "total_retrieved": len(rag_ids),
+            "photo_ids": [getattr(p, "id", "") for p in matched],
+            "distances": [round(d, 4) if d else None for d in matched_distances],
+            "ratio_gaps": ratio_gaps,
+        }, module="suggest")
 
     # ═══ 多样性采样：按日期分组，每组至多选 _STAGE2_MAX_PER_DATE 张 ═══
     date_groups: dict[str, list] = collections.defaultdict(list)
@@ -403,6 +541,9 @@ def _stage2_expand_selection(
         take = min(len(group), _STAGE2_MAX_PER_DATE)
         diverse.extend(group[:take])
 
+    before_diverse = len(matched)
+    removed_ids: list[str] = []
+
     # 如果筛选后不足 _STAGE2_MIN_PHOTOS 张，从被过滤掉的补充
     if len(diverse) < _STAGE2_MIN_PHOTOS:
         existing_ids = {getattr(p, "id", "") for p in diverse}
@@ -412,6 +553,12 @@ def _stage2_expand_selection(
             if getattr(p, "id", "") not in existing_ids:
                 diverse.append(p)
                 existing_ids.add(getattr(p, "id", ""))
+    else:
+        diverse_ids = {getattr(p, "id", "") for p in diverse}
+        for p in matched:
+            pid = getattr(p, "id", "")
+            if pid and pid not in diverse_ids:
+                removed_ids.append(pid)
 
     # 验证时间跨度
     dates = []
@@ -424,6 +571,15 @@ def _stage2_expand_selection(
     if len(dates) >= 2:
         dates.sort()
         date_span = (dates[-1] - dates[0]).days
+
+    # trace: suggest.stage2.diversity
+    if tracer:
+        tracer.emit("suggest.stage2.diversity", {
+            "before_count": before_diverse,
+            "after_count": len(diverse),
+            "date_count": len(date_groups),
+            "removed_photo_ids": removed_ids,
+        }, module="suggest")
 
     logger.info(
         "Stage 2 扩展选片: %d 张（%d 个日期）, 时间跨度 %d 天",
@@ -438,34 +594,37 @@ def _stage2_expand_selection(
 # ============================================================================
 
 _STAGE3_SYSTEM_PROMPT = (
-    "你是一位摄影编辑，正在策划一组可以发布的照片专题。"
-    "根据给定的选题方向和一组候选照片，输出一份结构化的选题提案。\n\n"
-    "要求：\n"
+    "你是一位摄影编辑和策展人。"
+    "给你一组通过语义检索聚合的照片，请从中独立发现有意义的选题，策划一组可以发布的照片专题。\n\n"
+    "核心原则：\n"
+    "- 这些照片因语义相关性被聚在一起，但你的任务不是描述它们的共同点\n"
+    "- 你需要从中发现一个值得讲述的故事或值得分享的观察，选题要有独立的价值判断\n"
+    "- 选题标准（按重要性排序）：能引发思考 > 有趣味性 > 有美学发现 > 有情感共鸣\n"
+    "- 不要按时间线或地点归类，也不要简单按拍摄对象分类（如'建筑照片集'、'花卉合集'）\n\n"
+    "输出要求：\n"
     "- title: 标题 6-12 字，精炼有记忆点\n"
     "- angle: 叙事角度 30-60 字，说明这组照片的故事线和发布价值\n"
-    "- rationale: 发布理由 20-40 字\n"
+    "- rationale: 发布理由 20-40 字，说明这个选题为什么有意义（而非仅仅描述照片内容或时间跨度）\n"
     "- photo_sequence: 照片序列数组，按叙事逻辑排列（不按时间或相似度）\n"
     "  - photo_id: 照片 ID\n"
-    "  - role_in_narrative: 这张照片在叙事中的角色（8-15字），如'开篇定调'、'对比过渡'、'情感高点'\n"
-    "- 序列中至少包含 5 张照片，优先选择不同场景的照片以体现叙事跨度\n"
-    "- **时间跨度**：选中的照片拍摄日期必须跨度至少 7 天，请利用候选照片的日期信息，"
-    "避免选择集中在同一天或相邻几天的照片\n\n"
+    "  - role_in_narrative: 这张照片在叙事中扮演什么角色（8-15 字）\n"
+    "- 从候选照片中选择 9-18 张来构建完整的叙事弧线，优先选择不同场景的照片\n"
+    "- 尽量覆盖更多照片以呈现主题的丰富性，但不要为了凑数而纳入不相关的照片\n"
+    "- 如果候选照片内容过于分散、确实难以形成有意义的选题，可以返回空 photo_sequence\n"
+    "- 时间跨度不做硬性要求\n\n"
     "你必须严格返回一行合法 JSON，不得包含任何其他文字、注释或 markdown 标记：\n"
     '{"title":"...","angle":"...","rationale":"...",'
     '"photo_sequence":[{"photo_id":"...","role_in_narrative":"..."}]}'
 )
 
 
-def _build_stage3_prompt(intuition: TopicIntuition, expanded_photos) -> str:
-    """构建 Stage 3 的 LLM prompt：选题直觉 + 候选照片描述。"""
+def _build_stage3_prompt(expanded_photos) -> str:
+    """构建 Stage 3 的 LLM prompt：仅展示候选照片，不预设选题方向。"""
     lines: list[str] = []
-    lines.append("## 选题方向\n")
-    lines.append(f"标题: {intuition.title}")
-    lines.append(f"角度: {intuition.angle}")
-    lines.append(f"灵感来源: {intuition.rationale}")
+    lines.append("## 候选照片\n")
+    lines.append(f"共 {len(expanded_photos)} 张照片，请从中独立发现有意义的选题视角，策划一组照片专题。\n")
     lines.append("")
 
-    lines.append("## 候选照片\n")
     for i, p in enumerate(expanded_photos):
         pid = getattr(p, "id", f"unknown_{i}")
         shot_date = _parse_shot_date(getattr(p, "shot_at", "") or "")
@@ -481,7 +640,7 @@ def _build_stage3_prompt(intuition: TopicIntuition, expanded_photos) -> str:
         lines.append(f"描述: {desc_short}")
         lines.append("")
 
-    lines.append("请基于以上选题方向和候选照片，输出完整选题提案。")
+    lines.append("请基于以上候选照片，独立挖掘选题并输出完整选题提案。")
     return "\n".join(lines)
 
 
@@ -521,23 +680,45 @@ def _stage3_generate_proposals(
     cfg,
     intuitions: list[TopicIntuition],
     all_photos,
+    tracer: tracer_mod.Tracer | None = None,
 ) -> list[TopicSuggestion]:
     """Stage 3: 为每个主题直觉生成完整选题提案。"""
     proposals: list[TopicSuggestion] = []
 
     for idx, intuition in enumerate(intuitions):
         # 扩展选片
-        expanded = _stage2_expand_selection(cfg, intuition, all_photos)
+        expanded = _stage2_expand_selection(cfg, intuition, all_photos, tracer=tracer)
 
-        if len(expanded) < _STAGE2_MIN_PHOTOS:
+        if len(expanded) < _STAGE3_MIN_POOL:
             logger.warning(
-                "Stage 3: 选题 '%s' 扩展后仅 %d 张（需 ≥%d），跳过",
-                intuition.title, len(expanded), _STAGE2_MIN_PHOTOS,
+                "Stage 3: 选题 '%s' 候选池仅 %d 张（需 ≥%d），不足以独立发现选题，跳过",
+                intuition.title, len(expanded), _STAGE3_MIN_POOL,
             )
+            if tracer:
+                tracer.emit("suggest.decision.skip", {
+                    "intuition_title": intuition.title,
+                    "reason": f"expanded_count={len(expanded)} < min={_STAGE3_MIN_POOL}",
+                    "expanded_count": len(expanded),
+                    "min_required": _STAGE3_MIN_POOL,
+                }, module="suggest")
             continue
 
-        # 构建 prompt
-        prompt_text = _build_stage3_prompt(intuition, expanded)
+        # 构建 prompt（仅传候选照片，不传 Stage 1 直觉）
+        prompt_text = _build_stage3_prompt(expanded)
+
+        # trace: suggest.stage3.llm.start
+        prompt_idx = idx
+        if tracer:
+            payload_ref = tracer.save_payload(
+                f"s3-prompt-{prompt_idx}.txt",
+                _STAGE3_SYSTEM_PROMPT + "\n\n" + prompt_text,
+            )
+            tracer.emit("suggest.stage3.llm.start", {
+                "intuition_title": intuition.title,
+                "candidate_count": len(expanded),
+                "prompt_chars": len(prompt_text),
+                "payload_ref": payload_ref,
+            }, module="suggest")
 
         llm = llm_factory.create_llm(cfg, temperature=0.7)
         messages = [
@@ -545,12 +726,32 @@ def _stage3_generate_proposals(
             lc_messages.HumanMessage(content=prompt_text),
         ]
 
+        t_start = time.time()
         try:
             resp = llm.invoke(messages)
             raw = resp.content if hasattr(resp, "content") else str(resp)
         except Exception as e:
             logger.exception("Stage 3 LLM 调用失败: %s", intuition.title)
             continue
+        llm_duration_ms = int((time.time() - t_start) * 1000)
+
+        # trace: suggest.stage3.llm.end
+        token_usage: dict = {}
+        if hasattr(resp, "response_metadata"):
+            usage = resp.response_metadata.get("token_usage", {})
+            token_usage = {
+                "prompt": usage.get("prompt_tokens", 0),
+                "completion": usage.get("completion_tokens", 0),
+            }
+        if tracer:
+            resp_ref = tracer.save_payload(f"s3-response-{prompt_idx}.txt", raw)
+            tracer.emit("suggest.stage3.llm.end", {
+                "model": getattr(cfg, "llm_model", "unknown"),
+                "duration_ms": llm_duration_ms,
+                "token_usage": token_usage,
+                "response_chars": len(raw),
+                "payload_ref": resp_ref,
+            }, module="suggest")
 
         parsed = _parse_proposal_response(raw)
         if not parsed:
@@ -560,8 +761,38 @@ def _stage3_generate_proposals(
         sequence = parsed.get("photo_sequence", [])
         if isinstance(sequence, list):
             raw_ids = [s.get("photo_id", "") for s in sequence if s.get("photo_id")]
+            # 保存完整的 photo_sequence（含 role_in_narrative）
+            clean_sequence: list[dict] = [
+                {"photo_id": s.get("photo_id", ""),
+                 "role_in_narrative": s.get("role_in_narrative", "")}
+                for s in sequence if s.get("photo_id")
+            ]
         else:
             raw_ids = []
+            clean_sequence = []
+
+        # LLM 判定候选照片无法形成有意义的选题（空 photo_sequence）
+        if not clean_sequence:
+            logger.info(
+                "Stage 3: 选题 '%s' LLM 判定候选池（%d 张）无法形成有意义的选题，跳过",
+                parsed.get("title", ""), len(expanded),
+            )
+            if tracer:
+                tracer.emit("suggest.stage3.skip_empty", {
+                    "title": parsed.get("title", ""),
+                    "candidate_count": len(expanded),
+                    "reason": "llm_returned_empty_photo_sequence",
+                }, module="suggest")
+            continue
+
+        # trace: suggest.stage3.proposal (before validation)
+        if tracer:
+            tracer.emit("suggest.stage3.proposal", {
+                "title": parsed.get("title", intuition.title),
+                "angle": parsed.get("angle", ""),
+                "rationale": parsed.get("rationale", ""),
+                "photo_sequence": clean_sequence,
+            }, module="suggest")
 
         # ═══ B8: 校验 photo_id 有效性，过滤幻觉/截断 ID ═══
         valid_ids: set[str] = {getattr(p, "id", "") for p in all_photos}
@@ -572,6 +803,7 @@ def _stage3_generate_proposals(
         used_ids: set[str] = set()
         photo_ids: list[str] = []
         hallucinated = 0
+        replacements: list[dict] = []  # trace 用
 
         for pid in raw_ids:
             if pid in valid_ids and pid not in used_ids:
@@ -579,10 +811,17 @@ def _stage3_generate_proposals(
                 used_ids.add(pid)
             else:
                 hallucinated += 1
+                replaced = False
                 for alt_id in expanded_ids:
                     if alt_id not in used_ids and alt_id in valid_ids:
                         photo_ids.append(alt_id)
                         used_ids.add(alt_id)
+                        replaced = True
+                        replacements.append({
+                            "from_id": pid,
+                            "to_id": alt_id,
+                            "reason": "不存在" if pid not in valid_ids else "重复",
+                        })
                         logger.warning(
                             "Stage 3: photo_id '%s' 无效（%s），替换为 '%s'",
                             pid,
@@ -590,7 +829,7 @@ def _stage3_generate_proposals(
                             alt_id,
                         )
                         break
-                else:
+                if not replaced:
                     logger.warning(
                         "Stage 3: 选题 '%s' photo_id '%s' 无效且无可用替换",
                         parsed.get("title", ""), pid,
@@ -602,7 +841,7 @@ def _stage3_generate_proposals(
                 parsed.get("title", ""), hallucinated,
             )
 
-        # 校验后不足 5 张则从扩展列表补充
+        # 校验后不足最低张数则从扩展列表补充
         if len(photo_ids) < _STAGE2_MIN_PHOTOS:
             for alt_id in expanded_ids:
                 if alt_id not in used_ids and alt_id in valid_ids:
@@ -613,7 +852,15 @@ def _stage3_generate_proposals(
         if not photo_ids:
             photo_ids = expanded_ids[:_STAGE2_MIN_PHOTOS]
 
-        # ═══ B9: 强制时间跨度 ≥ 7 天 ═══
+        # trace: suggest.stage3.validation
+        if tracer:
+            tracer.emit("suggest.stage3.validation", {
+                "hallucinated_count": hallucinated,
+                "replaced": replacements,
+                "final_photo_count": len(photo_ids),
+            }, module="suggest")
+
+        # ═══ 记录时间跨度（建议性，不做强制替换） ═══
         date_map: dict[str, datetime.date] = {}
         for p in itertools.chain(expanded, all_photos):
             pid = getattr(p, "id", "")
@@ -621,55 +868,24 @@ def _stage3_generate_proposals(
             if pid and shot_date:
                 date_map[pid] = shot_date
 
-        if not date_map:
-            logger.warning(
-                "Stage 3: 选题 '%s' date_map 为空，无法校验时间跨度",
-                parsed.get("title", ""),
-            )
-
         selected_dates = [date_map[pid] for pid in photo_ids if pid in date_map]
+        span_days = 0
         if len(selected_dates) >= 2:
             selected_dates.sort()
-            span = (selected_dates[-1] - selected_dates[0]).days
-            if span < 7:
-                logger.warning(
-                    "Stage 3: 选题 '%s' 时间跨度仅 %d 天（需 ≥7），尝试扩展",
-                    parsed.get("title", ""), span,
-                )
-                # 从扩展候选池中找最早/最晚日期的照片来替换
-                expanded_dated = [
-                    (getattr(p, "id", ""), date_map.get(getattr(p, "id", "")))
-                    for p in expanded
-                    if getattr(p, "id", "") in date_map
-                ]
-                expanded_dated.sort(key=lambda x: x[1])
-                if expanded_dated and (expanded_dated[-1][1] - expanded_dated[0][1]).days >= 7:
-                    for extreme_pid, extreme_date in (expanded_dated[0], expanded_dated[-1]):
-                        if extreme_pid not in used_ids:
-                            for i, pid in enumerate(photo_ids):
-                                if pid in date_map and date_map[pid] not in (
-                                    expanded_dated[0][1], expanded_dated[-1][1],
-                                ):
-                                    used_ids.discard(photo_ids[i])
-                                    photo_ids[i] = extreme_pid
-                                    used_ids.add(extreme_pid)
-                                    logger.info(
-                                        "Stage 3: 替换 '%s' → '%s'（扩展时间跨度）",
-                                        pid, extreme_pid,
-                                    )
-                                    break
-                    new_dates = [date_map[pid] for pid in photo_ids if pid in date_map]
-                    if len(new_dates) >= 2:
-                        new_dates.sort()
-                        new_span = (new_dates[-1] - new_dates[0]).days
-                        logger.info(
-                            "Stage 3: 选题 '%s' 时间跨度 %d → %d 天",
-                            parsed.get("title", ""), span, new_span,
-                        )
-                else:
-                    logger.warning(
-                        "Stage 3: 扩展候选池时间跨度不足 7 天，无法强制约束",
-                    )
+            span_days = (selected_dates[-1] - selected_dates[0]).days
+
+        if span_days < 3 and len(selected_dates) >= 2:
+            logger.info(
+                "Stage 3: 选题 '%s' 时间跨度仅 %d 天（照片可能集中在相近日期）",
+                parsed.get("title", ""), span_days,
+            )
+
+        if tracer:
+            tracer.emit("suggest.stage3.time_span", {
+                "span_days": span_days,
+                "photo_count": len(photo_ids),
+                "dated_count": len(selected_dates),
+            }, module="suggest")
 
         proposals.append(TopicSuggestion(
             title=parsed.get("title", intuition.title),
@@ -678,6 +894,9 @@ def _stage3_generate_proposals(
             candidate_index=idx,
             photo_ids=photo_ids,
             category="editorial_proposal",
+            photo_sequence=clean_sequence,
+            trace_id=tracer.trace_id if tracer else "",
+            intuition_source=intuition.inspired_photo_ids,
         ))
 
         logger.info(
@@ -1122,6 +1341,7 @@ def run_suggest(
     cfg,
     go_backend_url: str,
     cluster_dir: pathlib.Path | None = None,
+    tracer: tracer_mod.Tracer | None = None,
 ) -> tuple[list[TopicSuggestion], dict]:
     """
     执行潜在主题识别，返回选题建议列表和元信息。
@@ -1133,16 +1353,27 @@ def run_suggest(
         cfg: Config 对象
         go_backend_url: Go 后端地址
         cluster_dir: 聚类结果目录，为 None 时尝试默认路径
+        tracer: 可选的结构化追踪器，为 None 时内部创建
 
     返回:
         (suggestions, meta): 建议列表和元信息字典
     """
+    t_start = time.time()
+
+    # 内部创建 tracer（如果调用方未传入）
+    if tracer is None:
+        try:
+            tracer = tracer_mod.Tracer(cfg.project_root)
+        except Exception:
+            tracer = None
+
     meta: dict = {
         "total_photos": 0,
         "cluster_count": 0,
         "candidates_found": 0,
         "generated_at": datetime.datetime.now().isoformat(),
         "pipeline": "unknown",
+        "trace_id": tracer.trace_id if tracer else "",
     }
 
     # 1. 数据采集
@@ -1181,20 +1412,40 @@ def run_suggest(
             "Embedding 服务不可用（%s），跳过三阶段主路径，直接走回退路径",
             embedding_reason,
         )
+        if tracer:
+            tracer.emit("suggest.decision.pipeline", {
+                "pipeline": "legacy_three_dimension",
+                "reason": f"embedding_unavailable: {embedding_reason}",
+            }, module="suggest")
     else:
         logger.info("Embedding 服务可用（%s），进入三阶段主路径", embedding_reason)
         logger.info("=== 主路径：三阶段编辑视角提案 ===")
 
+        if tracer:
+            tracer.emit("suggest.decision.pipeline", {
+                "pipeline": "editorial_three_stage",
+                "reason": f"embedding_ok: {embedding_reason}",
+            }, module="suggest")
+
         # Stage 1: 随机采样 → LLM 主题直觉
-        intuitions = _stage1_generate_intuitions(cfg, photos)
+        intuitions = _stage1_generate_intuitions(cfg, photos, tracer=tracer)
 
         if intuitions:
             # Stage 2+3: 扩展选片 → 完整选题提案
-            proposals = _stage3_generate_proposals(cfg, intuitions, photos)
+            proposals = _stage3_generate_proposals(cfg, intuitions, photos, tracer=tracer)
 
             if proposals:
                 meta["pipeline"] = "editorial_three_stage"
                 meta["candidates_found"] = len(proposals)
+                total_duration_ms = int((time.time() - t_start) * 1000)
+                if tracer:
+                    tracer.emit("suggest.complete", {
+                        "pipeline": "editorial_three_stage",
+                        "total_suggestions": len(proposals),
+                        "total_duration_ms": total_duration_ms,
+                        "stage1_count": len(intuitions),
+                        "stage3_count": len(proposals),
+                    }, module="suggest")
                 logger.info("主路径成功：生成 %d 个选题建议", len(proposals))
                 return proposals, meta
 
@@ -1208,6 +1459,14 @@ def run_suggest(
 
     logger.info("=== 回退路径：三维度属性分析 ===")
     meta["pipeline"] = "legacy_three_dimension"
+
+    if tracer and meta.get("pipeline") == "legacy_three_dimension":
+        # 如果还没 emit 过 pipeline 决策（embedding 可用但主路径失败）
+        if embedding_ok:
+            tracer.emit("suggest.decision.pipeline", {
+                "pipeline": "legacy_three_dimension",
+                "reason": "main_path_failed",
+            }, module="suggest")
 
     freq = _count_attribute_frequencies(photos)
     for dim, values in freq.items():
@@ -1245,6 +1504,18 @@ def run_suggest(
     top_candidates = all_candidates[:15]
     meta["candidates_found"] = len(top_candidates)
 
+    # trace: fallback candidates
+    if tracer:
+        tracer.emit("suggest.fallback.candidates", {
+            "high_freq_count": len(high_freq),
+            "temporal_count": len(temporal),
+            "scarce_count": len(scarce),
+            "top_candidates": [
+                {"category": c.category, "summary": c.attributes_summary, "score": round(c.score, 3)}
+                for c in top_candidates[:10]
+            ],
+        }, module="suggest")
+
     if not top_candidates:
         logger.warning("未发现候选选题方向")
         return [], {**meta, "error": "未发现候选选题方向"}
@@ -1261,18 +1532,50 @@ def run_suggest(
 
     prompt_text = _build_legacy_prompt(len(photos), cluster_summary, top_candidates)
 
+    # trace: fallback llm
+    if tracer:
+        payload_ref = tracer.save_payload("fallback-prompt.txt",
+                                           _LEGACY_SUGGEST_SYSTEM_PROMPT + "\n\n" + prompt_text)
+        tracer.emit("suggest.fallback.llm.start", {
+            "model": getattr(cfg, "llm_model", "unknown"),
+            "temperature": 0.7,
+            "prompt_chars": len(prompt_text),
+            "payload_ref": payload_ref,
+            "candidate_count": len(top_candidates),
+        }, module="suggest")
+
     llm = llm_factory.create_llm(cfg, temperature=0.7)
     messages = [
         lc_messages.SystemMessage(content=_LEGACY_SUGGEST_SYSTEM_PROMPT),
         lc_messages.HumanMessage(content=prompt_text),
     ]
 
+    t_fallback_llm = time.time()
     try:
         resp = llm.invoke(messages)
         raw = resp.content if hasattr(resp, "content") else str(resp)
     except Exception as e:
         logger.exception("备选路径 LLM 调用失败")
         return [], {**meta, "error": f"LLM 调用失败: {e}"}
+
+    fb_duration_ms = int((time.time() - t_fallback_llm) * 1000)
+
+    if tracer:
+        resp_ref = tracer.save_payload("fallback-response.txt", raw)
+        token_usage_fb = {}
+        if hasattr(resp, "response_metadata"):
+            usage = resp.response_metadata.get("token_usage", {})
+            token_usage_fb = {
+                "prompt": usage.get("prompt_tokens", 0),
+                "completion": usage.get("completion_tokens", 0),
+            }
+        tracer.emit("suggest.fallback.llm.end", {
+            "model": getattr(cfg, "llm_model", "unknown"),
+            "duration_ms": fb_duration_ms,
+            "token_usage": token_usage_fb,
+            "response_chars": len(raw),
+            "payload_ref": resp_ref,
+        }, module="suggest")
 
     parsed = _parse_legacy_response(raw)
     if not parsed:
@@ -1302,7 +1605,18 @@ def run_suggest(
             candidate_index=idx,
             photo_ids=candidate.photo_ids[:10],
             category=candidate.category,
+            trace_id=tracer.trace_id if tracer else "",
         ))
+
+    total_duration_ms = int((time.time() - t_start) * 1000)
+    if tracer:
+        tracer.emit("suggest.complete", {
+            "pipeline": "legacy_three_dimension",
+            "total_suggestions": len(suggestions),
+            "total_duration_ms": total_duration_ms,
+            "stage1_count": 0,
+            "stage3_count": 0,
+        }, module="suggest")
 
     logger.info("备选路径生成 %d 个选题建议", len(suggestions))
     return suggestions, meta
