@@ -3,6 +3,8 @@
 > 中枢文档：[2026-07-27-5-topic-discovery-hub.md](2026-07-27-5-topic-discovery-hub.md) — 本专题全部关联产物的汇总入口
 >
 > 本文档覆盖 3.8 交互式管线评估（7.3/10）发现的四个衍生优化任务（B13 / 3.9 / B12 / 3.10），以及用户提出的管线产出简化（3.11）。
+>
+> **评估**：7.3/10（结构清晰度 8 / 决策合理性 8 / 验收可执行性 7 / 代码一致性 5 / 方案完整性 7），详见 [评估报告](../../data/eval_reports/eval-design-3.8-optimizations-2026-07-31.json)
 
 ## 1. 任务概览
 
@@ -305,17 +307,20 @@ LLM 被约束为输出 1 个直觉后，`_parse_intuitions_response` 会返回�
 
 ## 7. 附：代码质量问题收尾
 
-以下问题体量很小，可在以上任一任务中顺手修复：
+以下问题已在任务实现过程中验证：
 
-| 问题 | 文件 | 行号 |
+| 问题 | 文件 | 说明 |
 |------|------|------|
-| `prompt_idx = idx` 重复赋值（`prompt_idx` 在 790 和 797 行各赋值一次，后者覆盖前者） | `suggest.py` | 790, 797 |
-| `except Exception` 裸捕获吞掉了 trace 重放的具体错误 | `server.py` `_migrate_to_v2` | 215 |
-| `_save_suggest_history_v2` 写入时未捕获 `OSError`（磁盘满等场景） | `server.py` | 178 |
-| 版本时间线最后一个节点 CSS 残留空白 | `SuggestVersionTimeline.vue` | 168 |
-| `_migrate_to_v2` 返回值类型标注为 `dict`，但两处调用方写了 `if v2_item is None` | `server.py` | 184, 1200, 1411 |
+| 版本时间线最后一个节点 CSS 残留空白（`.version-item` 底部 8px padding 对末节点同样生效，仅重置了 `.version-info` 的 padding） | `SuggestVersionTimeline.vue` | 174 |
 
-建议：B13 统一存储时顺手修掉 `_migrate_to_v2` 的 except 和返回值问题；3.9 改造步骤卡片时顺手修 CSS 空白。
+以下原列问题经代码核实不成立，已排除：
+
+- ~~`prompt_idx = idx` 重复赋值~~：`prompt_idx` 仅在 suggest.py:796 赋值一次，790 行赋值的是 `prompt_text`，为不同变量
+- ~~`_migrate_to_v2` 裸 `except Exception`~~：实际捕获 `(OSError, ValueError, KeyError, json.JSONDecodeError)`，非裸异常
+- ~~`_save_suggest_history_v2` 未捕获 OSError~~：函数早已更名为 `_save_suggest_history` 且第 161 行有 `except OSError`
+- ~~`_migrate_to_v2` 返回值类型标注为 `dict` 但调用方写了 `if v2_item is None`~~：函数签名实际为 `dict | None`，调用方 None 检查完全正确
+
+建议：后续改造版本时间线组件时顺手修 CSS 空白。
 
 ---
 
