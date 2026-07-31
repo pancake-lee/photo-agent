@@ -13,14 +13,19 @@ import {
   NSpace,
   NModal,
   NPopconfirm,
+  NDropdown,
   useMessage,
 } from 'naive-ui'
 import {
   BulbOutline,
   PlayOutline,
   TrashOutline,
+  AddOutline,
+  FlashOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
+import SuggestDetailModal from '../components/SuggestDetailModal.vue'
+import SuggestManualModal from '../components/SuggestManualModal.vue'
 
 // ── 类型定义 ──
 
@@ -78,6 +83,27 @@ const deletingId = ref<string | null>(null)
 // 图片预览
 const previewVisible = ref(false)
 const previewUrl = ref('')
+
+// 详情 Modal
+const detailVisible = ref(false)
+const detailItemId = ref<string | null>(null)
+
+// 手动选题 Modal
+const manualVisible = ref(false)
+
+// 按钮下拉选项
+const suggestDropdownOptions = [
+  {
+    label: '自动生成选题建议',
+    key: 'auto',
+    icon: () => h(NIcon, null, { default: () => h(FlashOutline) }),
+  },
+  {
+    label: '手动生成选题建议',
+    key: 'manual',
+    icon: () => h(NIcon, null, { default: () => h(AddOutline) }),
+  },
+]
 
 // ── 初始化 ──
 
@@ -317,6 +343,32 @@ function formatTime(iso: string): string {
     return iso
   }
 }
+
+// ── 详情/手动选题 ──
+
+function handleDropdownSelect(key: string) {
+  if (key === 'auto') {
+    handleRunSuggest()
+  } else if (key === 'manual') {
+    manualVisible.value = true
+  }
+}
+
+function handleCardClick(item: HistoryItem) {
+  detailItemId.value = item.id
+  detailVisible.value = true
+}
+
+function handleManualDone(itemId: string) {
+  // 手动选题完成，刷新列表并打开详情
+  loadHistory()
+  detailItemId.value = itemId
+  detailVisible.value = true
+}
+
+function handleDetailRefreshed() {
+  loadHistory()
+}
 </script>
 
 <template>
@@ -331,17 +383,18 @@ function formatTime(iso: string): string {
           </NTag>
         </div>
         <NSpace>
-          <NButton
-            size="small"
-            type="primary"
-            :loading="loading"
-            @click="handleRunSuggest"
+          <NDropdown
+            trigger="click"
+            :options="suggestDropdownOptions"
+            @select="handleDropdownSelect"
           >
-            <template #icon>
-              <NIcon><PlayOutline /></NIcon>
-            </template>
-            生成选题建议
-          </NButton>
+            <NButton size="small" type="primary" :loading="loading">
+              <template #icon>
+                <NIcon><PlayOutline /></NIcon>
+              </template>
+              生成选题建议
+            </NButton>
+          </NDropdown>
         </NSpace>
       </div>
     </NLayoutHeader>
@@ -377,6 +430,7 @@ function formatTime(iso: string): string {
             v-for="item in history"
             :key="item.id"
             class="history-card"
+            @click="handleCardClick(item)"
           >
             <!-- 卡片头部：标题 + 分类 + 星级 + 删除 -->
             <div class="card-header-row">
@@ -464,6 +518,21 @@ function formatTime(iso: string): string {
         <img :src="previewUrl" class="preview-image" />
       </div>
     </NModal>
+
+    <!-- 选题详情弹窗 -->
+    <SuggestDetailModal
+      :item-id="detailItemId"
+      :visible="detailVisible"
+      @update:visible="detailVisible = $event"
+      @refreshed="handleDetailRefreshed"
+    />
+
+    <!-- 手动选题弹窗 -->
+    <SuggestManualModal
+      :visible="manualVisible"
+      @update:visible="manualVisible = $event"
+      @done="handleManualDone"
+    />
   </NLayout>
 </template>
 
@@ -535,6 +604,12 @@ function formatTime(iso: string): string {
   border: 1px solid var(--n-border-color);
   border-radius: 8px;
   padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.history-card:hover {
+  border-color: var(--n-color-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 /* 卡片头部 */

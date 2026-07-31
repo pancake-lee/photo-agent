@@ -298,16 +298,59 @@ def _parse_intuitions_response(raw: str) -> list[dict]:
 
 def _stage1_generate_intuitions(
     cfg, photos, tracer: tracer_mod.Tracer | None = None,
+    photo_ids_override: list[str] | None = None,
+    prompt_override: str | None = None,
+    intuitions_override: list[dict] | None = None,
 ) -> list[TopicIntuition]:
-    """Stage 1: 随机采样照片 → LLM 以编辑视角生成主题直觉。"""
-    if len(photos) < _STAGE1_SAMPLE_MIN:
+    """Stage 1: 随机采样照片 → LLM 以编辑视角生成主题直觉。
+
+    重入参数:
+        photo_ids_override: 替换随机采样，使用指定的 photo_id 列表
+        prompt_override: 替换自动构建的 prompt 文本
+        intuitions_override: 直接使用提供的直觉列表，跳过 LLM 调用。
+            格式: [{"title", "angle", "rationale", "inspired_indices"}]
+    """
+    # 如果提供了直觉覆盖，直接返回
+    if intuitions_override is not None:
+        intuitions: list[TopicIntuition] = []
+        for item in intuitions_override:
+            intuitions.append(TopicIntuition(
+                title=item.get("title", "未命名选题"),
+                angle=item.get("angle", ""),
+                rationale=item.get("rationale", ""),
+                inspired_indices=item.get("inspired_indices", []),
+                inspired_photo_ids=item.get("inspired_photo_ids", []),
+            ))
+        if tracer:
+            tracer.emit("suggest.stage1.intuitions", {
+                "count": len(intuitions),
+                "source": "override",
+                "intuitions": [
+                    {"title": it.title, "angle": it.angle, "rationale": it.rationale}
+                    for it in intuitions
+                ],
+            }, module="suggest")
+        logger.info("Stage 1: 使用提供的 %d 个直觉（跳过 LLM）", len(intuitions))
+        return intuitions
+
+    if len(photos) < _STAGE1_SAMPLE_MIN and not photo_ids_override:
         logger.warning(
             "照片数量不足 %d 张（当前 %d），跳过 Stage 1 随机采样",
             _STAGE1_SAMPLE_MIN, len(photos),
         )
         return []
 
-    sampled = _random_sample_photos(photos)
+    # 使用指定的照片 或 随机采样
+    if photo_ids_override:
+        photo_by_id: dict[str, any] = {}
+        for p in photos:
+            pid = getattr(p, "id", "")
+            if pid:
+                photo_by_id[pid] = p
+        sampled = [photo_by_id[pid] for pid in photo_ids_override if pid in photo_by_id]
+        logger.info("Stage 1: 使用指定照片 %d/%d 张", len(sampled), len(photo_ids_override))
+    else:
+        sampled = _random_sample_photos(photos)
 
     # trace: suggest.stage1.sample
     sample_photo_ids: list[str] = []
@@ -325,7 +368,7 @@ def _stage1_generate_intuitions(
             "photo_descs": sample_photo_descs,
         }, module="suggest")
 
-    prompt_text = _build_stage1_prompt(sampled)
+    prompt_text = prompt_override if prompt_override else _build_stage1_prompt(sampled)
 
     llm = llm_factory.create_llm(cfg, temperature=0.8)
     messages = [
@@ -681,13 +724,53 @@ def _stage3_generate_proposals(
     intuitions: list[TopicIntuition],
     all_photos,
     tracer: tracer_mod.Tracer | None = None,
+    expanded_photos_override: dict[int, list] | None = None,
+    prompt_overrides: dict[int, str] | None = None,
+    proposal_overrides: dict[int, dict] | None = None,
 ) -> list[TopicSuggestion]:
-    """Stage 3: 为每个主题直觉生成完整选题提案。"""
+    """Stage 3: 为每个主题直觉生成完整选题提案。
+
+    重入参数:
+        expanded_photos_override: {intuition_index: [photo_objects]}, 跳过 RAG
+        prompt_overrides: {intuition_index: prompt_string}, 替换 prompt
+        proposal_overrides: {intuition_index: {title, angle, rationale, photo_sequence}},
+            跳过 LLM，直接使用提供的提案
+    """
     proposals: list[TopicSuggestion] = []
 
     for idx, intuition in enumerate(intuitions):
-        # 扩展选片
-        expanded = _stage2_expand_selection(cfg, intuition, all_photos, tracer=tracer)
+        # 如果有 proposal override，直接构造结果跳过所有 LLM 流程
+        if proposal_overrides and idx in proposal_overrides:
+            po = proposal_overrides[idx]
+            photo_ids = po.get("photo_ids", [])
+            proposals.append(TopicSuggestion(
+                title=po.get("title", intuition.title),
+                angle=po.get("angle", intuition.angle),
+                rationale=po.get("rationale", intuition.rationale),
+                candidate_index=idx,
+                photo_ids=photo_ids,
+                category="editorial_proposal",
+                photo_sequence=po.get("photo_sequence", []),
+                trace_id=tracer.trace_id if tracer else "",
+                intuition_source=intuition.inspired_photo_ids,
+            ))
+            if tracer:
+                tracer.emit("suggest.stage3.proposal", {
+                    "title": po.get("title", ""),
+                    "angle": po.get("angle", ""),
+                    "rationale": po.get("rationale", ""),
+                    "photo_sequence": po.get("photo_sequence", []),
+                    "source": "override",
+                }, module="suggest")
+            logger.info("Stage 3: 选题 '%s' 使用提供的提案（跳过 LLM）", po.get("title", ""))
+            continue
+
+        # 扩展选片（使用覆盖 或 RAG）
+        if expanded_photos_override and idx in expanded_photos_override:
+            expanded = expanded_photos_override[idx]
+            logger.info("Stage 3: 选题 '%s' 使用提供的扩展照片 %d 张", intuition.title, len(expanded))
+        else:
+            expanded = _stage2_expand_selection(cfg, intuition, all_photos, tracer=tracer)
 
         if len(expanded) < _STAGE3_MIN_POOL:
             logger.warning(
@@ -703,8 +786,12 @@ def _stage3_generate_proposals(
                 }, module="suggest")
             continue
 
-        # 构建 prompt（仅传候选照片，不传 Stage 1 直觉）
-        prompt_text = _build_stage3_prompt(expanded)
+        # 构建 prompt（使用覆盖 或 默认）
+        prompt_idx = idx
+        if prompt_overrides and idx in prompt_overrides:
+            prompt_text = prompt_overrides[idx]
+        else:
+            prompt_text = _build_stage3_prompt(expanded)
 
         # trace: suggest.stage3.llm.start
         prompt_idx = idx

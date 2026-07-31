@@ -151,6 +151,101 @@ def _save_suggest_history(items: list[dict], dir_path: pathlib.Path) -> None:
 # 选题历史文件的读写锁，防止并发请求时读-改-写竞态丢失记录。
 _suggest_history_lock = threading.Lock()
 
+# v2 选题历史存储（版本化管理）
+_suggest_history_v2_lock = threading.Lock()
+
+
+def _suggest_history_v2_path(dir_path: pathlib.Path) -> pathlib.Path:
+    """返回 suggest_history_v2.json 的路径。"""
+    return dir_path / "suggest_history_v2.json"
+
+
+def _load_suggest_history_v2(dir_path: pathlib.Path) -> list[dict]:
+    """加载 v2 选题历史。文件不存在时返回空列表。"""
+    fp = _suggest_history_v2_path(dir_path)
+    if not fp.exists():
+        return []
+    try:
+        return json.loads(fp.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_suggest_history_v2(items: list[dict], dir_path: pathlib.Path) -> None:
+    """保存 v2 选题历史列表到 JSON 文件。"""
+    fp = _suggest_history_v2_path(dir_path)
+    fp.parent.mkdir(parents=True, exist_ok=True)
+    fp.write_text(
+        json.dumps(items, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+
+def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict:
+    """将 v1 单条记录懒迁移为 v2 格式（创建 v0 版本，不含步骤快照）。
+
+    返回 v2 记录字典，失败返回 None。
+    """
+    import chain.trace_replay as trace_replay
+
+    v2_id = v1_item.get("id", "")
+    trace_id = v1_item.get("trace_id", "")
+
+    # 尝试从 trace 重建步骤
+    steps: list[dict] = []
+    trace_expired = True
+    if trace_id:
+        try:
+            replayed, expired = trace_replay.replay_trace(project_root, trace_id)
+            trace_expired = expired
+            if not expired:
+                steps = [
+                    {
+                        "event": s.event,
+                        "label": s.label,
+                        "group": s.group,
+                        "stage": s.stage,
+                        "timestamp": s.timestamp,
+                        "data": s.data,
+                        "payload_content": s.payload_content,
+                        "payload_ref": s.payload_ref,
+                    }
+                    for s in replayed
+                ]
+        except Exception:
+            logger.warning("v2 迁移: trace 重放失败 trace_id=%s", trace_id)
+            trace_expired = True
+
+    v0_version = {
+        "version_id": f"{v2_id}-v0",
+        "parent_version_id": None,
+        "created_at": v1_item.get("generated_at", ""),
+        "created_from": "auto",
+        "modified_step": None,
+        "trace_id": trace_id,
+        "trace_expired": trace_expired,
+        "steps": steps,
+    }
+
+    return {
+        "id": v2_id,
+        "generated_at": v1_item.get("generated_at", ""),
+        "pipeline": v1_item.get("pipeline", ""),
+        "total_photos": v1_item.get("total_photos", 0),
+        "cluster_count": v1_item.get("cluster_count", 0),
+        "rating": v1_item.get("rating", 0),
+        "title": v1_item.get("title", ""),
+        "angle": v1_item.get("angle", ""),
+        "rationale": v1_item.get("rationale", ""),
+        "category": v1_item.get("category", ""),
+        "photo_ids": v1_item.get("photo_ids", []),
+        "photo_sequence": v1_item.get("photo_sequence", []),
+        "intuition_source": v1_item.get("intuition_source", []),
+        "error": v1_item.get("error", ""),
+        "versions": [v0_version],
+        "current_version_id": v0_version["version_id"],
+    }
+
 
 # ── Pydantic 模型 ──────────────────────────────────────────
 
@@ -875,6 +970,54 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     class SuggestRatingRequest(pydantic.BaseModel):
         rating: int
 
+    # ── v2 管线步骤模型 ──
+
+    class PipelineStepModel(pydantic.BaseModel):
+        event: str
+        label: str
+        group: str
+        stage: int
+        timestamp: str = ""
+        data: dict = {}
+        payload_content: str = ""
+        payload_ref: str = ""
+
+    class SuggestVersionModel(pydantic.BaseModel):
+        version_id: str
+        parent_version_id: str | None = None
+        created_at: str
+        created_from: str = "auto"  # "auto" | "manual" | "rerun"
+        modified_step: str | None = None  # 被修改的步骤 event
+        trace_id: str = ""
+        trace_expired: bool = False
+        steps: list[PipelineStepModel] = []
+
+    class SuggestHistoryDetail(pydantic.BaseModel):
+        id: str
+        generated_at: str
+        pipeline: str = ""
+        total_photos: int = 0
+        cluster_count: int = 0
+        rating: int = 0
+        title: str
+        angle: str
+        rationale: str
+        category: str
+        photo_ids: list[str]
+        photo_sequence: list[dict] = []
+        intuition_source: list[str] = []
+        error: str = ""
+        versions: list[SuggestVersionModel] = []
+        current_version_id: str = ""
+
+    class RerunRequest(pydantic.BaseModel):
+        from_step: str  # 步骤 event 名
+        overrides: dict = {}  # 编辑后的步骤数据
+
+    class ManualSuggestRequest(pydantic.BaseModel):
+        photo_ids: list[str] = []  # 为空则自动随机采样
+        intuition: dict | None = None  # {"title", "angle", "rationale", "inspired_indices"}
+
 
     class SuggestBatchResponse(pydantic.BaseModel):
         items: list[SuggestHistoryItem]
@@ -935,6 +1078,42 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 history.insert(0, item)
             _save_suggest_history(history, req.app.state.suggest_history_dir)
 
+        # 同步写入 v2（创建 v0 版本，无步骤快照，等首次打开详情时按需重建）
+        v2_items_batch: list[dict] = []
+        for it in items:
+            v2_items_batch.append({
+                "id": it["id"],
+                "generated_at": it["generated_at"],
+                "pipeline": it.get("pipeline", ""),
+                "total_photos": it.get("total_photos", 0),
+                "cluster_count": it.get("cluster_count", 0),
+                "rating": it.get("rating", 0),
+                "title": it.get("title", ""),
+                "angle": it.get("angle", ""),
+                "rationale": it.get("rationale", ""),
+                "category": it.get("category", ""),
+                "photo_ids": it.get("photo_ids", []),
+                "photo_sequence": it.get("photo_sequence", []),
+                "intuition_source": it.get("intuition_source", []),
+                "error": it.get("error", ""),
+                "versions": [{
+                    "version_id": f"{it['id']}-v0",
+                    "parent_version_id": None,
+                    "created_at": it["generated_at"],
+                    "created_from": "auto",
+                    "modified_step": None,
+                    "trace_id": it.get("trace_id", ""),
+                    "trace_expired": False,
+                    "steps": [],
+                }],
+                "current_version_id": f"{it['id']}-v0",
+            })
+        with _suggest_history_v2_lock:
+            v2_history = _load_suggest_history_v2(req.app.state.suggest_history_dir)
+            for v2_item in reversed(v2_items_batch):
+                v2_history.insert(0, v2_item)
+            _save_suggest_history_v2(v2_history, req.app.state.suggest_history_dir)
+
         return {"items": items, "count": len(items), "error": error}
 
     @app.get("/api/suggest/history", response_model=list[SuggestHistoryItem])
@@ -976,8 +1155,450 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 if it["id"] == item_id:
                     it["rating"] = body.rating
                     _save_suggest_history(items, hist_dir)
+                    # 同步 v2 评分
+                    with _suggest_history_v2_lock:
+                        v2_items = _load_suggest_history_v2(hist_dir)
+                        for v2 in v2_items:
+                            if v2["id"] == item_id:
+                                v2["rating"] = body.rating
+                                _save_suggest_history_v2(v2_items, hist_dir)
+                                break
                     return {"id": item_id, "rating": body.rating}
             raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
+
+    @app.get("/api/suggest/history/{item_id}/detail", response_model=SuggestHistoryDetail)
+    async def suggest_history_detail_v2(item_id: str, req: fastapi.Request):
+        """获取选题历史详情（v2 格式，含版本和管线步骤）。
+
+        若记录尚未迁移到 v2，触发懒迁移：从 v1 数据创建 v0 版本并从 trace 重建步骤。
+        trace 数据过期时，步骤列表为空且 trace_expired=True。
+        """
+        hist_dir = req.app.state.suggest_history_dir
+        cfg = req.app.state.cfg
+
+        # 先查 v2
+        with _suggest_history_v2_lock:
+            v2_items = _load_suggest_history_v2(hist_dir)
+            for v2 in v2_items:
+                if v2["id"] == item_id:
+                    return v2
+
+        # 回退到 v1 并懒迁移
+        v1_item = None
+        with _suggest_history_lock:
+            v1_items = _load_suggest_history(hist_dir)
+            for it in v1_items:
+                if it["id"] == item_id:
+                    v1_item = dict(it)
+                    break
+
+        if v1_item is None:
+            raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
+
+        # 懒迁移
+        v2_item = _migrate_to_v2(v1_item, cfg.project_root)
+        if v2_item is None:
+            raise fastapi.HTTPException(status_code=500, detail="迁移失败")
+
+        with _suggest_history_v2_lock:
+            v2_items = _load_suggest_history_v2(hist_dir)
+            v2_items.insert(0, v2_item)
+            _save_suggest_history_v2(v2_items, hist_dir)
+
+        return v2_item
+
+    @app.patch("/api/suggest/history/{item_id}/version/{version_id}/switch", response_model=dict)
+    async def suggest_history_version_switch(item_id: str, version_id: str, req: fastapi.Request):
+        """切换当前活跃版本。"""
+        hist_dir = req.app.state.suggest_history_dir
+        with _suggest_history_v2_lock:
+            v2_items = _load_suggest_history_v2(hist_dir)
+            for v2 in v2_items:
+                if v2["id"] == item_id:
+                    version_ids = {v["version_id"] for v in v2.get("versions", [])}
+                    if version_id not in version_ids:
+                        raise fastapi.HTTPException(status_code=404, detail="版本不存在")
+                    v2["current_version_id"] = version_id
+                    _save_suggest_history_v2(v2_items, hist_dir)
+                    return {"id": item_id, "current_version_id": version_id}
+            raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
+
+    @app.post("/api/suggest/random-sample", response_model=dict)
+    async def suggest_random_sample(req: fastapi.Request):
+        """随机采样照片，返回照片 ID 列表和简要描述。
+
+        用于前端「手动选题」中的「随机选取」按钮。
+        """
+        cfg = req.app.state.cfg
+        try:
+            photos = suggest_mod._fetch_all_photos(cfg.go_backend_url)
+        except Exception as e:
+            raise fastapi.HTTPException(status_code=500, detail=f"获取照片数据失败: {e}")
+
+        if not photos:
+            raise fastapi.HTTPException(status_code=400, detail="照片库为空")
+
+        sampled = suggest_mod._random_sample_photos(photos)
+        result = []
+        for p in sampled:
+            pid = getattr(p, "id", "")
+            desc = (getattr(p, "description", "") or "").strip()[:120]
+            result.append({"photo_id": pid, "description": desc})
+        return {"photo_ids": [r["photo_id"] for r in result], "photos": result, "count": len(result)}
+
+    @app.post("/api/suggest/manual-run", response_model=SuggestHistoryDetail)
+    async def suggest_manual_run(body: ManualSuggestRequest, req: fastapi.Request):
+        """手动选题：用户自选照片 + 可选直觉 → 走管线 → 新建 v2 记录。
+
+        photo_ids 为空时自动随机采样。
+        提供 intuition 时跳过 Stage 1 LLM，直接进入 Stage 2+3。
+        """
+        cfg = req.app.state.cfg
+        cluster_dir = cfg.resolve_path("./data/clusters")
+        hist_dir = req.app.state.suggest_history_dir
+
+        try:
+            all_photos = suggest_mod._fetch_all_photos(cfg.go_backend_url)
+        except Exception as e:
+            raise fastapi.HTTPException(status_code=500, detail=f"获取照片数据失败: {e}")
+
+        if not all_photos:
+            raise fastapi.HTTPException(status_code=400, detail="照片库为空")
+
+        tracer = tracer_mod.Tracer(cfg.project_root)
+        generated_at = datetime.datetime.now().isoformat()
+
+        # 确定照片：用户指定 或 随机采样
+        if body.photo_ids:
+            photo_by_id = {getattr(p, "id", ""): p for p in all_photos}
+            selected_photos = [photo_by_id[pid] for pid in body.photo_ids if pid in photo_by_id]
+            photo_ids_override = [getattr(p, "id", "") for p in selected_photos]
+        else:
+            sampled = suggest_mod._random_sample_photos(all_photos)
+            photo_ids_override = [getattr(p, "id", "") for p in sampled]
+
+        # 如果有直觉，跳过 Stage 1
+        if body.intuition:
+            intuitions = suggest_mod._stage1_generate_intuitions(
+                cfg, all_photos, tracer=tracer,
+                intuitions_override=[body.intuition],
+                photo_ids_override=photo_ids_override,
+            )
+        else:
+            intuitions = suggest_mod._stage1_generate_intuitions(
+                cfg, all_photos, tracer=tracer,
+                photo_ids_override=photo_ids_override,
+            )
+
+        if not intuitions:
+            raise fastapi.HTTPException(status_code=400, detail="未能生成选题直觉，请尝试更换照片或提供直觉")
+
+        proposals = suggest_mod._stage3_generate_proposals(
+            cfg, intuitions, all_photos, tracer=tracer,
+        )
+
+        if not proposals:
+            raise fastapi.HTTPException(status_code=400, detail="未能生成选题提案")
+
+        # 取第一个提案作为结果
+        s = proposals[0]
+
+        # 从 trace 重建步骤
+        import chain.trace_replay as trace_replay
+        replayed, expired = trace_replay.replay_trace(cfg.project_root, tracer.trace_id)
+        steps_snapshots = [
+            {
+                "event": st.event, "label": st.label, "group": st.group,
+                "stage": st.stage, "timestamp": st.timestamp, "data": st.data,
+                "payload_content": st.payload_content, "payload_ref": st.payload_ref,
+            }
+            for st in replayed
+        ] if not expired else []
+
+        v2_id = uuid.uuid4().hex[:12]
+        version = {
+            "version_id": f"{v2_id}-v0",
+            "parent_version_id": None,
+            "created_at": generated_at,
+            "created_from": "manual",
+            "modified_step": None,
+            "trace_id": tracer.trace_id,
+            "trace_expired": expired,
+            "steps": steps_snapshots,
+        }
+
+        v2_item = {
+            "id": v2_id,
+            "generated_at": generated_at,
+            "pipeline": "editorial_three_stage",
+            "total_photos": len(all_photos),
+            "cluster_count": 0,
+            "rating": 0,
+            "title": s.title,
+            "angle": s.angle,
+            "rationale": s.rationale,
+            "category": s.category,
+            "photo_ids": s.photo_ids,
+            "photo_sequence": s.photo_sequence,
+            "intuition_source": s.intuition_source,
+            "error": "",
+            "versions": [version],
+            "current_version_id": version["version_id"],
+        }
+
+        # 同时写入 v1 和 v2
+        v1_item = {
+            "id": v2_id,
+            "generated_at": generated_at,
+            "pipeline": "editorial_three_stage",
+            "total_photos": len(all_photos),
+            "cluster_count": 0,
+            "rating": 0,
+            "title": s.title,
+            "angle": s.angle,
+            "rationale": s.rationale,
+            "category": s.category,
+            "photo_ids": s.photo_ids,
+            "photo_sequence": s.photo_sequence,
+            "trace_id": tracer.trace_id,
+            "intuition_source": s.intuition_source,
+            "error": "",
+        }
+
+        with _suggest_history_lock:
+            items = _load_suggest_history(hist_dir)
+            items.insert(0, v1_item)
+            _save_suggest_history(items, hist_dir)
+
+        with _suggest_history_v2_lock:
+            v2_items = _load_suggest_history_v2(hist_dir)
+            v2_items.insert(0, v2_item)
+            _save_suggest_history_v2(v2_items, hist_dir)
+
+        return v2_item
+
+    @app.post("/api/suggest/history/{item_id}/rerun", response_model=SuggestHistoryDetail)
+    async def suggest_history_rerun(item_id: str, body: RerunRequest, req: fastapi.Request):
+        """从指定步骤重跑管线，产生新版本。
+
+        body.from_step: 起始步骤的 event 名（如 "suggest.stage1.sample"）
+        body.overrides:  编辑后的步骤数据，由前端根据步骤类型构造
+        """
+        cfg = req.app.state.cfg
+        hist_dir = req.app.state.suggest_history_dir
+
+        # 找到当前 v2 记录
+        with _suggest_history_v2_lock:
+            v2_items = _load_suggest_history_v2(hist_dir)
+            v2_item = None
+            for v in v2_items:
+                if v["id"] == item_id:
+                    v2_item = v
+                    break
+
+        if v2_item is None:
+            # 尝试懒迁移
+            with _suggest_history_lock:
+                v1_items = _load_suggest_history(hist_dir)
+                v1_item = None
+                for it in v1_items:
+                    if it["id"] == item_id:
+                        v1_item = dict(it)
+                        break
+            if v1_item is None:
+                raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
+            v2_item = _migrate_to_v2(v1_item, cfg.project_root)
+            if v2_item is None:
+                raise fastapi.HTTPException(status_code=500, detail="迁移失败")
+
+        try:
+            all_photos = suggest_mod._fetch_all_photos(cfg.go_backend_url)
+        except Exception as e:
+            raise fastapi.HTTPException(status_code=500, detail=f"获取照片数据失败: {e}")
+
+        photo_by_id = {getattr(p, "id", ""): p for p in all_photos}
+
+        tracer = tracer_mod.Tracer(cfg.project_root)
+        generated_at = datetime.datetime.now().isoformat()
+
+        from_step = body.from_step
+        overrides = body.overrides or {}
+
+        # 判断起始步骤的阶段
+        stage1_events = {"suggest.stage1.sample", "suggest.stage1.llm.start", "suggest.stage1.llm.end"}
+        stage2_events = {"suggest.stage2.rag.start", "suggest.stage2.rag.end", "suggest.stage2.diversity"}
+        # stage3 events are the rest
+
+        intuitions: list = []
+        proposals: list = []
+
+        if from_step in stage1_events:
+            # 从 Stage 1 某步开始，跑完整管线
+            photo_ids_ov = overrides.get("photo_ids")
+            prompt_ov = overrides.get("prompt")
+            intuitions_ov = overrides.get("intuitions")
+
+            if intuitions_ov:
+                intuitions = suggest_mod._stage1_generate_intuitions(
+                    cfg, all_photos, tracer=tracer,
+                    intuitions_override=intuitions_ov,
+                )
+            else:
+                intuitions = suggest_mod._stage1_generate_intuitions(
+                    cfg, all_photos, tracer=tracer,
+                    photo_ids_override=photo_ids_ov,
+                    prompt_override=prompt_ov,
+                )
+
+            if intuitions:
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer,
+                )
+
+        elif from_step in stage2_events:
+            # 从 Stage 2 开始，使用已有的直觉 + 覆盖的 RAG/扩展数据
+            photo_ids_for_expand = overrides.get("photo_ids", [])
+            expanded = [photo_by_id[pid] for pid in photo_ids_for_expand if pid in photo_by_id]
+
+            # 从当前版本的步骤中恢复直觉
+            current_version = None
+            for ver in v2_item.get("versions", []):
+                if ver["version_id"] == v2_item.get("current_version_id", ""):
+                    current_version = ver
+                    break
+
+            if current_version:
+                for st in current_version.get("steps", []):
+                    if st["event"] == "suggest.stage1.intuitions":
+                        intuitions_data = st.get("data", {}).get("intuitions", [])
+                        intuitions = [
+                            suggest_mod.TopicIntuition(
+                                title=it.get("title", ""),
+                                angle=it.get("angle", ""),
+                                rationale=it.get("rationale", ""),
+                                inspired_indices=[],
+                                inspired_photo_ids=it.get("inspired_photo_ids", []),
+                            )
+                            for it in intuitions_data
+                        ]
+                        break
+
+            if not intuitions:
+                raise fastapi.HTTPException(status_code=400, detail="无法从当前版本恢复主题直觉，请从 Stage 1 重新运行")
+
+            if expanded:
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer,
+                    expanded_photos_override={0: expanded},
+                )
+            else:
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer,
+                )
+
+        else:
+            # 从 Stage 3 开始，使用覆盖的提案数据
+            proposal_ov = overrides.get("proposal")
+            photo_ids_ov = overrides.get("photo_ids", [])
+
+            current_version = None
+            for ver in v2_item.get("versions", []):
+                if ver["version_id"] == v2_item.get("current_version_id", ""):
+                    current_version = ver
+                    break
+
+            if current_version:
+                for st in current_version.get("steps", []):
+                    if st["event"] == "suggest.stage1.intuitions":
+                        intuitions_data = st.get("data", {}).get("intuitions", [])
+                        intuitions = [
+                            suggest_mod.TopicIntuition(
+                                title=it.get("title", ""),
+                                angle=it.get("angle", ""),
+                                rationale=it.get("rationale", ""),
+                                inspired_indices=[],
+                                inspired_photo_ids=it.get("inspired_photo_ids", []),
+                            )
+                            for it in intuitions_data
+                        ]
+                        break
+
+            if not intuitions:
+                raise fastapi.HTTPException(status_code=400, detail="无法从当前版本恢复主题直觉，请从 Stage 1 重新运行")
+
+            if proposal_ov:
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer,
+                    proposal_overrides={0: proposal_ov},
+                )
+            else:
+                # 用覆盖的照片扩展
+                expanded = [photo_by_id[pid] for pid in photo_ids_ov if pid in photo_by_id] if photo_ids_ov else None
+                prompt_ov = overrides.get("prompt")
+                kwargs = {}
+                if expanded:
+                    kwargs["expanded_photos_override"] = {0: expanded}
+                if prompt_ov:
+                    kwargs["prompt_overrides"] = {0: prompt_ov}
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer, **kwargs,
+                )
+
+        if not proposals:
+            raise fastapi.HTTPException(status_code=400, detail="重跑未能生成有效提案")
+
+        s = proposals[0]
+
+        # 从 trace 重建步骤
+        import chain.trace_replay as trace_replay
+        replayed, expired = trace_replay.replay_trace(cfg.project_root, tracer.trace_id)
+        steps_snapshots = [
+            {
+                "event": st.event, "label": st.label, "group": st.group,
+                "stage": st.stage, "timestamp": st.timestamp, "data": st.data,
+                "payload_content": st.payload_content, "payload_ref": st.payload_ref,
+            }
+            for st in replayed
+        ] if not expired else []
+
+        # 生成新版本号
+        existing_versions = v2_item.get("versions", [])
+        version_num = len(existing_versions)
+        new_version_id = f"{item_id}-v{version_num}"
+        parent_id = v2_item.get("current_version_id", None)
+
+        new_version = {
+            "version_id": new_version_id,
+            "parent_version_id": parent_id,
+            "created_at": generated_at,
+            "created_from": "rerun",
+            "modified_step": from_step,
+            "trace_id": tracer.trace_id,
+            "trace_expired": expired,
+            "steps": steps_snapshots,
+        }
+
+        # 更新 v2 记录
+        v2_item["title"] = s.title
+        v2_item["angle"] = s.angle
+        v2_item["rationale"] = s.rationale
+        v2_item["photo_ids"] = s.photo_ids
+        v2_item["photo_sequence"] = s.photo_sequence
+        v2_item["intuition_source"] = s.intuition_source
+        v2_item["versions"].append(new_version)
+        v2_item["current_version_id"] = new_version_id
+
+        with _suggest_history_v2_lock:
+            v2_all = _load_suggest_history_v2(hist_dir)
+            for i, v in enumerate(v2_all):
+                if v["id"] == item_id:
+                    v2_all[i] = v2_item
+                    break
+            else:
+                v2_all.insert(0, v2_item)
+            _save_suggest_history_v2(v2_all, hist_dir)
+
+        return v2_item
 
     # ── 评估 API ─────────────────────────────────────────
 
