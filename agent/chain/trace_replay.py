@@ -39,15 +39,6 @@ _PIPELINE_STEPS = [
     {"event": "suggest.complete",           "stage": 3, "label": "管线完成",        "group": "汇总"},
 ]
 
-# 回退路径步骤
-_FALLBACK_STEPS = [
-    {"event": "suggest.decision.pipeline",     "stage": 0, "label": "管线选择",       "group": "决策"},
-    {"event": "suggest.fallback.candidates",    "stage": 1, "label": "候选方向汇总",   "group": "备选路径"},
-    {"event": "suggest.fallback.llm.start",     "stage": 2, "label": "LLM 输入",       "group": "备选路径"},
-    {"event": "suggest.fallback.llm.end",       "stage": 2, "label": "LLM 输出",       "group": "备选路径"},
-    {"event": "suggest.complete",               "stage": 3, "label": "管线完成",       "group": "汇总"},
-]
-
 
 @dataclasses.dataclass
 class PipelineStepSnapshot:
@@ -136,18 +127,7 @@ def _is_trace_expired(project_root: pathlib.Path, trace_id: str) -> bool:
 
 
 def _get_step_defs(events: list[dict]) -> list[dict]:
-    """根据 trace 事件判断管线类型，返回对应的步骤定义列表。"""
-    for e in events:
-        event_name = e.get("event", "")
-        data = e.get("data", {})
-        pipeline = data.get("pipeline", "")
-        if event_name == "suggest.decision.pipeline":
-            if pipeline == "editorial_three_stage":
-                return _PIPELINE_STEPS
-            return _FALLBACK_STEPS
-        if event_name == "suggest.fallback.candidates":
-            return _FALLBACK_STEPS
-    # 默认按主路径处理
+    """返回管线步骤定义列表。统一使用三阶段编辑视角提案步骤。"""
     return _PIPELINE_STEPS
 
 

@@ -9,6 +9,7 @@ import {
   NEmpty,
   NDivider,
   NProgress,
+  NTooltip,
   useMessage,
 } from 'naive-ui'
 import { CloseOutline, RefreshOutline, AlertCircleOutline } from '@vicons/ionicons5'
@@ -17,8 +18,6 @@ import { STEP_GROUP_LABELS } from '../types/suggest'
 import type { PipelineStep } from '../types/suggest'
 import SuggestStepCard from './SuggestStepCard.vue'
 import SuggestStepEditor from './SuggestStepEditor.vue'
-import SuggestVersionTimeline from './SuggestVersionTimeline.vue'
-import SuggestVersionDiff from './SuggestVersionDiff.vue'
 
 const props = defineProps<{
   itemId: string | null
@@ -39,16 +38,8 @@ const {
   rerunProgress,
   currentVersion,
   stepGroups,
-  sortedVersions,
-  compareMode,
-  selectedCompareVersions,
-  canCompare,
-  compareVersions,
   loadDetail,
-  switchVersion,
   rerunFromStepStream,
-  toggleCompareMode,
-  toggleCompareVersion,
 } = useSuggestDetail()
 
 // 编辑状态
@@ -64,14 +55,6 @@ watch(() => [props.itemId, props.visible], ([id, vis]) => {
 
 function handleClose() {
   emit('update:visible', false)
-}
-
-async function handleVersionSwitch(versionId: string) {
-  if (!props.itemId) return
-  const ok = await switchVersion(props.itemId, versionId)
-  if (!ok) {
-    message.error('版本切换失败')
-  }
 }
 
 function handleStepEdit(step: PipelineStep) {
@@ -92,16 +75,10 @@ async function handleEditorConfirm(overrides: Record<string, any>) {
 
 const CATEGORY_COLORS: Record<string, string> = {
   editorial_proposal: '#7c3aed',
-  high_freq_ungrouped: '#f0a020',
-  temporal_pattern: '#2080f0',
-  scarce_quality: '#18a058',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
   editorial_proposal: '编辑提案',
-  high_freq_ungrouped: '高频未成组',
-  temporal_pattern: '时间线规律',
-  scarce_quality: '稀缺优质',
 }
 </script>
 
@@ -144,85 +121,59 @@ const CATEGORY_LABELS: Record<string, string> = {
       </NEmpty>
     </div>
 
-    <!-- 详情内容：双栏布局 -->
+    <!-- 详情内容：单栏布局 -->
     <div v-else-if="detail" class="modal-body">
-      <!-- 左侧版本时间线 -->
-      <div class="modal-left">
-        <SuggestVersionTimeline
-          :versions="sortedVersions"
-          :current-version-id="detail.current_version_id"
-          :compare-mode="compareMode"
-          :selected-compare-versions="selectedCompareVersions"
-          :can-compare="canCompare"
-          @switch="handleVersionSwitch"
-          @toggle-compare="toggleCompareMode"
-          @toggle-version="toggleCompareVersion"
+      <!-- trace 过期提示 -->
+      <div v-if="currentVersion?.trace_expired" class="trace-expired-banner">
+        <NIcon size="14"><AlertCircleOutline /></NIcon>
+        追踪数据已过期，仅展示最终结果
+      </div>
+
+      <!-- 重跑中（含阶段进度） -->
+      <div v-if="rerunLoading" class="rerun-loading">
+        <NSpin size="small" />
+        <div class="rerun-progress-info">
+          <span class="rerun-label">正在重跑管线...</span>
+          <span v-if="rerunProgress" class="rerun-stage">
+            {{ rerunProgress.label }}
+            <template v-if="rerunProgress.status === 'done'"> ✅</template>
+            <template v-else> 🔄</template>
+          </span>
+        </div>
+        <NProgress
+          v-if="rerunProgress"
+          :percentage="Math.round((rerunProgress.stage / 3) * 100)"
+          :height="4"
+          :border-radius="2"
+          :show-indicator="false"
+          style="width: 100%; margin-top: 6px;"
         />
       </div>
 
-      <!-- 右侧：差异视图 或 步骤列表 -->
-      <div class="modal-right">
-        <!-- 版本差异对比视图 -->
-        <template v-if="compareMode && compareVersions.length === 2">
-          <SuggestVersionDiff
-            :version-a="compareVersions[0]"
-            :version-b="compareVersions[1]"
-          />
-        </template>
-
-        <!-- 常规步骤列表 -->
-        <template v-else>
-        <!-- trace 过期提示 -->
-        <div v-if="currentVersion?.trace_expired" class="trace-expired-banner">
-          <NIcon size="14"><AlertCircleOutline /></NIcon>
-          追踪数据已过期，仅展示最终结果
-        </div>
-
-        <!-- 重跑中（含阶段进度） -->
-        <div v-if="rerunLoading" class="rerun-loading">
-          <NSpin size="small" />
-          <div class="rerun-progress-info">
-            <span class="rerun-label">正在重跑管线...</span>
-            <span v-if="rerunProgress" class="rerun-stage">
-              {{ rerunProgress.label }}
-              <template v-if="rerunProgress.status === 'done'"> ✅</template>
-              <template v-else> 🔄</template>
-            </span>
-          </div>
-          <NProgress
-            v-if="rerunProgress"
-            :percentage="Math.round((rerunProgress.stage / 3) * 100)"
-            :height="4"
-            :border-radius="2"
-            :show-indicator="false"
-            style="width: 100%; margin-top: 6px;"
+      <!-- 按 group 分组展示步骤 -->
+      <div v-if="stepGroups.length > 0">
+        <div v-for="group in stepGroups" :key="group.group" class="step-group">
+          <NDivider title-placement="left">
+            {{ STEP_GROUP_LABELS[group.group] || group.group }}
+          </NDivider>
+          <SuggestStepCard
+            v-for="step in group.steps"
+            :key="step.event + step.timestamp"
+            :step="step"
+            :editable="true"
+            @edit="handleStepEdit"
           />
         </div>
+      </div>
 
-        <!-- 按 group 分组展示步骤 -->
-        <div v-if="stepGroups.length > 0">
-          <div v-for="group in stepGroups" :key="group.group" class="step-group">
-            <NDivider title-placement="left">
-              {{ STEP_GROUP_LABELS[group.group] || group.group }}
-            </NDivider>
-            <SuggestStepCard
-              v-for="step in group.steps"
-              :key="step.event + step.timestamp"
-              :step="step"
-              :editable="true"
-              @edit="handleStepEdit"
-            />
-          </div>
-        </div>
+      <!-- 空步骤（trace 过期或无痕数据） -->
+      <div v-else class="no-steps">
+        <NEmpty description="暂无管线步骤数据" size="small" />
+      </div>
 
-        <!-- 空步骤（trace 过期或无痕数据） -->
-        <div v-else class="no-steps">
-          <NEmpty description="暂无管线步骤数据" size="small" />
-        </div>
-
-        <!-- 最终结果摘要 -->
-        <NDivider title-placement="left">最终结果</NDivider>
-        <div class="final-result">
+      <!-- 最终结果摘要 -->
+      <NDivider title-placement="left">最终结果</NDivider>
+      <div class="final-result">
           <div class="result-field">
             <span class="field-label">发布角度</span>
             <p>{{ detail.angle }}</p>
@@ -233,18 +184,27 @@ const CATEGORY_LABELS: Record<string, string> = {
           </div>
           <div class="result-field">
             <span class="field-label">推荐照片（{{ detail.photo_ids.length }} 张）</span>
-            <div class="photo-id-list">
-              <span v-for="pid in detail.photo_ids.slice(0, 12)" :key="pid" class="photo-id-tag">
-                {{ pid.slice(0, 16) }}
-              </span>
-              <span v-if="detail.photo_ids.length > 12" class="photo-id-more">
-                还有 {{ detail.photo_ids.length - 12 }} 张...
-              </span>
+            <div class="photo-thumb-grid">
+              <NTooltip
+                v-for="pid in detail.photo_ids"
+                :key="pid"
+                trigger="hover"
+              >
+                <template #trigger>
+                  <div class="thumb-item">
+                    <img
+                      :src="`/api/v1/photos/${pid}/image`"
+                      :alt="pid.slice(0, 8)"
+                      loading="lazy"
+                      @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                    />
+                  </div>
+                </template>
+                {{ pid }}
+              </NTooltip>
             </div>
           </div>
         </div>
-        </template>
-      </div>
     </div>
 
     <!-- 编辑器弹窗 -->
@@ -282,20 +242,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   padding: 60px 0;
 }
 .modal-body {
-  display: flex;
-  gap: 24px;
   height: calc(90vh - 120px);
-  overflow: hidden;
-}
-.modal-left {
-  width: 200px;
-  flex-shrink: 0;
-  overflow-y: auto;
-  border-right: 1px solid var(--n-border-color);
-  padding-right: 16px;
-}
-.modal-right {
-  flex: 1;
   overflow-y: auto;
   padding-right: 8px;
 }
@@ -358,21 +305,29 @@ const CATEGORY_LABELS: Record<string, string> = {
   color: var(--n-text-color-3);
   text-transform: uppercase;
 }
-.photo-id-list {
-  display: flex;
-  flex-wrap: wrap;
+.photo-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 4px;
+  margin-top: 6px;
 }
-.photo-id-tag {
-  font-size: 11px;
-  font-family: monospace;
-  padding: 2px 6px;
-  background: var(--n-action-color);
+.thumb-item {
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
   border-radius: 4px;
-  color: var(--n-text-color-2);
+  border: 1px solid var(--n-border-color);
+  background: var(--n-action-color);
+}
+.thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .photo-id-more {
   font-size: 11px;
   color: var(--n-text-color-3);
+  margin-top: 4px;
+  display: block;
 }
 </style>

@@ -90,7 +90,6 @@ export const STEP_GROUP_LABELS: Record<string, string> = {
   'Stage 3 选题提案': '📝 Stage 3 选题提案',
   '决策': '⚙️ 管线决策',
   '汇总': '✅ 汇总',
-  '备选路径': '🔄 备选路径',
 }
 
 export const EDITABLE_STEPS = [

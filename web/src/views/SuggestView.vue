@@ -22,6 +22,7 @@ import {
   TrashOutline,
   AddOutline,
   FlashOutline,
+  InformationCircleOutline,
 } from '@vicons/ionicons5'
 import { AGENT_BASE } from '../config'
 import SuggestDetailModal from '../components/SuggestDetailModal.vue'
@@ -49,28 +50,18 @@ interface HistoryItem {
 
 const CATEGORY_LABELS: Record<string, string> = {
   editorial_proposal: '编辑提案',
-  high_freq_ungrouped: '高频未成组',
-  temporal_pattern: '时间线规律',
-  scarce_quality: '稀缺优质',
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
   editorial_proposal: '#7c3aed',
-  high_freq_ungrouped: '#f0a020',
-  temporal_pattern: '#2080f0',
-  scarce_quality: '#18a058',
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
   editorial_proposal: '📝',
-  high_freq_ungrouped: '🔍',
-  temporal_pattern: '📅',
-  scarce_quality: '💎',
 }
 
 const PIPELINE_LABELS: Record<string, string> = {
   editorial_three_stage: '编辑视角',
-  legacy_three_dimension: '三维度分析',
 }
 
 // ── 状态 ──
@@ -414,7 +405,7 @@ function handleDetailRefreshed() {
             <template #extra>
               <div class="empty-actions">
                 <span class="empty-hint">
-                  AI 将扫描照片库，从编辑视角发现潜在选题，支持三阶段智能分析和三维度属性回退
+                  AI 将扫描照片库，从编辑视角发现潜在选题，通过三阶段智能分析生成选题建议
                 </span>
                 <NButton size="small" type="primary" @click="handleRunSuggest">
                   生成选题建议
@@ -430,7 +421,6 @@ function handleDetailRefreshed() {
             v-for="item in history"
             :key="item.id"
             class="history-card"
-            @click="handleCardClick(item)"
           >
             <!-- 卡片头部：标题 + 分类 + 星级 + 删除 -->
             <div class="card-header-row">
@@ -446,6 +436,16 @@ function handleDetailRefreshed() {
               </div>
               <div class="card-header-right">
                 <component :is="renderStars(item)" />
+                <NButton
+                  size="tiny"
+                  text
+                  @click.stop="handleCardClick(item)"
+                >
+                  <template #icon>
+                    <NIcon size="16" :component="InformationCircleOutline" />
+                  </template>
+                  详情
+                </NButton>
                 <NButton
                   size="tiny"
                   text
@@ -604,7 +604,6 @@ function handleDetailRefreshed() {
   border: 1px solid var(--n-border-color);
   border-radius: 8px;
   padding: 14px 16px;
-  cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .history-card:hover {

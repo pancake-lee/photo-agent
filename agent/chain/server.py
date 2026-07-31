@@ -231,6 +231,45 @@ def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict | None:
     }
 
 
+def _try_refill_steps(v2_item: dict, project_root: pathlib.Path) -> bool:
+    """补偿修复：若 v2 条目版本步骤为空但 trace 未过期，尝试从 trace 回放填充。
+
+    返回 True 表示有填充发生（调用方需要写回文件）。
+    """
+    import chain.trace_replay as trace_replay
+
+    refilled = False
+    for ver in v2_item.get("versions", []):
+        if ver.get("steps"):
+            continue
+        if ver.get("trace_expired", True):
+            continue
+        trace_id = ver.get("trace_id", "")
+        if not trace_id:
+            continue
+        try:
+            replayed, expired = trace_replay.replay_trace(project_root, trace_id)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
+            logger.warning(
+                "补偿回放失败 trace_id=%s: %s", trace_id, e,
+            )
+            continue
+        if expired or not replayed:
+            continue
+        ver["steps"] = [
+            {
+                "event": s.event, "label": s.label, "group": s.group,
+                "stage": s.stage, "timestamp": s.timestamp, "data": s.data,
+                "payload_content": s.payload_content, "payload_ref": s.payload_ref,
+            }
+            for s in replayed
+        ]
+        ver["trace_expired"] = False
+        refilled = True
+
+    return refilled
+
+
 # ── Pydantic 模型 ──────────────────────────────────────────
 
 class CreateSessionRequest(pydantic.BaseModel):
@@ -1012,11 +1051,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     async def suggest_run(req: fastapi.Request):
         """运行潜在主题识别，返回选题建议列表。
 
-        主路径：三阶段编辑视角提案（随机采样 → RAG 扩展 → LLM 提案）
-        回退路径：三维度属性分析（高频未成组 / 时间线规律 / 稀缺优质）
+        三阶段编辑视角提案（随机采样 → RAG 扩展 → LLM 提案）。
 
-        每个主题作为独立记录持久化到 suggest_history.json，
-        一次生成 N 个主题即写入 N 条独立记录。
+        每个主题作为独立记录持久化到 suggest_history.json。
         """
         cfg = req.app.state.cfg
         cluster_dir = cfg.resolve_path("./data/clusters")
@@ -1027,6 +1064,18 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         suggestions, meta = suggest_mod.run_suggest(
             cfg, cfg.go_backend_url, cluster_dir, tracer=tracer,
         )
+
+        # 从 trace 重建管线步骤（对齐手动选题的行为）
+        import chain.trace_replay as trace_replay
+        replayed, expired = trace_replay.replay_trace(cfg.project_root, tracer.trace_id)
+        steps_snapshots = [
+            {
+                "event": st.event, "label": st.label, "group": st.group,
+                "stage": st.stage, "timestamp": st.timestamp, "data": st.data,
+                "payload_content": st.payload_content, "payload_ref": st.payload_ref,
+            }
+            for st in replayed
+        ] if not expired else []
 
         generated_at = meta.get("generated_at", "")
         pipeline = meta.get("pipeline", "")
@@ -1080,8 +1129,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     "created_from": "auto",
                     "modified_step": None,
                     "trace_id": it.get("trace_id", ""),
-                    "trace_expired": False,
-                    "steps": [],
+                    "trace_expired": expired,
+                    "steps": steps_snapshots,
                 }],
                 "current_version_id": f"{it['id']}-v0",
             })
@@ -1141,16 +1190,32 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         若记录尚未迁移到 v2，触发懒迁移：从 v1 数据创建 v0 版本并从 trace 重建步骤。
         trace 数据过期时，步骤列表为空且 trace_expired=True。
+        若 v2 条目步骤为空但 trace 未过期（例如旧版 suggest/run 未填充），
+        自动尝试从 trace 回放填补并写回。
         """
         hist_dir = req.app.state.suggest_history_dir
         cfg = req.app.state.cfg
 
         # 先查 v2
+        v2_item: dict | None = None
         with _suggest_history_lock:
             v2_items = _load_suggest_history(hist_dir)
             for v2 in v2_items:
                 if v2["id"] == item_id:
-                    return v2
+                    v2_item = v2
+                    break
+
+        if v2_item is not None:
+            # 补偿修复：若步骤为空但 trace 未过期，尝试重新回放
+            if _try_refill_steps(v2_item, cfg.project_root):
+                with _suggest_history_lock:
+                    v2_items2 = _load_suggest_history(hist_dir)
+                    for i, v in enumerate(v2_items2):
+                        if v["id"] == item_id:
+                            v2_items2[i] = v2_item
+                            break
+                    _save_suggest_history(v2_items2, hist_dir)
+            return v2_item
 
         # 回退到旧 v1 文件并懒迁移（只读，不写回 v1）
         v1_item = None

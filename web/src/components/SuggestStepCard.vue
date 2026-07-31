@@ -14,6 +14,7 @@ import {
   ChevronUpOutline,
   CreateOutline,
   ImageOutline,
+  CodeOutline,
 } from '@vicons/ionicons5'
 import type { PipelineStep } from '../types/suggest'
 import { isStepEditable } from '../types/suggest'
@@ -28,13 +29,23 @@ const emit = defineEmits<{
 }>()
 
 const expanded = ref(false)
-const editing = ref(false)
 
 const hasPayload = computed(() => !!props.step.payload_content)
-const hasPhotoData = computed(() => {
+
+// 步骤是否有可视化内容（照片或 payload）
+const hasVisualContent = computed(() => {
+  if (hasPayload.value) return true
   const d = props.step.data
-  return (d.photo_ids?.length > 0) || (d.photo_sequence?.length > 0)
+  return !!(d.photo_ids?.length || d.photo_sequence?.length || d.kept_photo_ids?.length)
 })
+
+// 无可视化内容的步骤，数据默认展开（数据是唯一内容）
+const dataExpanded = ref(!hasVisualContent.value)
+
+// 步骤事件类型判断
+const isRagEnd = computed(() => props.step.event === 'suggest.stage2.rag.end')
+const isDiversity = computed(() => props.step.event === 'suggest.stage2.diversity')
+const isProposal = computed(() => props.step.event === 'suggest.stage3.proposal')
 
 // 步骤中关联的照片 ID 列表
 const stepPhotoIds = computed<string[]>(() => {
@@ -43,7 +54,33 @@ const stepPhotoIds = computed<string[]>(() => {
   if (d.photo_sequence?.length > 0) {
     return d.photo_sequence.map((s: any) => s.photo_id).filter(Boolean)
   }
+  // diversity 步骤：使用 kept_photo_ids
+  if (d.kept_photo_ids?.length > 0) return d.kept_photo_ids
   return []
+})
+
+// RAG 特有数据
+const distances = computed<(number | null)[]>(() => {
+  return props.step.data.distances || []
+})
+const ratioGaps = computed<number[]>(() => {
+  return props.step.data.ratio_gaps || []
+})
+
+// 提案的 photo_sequence（含 role_in_narrative）
+const photoSequence = computed<Array<{ photo_id: string; role_in_narrative: string }>>(() => {
+  return props.step.data.photo_sequence || []
+})
+
+// 多样性过滤详情（仅保留有实际移除的组）
+const diversityDetails = computed<Array<{
+  date: string
+  kept_photo_ids: string[]
+  removed_photo_ids?: string[]
+  reason?: string
+}>>(() => {
+  const details = props.step.data.diversity_details || []
+  return details.filter((d: any) => d.removed_photo_ids?.length > 0)
 })
 
 // 照片缩略图 URL
@@ -92,6 +129,11 @@ function summaryText(): string {
 function handleEdit() {
   emit('edit', props.step)
 }
+
+// 缩略图渲染工具函数
+function renderThumbItem(pid: string, extraClass?: string) {
+  return { pid, extraClass: extraClass || '' }
+}
 </script>
 
 <template>
@@ -118,35 +160,143 @@ function handleEdit() {
 
     <!-- 展开态：显示完整数据 -->
     <div v-if="expanded" class="step-body">
-      <!-- 照片缩略图网格 -->
-      <div v-if="stepPhotoIds.length > 0" class="photo-thumb-grid">
-        <span class="field-label">
-          <NIcon size="14"><ImageOutline /></NIcon>
-          关联照片（{{ stepPhotoIds.length }} 张）
-        </span>
-        <div class="thumb-grid">
-          <NTooltip
-            v-for="pid in stepPhotoIds.slice(0, 24)"
-            :key="pid"
-            trigger="hover"
-          >
-            <template #trigger>
-              <div class="thumb-item">
-                <img
-                  :src="thumbUrl(pid)"
-                  :alt="pid.slice(0, 8)"
-                  loading="lazy"
-                  @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
-                />
-              </div>
-            </template>
-            {{ pid }}
-          </NTooltip>
+      <!-- ── RAG 匹配结果：全部缩略图 + distances/ratio_gaps ── -->
+      <template v-if="isRagEnd && stepPhotoIds.length > 0">
+        <div class="photo-section">
+          <span class="field-label">
+            <NIcon size="14"><ImageOutline /></NIcon>
+            匹配照片（{{ stepPhotoIds.length }} 张）
+          </span>
+          <div class="thumb-grid">
+            <NTooltip v-for="(pid, idx) in stepPhotoIds" :key="pid" trigger="hover">
+              <template #trigger>
+                <div class="thumb-item-with-meta">
+                  <div class="thumb-item">
+                    <img
+                      :src="thumbUrl(pid)"
+                      :alt="pid.slice(0, 8)"
+                      loading="lazy"
+                      @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                    />
+                  </div>
+                  <span class="photo-meta">距离 {{ distances[idx] ?? '—' }}</span>
+                  <span v-if="idx < ratioGaps.length" class="photo-meta">
+                    比值 {{ ratioGaps[idx] }}
+                  </span>
+                </div>
+              </template>
+              {{ pid }}
+            </NTooltip>
+          </div>
         </div>
-        <span v-if="stepPhotoIds.length > 24" class="thumb-more">
-          还有 {{ stepPhotoIds.length - 24 }} 张...
-        </span>
-      </div>
+      </template>
+
+      <!-- ── 多样性过滤：展示保留/移除的因果关系 ── -->
+      <template v-else-if="isDiversity && diversityDetails.length > 0">
+        <div class="photo-section">
+          <span class="field-label">
+            <NIcon size="14"><ImageOutline /></NIcon>
+            多样性过滤详情（{{ step.data.before_count || 0 }} → {{ step.data.after_count || 0 }} 张）
+          </span>
+          <div v-for="(detail, gi) in diversityDetails" :key="gi" class="diversity-group">
+            <div class="diversity-date-label">{{ detail.date }}</div>
+
+            <!-- 保留的照片 -->
+            <div class="kept-section">
+              <span class="kept-label">✓ 保留 {{ detail.kept_photo_ids.length }} 张</span>
+              <div class="thumb-grid">
+                <NTooltip v-for="pid in detail.kept_photo_ids" :key="pid" trigger="hover">
+                  <template #trigger>
+                    <div class="thumb-item kept">
+                      <img
+                        :src="thumbUrl(pid)"
+                        :alt="pid.slice(0, 8)"
+                        loading="lazy"
+                        @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                      />
+                    </div>
+                  </template>
+                  {{ pid }}
+                </NTooltip>
+              </div>
+            </div>
+
+            <!-- 移除的照片 -->
+            <div v-if="detail.removed_photo_ids?.length" class="removed-section">
+              <span class="removed-label">✗ {{ detail.reason }}</span>
+              <div class="thumb-grid">
+                <NTooltip v-for="pid in detail.removed_photo_ids" :key="pid" trigger="hover">
+                  <template #trigger>
+                    <div class="thumb-item removed">
+                      <img
+                        :src="thumbUrl(pid)"
+                        :alt="pid.slice(0, 8)"
+                        loading="lazy"
+                        @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                      />
+                    </div>
+                  </template>
+                  {{ pid }}
+                </NTooltip>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── 提案解析：缩略图 + 叙事角色 ── -->
+      <template v-else-if="isProposal && photoSequence.length > 0">
+        <div class="photo-section">
+          <span class="field-label">
+            <NIcon size="14"><ImageOutline /></NIcon>
+            推荐照片序列（{{ photoSequence.length }} 张）
+          </span>
+          <div class="thumb-grid">
+            <NTooltip v-for="seq in photoSequence" :key="seq.photo_id" trigger="hover">
+              <template #trigger>
+                <div class="thumb-item-with-meta">
+                  <div class="thumb-item">
+                    <img
+                      :src="thumbUrl(seq.photo_id)"
+                      :alt="seq.photo_id.slice(0, 8)"
+                      loading="lazy"
+                      @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                    />
+                  </div>
+                  <span class="photo-meta narrative-role">{{ seq.role_in_narrative }}</span>
+                </div>
+              </template>
+              {{ seq.photo_id }}
+            </NTooltip>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── 通用缩略图（非 RAG/提案步骤，或多样性无移除时回退） ── -->
+      <template v-else-if="stepPhotoIds.length > 0 && !isRagEnd && !isProposal">
+        <div class="photo-section">
+          <span class="field-label">
+            <NIcon size="14"><ImageOutline /></NIcon>
+            关联照片（{{ stepPhotoIds.length }} 张）
+          </span>
+          <div class="thumb-grid">
+            <NTooltip v-for="pid in stepPhotoIds" :key="pid" trigger="hover">
+              <template #trigger>
+                <div class="thumb-item">
+                  <img
+                    :src="thumbUrl(pid)"
+                    :alt="pid.slice(0, 8)"
+                    loading="lazy"
+                    @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                  />
+                </div>
+              </template>
+              {{ pid }}
+            </NTooltip>
+          </div>
+        </div>
+      </template>
+
       <!-- payload 内容（prompt/response 文本） -->
       <div v-if="hasPayload" class="step-payload">
         <span class="field-label">Payload</span>
@@ -160,10 +310,18 @@ function handleEdit() {
         </span>
       </div>
 
-      <!-- 数据字段（格式化 JSON） -->
+      <!-- 数据字段（折叠态，默认收起） -->
       <div class="step-data">
-        <span class="field-label">数据</span>
+        <div class="data-toggle" @click="dataExpanded = !dataExpanded">
+          <NIcon size="14">
+            <ChevronDownOutline v-if="!dataExpanded" />
+            <ChevronUpOutline v-else />
+          </NIcon>
+          <NIcon size="14"><CodeOutline /></NIcon>
+          <span class="data-toggle-label">原始数据</span>
+        </div>
         <NCode
+          v-if="dataExpanded"
           :code="JSON.stringify(step.data, null, 2)"
           language="json"
           word-wrap
@@ -182,7 +340,6 @@ function handleEdit() {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  user-select: none;
 }
 .step-header-left {
   display: flex;
@@ -208,23 +365,26 @@ function handleEdit() {
   padding-top: 12px;
   border-top: 1px solid var(--n-border-color);
 }
-.step-payload,
-.step-data {
+.step-payload {
   margin-bottom: 8px;
 }
 .field-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-weight: 600;
   color: var(--n-text-color-3);
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .truncate-hint {
   font-size: 11px;
   color: var(--n-text-color-3);
 }
-.photo-thumb-grid {
+
+/* ── 照片区域 ── */
+.photo-section {
   margin-bottom: 12px;
 }
 .thumb-grid {
@@ -246,10 +406,93 @@ function handleEdit() {
   height: 100%;
   object-fit: cover;
 }
-.thumb-more {
-  font-size: 11px;
+.thumb-item.kept {
+  border-color: var(--n-color-success);
+  border-width: 2px;
+}
+.thumb-item.removed {
+  border-color: var(--n-color-error);
+  border-width: 2px;
+  opacity: 0.7;
+}
+
+/* ── 带元数据的缩略图项 ── */
+.thumb-item-with-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.thumb-item-with-meta .thumb-item {
+  margin-bottom: 2px;
+}
+.photo-meta {
+  font-size: 10px;
   color: var(--n-text-color-3);
+  text-align: center;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.narrative-role {
+  color: var(--n-color-primary);
+  font-weight: 500;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ── 多样性过滤 ── */
+.diversity-group {
+  margin-bottom: 10px;
+  padding: 8px;
+  background: var(--n-action-color);
+  border-radius: 6px;
+}
+.diversity-date-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+  margin-bottom: 4px;
+}
+.kept-section {
+  margin-bottom: 6px;
+}
+.kept-label {
+  font-size: 11px;
+  color: var(--n-color-success);
+  font-weight: 500;
+}
+.removed-section {
   margin-top: 4px;
-  display: block;
+  padding-top: 4px;
+  border-top: 1px dashed var(--n-border-color);
+}
+.removed-label {
+  font-size: 11px;
+  color: var(--n-color-error);
+  font-weight: 500;
+}
+
+/* ── 数据折叠 ── */
+.step-data {
+  margin-bottom: 8px;
+}
+.data-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 0;
+  user-select: none;
+}
+.data-toggle-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-text-color-3);
+  text-transform: uppercase;
 }
 </style>

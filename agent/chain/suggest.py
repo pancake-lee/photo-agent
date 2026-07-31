@@ -1,12 +1,10 @@
 """
     潜在主题识别模块 — 编辑视角提案。
 
-    三阶段工作流（主路径）：
+    三阶段工作流：
         1. 随机采样 → LLM 生成主题直觉（不暴露日期信息）
         2. RAG + 多样性约束 → 扩展选片
         3. LLM 沉淀完整选题提案（标题 + 角度 + 照片序列 + 理由）
-
-    备选输入（回退路径）：原有三维度分析（高频未成组 / 时间线规律 / 稀缺优质）
 
     用法:
         import chain.suggest as suggest_mod
@@ -29,7 +27,6 @@ import random
 import re
 import itertools
 
-import httpx
 import langchain_core.messages as lc_messages
 
 import utils.backend_sdk as bksdk
@@ -43,18 +40,6 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # 数据结构
 # ============================================================================
-
-@dataclasses.dataclass
-class CandidateGroup:
-    """分析出的候选选题方向（含具体照片）。用于备选三维度分析。"""
-    category: str          # "high_freq_ungrouped" | "temporal_pattern" | "scarce_quality"
-    photo_ids: list[str]
-    photo_count: int
-    attributes_summary: str   # 属性摘要文本，供 LLM 理解
-    analysis_rationale: str   # 分析依据，供 LLM 参考
-    sample_descriptions: list[str]  # 代表照片的 VLM 描述（最多 5 条）
-    score: float
-
 
 @dataclasses.dataclass
 class TopicIntuition:
@@ -579,10 +564,24 @@ def _stage2_expand_selection(
         date_groups[date_key].append(p)
 
     diverse: list = []
-    for date_key, group in date_groups.items():
-        # 每个日期组按 RAG 原始顺序取前 N 张
+    # 记录每个日期组的保留/移除详情，用于前端展示因果关系
+    diversity_details: list[dict] = []
+    for date_key in sorted(date_groups.keys()):
+        group = date_groups[date_key]
         take = min(len(group), _STAGE2_MAX_PER_DATE)
-        diverse.extend(group[:take])
+        kept = group[:take]
+        removed = group[take:]
+        diverse.extend(kept)
+        detail = {
+            "date": date_key if date_key != "__unknown__" else "未知日期",
+            "kept_photo_ids": [getattr(p, "id", "") for p in kept],
+        }
+        if removed:
+            detail["removed_photo_ids"] = [getattr(p, "id", "") for p in removed]
+            detail["reason"] = (
+                f"同一日期已有 {len(kept)} 张入选，移除 {len(removed)} 张"
+            )
+        diversity_details.append(detail)
 
     before_diverse = len(matched)
     removed_ids: list[str] = []
@@ -622,6 +621,8 @@ def _stage2_expand_selection(
             "after_count": len(diverse),
             "date_count": len(date_groups),
             "removed_photo_ids": removed_ids,
+            "kept_photo_ids": [getattr(p, "id", "") for p in diverse],
+            "diversity_details": diversity_details,
         }, module="suggest")
 
     logger.info(
@@ -994,364 +995,6 @@ def _stage3_generate_proposals(
 
 
 # ============================================================================
-# 备选路径：原有三维度分析（回退用）
-# ============================================================================
-
-def _parse_attr_values(value_str: str) -> list[str]:
-    """解析逗号分隔的属性值字符串，返回清洗后的值列表。"""
-    if not value_str:
-        return []
-    return [v.strip() for v in value_str.split(",") if v.strip()]
-
-
-def _count_attribute_frequencies(photos) -> dict[str, dict[str, int]]:
-    """统计各属性维度的值频率。"""
-    dims = ["objects", "colors", "scene", "lighting", "mood"]
-    freq: dict[str, dict[str, int]] = {d: collections.defaultdict(int) for d in dims}
-
-    for p in photos:
-        for dim in dims:
-            raw = (getattr(p, dim, "") or "").strip()
-            if dim in ("objects", "colors"):
-                values = _parse_attr_values(raw)
-            else:
-                values = [raw] if raw else []
-
-            for v in values:
-                if v and len(v) >= 2:
-                    freq[dim][v] += 1
-
-    return {d: dict(f) for d, f in freq.items()}
-
-
-def _collect_cluster_keywords(cluster_results: list[cluster_mod.ClusterResult]) -> set[str]:
-    """从聚类主题标签中提取关键词集合。"""
-    keywords: set[str] = set()
-    for r in cluster_results:
-        for c in r.clusters:
-            label = c.label or ""
-            desc = c.theme_description or ""
-            text = label + desc
-            for i in range(len(text)):
-                for length in (2, 3, 4):
-                    if i + length <= len(text):
-                        keywords.add(text[i:i + length])
-    return keywords
-
-
-def _photo_has_attr(photo, dim: str, value: str) -> bool:
-    """检查照片是否具有指定属性值。"""
-    raw = (getattr(photo, dim, "") or "").strip()
-    if dim in ("objects", "colors"):
-        return value in _parse_attr_values(raw)
-    return raw == value
-
-
-def _find_high_freq_ungrouped(
-    freq: dict[str, dict[str, int]],
-    cluster_keywords: set[str],
-    photos,
-    min_frequency: int = 3,
-) -> list[CandidateGroup]:
-    """找出高频但未被聚类覆盖的属性值，构建候选组。"""
-    candidates: list[CandidateGroup] = []
-
-    for dim, values in freq.items():
-        for value, count in sorted(values.items(), key=lambda x: -x[1]):
-            if count < min_frequency:
-                continue
-
-            covered = any(kw in value or value in kw for kw in cluster_keywords)
-            if covered:
-                continue
-
-            matching = []
-            for p in photos:
-                raw = (getattr(p, dim, "") or "").strip()
-                if dim in ("objects", "colors"):
-                    pvals = _parse_attr_values(raw)
-                else:
-                    pvals = [raw] if raw else []
-                if value in pvals:
-                    matching.append(p)
-
-            if len(matching) < 2:
-                continue
-
-            matching.sort(key=lambda p: (1 if (p.description or "") else 0), reverse=True)
-
-            photo_ids = [p.id for p in matching[:15]]
-            sample_descs = [
-                (p.description or "无描述")[:120]
-                for p in matching[:5]
-            ]
-
-            dim_labels = {
-                "objects": "主体", "colors": "色调", "scene": "场景",
-                "lighting": "光线", "mood": "情绪",
-            }
-            score = count / max(freq[dim].values()) if freq[dim] else 0.0
-
-            candidates.append(CandidateGroup(
-                category="high_freq_ungrouped",
-                photo_ids=photo_ids,
-                photo_count=len(matching),
-                attributes_summary=f"{dim_labels.get(dim, dim)}={value}（共 {count} 张）",
-                analysis_rationale=f"'{value}' 出现 {count} 次，频率较高但未被现有主题覆盖",
-                sample_descriptions=sample_descs,
-                score=score,
-            ))
-
-    candidates.sort(key=lambda c: c.score, reverse=True)
-    return candidates[:10]
-
-
-def _find_temporal_patterns(
-    photos,
-    stats,
-    freq: dict[str, dict[str, int]],
-) -> list[CandidateGroup]:
-    """发现时间线规律：跨年份的季节性拍摄模式。"""
-    candidates: list[CandidateGroup] = []
-
-    monthly_photos: dict[int, list] = collections.defaultdict(list)
-    for p in photos:
-        shot_date = _parse_shot_date(p.shot_at or "")
-        if not shot_date:
-            continue
-        monthly_photos[shot_date.month].append(p)
-
-    if not monthly_photos:
-        return candidates
-
-    current_year = datetime.datetime.now().year
-
-    for month in sorted(monthly_photos.keys()):
-        month_pics = monthly_photos[month]
-        if len(month_pics) < 3:
-            continue
-
-        month_freq = _count_attribute_frequencies(month_pics)
-
-        for dim, mf in month_freq.items():
-            for value, mcount in mf.items():
-                if mcount < 2:
-                    continue
-                global_count = freq.get(dim, {}).get(value, 0)
-                if global_count == 0:
-                    continue
-
-                years_with_attr: set[int] = set()
-                for p in month_pics:
-                    shot_date = _parse_shot_date(p.shot_at or "")
-                    if not shot_date:
-                        continue
-                    raw = (getattr(p, dim, "") or "").strip()
-                    if dim in ("objects", "colors"):
-                        pvals = _parse_attr_values(raw)
-                    else:
-                        pvals = [raw] if raw else []
-                    if value in pvals:
-                        years_with_attr.add(shot_date.year)
-
-                if len(years_with_attr) < 2:
-                    continue
-
-                missing_current_year = current_year not in years_with_attr
-
-                month_name = f"{month}月"
-                month_ratio = mcount / len(month_pics)
-                global_ratio = global_count / max(len(photos), 1)
-                lift = month_ratio / max(global_ratio, 0.001)
-
-                if lift < 1.5 and not missing_current_year:
-                    continue
-
-                dim_labels = {
-                    "objects": "主体", "colors": "色调", "scene": "场景",
-                    "lighting": "光线", "mood": "情绪",
-                }
-
-                matching = [p for p in month_pics if _photo_has_attr(p, dim, value)]
-                matching.sort(
-                    key=lambda p: (1 if (p.description or "") else 0),
-                    reverse=True,
-                )
-
-                photo_ids = [p.id for p in matching[:15]]
-                sample_descs = [
-                    (p.description or "无描述")[:120]
-                    for p in matching[:5]
-                ]
-
-                if missing_current_year:
-                    rationale = (
-                        f"{', '.join(str(y) for y in sorted(years_with_attr))} 年"
-                        f"的 {month_name} 都拍了 '{value}'，{current_year} 年尚未出现"
-                    )
-                    score = lift * 1.5
-                else:
-                    rationale = (
-                        f"{', '.join(str(y) for y in sorted(years_with_attr))} 年"
-                        f"的 {month_name} 都出现了 '{value}'，有季节性规律"
-                    )
-                    score = lift
-
-                candidates.append(CandidateGroup(
-                    category="temporal_pattern",
-                    photo_ids=photo_ids,
-                    photo_count=len(matching),
-                    attributes_summary=(
-                        f"{month_name} | {dim_labels.get(dim, dim)}={value}"
-                        f"（该月 {mcount} 张，全局 {global_count} 张）"
-                    ),
-                    analysis_rationale=rationale,
-                    sample_descriptions=sample_descs,
-                    score=score,
-                ))
-
-    seen_keys: set[str] = set()
-    deduped: list[CandidateGroup] = []
-    for c in sorted(candidates, key=lambda x: x.score, reverse=True):
-        key = c.attributes_summary
-        if key not in seen_keys:
-            seen_keys.add(key)
-            deduped.append(c)
-
-    return deduped[:10]
-
-
-def _find_scarce_quality(
-    freq: dict[str, dict[str, int]],
-    cluster_results: list[cluster_mod.ClusterResult],
-    photos,
-    max_frequency: int = 5,
-) -> list[CandidateGroup]:
-    """找出现频率低但可能在聚类中凝聚度较高的属性。"""
-    candidates: list[CandidateGroup] = []
-
-    photo_coherence: dict[str, float] = {}
-    for r in cluster_results:
-        for c in r.clusters:
-            for p in c.photos:
-                if p.photo_id not in photo_coherence:
-                    photo_coherence[p.photo_id] = c.coherence_score
-
-    for dim, values in freq.items():
-        for value, count in values.items():
-            if count < 2 or count > max_frequency:
-                continue
-
-            matching = [p for p in photos if _photo_has_attr(p, dim, value)]
-            if len(matching) < 2:
-                continue
-
-            quality_scores: list[float] = []
-            for p in matching:
-                score = 0.0
-                if (p.description or "").strip():
-                    score += 0.3
-                pid = p.id or ""
-                if pid in photo_coherence:
-                    score += photo_coherence[pid]
-                quality_scores.append(score)
-
-            avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0
-
-            if avg_quality < 0.2:
-                continue
-
-            paired = list(zip(matching, quality_scores))
-            paired.sort(key=lambda x: x[1], reverse=True)
-            matching_sorted = [p for p, _ in paired]
-
-            photo_ids = [p.id for p in matching_sorted[:15]]
-            sample_descs = [
-                (p.description or "无描述")[:120]
-                for p in matching_sorted[:5]
-            ]
-
-            dim_labels = {
-                "objects": "主体", "colors": "色调", "scene": "场景",
-                "lighting": "光线", "mood": "情绪",
-            }
-
-            rarity_score = 1.0 / max(count, 1)
-            score = avg_quality * rarity_score
-
-            candidates.append(CandidateGroup(
-                category="scarce_quality",
-                photo_ids=photo_ids,
-                photo_count=len(matching),
-                attributes_summary=(
-                    f"{dim_labels.get(dim, dim)}={value}"
-                    f"（仅 {count} 张，质量分 {avg_quality:.2f}）"
-                ),
-                analysis_rationale=(
-                    f"'{value}' 仅出现 {count} 次，稀有但照片质量不错，"
-                    f"可考虑作为差异化选题"
-                ),
-                sample_descriptions=sample_descs,
-                score=score,
-            ))
-
-    candidates.sort(key=lambda c: c.score, reverse=True)
-    return candidates[:10]
-
-
-# ============================================================================
-# 旧版 LLM 生成（备选路径用）
-# ============================================================================
-
-_LEGACY_SUGGEST_SYSTEM_PROMPT = (
-    "你是一位摄影选题策划专家。用户照片库经过数据分析，发现了一些潜在选题方向。"
-    "请从中选出 3-5 个最有价值的选题，为每个选题生成标题和发布角度。\n\n"
-    "选题原则：\n"
-    "- 优先选择有故事性、有时间感的选题\n"
-    "- 标题 6-12 字，精炼有记忆点（如'春日花语系列'、'蓝调时刻合集'）\n"
-    "- 发布角度 30-60 字，说明为什么值得发、怎么发\n"
-    "- 选题理由 20-40 字，说明基于什么分析得出\n\n"
-    "你必须严格返回一行合法 JSON 数组，不得包含任何其他文字、注释或 markdown 标记。\n"
-    '输出格式：[{"title":"...","angle":"...","rationale":"...","candidate_index":0}]'
-)
-
-
-def _build_legacy_prompt(
-    total_photos: int,
-    cluster_summary: str,
-    candidates: list[CandidateGroup],
-) -> str:
-    """构建备选路径的 LLM prompt。"""
-    parts: list[str] = []
-
-    parts.append(f"## 照片库概况\n- 总照片数：{total_photos}\n- 已有聚类主题：{cluster_summary}\n")
-
-    parts.append("## 候选选题方向\n")
-    for i, c in enumerate(candidates):
-        parts.append(f"### 候选 {i}（{c.category}）")
-        parts.append(f"- 属性特征：{c.attributes_summary}")
-        parts.append(f"- 照片数量：{c.photo_count}")
-        parts.append(f"- 分析依据：{c.analysis_rationale}")
-        if c.sample_descriptions:
-            parts.append("- 代表照片描述：")
-            for desc in c.sample_descriptions[:3]:
-                parts.append(f"  - {desc}")
-        parts.append("")
-
-    return "\n".join(parts)
-
-
-def _parse_legacy_response(raw: str) -> list[dict]:
-    """解析备选路径 LLM 返回的选题建议 JSON。"""
-    return _parse_llm_json_response(raw, "备选路径选题建议")
-
-
-# 向后兼容别名
-_parse_suggest_response = _parse_legacy_response
-_build_suggest_prompt = _build_legacy_prompt
-
-
-# ============================================================================
 # 数据采集
 # ============================================================================
 
@@ -1400,25 +1043,6 @@ def _load_cluster_results(cluster_dir: pathlib.Path) -> list[cluster_mod.Cluster
     return results
 
 
-def _check_embedding_health(go_backend_url: str) -> tuple[bool, str]:
-    """检查 embedding 服务配置可用性。返回 (available, reason)。"""
-    url = go_backend_url.rstrip("/") + "/v1/embeddings/health"
-    try:
-        resp = httpx.get(url, timeout=5.0)
-        data = resp.json()
-        status = data.get("status", "")
-        if status == "ok":
-            return True, f"model={data.get('model', 'unknown')}"
-        reason = data.get("reason", "unknown")
-        return False, reason
-    except httpx.HTTPStatusError as e:
-        return False, "HTTP error: %s" % e
-    except httpx.RequestError as e:
-        return False, "request failed: %s" % e
-    except Exception as e:
-        return False, "unexpected error: %s" % e
-
-
 # ============================================================================
 # 主入口
 # ============================================================================
@@ -1432,8 +1056,7 @@ def run_suggest(
     """
     执行潜在主题识别，返回选题建议列表和元信息。
 
-    主路径：三阶段编辑视角提案（随机采样 → RAG 扩展 → LLM 提案）
-    回退路径：原有三维度属性分析（高频未成组 / 时间线规律 / 稀缺优质）
+    三阶段编辑视角提案（随机采样 → RAG 扩展 → LLM 提案）。
 
     参数:
         cfg: Config 对象
@@ -1489,223 +1112,43 @@ def run_suggest(
     meta["cluster_count"] = len(cluster_results)
 
     # ════════════════════════════════════════════════════════════════════
-    # 主路径：三阶段编辑视角提案
+    # 三阶段编辑视角提案
     # ════════════════════════════════════════════════════════════════════
 
-    embedding_ok, embedding_reason = _check_embedding_health(go_backend_url)
-    if not embedding_ok:
-        logger.warning(
-            "Embedding 服务不可用（%s），跳过三阶段主路径，直接走回退路径",
-            embedding_reason,
-        )
-        if tracer:
-            tracer.emit("suggest.decision.pipeline", {
-                "pipeline": "legacy_three_dimension",
-                "reason": f"embedding_unavailable: {embedding_reason}",
-            }, module="suggest")
-    else:
-        logger.info("Embedding 服务可用（%s），进入三阶段主路径", embedding_reason)
-        logger.info("=== 主路径：三阶段编辑视角提案 ===")
-
-        if tracer:
-            tracer.emit("suggest.decision.pipeline", {
-                "pipeline": "editorial_three_stage",
-                "reason": f"embedding_ok: {embedding_reason}",
-            }, module="suggest")
-
-        # Stage 1: 随机采样 → LLM 主题直觉
-        intuitions = _stage1_generate_intuitions(cfg, photos, tracer=tracer)
-
-        if intuitions:
-            # Stage 2+3: 扩展选片 → 完整选题提案
-            proposals = _stage3_generate_proposals(cfg, intuitions, photos, tracer=tracer)
-
-            if proposals:
-                meta["pipeline"] = "editorial_three_stage"
-                meta["candidates_found"] = len(proposals)
-                total_duration_ms = int((time.time() - t_start) * 1000)
-                if tracer:
-                    tracer.emit("suggest.complete", {
-                        "pipeline": "editorial_three_stage",
-                        "total_suggestions": len(proposals),
-                        "total_duration_ms": total_duration_ms,
-                        "stage1_count": len(intuitions),
-                        "stage3_count": len(proposals),
-                    }, module="suggest")
-                logger.info("主路径成功：生成 %d 个选题建议", len(proposals))
-                return proposals, meta
-
-            logger.warning("主路径 Stage 3 未产出有效提案，回退到备选路径")
-        else:
-            logger.warning("主路径 Stage 1 未产出主题直觉，回退到备选路径")
-
-    # ════════════════════════════════════════════════════════════════════
-    # 回退路径：原有三维度属性分析
-    # ════════════════════════════════════════════════════════════════════
-
-    logger.info("=== 回退路径：三维度属性分析 ===")
-    meta["pipeline"] = "legacy_three_dimension"
-
-    if tracer and meta.get("pipeline") == "legacy_three_dimension":
-        # 如果还没 emit 过 pipeline 决策（embedding 可用但主路径失败）
-        if embedding_ok:
-            tracer.emit("suggest.decision.pipeline", {
-                "pipeline": "legacy_three_dimension",
-                "reason": "main_path_failed",
-            }, module="suggest")
-
-    freq = _count_attribute_frequencies(photos)
-    for dim, values in freq.items():
-        if values:
-            top3 = sorted(values.items(), key=lambda x: -x[1])[:3]
-            logger.info("属性维度 [%s]: %d 个不同值, top3=%s", dim, len(values), top3)
-        else:
-            logger.warning("属性维度 [%s]: 无数据", dim)
-    cluster_keywords = _collect_cluster_keywords(cluster_results)
-
-    all_candidates: list[CandidateGroup] = []
-
-    high_freq = _find_high_freq_ungrouped(freq, cluster_keywords, photos)
-    all_candidates.extend(high_freq)
-    if high_freq:
-        logger.info("高频未成组候选: %d 个", len(high_freq))
-    else:
-        logger.warning("高频未成组: 无候选")
-
-    temporal = _find_temporal_patterns(photos, stats, freq)
-    all_candidates.extend(temporal)
-    if temporal:
-        logger.info("时间线规律候选: %d 个", len(temporal))
-    else:
-        logger.warning("时间线规律: 无候选")
-
-    scarce = _find_scarce_quality(freq, cluster_results, photos)
-    all_candidates.extend(scarce)
-    if scarce:
-        logger.info("稀缺优质候选: %d 个", len(scarce))
-    else:
-        logger.warning("稀缺优质: 无候选")
-
-    all_candidates.sort(key=lambda c: c.score, reverse=True)
-    top_candidates = all_candidates[:15]
-    meta["candidates_found"] = len(top_candidates)
-
-    # trace: fallback candidates
-    if tracer:
-        tracer.emit("suggest.fallback.candidates", {
-            "high_freq_count": len(high_freq),
-            "temporal_count": len(temporal),
-            "scarce_count": len(scarce),
-            "top_candidates": [
-                {"category": c.category, "summary": c.attributes_summary, "score": round(c.score, 3)}
-                for c in top_candidates[:10]
-            ],
-        }, module="suggest")
-
-    if not top_candidates:
-        logger.warning("未发现候选选题方向")
-        return [], {**meta, "error": "未发现候选选题方向"}
-
-    # LLM 生成
-    logger.info("调用 LLM 生成选题建议（备选路径）...")
-
-    cluster_labels: list[str] = []
-    for r in cluster_results:
-        for c in r.clusters:
-            if c.label and c.label != f"聚类 {c.cluster_id}":
-                cluster_labels.append(f"{c.label}（{c.size}张）")
-    cluster_summary = ", ".join(cluster_labels[:20]) if cluster_labels else "暂无"
-
-    prompt_text = _build_legacy_prompt(len(photos), cluster_summary, top_candidates)
-
-    # trace: fallback llm
-    if tracer:
-        payload_ref = tracer.save_payload("fallback-prompt.txt",
-                                           _LEGACY_SUGGEST_SYSTEM_PROMPT + "\n\n" + prompt_text)
-        tracer.emit("suggest.fallback.llm.start", {
-            "model": getattr(cfg, "llm_model", "unknown"),
-            "temperature": 0.7,
-            "prompt_chars": len(prompt_text),
-            "payload_ref": payload_ref,
-            "candidate_count": len(top_candidates),
-        }, module="suggest")
-
-    llm = llm_factory.create_llm(cfg, temperature=0.7)
-    messages = [
-        lc_messages.SystemMessage(content=_LEGACY_SUGGEST_SYSTEM_PROMPT),
-        lc_messages.HumanMessage(content=prompt_text),
-    ]
-
-    t_fallback_llm = time.time()
-    try:
-        resp = llm.invoke(messages)
-        raw = resp.content if hasattr(resp, "content") else str(resp)
-    except Exception as e:
-        logger.exception("备选路径 LLM 调用失败")
-        return [], {**meta, "error": f"LLM 调用失败: {e}"}
-
-    fb_duration_ms = int((time.time() - t_fallback_llm) * 1000)
+    logger.info("=== 三阶段编辑视角提案 ===")
 
     if tracer:
-        resp_ref = tracer.save_payload("fallback-response.txt", raw)
-        token_usage_fb = {}
-        if hasattr(resp, "response_metadata"):
-            usage = resp.response_metadata.get("token_usage", {})
-            token_usage_fb = {
-                "prompt": usage.get("prompt_tokens", 0),
-                "completion": usage.get("completion_tokens", 0),
-            }
-        tracer.emit("suggest.fallback.llm.end", {
-            "model": getattr(cfg, "llm_model", "unknown"),
-            "duration_ms": fb_duration_ms,
-            "token_usage": token_usage_fb,
-            "response_chars": len(raw),
-            "payload_ref": resp_ref,
+        tracer.emit("suggest.decision.pipeline", {
+            "pipeline": "editorial_three_stage",
         }, module="suggest")
 
-    parsed = _parse_legacy_response(raw)
-    if not parsed:
-        return [], {**meta, "error": "LLM 未返回有效选题建议"}
+    # Stage 1: 随机采样 → LLM 主题直觉
+    intuitions = _stage1_generate_intuitions(cfg, photos, tracer=tracer)
 
-    # 组装结果
-    suggestions: list[TopicSuggestion] = []
-    for item in parsed[:5]:
-        idx = item.get("candidate_index", 0)
-        try:
-            idx = int(idx)
-        except (ValueError, TypeError):
-            idx = 0
+    if not intuitions:
+        logger.error("Stage 1 未产出主题直觉")
+        return [], {**meta, "error": "Stage 1 未产出主题直觉"}
 
-        if 0 <= idx < len(top_candidates):
-            candidate = top_candidates[idx]
-        else:
-            candidate = top_candidates[0] if top_candidates else None
+    # Stage 2+3: 扩展选片 → 完整选题提案
+    proposals = _stage3_generate_proposals(cfg, intuitions, photos, tracer=tracer)
 
-        if candidate is None:
-            continue
+    if not proposals:
+        logger.error("Stage 3 未产出有效提案")
+        return [], {**meta, "error": "Stage 3 未产出有效提案"}
 
-        suggestions.append(TopicSuggestion(
-            title=item.get("title", "未命名选题"),
-            angle=item.get("angle", ""),
-            rationale=item.get("rationale", ""),
-            candidate_index=idx,
-            photo_ids=candidate.photo_ids[:10],
-            category=candidate.category,
-            trace_id=tracer.trace_id if tracer else "",
-        ))
-
+    meta["pipeline"] = "editorial_three_stage"
+    meta["candidates_found"] = len(proposals)
     total_duration_ms = int((time.time() - t_start) * 1000)
     if tracer:
         tracer.emit("suggest.complete", {
-            "pipeline": "legacy_three_dimension",
-            "total_suggestions": len(suggestions),
+            "pipeline": "editorial_three_stage",
+            "total_suggestions": len(proposals),
             "total_duration_ms": total_duration_ms,
-            "stage1_count": 0,
-            "stage3_count": 0,
+            "stage1_count": len(intuitions),
+            "stage3_count": len(proposals),
         }, module="suggest")
-
-    logger.info("备选路径生成 %d 个选题建议", len(suggestions))
-    return suggestions, meta
+    logger.info("生成 %d 个选题建议", len(proposals))
+    return proposals, meta
 
 
 # ============================================================================
@@ -1714,9 +1157,6 @@ def run_suggest(
 
 _CATEGORY_LABELS = {
     "editorial_proposal": "📝 编辑视角提案",
-    "high_freq_ungrouped": "🔍 高频未成组",
-    "temporal_pattern": "📅 时间线规律",
-    "scarce_quality": "💎 稀缺优质",
 }
 
 
@@ -1736,11 +1176,7 @@ def format_suggestions(
     lines.append(f"已有聚类: {meta.get('cluster_count', 0)} 个")
     pipeline = meta.get("pipeline", "")
     if pipeline:
-        pipe_labels = {
-            "editorial_three_stage": "编辑视角三阶段",
-            "legacy_three_dimension": "三维度属性分析（回退）",
-        }
-        lines.append(f"生成路径: {pipe_labels.get(pipeline, pipeline)}")
+        lines.append(f"生成路径: 编辑视角三阶段")
     lines.append("")
 
     if not suggestions:
