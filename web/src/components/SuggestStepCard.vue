@@ -7,11 +7,13 @@ import {
   NTag,
   NSpace,
   NCode,
+  NTooltip,
 } from 'naive-ui'
 import {
   ChevronDownOutline,
   ChevronUpOutline,
   CreateOutline,
+  ImageOutline,
 } from '@vicons/ionicons5'
 import type { PipelineStep } from '../types/suggest'
 import { isStepEditable } from '../types/suggest'
@@ -31,8 +33,23 @@ const editing = ref(false)
 const hasPayload = computed(() => !!props.step.payload_content)
 const hasPhotoData = computed(() => {
   const d = props.step.data
-  return d.photo_ids?.length > 0 || d.photo_sequence?.length > 0
+  return (d.photo_ids?.length > 0) || (d.photo_sequence?.length > 0)
 })
+
+// 步骤中关联的照片 ID 列表
+const stepPhotoIds = computed<string[]>(() => {
+  const d = props.step.data
+  if (d.photo_ids?.length > 0) return d.photo_ids
+  if (d.photo_sequence?.length > 0) {
+    return d.photo_sequence.map((s: any) => s.photo_id).filter(Boolean)
+  }
+  return []
+})
+
+// 照片缩略图 URL
+function thumbUrl(photoId: string): string {
+  return photoId ? `/api/v1/photos/${photoId}/image` : ''
+}
 
 function summaryText(): string {
   const d = props.step.data
@@ -101,6 +118,35 @@ function handleEdit() {
 
     <!-- 展开态：显示完整数据 -->
     <div v-if="expanded" class="step-body">
+      <!-- 照片缩略图网格 -->
+      <div v-if="stepPhotoIds.length > 0" class="photo-thumb-grid">
+        <span class="field-label">
+          <NIcon size="14"><ImageOutline /></NIcon>
+          关联照片（{{ stepPhotoIds.length }} 张）
+        </span>
+        <div class="thumb-grid">
+          <NTooltip
+            v-for="pid in stepPhotoIds.slice(0, 24)"
+            :key="pid"
+            trigger="hover"
+          >
+            <template #trigger>
+              <div class="thumb-item">
+                <img
+                  :src="thumbUrl(pid)"
+                  :alt="pid.slice(0, 8)"
+                  loading="lazy"
+                  @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"
+                />
+              </div>
+            </template>
+            {{ pid }}
+          </NTooltip>
+        </div>
+        <span v-if="stepPhotoIds.length > 24" class="thumb-more">
+          还有 {{ stepPhotoIds.length - 24 }} 张...
+        </span>
+      </div>
       <!-- payload 内容（prompt/response 文本） -->
       <div v-if="hasPayload" class="step-payload">
         <span class="field-label">Payload</span>
@@ -177,5 +223,33 @@ function handleEdit() {
 .truncate-hint {
   font-size: 11px;
   color: var(--n-text-color-3);
+}
+.photo-thumb-grid {
+  margin-bottom: 12px;
+}
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+}
+.thumb-item {
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid var(--n-border-color);
+  background: var(--n-action-color);
+}
+.thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thumb-more {
+  font-size: 11px;
+  color: var(--n-text-color-3);
+  margin-top: 4px;
+  display: block;
 }
 </style>

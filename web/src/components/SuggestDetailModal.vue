@@ -8,6 +8,7 @@ import {
   NSpin,
   NEmpty,
   NDivider,
+  NProgress,
   useMessage,
 } from 'naive-ui'
 import { CloseOutline, RefreshOutline, AlertCircleOutline } from '@vicons/ionicons5'
@@ -17,6 +18,7 @@ import type { PipelineStep } from '../types/suggest'
 import SuggestStepCard from './SuggestStepCard.vue'
 import SuggestStepEditor from './SuggestStepEditor.vue'
 import SuggestVersionTimeline from './SuggestVersionTimeline.vue'
+import SuggestVersionDiff from './SuggestVersionDiff.vue'
 
 const props = defineProps<{
   itemId: string | null
@@ -34,12 +36,19 @@ const {
   detail,
   detailError,
   rerunLoading,
+  rerunProgress,
   currentVersion,
   stepGroups,
   sortedVersions,
+  compareMode,
+  selectedCompareVersions,
+  canCompare,
+  compareVersions,
   loadDetail,
   switchVersion,
-  rerunFromStep,
+  rerunFromStepStream,
+  toggleCompareMode,
+  toggleCompareVersion,
 } = useSuggestDetail()
 
 // 编辑状态
@@ -72,10 +81,12 @@ function handleStepEdit(step: PipelineStep) {
 
 async function handleEditorConfirm(overrides: Record<string, any>) {
   if (!props.itemId || !editingStep.value) return
-  const result = await rerunFromStep(props.itemId, editingStep.value.event, overrides)
+  const result = await rerunFromStepStream(props.itemId, editingStep.value.event, overrides)
   if (result) {
     message.success('重跑完成，已生成新版本')
     emit('refreshed')
+  } else if (detailError.value) {
+    message.error(detailError.value)
   }
 }
 
@@ -140,22 +151,52 @@ const CATEGORY_LABELS: Record<string, string> = {
         <SuggestVersionTimeline
           :versions="sortedVersions"
           :current-version-id="detail.current_version_id"
+          :compare-mode="compareMode"
+          :selected-compare-versions="selectedCompareVersions"
+          :can-compare="canCompare"
           @switch="handleVersionSwitch"
+          @toggle-compare="toggleCompareMode"
+          @toggle-version="toggleCompareVersion"
         />
       </div>
 
-      <!-- 右侧步骤列表 -->
+      <!-- 右侧：差异视图 或 步骤列表 -->
       <div class="modal-right">
+        <!-- 版本差异对比视图 -->
+        <template v-if="compareMode && compareVersions.length === 2">
+          <SuggestVersionDiff
+            :version-a="compareVersions[0]"
+            :version-b="compareVersions[1]"
+          />
+        </template>
+
+        <!-- 常规步骤列表 -->
+        <template v-else>
         <!-- trace 过期提示 -->
         <div v-if="currentVersion?.trace_expired" class="trace-expired-banner">
           <NIcon size="14"><AlertCircleOutline /></NIcon>
           追踪数据已过期，仅展示最终结果
         </div>
 
-        <!-- 重跑中 -->
+        <!-- 重跑中（含阶段进度） -->
         <div v-if="rerunLoading" class="rerun-loading">
           <NSpin size="small" />
-          <span>正在重跑管线...</span>
+          <div class="rerun-progress-info">
+            <span class="rerun-label">正在重跑管线...</span>
+            <span v-if="rerunProgress" class="rerun-stage">
+              {{ rerunProgress.label }}
+              <template v-if="rerunProgress.status === 'done'"> ✅</template>
+              <template v-else> 🔄</template>
+            </span>
+          </div>
+          <NProgress
+            v-if="rerunProgress"
+            :percentage="Math.round((rerunProgress.stage / 3) * 100)"
+            :height="4"
+            :border-radius="2"
+            :show-indicator="false"
+            style="width: 100%; margin-top: 6px;"
+          />
         </div>
 
         <!-- 按 group 分组展示步骤 -->
@@ -202,6 +243,7 @@ const CATEGORY_LABELS: Record<string, string> = {
             </div>
           </div>
         </div>
+        </template>
       </div>
     </div>
 
@@ -270,11 +312,24 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 .rerun-loading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 12px;
   color: var(--n-text-color-2);
   font-size: 13px;
+}
+.rerun-progress-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rerun-label {
+  font-size: 13px;
+}
+.rerun-stage {
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 .step-group {
   margin-bottom: 8px;

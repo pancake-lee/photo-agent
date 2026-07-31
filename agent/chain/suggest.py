@@ -94,8 +94,8 @@ class TopicSuggestion:
 # 常量
 # ============================================================================
 
-_STAGE1_SAMPLE_MIN = 6
-_STAGE1_SAMPLE_MAX = 9
+_STAGE1_SAMPLE_MIN = 3
+_STAGE1_SAMPLE_MAX = 3
 _STAGE2_MIN_PHOTOS = 3
 _STAGE3_MIN_POOL = 6   # Stage 3 最少候选数：少于此数量难以独立发现选题
 _STAGE3_TARGET_MIN = 9
@@ -145,7 +145,7 @@ _STAGE1_SYSTEM_PROMPT = (
     "2. 有趣味性：视角新颖、幽默、出人意料，能抓住注意力\n"
     "3. 有美学价值：对构图、光影、色彩等方面的独特审美发现\n"
     "4. 有情感共鸣：能唤起普遍的人类情感、记忆或体验\n\n"
-    "输出 2-4 个选题直觉，每个包含：\n"
+    "输出 1 个最有价值的选题直觉，包含：\n"
     "- title: 标题 6-12 字，精炼有记忆点\n"
     "- angle: 角度描述 20-40 字，说明这个选题的独特视角和发布价值\n"
     "- rationale: 选题理由 20-40 字，说明这个视角为什么有意义（而非仅仅描述照片里有什么）\n"
@@ -238,7 +238,7 @@ def _build_stage1_prompt(photos) -> str:
             lines.append(f"描述: （无描述）")
             lines.append("")
 
-    lines.append("请基于以上照片，输出 2-4 个选题直觉。")
+    lines.append("请基于以上照片，输出 1 个最有价值的选题直觉。")
     return "\n".join(lines)
 
 
@@ -787,7 +787,6 @@ def _stage3_generate_proposals(
             continue
 
         # 构建 prompt（使用覆盖 或 默认）
-        prompt_idx = idx
         if prompt_overrides and idx in prompt_overrides:
             prompt_text = prompt_overrides[idx]
         else:

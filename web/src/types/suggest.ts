@@ -76,6 +76,12 @@ export interface RandomSampleResult {
   count: number
 }
 
+export interface RerunProgress {
+  stage: number
+  label: string
+  status: 'running' | 'done'
+}
+
 // ── 步骤标签常量 ──
 
 export const STEP_GROUP_LABELS: Record<string, string> = {

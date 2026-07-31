@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NTag, NIcon } from 'naive-ui'
-import { CheckmarkCircleOutline, GitBranchOutline } from '@vicons/ionicons5'
+import { NTag, NIcon, NButton, NCheckbox, NTooltip } from 'naive-ui'
+import { CheckmarkCircleOutline, GitBranchOutline, GitCompareOutline, CloseOutline } from '@vicons/ionicons5'
 import type { SuggestVersion } from '../types/suggest'
 
 const props = defineProps<{
   versions: SuggestVersion[]
   currentVersionId: string
+  compareMode?: boolean
+  selectedCompareVersions?: string[]
+  canCompare?: boolean
 }>()
 
 const emit = defineEmits<{
   switch: [versionId: string]
+  'toggle-compare': []
+  'toggle-version': [versionId: string]
 }>()
 
 const sorted = computed(() =>
@@ -77,12 +82,32 @@ function isCurrent(versionId: string): boolean {
 
 <template>
   <div class="version-timeline">
+    <!-- 对比按钮 -->
+    <div v-if="canCompare" class="compare-toggle">
+      <NButton
+        size="tiny"
+        :type="compareMode ? 'primary' : 'default'"
+        @click="emit('toggle-compare')"
+      >
+        <template #icon>
+          <NIcon size="14">
+            <GitCompareOutline v-if="!compareMode" />
+            <CloseOutline v-else />
+          </NIcon>
+        </template>
+        {{ compareMode ? '退出对比' : '对比' }}
+      </NButton>
+      <span v-if="compareMode" class="compare-hint">
+        勾选 2 个版本
+      </span>
+    </div>
+
     <div
       v-for="ver in sorted"
       :key="ver.version_id"
       class="version-item"
       :class="{ current: isCurrent(ver.version_id) }"
-      @click="emit('switch', ver.version_id)"
+      @click="compareMode ? emit('toggle-version', ver.version_id) : emit('switch', ver.version_id)"
     >
       <!-- 时间线连接线 -->
       <div class="timeline-line">
@@ -97,6 +122,12 @@ function isCurrent(versionId: string): boolean {
       <!-- 版本信息 -->
       <div class="version-info">
         <div class="version-header">
+          <NCheckbox
+            v-if="compareMode"
+            :checked="selectedCompareVersions?.includes(ver.version_id)"
+            size="small"
+            @click.stop
+          />
           <span class="version-id">{{ ver.version_id.split('-v')[1] || ver.version_id }}</span>
           <NTag
             size="tiny"
@@ -123,6 +154,18 @@ function isCurrent(versionId: string): boolean {
 .version-timeline {
   display: flex;
   flex-direction: column;
+}
+.compare-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--n-border-color);
+}
+.compare-hint {
+  font-size: 11px;
+  color: var(--n-text-color-3);
 }
 .version-item {
   display: flex;
@@ -167,6 +210,9 @@ function isCurrent(versionId: string): boolean {
 }
 .version-item:last-child .timeline-connector {
   display: none;
+}
+.version-item:last-child .version-info {
+  padding-bottom: 0;
 }
 /* 版本信息 */
 .version-info {

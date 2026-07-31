@@ -16,10 +16,12 @@ import uuid
 import datetime
 import os
 import threading
+import queue
 
 
 import fastapi
 import fastapi.middleware.cors
+import fastapi.responses
 import pydantic
 
 import chain.photo_agent as photo_agent
@@ -120,15 +122,24 @@ def _save_golden_queries(items: list[dict], dir_path: pathlib.Path) -> None:
 
 
 # ── 选题历史 JSON 存储 ─────────────────────────────────────
+# v2（suggest_history_v2.json）是唯一数据源。
+# suggest_history.json 自 B13 起不再写入，仅保留文件供回退读取。
+
+_suggest_history_lock = threading.Lock()
 
 
 def _suggest_history_path(dir_path: pathlib.Path) -> pathlib.Path:
-    """返回 suggest_history.json 的路径。"""
+    """返回选题历史 v2 文件的路径（唯一数据源）。"""
+    return dir_path / "suggest_history_v2.json"
+
+
+def _suggest_history_v1_path(dir_path: pathlib.Path) -> pathlib.Path:
+    """返回旧 v1 文件的路径（只读，用于懒迁移回退）。"""
     return dir_path / "suggest_history.json"
 
 
 def _load_suggest_history(dir_path: pathlib.Path) -> list[dict]:
-    """加载所有选题历史。文件不存在时返回空列表。"""
+    """加载选题历史（v2 格式）。文件不存在时返回空列表。"""
     fp = _suggest_history_path(dir_path)
     if not fp.exists():
         return []
@@ -139,49 +150,19 @@ def _load_suggest_history(dir_path: pathlib.Path) -> list[dict]:
 
 
 def _save_suggest_history(items: list[dict], dir_path: pathlib.Path) -> None:
-    """保存选题历史列表到 JSON 文件。"""
+    """保存选题历史列表到 v2 JSON 文件。"""
     fp = _suggest_history_path(dir_path)
     fp.parent.mkdir(parents=True, exist_ok=True)
-    fp.write_text(
-        json.dumps(items, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
-
-
-# 选题历史文件的读写锁，防止并发请求时读-改-写竞态丢失记录。
-_suggest_history_lock = threading.Lock()
-
-# v2 选题历史存储（版本化管理）
-_suggest_history_v2_lock = threading.Lock()
-
-
-def _suggest_history_v2_path(dir_path: pathlib.Path) -> pathlib.Path:
-    """返回 suggest_history_v2.json 的路径。"""
-    return dir_path / "suggest_history_v2.json"
-
-
-def _load_suggest_history_v2(dir_path: pathlib.Path) -> list[dict]:
-    """加载 v2 选题历史。文件不存在时返回空列表。"""
-    fp = _suggest_history_v2_path(dir_path)
-    if not fp.exists():
-        return []
     try:
-        return json.loads(fp.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
+        fp.write_text(
+            json.dumps(items, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        logger.error("保存选题历史失败: %s", e)
 
 
-def _save_suggest_history_v2(items: list[dict], dir_path: pathlib.Path) -> None:
-    """保存 v2 选题历史列表到 JSON 文件。"""
-    fp = _suggest_history_v2_path(dir_path)
-    fp.parent.mkdir(parents=True, exist_ok=True)
-    fp.write_text(
-        json.dumps(items, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
-
-
-def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict:
+def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict | None:
     """将 v1 单条记录懒迁移为 v2 格式（创建 v0 版本，不含步骤快照）。
 
     返回 v2 记录字典，失败返回 None。
@@ -212,8 +193,11 @@ def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict:
                     }
                     for s in replayed
                 ]
-        except Exception:
-            logger.warning("v2 迁移: trace 重放失败 trace_id=%s", trace_id)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
+            logger.warning(
+                "v2 迁移: trace 重放失败 trace_id=%s, 错误类型=%s: %s",
+                trace_id, type(e).__name__, e,
+            )
             trace_expired = True
 
     v0_version = {
@@ -1072,13 +1056,6 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             items.append(item)
 
         # 持久化保存（最新的插入列表头部），加锁防止并发写丢失
-        with _suggest_history_lock:
-            history = _load_suggest_history(req.app.state.suggest_history_dir)
-            for item in reversed(items):
-                history.insert(0, item)
-            _save_suggest_history(history, req.app.state.suggest_history_dir)
-
-        # 同步写入 v2（创建 v0 版本，无步骤快照，等首次打开详情时按需重建）
         v2_items_batch: list[dict] = []
         for it in items:
             v2_items_batch.append({
@@ -1108,11 +1085,11 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 }],
                 "current_version_id": f"{it['id']}-v0",
             })
-        with _suggest_history_v2_lock:
-            v2_history = _load_suggest_history_v2(req.app.state.suggest_history_dir)
+        with _suggest_history_lock:
+            v2_history = _load_suggest_history(req.app.state.suggest_history_dir)
             for v2_item in reversed(v2_items_batch):
                 v2_history.insert(0, v2_item)
-            _save_suggest_history_v2(v2_history, req.app.state.suggest_history_dir)
+            _save_suggest_history(v2_history, req.app.state.suggest_history_dir)
 
         return {"items": items, "count": len(items), "error": error}
 
@@ -1155,14 +1132,6 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 if it["id"] == item_id:
                     it["rating"] = body.rating
                     _save_suggest_history(items, hist_dir)
-                    # 同步 v2 评分
-                    with _suggest_history_v2_lock:
-                        v2_items = _load_suggest_history_v2(hist_dir)
-                        for v2 in v2_items:
-                            if v2["id"] == item_id:
-                                v2["rating"] = body.rating
-                                _save_suggest_history_v2(v2_items, hist_dir)
-                                break
                     return {"id": item_id, "rating": body.rating}
             raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
 
@@ -1177,16 +1146,20 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         cfg = req.app.state.cfg
 
         # 先查 v2
-        with _suggest_history_v2_lock:
-            v2_items = _load_suggest_history_v2(hist_dir)
+        with _suggest_history_lock:
+            v2_items = _load_suggest_history(hist_dir)
             for v2 in v2_items:
                 if v2["id"] == item_id:
                     return v2
 
-        # 回退到 v1 并懒迁移
+        # 回退到旧 v1 文件并懒迁移（只读，不写回 v1）
         v1_item = None
-        with _suggest_history_lock:
-            v1_items = _load_suggest_history(hist_dir)
+        v1_fp = _suggest_history_v1_path(hist_dir)
+        if v1_fp.exists():
+            try:
+                v1_items = json.loads(v1_fp.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                v1_items = []
             for it in v1_items:
                 if it["id"] == item_id:
                     v1_item = dict(it)
@@ -1200,10 +1173,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if v2_item is None:
             raise fastapi.HTTPException(status_code=500, detail="迁移失败")
 
-        with _suggest_history_v2_lock:
-            v2_items = _load_suggest_history_v2(hist_dir)
+        with _suggest_history_lock:
+            v2_items = _load_suggest_history(hist_dir)
             v2_items.insert(0, v2_item)
-            _save_suggest_history_v2(v2_items, hist_dir)
+            _save_suggest_history(v2_items, hist_dir)
 
         return v2_item
 
@@ -1211,15 +1184,15 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     async def suggest_history_version_switch(item_id: str, version_id: str, req: fastapi.Request):
         """切换当前活跃版本。"""
         hist_dir = req.app.state.suggest_history_dir
-        with _suggest_history_v2_lock:
-            v2_items = _load_suggest_history_v2(hist_dir)
+        with _suggest_history_lock:
+            v2_items = _load_suggest_history(hist_dir)
             for v2 in v2_items:
                 if v2["id"] == item_id:
                     version_ids = {v["version_id"] for v in v2.get("versions", [])}
                     if version_id not in version_ids:
                         raise fastapi.HTTPException(status_code=404, detail="版本不存在")
                     v2["current_version_id"] = version_id
-                    _save_suggest_history_v2(v2_items, hist_dir)
+                    _save_suggest_history(v2_items, hist_dir)
                     return {"id": item_id, "current_version_id": version_id}
             raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
 
@@ -1277,25 +1250,37 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             sampled = suggest_mod._random_sample_photos(all_photos)
             photo_ids_override = [getattr(p, "id", "") for p in sampled]
 
-        # 如果有直觉，跳过 Stage 1
+        # 如果有直觉，跳过 Stage 1 LLM；若同时提供照片则也跳过 RAG
         if body.intuition:
             intuitions = suggest_mod._stage1_generate_intuitions(
                 cfg, all_photos, tracer=tracer,
                 intuitions_override=[body.intuition],
                 photo_ids_override=photo_ids_override,
             )
+            if not intuitions:
+                raise fastapi.HTTPException(status_code=400, detail="未能生成选题直觉，请尝试更换照片或提供直觉")
+
+            # 用户同时提供了直觉和照片：直接用用户照片作为候选池，跳过 RAG
+            if body.photo_ids and photo_ids_override:
+                expanded_photos = [photo_by_id[pid] for pid in photo_ids_override if pid in photo_by_id]
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer,
+                    expanded_photos_override={0: expanded_photos},
+                )
+            else:
+                proposals = suggest_mod._stage3_generate_proposals(
+                    cfg, intuitions, all_photos, tracer=tracer,
+                )
         else:
             intuitions = suggest_mod._stage1_generate_intuitions(
                 cfg, all_photos, tracer=tracer,
                 photo_ids_override=photo_ids_override,
             )
-
-        if not intuitions:
-            raise fastapi.HTTPException(status_code=400, detail="未能生成选题直觉，请尝试更换照片或提供直觉")
-
-        proposals = suggest_mod._stage3_generate_proposals(
-            cfg, intuitions, all_photos, tracer=tracer,
-        )
+            if not intuitions:
+                raise fastapi.HTTPException(status_code=400, detail="未能生成选题直觉，请尝试更换照片或提供直觉")
+            proposals = suggest_mod._stage3_generate_proposals(
+                cfg, intuitions, all_photos, tracer=tracer,
+            )
 
         if not proposals:
             raise fastapi.HTTPException(status_code=400, detail="未能生成选题提案")
@@ -1346,34 +1331,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "current_version_id": version["version_id"],
         }
 
-        # 同时写入 v1 和 v2
-        v1_item = {
-            "id": v2_id,
-            "generated_at": generated_at,
-            "pipeline": "editorial_three_stage",
-            "total_photos": len(all_photos),
-            "cluster_count": 0,
-            "rating": 0,
-            "title": s.title,
-            "angle": s.angle,
-            "rationale": s.rationale,
-            "category": s.category,
-            "photo_ids": s.photo_ids,
-            "photo_sequence": s.photo_sequence,
-            "trace_id": tracer.trace_id,
-            "intuition_source": s.intuition_source,
-            "error": "",
-        }
-
         with _suggest_history_lock:
-            items = _load_suggest_history(hist_dir)
-            items.insert(0, v1_item)
-            _save_suggest_history(items, hist_dir)
-
-        with _suggest_history_v2_lock:
-            v2_items = _load_suggest_history_v2(hist_dir)
+            v2_items = _load_suggest_history(hist_dir)
             v2_items.insert(0, v2_item)
-            _save_suggest_history_v2(v2_items, hist_dir)
+            _save_suggest_history(v2_items, hist_dir)
 
         return v2_item
 
@@ -1388,8 +1349,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         hist_dir = req.app.state.suggest_history_dir
 
         # 找到当前 v2 记录
-        with _suggest_history_v2_lock:
-            v2_items = _load_suggest_history_v2(hist_dir)
+        with _suggest_history_lock:
+            v2_items = _load_suggest_history(hist_dir)
             v2_item = None
             for v in v2_items:
                 if v["id"] == item_id:
@@ -1397,10 +1358,14 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     break
 
         if v2_item is None:
-            # 尝试懒迁移
-            with _suggest_history_lock:
-                v1_items = _load_suggest_history(hist_dir)
-                v1_item = None
+            # 尝试从旧 v1 文件懒迁移（只读，不写回 v1）
+            v1_item = None
+            v1_fp = _suggest_history_v1_path(hist_dir)
+            if v1_fp.exists():
+                try:
+                    v1_items = json.loads(v1_fp.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    v1_items = []
                 for it in v1_items:
                     if it["id"] == item_id:
                         v1_item = dict(it)
@@ -1588,17 +1553,282 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         v2_item["versions"].append(new_version)
         v2_item["current_version_id"] = new_version_id
 
-        with _suggest_history_v2_lock:
-            v2_all = _load_suggest_history_v2(hist_dir)
+        with _suggest_history_lock:
+            v2_all = _load_suggest_history(hist_dir)
             for i, v in enumerate(v2_all):
                 if v["id"] == item_id:
                     v2_all[i] = v2_item
                     break
             else:
                 v2_all.insert(0, v2_item)
-            _save_suggest_history_v2(v2_all, hist_dir)
+            _save_suggest_history(v2_all, hist_dir)
 
         return v2_item
+
+    @app.post("/api/suggest/history/{item_id}/rerun-stream")
+    async def suggest_history_rerun_stream(item_id: str, body: RerunRequest, req: fastapi.Request):
+        """SSE 版本的 rerun，推送管线阶段进度事件。
+
+        事件格式:
+          {"event": "progress", "data": {"stage": 1, "label": "Stage 1 灵感发现", "status": "running"}}
+          {"event": "complete", "data": <SuggestHistoryDetail>}
+          {"event": "error", "data": {"message": "..."}}
+        """
+        cfg = req.app.state.cfg
+        hist_dir = req.app.state.suggest_history_dir
+
+        # 复制 rerun 所需上下文（在 async 上下文中捕获）
+        from_step = body.from_step
+        overrides = body.overrides or {}
+
+        def generate():
+            progress_q: queue.Queue = queue.Queue()
+
+            def run():
+                try:
+                    # ── 加载 v2 记录 ──
+                    with _suggest_history_lock:
+                        v2_items = _load_suggest_history(hist_dir)
+                        v2_item_local = None
+                        for v in v2_items:
+                            if v["id"] == item_id:
+                                v2_item_local = v
+                                break
+
+                    if v2_item_local is None:
+                        v1_item = None
+                        v1_fp = _suggest_history_v1_path(hist_dir)
+                        if v1_fp.exists():
+                            try:
+                                v1_items = json.loads(v1_fp.read_text(encoding="utf-8"))
+                            except (json.JSONDecodeError, OSError):
+                                v1_items = []
+                            for it in v1_items:
+                                if it["id"] == item_id:
+                                    v1_item = dict(it)
+                                    break
+                        if v1_item is None:
+                            progress_q.put({"event": "error", "data": {"message": "选题记录不存在"}})
+                            return
+                        v2_item_local = _migrate_to_v2(v1_item, cfg.project_root)
+                        if v2_item_local is None:
+                            progress_q.put({"event": "error", "data": {"message": "迁移失败"}})
+                            return
+
+                    all_photos = suggest_mod._fetch_all_photos(cfg.go_backend_url)
+                    photo_by_id = {getattr(p, "id", ""): p for p in all_photos}
+
+                    tracer = tracer_mod.Tracer(cfg.project_root)
+                    generated_at = datetime.datetime.now().isoformat()
+
+                    stage1_events = {"suggest.stage1.sample", "suggest.stage1.llm.start", "suggest.stage1.llm.end"}
+                    stage2_events = {"suggest.stage2.rag.start", "suggest.stage2.rag.end", "suggest.stage2.diversity"}
+
+                    intuitions: list = []
+                    proposals: list = []
+
+                    if from_step in stage1_events:
+                        progress_q.put({"event": "progress", "data": {"stage": 1, "label": "Stage 1 灵感发现", "status": "running"}})
+                        photo_ids_ov = overrides.get("photo_ids")
+                        prompt_ov = overrides.get("prompt")
+                        intuitions_ov_data = overrides.get("intuitions")
+
+                        if intuitions_ov_data:
+                            intuitions = suggest_mod._stage1_generate_intuitions(
+                                cfg, all_photos, tracer=tracer,
+                                intuitions_override=intuitions_ov_data,
+                            )
+                        else:
+                            intuitions = suggest_mod._stage1_generate_intuitions(
+                                cfg, all_photos, tracer=tracer,
+                                photo_ids_override=photo_ids_ov,
+                                prompt_override=prompt_ov,
+                            )
+                        progress_q.put({"event": "progress", "data": {"stage": 1, "label": "Stage 1 灵感发现", "status": "done"}})
+
+                        if intuitions:
+                            progress_q.put({"event": "progress", "data": {"stage": 2, "label": "Stage 2 扩展选片", "status": "running"}})
+                            progress_q.put({"event": "progress", "data": {"stage": 3, "label": "Stage 3 选题提案", "status": "running"}})
+                            proposals = suggest_mod._stage3_generate_proposals(
+                                cfg, intuitions, all_photos, tracer=tracer,
+                            )
+                            progress_q.put({"event": "progress", "data": {"stage": 3, "label": "Stage 3 选题提案", "status": "done"}})
+
+                    elif from_step in stage2_events:
+                        progress_q.put({"event": "progress", "data": {"stage": 2, "label": "Stage 2 扩展选片", "status": "running"}})
+
+                        # 恢复直觉
+                        current_version = None
+                        for ver in v2_item_local.get("versions", []):
+                            if ver["version_id"] == v2_item_local.get("current_version_id", ""):
+                                current_version = ver
+                                break
+                        if current_version:
+                            for st in current_version.get("steps", []):
+                                if st["event"] == "suggest.stage1.intuitions":
+                                    intuitions_data = st.get("data", {}).get("intuitions", [])
+                                    intuitions = [
+                                        suggest_mod.TopicIntuition(
+                                            title=it.get("title", ""),
+                                            angle=it.get("angle", ""),
+                                            rationale=it.get("rationale", ""),
+                                            inspired_indices=[],
+                                            inspired_photo_ids=it.get("inspired_photo_ids", []),
+                                        )
+                                        for it in intuitions_data
+                                    ]
+                                    break
+                        if not intuitions:
+                            progress_q.put({"event": "error", "data": {"message": "无法从当前版本恢复主题直觉，请从 Stage 1 重新运行"}})
+                            return
+
+                        photo_ids_for_expand = overrides.get("photo_ids", [])
+                        expanded = [photo_by_id[pid] for pid in photo_ids_for_expand if pid in photo_by_id]
+
+                        progress_q.put({"event": "progress", "data": {"stage": 3, "label": "Stage 3 选题提案", "status": "running"}})
+                        if expanded:
+                            proposals = suggest_mod._stage3_generate_proposals(
+                                cfg, intuitions, all_photos, tracer=tracer,
+                                expanded_photos_override={0: expanded},
+                            )
+                        else:
+                            proposals = suggest_mod._stage3_generate_proposals(
+                                cfg, intuitions, all_photos, tracer=tracer,
+                            )
+                        progress_q.put({"event": "progress", "data": {"stage": 3, "label": "Stage 3 选题提案", "status": "done"}})
+
+                    else:
+                        progress_q.put({"event": "progress", "data": {"stage": 3, "label": "Stage 3 选题提案", "status": "running"}})
+
+                        # 恢复直觉
+                        current_version = None
+                        for ver in v2_item_local.get("versions", []):
+                            if ver["version_id"] == v2_item_local.get("current_version_id", ""):
+                                current_version = ver
+                                break
+                        if current_version:
+                            for st in current_version.get("steps", []):
+                                if st["event"] == "suggest.stage1.intuitions":
+                                    intuitions_data = st.get("data", {}).get("intuitions", [])
+                                    intuitions = [
+                                        suggest_mod.TopicIntuition(
+                                            title=it.get("title", ""),
+                                            angle=it.get("angle", ""),
+                                            rationale=it.get("rationale", ""),
+                                            inspired_indices=[],
+                                            inspired_photo_ids=it.get("inspired_photo_ids", []),
+                                        )
+                                        for it in intuitions_data
+                                    ]
+                                    break
+                        if not intuitions:
+                            progress_q.put({"event": "error", "data": {"message": "无法从当前版本恢复主题直觉，请从 Stage 1 重新运行"}})
+                            return
+
+                        proposal_ov = overrides.get("proposal")
+                        photo_ids_ov_stage3 = overrides.get("photo_ids", [])
+
+                        if proposal_ov:
+                            proposals = suggest_mod._stage3_generate_proposals(
+                                cfg, intuitions, all_photos, tracer=tracer,
+                                proposal_overrides={0: proposal_ov},
+                            )
+                        else:
+                            expanded_stage3 = [photo_by_id[pid] for pid in photo_ids_ov_stage3 if pid in photo_by_id] if photo_ids_ov_stage3 else None
+                            prompt_ov_stage3 = overrides.get("prompt")
+                            kwargs = {}
+                            if expanded_stage3:
+                                kwargs["expanded_photos_override"] = {0: expanded_stage3}
+                            if prompt_ov_stage3:
+                                kwargs["prompt_overrides"] = {0: prompt_ov_stage3}
+                            proposals = suggest_mod._stage3_generate_proposals(
+                                cfg, intuitions, all_photos, tracer=tracer, **kwargs,
+                            )
+                        progress_q.put({"event": "progress", "data": {"stage": 3, "label": "Stage 3 选题提案", "status": "done"}})
+
+                    if not proposals:
+                        progress_q.put({"event": "error", "data": {"message": "重跑未能生成有效提案"}})
+                        return
+
+                    s_result = proposals[0]
+
+                    # 从 trace 重建步骤
+                    import chain.trace_replay as trace_replay
+                    replayed, expired = trace_replay.replay_trace(cfg.project_root, tracer.trace_id)
+                    steps_snapshots = [
+                        {
+                            "event": st.event, "label": st.label, "group": st.group,
+                            "stage": st.stage, "timestamp": st.timestamp, "data": st.data,
+                            "payload_content": st.payload_content, "payload_ref": st.payload_ref,
+                        }
+                        for st in replayed
+                    ] if not expired else []
+
+                    # 生成新版本号
+                    existing_versions = v2_item_local.get("versions", [])
+                    version_num = len(existing_versions)
+                    new_version_id = f"{item_id}-v{version_num}"
+                    parent_id = v2_item_local.get("current_version_id", None)
+
+                    new_version = {
+                        "version_id": new_version_id,
+                        "parent_version_id": parent_id,
+                        "created_at": generated_at,
+                        "created_from": "rerun",
+                        "modified_step": from_step,
+                        "trace_id": tracer.trace_id,
+                        "trace_expired": expired,
+                        "steps": steps_snapshots,
+                    }
+
+                    # 更新 v2 记录
+                    v2_item_local["title"] = s_result.title
+                    v2_item_local["angle"] = s_result.angle
+                    v2_item_local["rationale"] = s_result.rationale
+                    v2_item_local["photo_ids"] = s_result.photo_ids
+                    v2_item_local["photo_sequence"] = s_result.photo_sequence
+                    v2_item_local["intuition_source"] = s_result.intuition_source
+                    v2_item_local["versions"].append(new_version)
+                    v2_item_local["current_version_id"] = new_version_id
+
+                    with _suggest_history_lock:
+                        v2_all = _load_suggest_history(hist_dir)
+                        for i, v in enumerate(v2_all):
+                            if v["id"] == item_id:
+                                v2_all[i] = v2_item_local
+                                break
+                        else:
+                            v2_all.insert(0, v2_item_local)
+                        _save_suggest_history(v2_all, hist_dir)
+
+                    progress_q.put({"event": "complete", "data": v2_item_local})
+
+                except Exception as e:
+                    logger.exception("SSE rerun 失败")
+                    progress_q.put({"event": "error", "data": {"message": f"重跑失败: {e}"}})
+
+            thread = threading.Thread(target=run, daemon=True)
+            thread.start()
+
+            while True:
+                try:
+                    event = progress_q.get(timeout=120)
+                    yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+                    if event["event"] in ("complete", "error"):
+                        break
+                except queue.Empty:
+                    yield f"data: {json.dumps({'event': 'error', 'data': {'message': '重跑超时'}})}\n\n"
+                    break
+
+        return fastapi.responses.StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     # ── 评估 API ─────────────────────────────────────────
 

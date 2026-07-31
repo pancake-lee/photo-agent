@@ -126,6 +126,13 @@ async function handleSubmit() {
             已选择 {{ selectedPhotos.length }} 张照片。
             填写选题直觉（可选，留空则由 AI 自动生成）：
           </p>
+          <!-- 照片+直觉同时提供时的行为说明 -->
+          <div
+            v-if="selectedPhotos.length > 0 && hasIntuition"
+            class="photo-intuition-hint"
+          >
+            💡 你选择的照片将直接作为 AI 选题的候选池，AI 将在这些照片中选择最佳组合，跳过自动搜索匹配。
+          </div>
           <div class="form-field">
             <span class="form-label">标题</span>
             <NInput
@@ -194,7 +201,7 @@ async function handleSubmit() {
             <template #icon>
               <NIcon><CheckmarkOutline /></NIcon>
             </template>
-            {{ hasIntuition ? '生成选题' : 'AI 自动生成' }}
+            {{ hasIntuition && selectedPhotos.length > 0 ? '用我选的照片生成选题' : hasIntuition ? '生成选题' : 'AI 自动生成' }}
           </NButton>
         </NSpace>
       </NSpace>
@@ -229,5 +236,13 @@ async function handleSubmit() {
   font-size: 12px;
   font-weight: 600;
   color: var(--n-text-color-3);
+}
+.photo-intuition-hint {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  padding: 8px 12px;
+  background: var(--n-info-color-suppl);
+  border-radius: 6px;
+  line-height: 1.5;
 }
 </style>
