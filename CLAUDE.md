@@ -100,5 +100,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范
 - [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — 文档审阅规范
 - [docs/eval/baseline.md](docs/eval/baseline.md) — 评估基线指标
+- [docs/design/2026-08-01-topic-discovery-design.md](docs/design/2026-08-01-topic-discovery-design.md) — 主题发现统合设计文档
 - [docs/design/](docs/design/) — 方案设计文档
+- [docs/archive/v1.0.8.md](docs/archive/v1.0.8.md) — v1.0.8 版本归档（主题发现交互式管线）
 - [docs/archive/](docs/archive/) — 已完成版本的归档

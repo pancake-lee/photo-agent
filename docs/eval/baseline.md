@@ -55,7 +55,7 @@
 ### 2026-07-31 — 3.8 衍生优化设计方案文档评估
 
 - **总体评分**：7.3/10 ✅ 通过（阈值 6.0）
-- **评估对象**：`docs/design/2026-07-31-2-suggest-pipeline-optimizations.md`（五个优化任务的设计方案）
+- **评估对象**：`docs/archive/topic-discovery/2026-07-31-2-suggest-pipeline-optimizations.md`（五个优化任务的设计方案，已归档）
 - **文档质量**：（结构清晰度 8 / 决策合理性 8 / 验收可执行性 7 / 代码一致性 5 / 方案完整性 7）— 结构统一、决策有据，但 §7 代码质量清单中至少 3/5 条描述与实际代码不符
 - **新发现问题**：§7 三处代码描述不准确（prompt_idx 非重复赋值、_migrate_to_v2 非裸 except、_save_suggest_history 已捕获 OSError），backlog 与设计文档验收勾选状态不一致
 - **评估报告**：`data/eval_reports/eval-design-3.8-optimizations-2026-07-31.json`

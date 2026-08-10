@@ -71,7 +71,8 @@ Go（plogger）和 Python（自建）统一输出结构化 JSON 日志，`trace_
 
 ### 专题中枢
 
-- [docs/design/2026-07-27-5-topic-discovery-hub.md](design/2026-07-27-5-topic-discovery-hub.md) — 3.4 主题发现完整改进链中枢（6 轮评估闭环）
+- [docs/design/2026-08-01-topic-discovery-design.md](design/2026-08-01-topic-discovery-design.md) — 主题发现统合设计文档（当前功能架构 + 主要设计变更记录）
+- [docs/archive/topic-discovery/2026-07-27-5-topic-discovery-hub.md](archive/topic-discovery/2026-07-27-5-topic-discovery-hub.md) — 3.4 主题发现完整改进链中枢（时间线 + 10 轮评估 + 全部提交记录，已归档）
 
 ## 4. 关键设计决策
 

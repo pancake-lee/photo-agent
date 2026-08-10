@@ -241,11 +241,17 @@ descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go
 
 **选题建议（主题发现）**：
 
-- `POST /api/suggest/run` — 生成选题建议（三阶段编辑视角提案管道），结果自动保存
+- `POST /api/suggest/run` — 自动生成选题建议（三阶段编辑视角提案管道），结果自动保存
+- `POST /api/suggest/random-sample` — 随机采样照片 ID
+- `POST /api/suggest/manual-run` — 手动选题（自选照片 + 可选直觉）
 - `GET /api/suggest/history` — 历史选题列表（时间倒序）
-- `GET /api/suggest/history/:id` — 单条选题详情
+- `GET /api/suggest/history/:id` — 单条选题摘要
+- `GET /api/suggest/history/:id/detail` — 完整详情（含 versions + 管线步骤）
 - `DELETE /api/suggest/history/:id` — 删除选题记录
 - `PATCH /api/suggest/history/:id/rating` — 更新评分（1-5 星）
+- `PATCH /api/suggest/history/:id/version/:vid/switch` — 切换活跃版本
+- `POST /api/suggest/history/:id/rerun` — 从指定步骤重跑（返回完整 detail）
+- `POST /api/suggest/history/:id/rerun-stream` — SSE 进度推送版重跑
 
 **聚类分析**：
 
