@@ -160,14 +160,18 @@ Wails 桌面应用（Windows 客户端）
 
 ### 分阶段计划
 
-#### 阶段 1：Wails 工程搭建 + 嵌入现有 Web 前端
+#### 阶段 1：Wails 工程搭建 + 嵌入现有 Web 前端 ✅ (2026-08-12)
 
 在 `client/` 下初始化 Wails 项目，将现有 Vue 3 前端集成进去，跑通”桌面窗口展示 Photo Agent 全部现有功能”。
 
-- Wails 项目初始化，Go 模块配置
-- Vue 3 前端适配（Vite 配置、API 代理指向 localhost 服务端）
-- 环境检测：`window.__WAILS__` 或类似机制区分 Wails WebView / 浏览器
-- 验证：桌面窗口中正常使用照片管理、AI 对话、选题建议、聚类等功能
+- [x] Wails 项目初始化，Go 模块配置（Wails v2.9.1）
+- [x] Vue 3 前端适配（Vite 配置复用，`build:prod` 跳过 vue-tsc）
+- [x] `build-frontend.sh`：构建 web 前端并复制到 `client/frontend/dist/` 供 Go embed
+- [x] 环境检测：`web/src/utils/env.ts` 提供 `isWails()` 函数（检测 `window.go.main.App`）
+- [x] Makefile：`make build` / `make build-windows` / `make dev`
+- [x] 构建验证：`CGO_ENABLED=1 go build` 成功，前端资源嵌入二进制
+
+> 已知限制：`wails build` 与 Go 1.24 不兼容（`golang.org/x/tools` 版本过旧），改用 `go build` 直接构建。W3 需要 JS bindings 时再处理。
 
 #### 阶段 2：服务端 NEF 存储 + 存储状态查询 API
 

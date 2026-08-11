@@ -50,3 +50,8 @@ data/*
 .pids
 .env
 logs
+
+# Wails
+client/frontend/dist/*
+!client/frontend/dist/.gitkeep
+client/go.sum

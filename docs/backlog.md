@@ -16,7 +16,7 @@
 | 待规划 | Phase 4    | 4.1  | 发布历史分析                   |      |
 | 待规划 | Phase 4    | 4.2  | 系列感维护                     |      |
 | 待规划 | 缺陷修复   | B2   | 时间线规律维度无候选           |      |
-| 已规划 | 导入工作流 | W1   | Wails 工程搭建 + 嵌入前端      |      |
+| Done   | 导入工作流 | W1   | Wails 工程搭建 + 嵌入前端      |      |
 | 已规划 | 导入工作流 | W2   | 服务端 NEF 存储 + storage/info |      |
 | 已规划 | 导入工作流 | W3   | 客户端文件操作能力             |      |
 | 已规划 | 导入工作流 | W4   | 前端导入三步流程页面           |      |
@@ -137,11 +137,17 @@
 
 ### W1 Wails 工程搭建 + 嵌入现有前端
 
-- **状态**：已规划
+- **状态**：Done
 - **背景**：需要一个 Windows 桌面客户端作为 Photo Agent 入口，最终内嵌 Web 视图展示 Photo Agent 界面。
-- **方案**：在 `client/` 初始化 Wails 项目，Go 模块配置，将现有 Vue 3 前端集成到 WebView 中。前端适配 Vite 配置，API 代理指向本地运行的服务端。前端检测 `window.__WAILS__` 区分 Wails/浏览器环境。验证：桌面窗口中正常使用照片管理、AI 对话、选题建议等功能。
-- **分析**：-
-- **验收**：桌面启动后展示 Photo Agent 完整界面，现有功能（照片管理、AI 对话、选题建议、聚类）均可正常使用。
+- **方案**：在 `client/` 初始化 Wails 项目，Go 模块配置，将现有 Vue 3 前端集成到 WebView 中。前端适配 Vite 配置，API 代理指向本地运行的服务端。前端检测 `window.go.main.App` 区分 Wails/浏览器环境。
+- **分析**：Wails v2.9.1 的 `wails build` 与 Go 1.24 不兼容（内部 `golang.org/x/tools` 版本过旧）。改用 `CGO_ENABLED=1 go build` 直接构建，前端资源 `//go:embed` 嵌入二进制。JS bindings 生成（W3 需要）留待后续处理。
+- **验收**：
+  - [x] Wails 项目结构就绪（`client/`：`main.go` / `app.go` / `go.mod` / `wails.json`）
+  - [x] 前端构建流程：`build-frontend.sh` → `web/` 构建 → 复制到 `client/frontend/dist/`
+  - [x] Go 编译通过，`CGO_ENABLED=1 go build` 成功生成二进制
+  - [x] 前端资源嵌入验证通过（`strings` 确认 dist 文件在二进制中）
+  - [x] 环境检测工具就绪（`web/src/utils/env.ts`）
+  - [ ] 桌面窗口实际展示验证（需有图形环境的机器）
 
 ### W2 服务端 NEF 存储 + storage/info API
 

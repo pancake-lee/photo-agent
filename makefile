@@ -1,4 +1,4 @@
-.PHONY: start stop status
+.PHONY: start stop status client
 
 PID_DIR := .pids
 LOG_DIR := logs
@@ -99,12 +99,23 @@ status:
 	@ss -tlnp | grep -E "($(BACKEND_PORT)|$(AGENT_PORT)|$(WEB_PORT))" \
 		| awk '{print "  " $$4 " → " $$NF}' || echo "  (无)"
 
-		@# HTTP 健康检查
-		@echo ""
-		@echo "🏥 HTTP 健康检查:"
-		@curl -sf -o /dev/null http://localhost:$(BACKEND_PORT)/api/v1/health \
-			&& echo "  ● backend  ✓" || echo "  ○ backend  ✕"
-		@curl -sf -o /dev/null http://localhost:$(AGENT_PORT)/api/chat/health \
-			&& echo "  ● agent    ✓" || echo "  ○ agent    ✕"
-		@curl -sf -o /dev/null http://localhost:$(WEB_PORT) \
-			&& echo "  ● web      ✓" || echo "  ○ web      ✕"
+	@# HTTP 健康检查
+	@echo ""
+	@echo "🏥 HTTP 健康检查:"
+	@curl -sf -o /dev/null http://localhost:$(BACKEND_PORT)/api/v1/health \
+		&& echo "  ● backend  ✓" || echo "  ○ backend  ✕"
+	@curl -sf -o /dev/null http://localhost:$(AGENT_PORT)/api/chat/health \
+		&& echo "  ● agent    ✓" || echo "  ○ agent    ✕"
+	@curl -sf -o /dev/null http://localhost:$(WEB_PORT) \
+		&& echo "  ● web      ✓" || echo "  ○ web      ✕"
+
+# ── 构建 Windows 客户端 ───────────────────────────────────
+client:
+	@# 1. 构建 web 前端
+	cd web && pnpm build:prod
+	@# 2. 复制到 client 嵌入目录
+	@rm -rf client/frontend/dist
+	@cp -r web/dist client/frontend/dist
+	@# 3. 交叉编译 Windows exe
+	$(MAKE) -C client build-windows
+	@echo "✅ 客户端构建完成: bin/photo-agent.exe"
