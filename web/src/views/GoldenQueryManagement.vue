@@ -24,7 +24,7 @@ import {
   CloudUploadOutline,
   BarChartOutline,
 } from '@vicons/ionicons5'
-import { AGENT_BASE } from '../config'
+import { getAgentBase, getApiBase } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 
@@ -98,7 +98,7 @@ const previewShow = ref(false)
 const previewImg = ref('')
 
 function openPreview(uuid: string) {
-  previewImg.value = `/api/v1/photos/${uuid}/image`
+  previewImg.value = `${getApiBase()}/photos/${uuid}/image`
   previewShow.value = true
 }
 
@@ -107,7 +107,7 @@ function openPreview(uuid: string) {
 async function fetchItems() {
   loading.value = true
   try {
-    const resp = await fetch(`${AGENT_BASE}/golden-queries`)
+    const resp = await fetch(`${getAgentBase()}/golden-queries`)
     if (resp.ok) {
       items.value = await resp.json()
     }
@@ -123,7 +123,7 @@ async function fetchItems() {
 
 async function handleDelete(id: string) {
   try {
-    const resp = await fetch(`${AGENT_BASE}/golden-queries/${id}`, {
+    const resp = await fetch(`${getAgentBase()}/golden-queries/${id}`, {
       method: 'DELETE',
     })
     if (resp.ok) {
@@ -189,7 +189,7 @@ async function handleImport(event: Event) {
       message.error('文件格式错误：应为 JSON 数组')
       return
     }
-    const resp = await fetch(`${AGENT_BASE}/golden-queries/import`, {
+    const resp = await fetch(`${getAgentBase()}/golden-queries/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -221,7 +221,7 @@ async function handleEvaluate() {
   evalModalVisible.value = true
   evalResult.value = null
   try {
-    const resp = await fetch(`${AGENT_BASE}/golden-queries/evaluate`, {
+    const resp = await fetch(`${getAgentBase()}/golden-queries/evaluate`, {
       method: 'POST',
     })
     if (resp.ok) {

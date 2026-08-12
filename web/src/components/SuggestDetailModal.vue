@@ -12,10 +12,11 @@ import {
   NTooltip,
   useMessage,
 } from 'naive-ui'
-import { CloseOutline, RefreshOutline, AlertCircleOutline } from '@vicons/ionicons5'
+import { AlertCircleOutline } from '@vicons/ionicons5'
 import { useSuggestDetail } from '../composables/useSuggestDetail'
 import { STEP_GROUP_LABELS } from '../types/suggest'
 import type { PipelineStep } from '../types/suggest'
+import { getApiBase } from '../config'
 import SuggestStepCard from './SuggestStepCard.vue'
 import SuggestStepEditor from './SuggestStepEditor.vue'
 
@@ -52,10 +53,6 @@ watch(() => [props.itemId, props.visible], ([id, vis]) => {
     loadDetail(id as string)
   }
 })
-
-function handleClose() {
-  emit('update:visible', false)
-}
 
 function handleStepEdit(step: PipelineStep) {
   editingStep.value = step
@@ -193,7 +190,7 @@ const CATEGORY_LABELS: Record<string, string> = {
                 <template #trigger>
                   <div class="thumb-item">
                     <img
-                      :src="`/api/v1/photos/${pid}/image`"
+                      :src="`${getApiBase()}/photos/${pid}/image`"
                       :alt="pid.slice(0, 8)"
                       loading="lazy"
                       @error="(e: Event) => { (e.target as HTMLImageElement).style.display = 'none' }"

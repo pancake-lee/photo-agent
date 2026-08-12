@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
-import { DEFAULT_PAGE_SIZE } from '../config'
+import { DEFAULT_PAGE_SIZE, getApiBase } from '../config'
 import { photoApi, timelineApi } from '../backend-sdk-client'
-import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse, ApiGetPhotoStatsResponse, ApiDeletePhotoResponse, ApiListTimelinesResponse } from '../../backend-sdk/api'
-import type { PhotoListItem, PhotoDetail, PhotoListResponse, PhotoStats } from '../types/photo'
+import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse, ApiGetPhotoStatsResponse, ApiListTimelinesResponse } from '../../backend-sdk/api'
+import type { PhotoListItem, PhotoDetail, PhotoStats } from '../types/photo'
 
 // ------------------------------------------------------------------ #
 // 适配器：SDK camelCase → 现有 snake_case 类型
@@ -31,7 +31,7 @@ function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
     altitude: item.altitude ?? null,
     imported_at: item.importedAt ?? '',
     has_description: item.hasDescription ?? false,
-    thumbnail_url: item.thumbnailUrl ?? '',
+    thumbnail_url: item.id ? `${getApiBase()}/photos/${item.id}/image` : '',
   }
 }
 
@@ -59,8 +59,8 @@ function adaptPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetail {
     altitude: photo?.altitude ?? null,
     imported_at: photo?.importedAt ?? '',
     has_description: photo?.hasDescription ?? false,
-    thumbnail_url: photo?.thumbnailUrl ?? '',
-    image_url: resp.imageUrl ?? '',
+    thumbnail_url: photo?.id ? `${getApiBase()}/photos/${photo.id}/image` : '',
+    image_url: photo?.id ? `${getApiBase()}/photos/${photo.id}/image` : '',
     description_model: resp.descriptionModel ?? '',
     description_time: resp.descriptionTime ?? '',
   }
@@ -241,7 +241,7 @@ export function usePhotos() {
 
   // 删除照片
   async function deletePhoto(photoId: string): Promise<void> {
-    const resp: ApiDeletePhotoResponse = await photoApi.photoServiceDeletePhoto(photoId)
+    await photoApi.photoServiceDeletePhoto(photoId)
     // SDK 调用成功即表示删除成功（异常由 SDK 抛出）
     // 从本地列表移除
     photos.value = photos.value.filter((p) => p.id !== photoId)

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { AGENT_BASE } from '../config'
+import { getAgentBase } from '../config'
 import type { EmbedStats, EmbedInfo } from '../types/photo'
 
 // 全局嵌入状态（跨组件共享）
@@ -17,7 +17,7 @@ export function useEmbedStatus() {
       return
     }
     try {
-      const resp = await fetch(`${AGENT_BASE}/embed/photos/status`, {
+      const resp = await fetch(`${getAgentBase()}/embed/photos/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: photoIds }),
@@ -44,7 +44,7 @@ export function useEmbedStatus() {
    */
   async function fetchEmbedStats() {
     try {
-      const resp = await fetch(`${AGENT_BASE}/embed/stats`)
+      const resp = await fetch(`${getAgentBase()}/embed/stats`)
       if (!resp.ok) {
         embedStats.value = null
         return
@@ -66,7 +66,7 @@ export function useEmbedStatus() {
    */
   async function fetchEmbedInfo(photoId: string): Promise<EmbedInfo | null> {
     try {
-      const resp = await fetch(`${AGENT_BASE}/embed/photos/${photoId}`)
+      const resp = await fetch(`${getAgentBase()}/embed/photos/${photoId}`)
       if (!resp.ok) return null
       return await resp.json()
     } catch {

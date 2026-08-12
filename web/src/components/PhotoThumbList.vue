@@ -12,6 +12,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { NIcon } from 'naive-ui'
 import { ImageOutline } from '@vicons/ionicons5'
+import { getApiBase } from '../config'
 
 // ── 通用照片引用类型 ──
 // 与 EvalPhotoItem / ClusterPhoto 兼容：优先使用 uuid，回退到 photo_id
@@ -38,7 +39,7 @@ const emit = defineEmits<{
 }>()
 
 function imageUrl(uuid: string): string {
-  return uuid ? `/api/v1/photos/${uuid}/image` : ''
+  return uuid ? `${getApiBase()}/photos/${uuid}/image` : ''
 }
 
 /** 获取照片的 UUID（优先 uuid 字段，回退 photo_id） */

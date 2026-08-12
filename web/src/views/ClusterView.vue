@@ -27,7 +27,7 @@ import {
   PlayOutline,
   AppsOutline,
 } from '@vicons/ionicons5'
-import { AGENT_BASE } from '../config'
+import { getAgentBase, getApiBase } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 
@@ -190,7 +190,7 @@ const previewShow = ref(false)
 const previewImg = ref('')
 
 function openPreview(uuid: string) {
-  previewImg.value = `/api/v1/photos/${uuid}/image`
+  previewImg.value = `${getApiBase()}/photos/${uuid}/image`
   previewShow.value = true
 }
 
@@ -199,7 +199,7 @@ function openPreview(uuid: string) {
 async function fetchResults() {
   loading.value = true
   try {
-    const resp = await fetch(`${AGENT_BASE}/cluster/results`)
+    const resp = await fetch(`${getAgentBase()}/cluster/results`)
     if (resp.ok) {
       results.value = await resp.json()
     }
@@ -217,7 +217,7 @@ async function handleRunCluster() {
   running.value = true
   showParamModal.value = false
   try {
-    const resp = await fetch(`${AGENT_BASE}/cluster/run`, {
+    const resp = await fetch(`${getAgentBase()}/cluster/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(paramForm.value),
@@ -243,7 +243,7 @@ async function handleRunCluster() {
 
 async function handleDelete(id: string) {
   try {
-    const resp = await fetch(`${AGENT_BASE}/cluster/results/${id}`, {
+    const resp = await fetch(`${getAgentBase()}/cluster/results/${id}`, {
       method: 'DELETE',
     })
     if (resp.ok) {
@@ -265,7 +265,7 @@ async function handleGenerateTheme(resultId: string, clusterId: number) {
   generatingThemeId.value = clusterId
   try {
     const resp = await fetch(
-      `${AGENT_BASE}/cluster/results/${resultId}/clusters/${clusterId}/generate-theme`,
+      `${getAgentBase()}/cluster/results/${resultId}/clusters/${clusterId}/generate-theme`,
       { method: 'POST' },
     )
     if (resp.ok) {
@@ -306,7 +306,7 @@ async function handleEvaluateThemes(resultId: string, clusterIds?: number[]) {
     } else {
       body.cluster_ids = null
     }
-    const resp = await fetch(`${AGENT_BASE}/cluster/results/${resultId}/evaluate-themes`, {
+    const resp = await fetch(`${getAgentBase()}/cluster/results/${resultId}/evaluate-themes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -333,17 +333,13 @@ async function handleSingleEval(resultId: string, clusterId: number) {
 
   try {
     const resp = await fetch(
-      `${AGENT_BASE}/cluster/results/${resultId}/clusters/${clusterId}/evaluate-theme`,
+      `${getAgentBase()}/cluster/results/${resultId}/clusters/${clusterId}/evaluate-theme`,
       { method: 'POST' },
     )
     if (resp.ok) {
       const singleResult = await resp.json()
       // 将单簇结果合并到 evalReport 中
       if (evalReport.value) {
-        // 计算旧有该簇失败条数
-        const oldFailuresForCluster = evalReport.value.heuristic.failures
-          .filter(f => f.cluster_id === clusterId).length
-
         // 构建新 failures 列表：移除旧有该簇的 failures，加入新的 failures
         const newFailures: EvalRuleResult[] = evalReport.value.heuristic.failures
           .filter(f => f.cluster_id !== clusterId)
@@ -427,7 +423,7 @@ async function handleConfirm() {
         : null
       const body: Record<string, any> = { cluster_ids: clusterIds }
       const resp = await fetch(
-        `${AGENT_BASE}/cluster/results/${detailItem.value.id}/generate-all-themes`,
+        `${getAgentBase()}/cluster/results/${detailItem.value.id}/generate-all-themes`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -437,8 +433,8 @@ async function handleConfirm() {
       if (resp.ok) {
         detailItem.value = await resp.json()
         // 同步更新列表
-        const idx = results.value.findIndex(r => r.id === detailItem.value!.id)
-        if (idx >= 0 && detailItem.value.clusters) {
+        const idx = results.value.findIndex(r => r.id === detailItem.value?.id)
+        if (idx >= 0 && detailItem.value?.clusters) {
           results.value[idx].cluster_labels = detailItem.value.clusters.map((c: ClusterItem) => ({
             cluster_id: c.cluster_id,
             label: c.label,
@@ -478,7 +474,7 @@ async function showDetail(row: ClusterResultSummary) {
   evalReport.value = null
   expandedClusters.value = new Set()
   try {
-    const resp = await fetch(`${AGENT_BASE}/cluster/results/${row.id}`)
+    const resp = await fetch(`${getAgentBase()}/cluster/results/${row.id}`)
     if (resp.ok) {
       detailItem.value = await resp.json()
     } else {

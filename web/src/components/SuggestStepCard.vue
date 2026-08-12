@@ -4,7 +4,6 @@ import {
   NCard,
   NButton,
   NIcon,
-  NTag,
   NSpace,
   NCode,
   NTooltip,
@@ -18,6 +17,7 @@ import {
 } from '@vicons/ionicons5'
 import type { PipelineStep } from '../types/suggest'
 import { isStepEditable } from '../types/suggest'
+import { getApiBase } from '../config'
 
 const props = defineProps<{
   step: PipelineStep
@@ -85,7 +85,7 @@ const diversityDetails = computed<Array<{
 
 // 照片缩略图 URL
 function thumbUrl(photoId: string): string {
-  return photoId ? `/api/v1/photos/${photoId}/image` : ''
+  return photoId ? `${getApiBase()}/photos/${photoId}/image` : ''
 }
 
 function summaryText(): string {
@@ -128,11 +128,6 @@ function summaryText(): string {
 
 function handleEdit() {
   emit('edit', props.step)
-}
-
-// 缩略图渲染工具函数
-function renderThumbItem(pid: string, extraClass?: string) {
-  return { pid, extraClass: extraClass || '' }
 }
 </script>
 

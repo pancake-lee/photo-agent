@@ -7,7 +7,6 @@ import {
   NInput,
   NForm,
   NFormItem,
-  NSelect,
   useMessage,
 } from 'naive-ui'
 import type { PipelineStep } from '../types/suggest'

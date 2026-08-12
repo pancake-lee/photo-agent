@@ -6,7 +6,7 @@ import type {
   SendMessageResponse,
 } from '../types/chat'
 
-const API_PREFIX = '/api/chat'
+import { getAgentBase } from '../config'
 
 // ── 响应式状态 ──
 
@@ -19,7 +19,7 @@ const isLoading = ref(false)
 
 async function fetchSessions() {
   try {
-    const resp = await fetch(`${API_PREFIX}/sessions`)
+    const resp = await fetch(`${getAgentBase()}/chat/sessions`)
     if (resp.ok) {
       sessions.value = await resp.json()
     }
@@ -29,7 +29,7 @@ async function fetchSessions() {
 }
 
 async function createSession(): Promise<string> {
-  const resp = await fetch(`${API_PREFIX}/sessions`, {
+  const resp = await fetch(`${getAgentBase()}/chat/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
@@ -45,7 +45,7 @@ async function createSession(): Promise<string> {
 async function loadSession(sessionId: string) {
   isLoading.value = true
   try {
-    const resp = await fetch(`${API_PREFIX}/sessions/${sessionId}`)
+    const resp = await fetch(`${getAgentBase()}/chat/sessions/${sessionId}`)
     if (!resp.ok) {
       throw new Error('会话不存在')
     }
@@ -82,7 +82,7 @@ async function sendMessage(question: string): Promise<SendMessageResponse> {
 
   try {
     const resp = await fetch(
-      `${API_PREFIX}/sessions/${sessionId}/messages`,
+      `${getAgentBase()}/chat/sessions/${sessionId}/messages`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,7 +122,7 @@ async function sendMessage(question: string): Promise<SendMessageResponse> {
 }
 
 async function deleteSession(sessionId: string) {
-  const resp = await fetch(`${API_PREFIX}/sessions/${sessionId}`, {
+  const resp = await fetch(`${getAgentBase()}/chat/sessions/${sessionId}`, {
     method: 'DELETE',
   })
   if (!resp.ok) {

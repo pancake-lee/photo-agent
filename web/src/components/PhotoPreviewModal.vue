@@ -22,10 +22,6 @@ const emit = defineEmits<{
   'update:show': [value: boolean]
 }>()
 
-function close() {
-  emit('update:show', false)
-}
-
 function handleDownload() {
   fetch(props.imageUrl)
     .then(res => res.blob())

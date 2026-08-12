@@ -12,6 +12,11 @@ import (
 var assets embed.FS
 
 func main() {
+	// WebView2 DevTools：通过 Wails build tags (devtools + debug) 启用
+	// - 右键 → 检查 / Inspect
+	// - F12 / Ctrl+Shift+I 打开 DevTools
+	// - 启动时自动弹出 DevTools 窗口
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
@@ -21,8 +26,9 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 16, G: 16, B: 20, A: 1},
-		OnStartup:        app.startup,
+		BackgroundColour:         &options.RGBA{R: 16, G: 16, B: 20, A: 1},
+		EnableDefaultContextMenu: true,
+		OnStartup:                app.startup,
 		Bind: []interface{}{
 			app,
 		},

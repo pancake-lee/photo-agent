@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from 'vue'
-import { AGENT_BASE, EMBED_POLL_INTERVAL } from '../config'
+import { getAgentBase, EMBED_POLL_INTERVAL } from '../config'
 import type { EmbedQueueStatus } from '../types/photo'
 
 // Embed 队列全局状态
@@ -19,7 +19,7 @@ let usageCount = 0
 export function useEmbedQueue() {
   async function fetchStatus() {
     try {
-      const resp = await fetch(`${AGENT_BASE}/embed/queue/status`)
+      const resp = await fetch(`${getAgentBase()}/embed/queue/status`)
       if (!resp.ok) return
       const data: EmbedQueueStatus = await resp.json()
       const wasRunning = status.value.running
@@ -56,7 +56,7 @@ export function useEmbedQueue() {
   }
 
   async function startQueue(force = false) {
-    const resp = await fetch(`${AGENT_BASE}/embed/queue/start`, {
+    const resp = await fetch(`${getAgentBase()}/embed/queue/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ force }),
@@ -74,7 +74,7 @@ export function useEmbedQueue() {
 
   async function stopQueue() {
     try {
-      await fetch(`${AGENT_BASE}/embed/queue/stop`, { method: 'POST' })
+      await fetch(`${getAgentBase()}/embed/queue/stop`, { method: 'POST' })
       stopPolling()
       status.value = { running: false, total: 0, completed: 0, failed: 0 }
     } catch (e) {
@@ -83,7 +83,7 @@ export function useEmbedQueue() {
   }
 
   async function enqueuePhoto(photoId: string) {
-    const resp = await fetch(`${AGENT_BASE}/embed/photos/${photoId}`, {
+    const resp = await fetch(`${getAgentBase()}/embed/photos/${photoId}`, {
       method: 'POST',
     })
     if (!resp.ok) throw new Error('入队失败')

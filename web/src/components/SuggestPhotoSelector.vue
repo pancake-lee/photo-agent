@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { NButton, NInput, NIcon, NSpin, NEmpty, useMessage } from 'naive-ui'
 import { ShuffleOutline, SearchOutline } from '@vicons/ionicons5'
-import { AGENT_BASE } from '../config'
+import { getAgentBase, getApiBase } from '../config'
 
 interface PhotoItem {
   photo_id: string
@@ -58,7 +58,7 @@ async function loadPhotos() {
     let page = 1
     const items: PhotoItem[] = []
     while (true) {
-      const resp = await fetch(`/api/v1/photos?page=${page}&page_size=200`)
+      const resp = await fetch(`${getApiBase()}/photos?page=${page}&page_size=200`)
       if (!resp.ok) break
       const data = await resp.json()
       const list = data.items || data
@@ -98,7 +98,7 @@ function togglePhoto(pid: string) {
 
 async function handleRandomSample() {
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/random-sample`, { method: 'POST' })
+    const resp = await fetch(`${getAgentBase()}/suggest/random-sample`, { method: 'POST' })
     if (resp.ok) {
       const data = await resp.json()
       const ids: Array<{ photo_id: string; description: string }> = data.photos || []
@@ -111,7 +111,7 @@ async function handleRandomSample() {
 }
 
 function imageUrl(uuid: string): string {
-  return uuid ? `/api/v1/photos/${uuid}/image` : ''
+  return uuid ? `${getApiBase()}/photos/${uuid}/image` : ''
 }
 
 function goToPage(page: number) {

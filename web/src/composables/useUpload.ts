@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { API_BASE } from '../config'
+import { getApiBase } from '../config'
 import type {
   UploadFile,
   UploadResponse,
@@ -79,7 +79,7 @@ export function useUpload() {
       formData.append('conflict_resolution', resolution)
     }
 
-    const resp = await fetch(`${API_BASE}/photos/upload`, {
+    const resp = await fetch(`${getApiBase()}/photos/upload`, {
       method: 'POST',
       body: formData,
     })

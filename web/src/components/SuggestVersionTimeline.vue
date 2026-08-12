@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NTag, NIcon, NButton, NCheckbox, NTooltip } from 'naive-ui'
+import { NTag, NIcon, NButton, NCheckbox } from 'naive-ui'
 import { CheckmarkCircleOutline, GitBranchOutline, GitCompareOutline, CloseOutline } from '@vicons/ionicons5'
 import type { SuggestVersion } from '../types/suggest'
 

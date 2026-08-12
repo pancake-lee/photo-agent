@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NTag, NIcon, NEmpty, NDivider } from 'naive-ui'
+import { NIcon, NEmpty, NDivider } from 'naive-ui'
 import { AddCircleOutline, RemoveCircleOutline, SwapHorizontalOutline } from '@vicons/ionicons5'
 import type { SuggestVersion, PipelineStep } from '../types/suggest'
 
@@ -8,33 +8,6 @@ const props = defineProps<{
   versionA: SuggestVersion | null
   versionB: SuggestVersion | null
 }>()
-
-// 文本 diff：简单的 word-level 对比
-function diffText(a: string, b: string): { added: string[]; removed: string[]; same: string[] } {
-  const aWords = a.split('')
-  const bWords = b.split('')
-  const added: string[] = []
-  const removed: string[] = []
-  const same: string[] = []
-
-  let i = 0; let j = 0
-  while (i < aWords.length || j < bWords.length) {
-    if (i < aWords.length && j < bWords.length && aWords[i] === bWords[j]) {
-      same.push(aWords[i])
-      i++; j++
-    } else {
-      if (i < aWords.length) {
-        removed.push(aWords[i])
-        i++
-      }
-      if (j < bWords.length) {
-        added.push(bWords[j])
-        j++
-      }
-    }
-  }
-  return { added, removed, same }
-}
 
 // 版本标签
 function versionLabel(v: SuggestVersion): string {
@@ -117,8 +90,10 @@ const diff = computed(() => {
   }
 })
 
+import { getApiBase } from '../config'
+
 function thumbUrl(photoId: string): string {
-  return photoId ? `/api/v1/photos/${photoId}/image` : ''
+  return photoId ? `${getApiBase()}/photos/${photoId}/image` : ''
 }
 </script>
 

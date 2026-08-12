@@ -18,6 +18,7 @@ import {
 import { TrashOutline, SendOutline, ImageOutline, DownloadOutline, BookmarkOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
+import { getAgentBase } from '../config'
 import type { PhotoRef } from '../types/chat'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 
@@ -164,12 +165,6 @@ function renderMarkdown(text: string): string {
   return typeof result === 'string' ? result : ''
 }
 
-function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
-}
-
 // ── 图片预览与下载 ──
 
 const previewVisible = ref(false)
@@ -213,7 +208,7 @@ async function handleGoldenSave() {
   if (!goldenQueryText.value.trim() || goldenPhotoIds.value.length === 0) return
   goldenSaving.value = true
   try {
-    const resp = await fetch('/api/golden-queries', {
+    const resp = await fetch(`${getAgentBase()}/golden-queries`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -369,7 +364,7 @@ const hasMessages = computed(() => messages.value.length > 0)
                 <div class="attachments-header">📎 相关照片 ({{ msg.photos.length }})</div>
                 <div class="attachments-list">
                   <div
-                    v-for="(photo, idx) in msg.photos"
+                    v-for="photo in msg.photos"
                     :key="photo.photo_id"
                     class="attachment-item"
                   >

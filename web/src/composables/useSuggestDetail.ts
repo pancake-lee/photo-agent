@@ -1,7 +1,6 @@
 import { ref, computed } from 'vue'
-import { AGENT_BASE } from '../config'
+import { getAgentBase } from '../config'
 import type {
-  HistoryItem,
   SuggestHistoryDetail,
   SuggestVersion,
   PipelineStep,
@@ -58,7 +57,7 @@ async function loadDetail(itemId: string): Promise<SuggestHistoryDetail | null> 
   detailLoading.value = true
   detailError.value = ''
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/history/${itemId}/detail`)
+    const resp = await fetch(`${getAgentBase()}/suggest/history/${itemId}/detail`)
     if (resp.ok) {
       const data = await resp.json()
       detail.value = data
@@ -79,7 +78,7 @@ async function switchVersion(itemId: string, versionId: string): Promise<boolean
   if (!detail.value) return false
   try {
     const resp = await fetch(
-      `${AGENT_BASE}/suggest/history/${itemId}/version/${versionId}/switch`,
+      `${getAgentBase()}/suggest/history/${itemId}/version/${versionId}/switch`,
       { method: 'PATCH' }
     )
     if (resp.ok) {
@@ -97,7 +96,7 @@ async function rerunFromStep(itemId: string, fromStep: string, overrides: Record
   rerunLoading.value = true
   try {
     const body: RerunRequest = { from_step: fromStep, overrides }
-    const resp = await fetch(`${AGENT_BASE}/suggest/history/${itemId}/rerun`, {
+    const resp = await fetch(`${getAgentBase()}/suggest/history/${itemId}/rerun`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -129,7 +128,7 @@ async function rerunFromStepStream(
 
   try {
     const body: RerunRequest = { from_step: fromStep, overrides }
-    const resp = await fetch(`${AGENT_BASE}/suggest/history/${itemId}/rerun-stream`, {
+    const resp = await fetch(`${getAgentBase()}/suggest/history/${itemId}/rerun-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -192,7 +191,7 @@ async function rerunFromStepStream(
 async function manualRun(req: ManualSuggestRequest): Promise<SuggestHistoryDetail | null> {
   manualLoading.value = true
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/manual-run`, {
+    const resp = await fetch(`${getAgentBase()}/suggest/manual-run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
@@ -215,7 +214,7 @@ async function manualRun(req: ManualSuggestRequest): Promise<SuggestHistoryDetai
 
 async function randomSample(): Promise<RandomSampleResult | null> {
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/random-sample`, { method: 'POST' })
+    const resp = await fetch(`${getAgentBase()}/suggest/random-sample`, { method: 'POST' })
     if (resp.ok) {
       return await resp.json()
     }

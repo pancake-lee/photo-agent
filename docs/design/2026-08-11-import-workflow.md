@@ -173,6 +173,43 @@ Wails 桌面应用（Windows 客户端）
 
 > 已知限制：`wails build` 与 Go 1.24 不兼容（`golang.org/x/tools` 版本过旧），改用 `go build` 直接构建。W3 需要 JS bindings 时再处理。
 
+### DevTools 调试方案 ✅ (2026-08-12)
+
+Wails 桌面应用内调试手段的选型与落地。
+
+#### 右键 → 检查（Inspect）— 已解决
+
+WebView2 的上下文菜单在检测到页面有文字被选中时，会包含"检查"（Inspect）选项，否则不显示。初期尝试在 `contextmenu` 或 `mousedown` 事件中临时创建零宽空格选区，但 WebView2 在 `mouseup`→`contextmenu` 之间会清除程序化创建的选区，导致不稳定。
+
+**最终方案：持久幽灵选区（persistent ghost selection）**
+
+核心发现：WebView2 只清除"本次右键序列中"创建的选区，不会清除上一次交互留下的选区。"双击右键"之所以稳定，正是因为第一次点击的选区残留到了第二次。
+
+实现（`web/src/App.vue` onMounted）：
+
+1. 维护一个 1×1px、`pointer-events:none` 的 span 元素（ghost），内含零宽空格
+2. 页面加载时在 (0,0) 预置 ghost 并选中
+3. 每次 `mousedown`：
+   - 右键：始终将 ghost 移到点击位置并选中
+   - 左键：仅在无真实选区时更新 ghost 位置（用户拖选文字时不干预）
+4. `contextmenu` 兜底：万一选区仍被清除，最后补救一次
+5. ghost 不清理，只更新位置，始终保持在 DOM 中
+
+这样 ghost 始终是"上次点击留下的选区"，WebView2 不会清除它，右键菜单稳定包含"检查"。
+
+#### 键盘快捷键（F12 / Ctrl+Shift+I）— 已放弃
+
+尝试过的方案均无效：
+
+- Wails `AcceleratorKeyCallback` 仅处理 `Ctrl+Shift+F12`，不响应 F12 或 Ctrl+Shift+I
+- WebView2 `PutAreDevToolsEnabled(true)` 理论上应启用原生快捷键，实际不生效
+- Go 层通过 `ICoreWebView2Settings::put_AreDevToolsEnabled` 同样无效
+- 前端 `keydown` 监听无法触发原生 DevTools（JS 无权调用）
+
+**放弃原因**：WebView2 的键盘快捷键由底层 Chromium 控制，Wails 的 Go API 和前端 JS 均无法接管或触发。当前右键 → 检查已稳定可用，投入产出比不支持继续深入。
+
+> 如果未来必须支持快捷键，可能的探索方向：(1) 在 Wails Go 层注册全局热键（Windows API `RegisterHotKey`），收到热键后调用 WebView2 COM 接口 `OpenDevToolsWindow()`；(2) 等待 Wails v3 对 WebView2 设置的更完整暴露。
+
 #### 阶段 2：服务端 NEF 存储 + 存储状态查询 API
 
 在现有 Go 后端新增两个能力：NEF 文件上传（仅存储）、存储目录状态查询。

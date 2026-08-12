@@ -24,7 +24,7 @@ import {
   FlashOutline,
   InformationCircleOutline,
 } from '@vicons/ionicons5'
-import { AGENT_BASE } from '../config'
+import { getAgentBase, getApiBase } from '../config'
 import SuggestDetailModal from '../components/SuggestDetailModal.vue'
 import SuggestManualModal from '../components/SuggestManualModal.vue'
 
@@ -104,7 +104,7 @@ onMounted(() => {
 
 async function loadHistory() {
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/history`)
+    const resp = await fetch(`${getAgentBase()}/suggest/history`)
     if (resp.ok) {
       history.value = await resp.json()
     } else {
@@ -117,7 +117,7 @@ async function loadHistory() {
 }
 
 function imageUrl(uuid: string): string {
-  return uuid ? `/api/v1/photos/${uuid}/image` : ''
+  return uuid ? `${getApiBase()}/photos/${uuid}/image` : ''
 }
 
 // ── 运行选题建议 ──
@@ -125,7 +125,7 @@ function imageUrl(uuid: string): string {
 async function handleRunSuggest() {
   loading.value = true
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/run`, {
+    const resp = await fetch(`${getAgentBase()}/suggest/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     })
@@ -160,7 +160,7 @@ async function handleRate(item: HistoryItem, star: number) {
   const oldRating = item.rating
   item.rating = newRating
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/history/${item.id}/rating`, {
+    const resp = await fetch(`${getAgentBase()}/suggest/history/${item.id}/rating`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rating: newRating }),
@@ -180,7 +180,7 @@ async function handleRate(item: HistoryItem, star: number) {
 async function handleDelete(item: HistoryItem) {
   deletingId.value = item.id
   try {
-    const resp = await fetch(`${AGENT_BASE}/suggest/history/${item.id}`, {
+    const resp = await fetch(`${getAgentBase()}/suggest/history/${item.id}`, {
       method: 'DELETE',
     })
     if (resp.ok) {
