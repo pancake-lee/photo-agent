@@ -5,6 +5,7 @@ import (
 
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/service"
+	"backend/internal/pkg/db"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/pconfig"
@@ -22,6 +23,11 @@ func main() {
 	plogger.InitFromConfig(*l)
 	pconfig.Log()
 	pdb.MustInitSqliteByConfig()
+
+	// 数据库迁移（幂等）
+	if err := db.Migrate(); err != nil {
+		plogger.Fatalf("DB migrate failed: %v", err)
+	}
 
 	// 加载服务配置
 	err := pconfig.Scan(&conf.C)
@@ -41,6 +47,7 @@ func main() {
 	var embeddingSvr service.EmbeddingServer
 	openapiSvr := service.NewOpenAPIServer("./openapi.yaml")
 	var healthSvr service.HealthServer
+	var storageSvr service.StorageServer
 
 	papp.SetIgnoreAuth() // 开发阶段，忽略 auth 验证
 	papp.RunKratosApp(
@@ -52,5 +59,6 @@ func main() {
 		&querySvr,
 		&embeddingSvr,
 		openapiSvr,
-		&healthSvr)
+		&healthSvr,
+		&storageSvr)
 }

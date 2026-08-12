@@ -3,6 +3,7 @@ CREATE TABLE photos (
   id TEXT NOT NULL PRIMARY KEY,
   filename TEXT NOT NULL DEFAULT '',
   file_path TEXT NOT NULL DEFAULT '',
+  file_type TEXT NOT NULL DEFAULT 'jpg',
   timeline TEXT NOT NULL DEFAULT '',
   tags TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"backend/internal/defaultService/conf"
@@ -195,9 +196,16 @@ func (s *PhotoServer) DeletePhoto(
 		return nil, ctx.Log.LogErr(err)
 	}
 
-	fullPath := filepath.Join(conf.C.Storage.PhotoPath, photo.FilePath)
-	if err := os.Remove(fullPath); err != nil && !os.IsNotExist(err) {
-		plogger.Warnf("Failed to delete photo file %s: %v", fullPath, err)
+	// 删除源文件（PhotoSrc）和缩略图（PhotoPath）
+	srcPath := filepath.Join(conf.C.Storage.PhotoSrc, photo.FilePath)
+	if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
+		plogger.Warnf("Failed to delete source file %s: %v", srcPath, err)
+	}
+	if photo.FileType != "nef" {
+		thumbPath := filepath.Join(conf.C.Storage.PhotoPath, photo.FilePath)
+		if err := os.Remove(thumbPath); err != nil && !os.IsNotExist(err) {
+			plogger.Warnf("Failed to delete thumbnail %s: %v", thumbPath, err)
+		}
 	}
 
 	return &api.DeletePhotoResponse{
@@ -210,7 +218,7 @@ func (s *PhotoServer) DeletePhoto(
 // 原始 HTTP 路由 handler（非 proto 映射）
 // ================================================================
 
-// GetPhotoImageHandler 返回图片原图文件
+// GetPhotoImageHandler 返回图片文件（JPG 从 PhotoPath 取缩略图，NEF 不支持浏览器渲染）
 func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 	id := kctx.Vars().Get("id")
 
@@ -222,13 +230,18 @@ func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 		return err
 	}
 
+	if photo.FileType == "nef" {
+		return kctx.Result(415, map[string]string{"error": "NEF raw files cannot be displayed in browser"})
+	}
+
 	fullPath := filepath.Join(conf.C.Storage.PhotoPath, photo.FilePath)
 	http.ServeFile(kctx.Response(), kctx.Request(), fullPath)
 	return nil
 }
 
 // UploadPhotoHandler 上传图片。
-// 流程：保存到 photo_src → 压缩到 photo_path → 读 EXIF → 匹配时间线 → 入库。
+// JPG 流程：保存到 photo_src → 压缩到 photo_path → 读 EXIF → 匹配时间线 → 入库。
+// NEF 流程：保存到 photo_src → 入库（跳过压缩/VLM/Embedding）。
 func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	req := kctx.Request()
 
@@ -239,6 +252,7 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	originalName := req.FormValue("original_name")
 	originalShotAt := req.FormValue("original_shot_at")
 	conflictResolution := req.FormValue("conflict_resolution")
+	folder := req.FormValue("folder")
 
 	file, header, err := req.FormFile("file")
 	if err != nil {
@@ -246,7 +260,7 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	}
 	defer file.Close()
 
-	ext := filepath.Ext(header.Filename)
+	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext == "" {
 		ext = ".jpg"
 	}
@@ -256,14 +270,21 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	_ctx := req.Context()
 	ctx := papp.NewAppCtx(_ctx)
 
+	isNEF := ext == ".nef"
+
 	// 检查冲突
 	existingPhoto, _ := data.PhotoDAO.GetByFilename(ctx, targetFilename)
 	if existingPhoto != nil {
-		return s.handleConflict(kctx, ctx, file, targetFilename, existingPhoto, newShotAt, conflictResolution)
+		return s.handleConflict(kctx, ctx, file, targetFilename, existingPhoto, newShotAt, conflictResolution, folder, isNEF)
 	}
 
-	// 无冲突：保存 → 压缩 → 入库
-	photoID := s.doUpload(ctx, file, targetFilename, newShotAt)
+	// 无冲突：保存 → 入库
+	var photoID string
+	if isNEF {
+		photoID = s.doNefUpload(ctx, file, targetFilename, folder)
+	} else {
+		photoID = s.doUpload(ctx, file, targetFilename, folder, newShotAt)
+	}
 	plogger.Infof("Photo uploaded: %s -> id=%s", targetFilename, photoID)
 	return kctx.Result(200, map[string]any{
 		"status":   "stored",
@@ -276,7 +297,7 @@ func (s *PhotoServer) handleConflict(
 	kctx khttp.Context, ctx *papp.AppCtx,
 	file interface{ io.Reader }, targetFilename string,
 	existingPhoto *data.PhotoDO, newShotAt *time.Time,
-	resolution string,
+	resolution string, folder string, isNEF bool,
 ) error {
 	if resolution == "" {
 		return kctx.Result(200, map[string]any{
@@ -288,21 +309,31 @@ func (s *PhotoServer) handleConflict(
 
 	switch resolution {
 	case "overwrite":
-		// 保存到 photo_src + 压缩到 photo_path
-		if err := saveUploadedFile(file, targetFilename, conf.C.Storage.PhotoSrc); err != nil {
+		destDir := conf.C.Storage.PhotoSrc
+		if folder != "" {
+			destDir = filepath.Join(destDir, folder)
+		}
+		if err := saveUploadedFile(file, targetFilename, destDir); err != nil {
 			return err
 		}
-		srcPath := filepath.Join(conf.C.Storage.PhotoSrc, targetFilename)
-		maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
-		if err := processToPhotoPath(srcPath, targetFilename, conf.C.Storage.PhotoPath, maxBytes); err != nil {
-			return err
+		if !isNEF {
+			srcPath := filepath.Join(destDir, targetFilename)
+			maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
+			thumbDir := conf.C.Storage.PhotoPath
+			if folder != "" {
+				thumbDir = filepath.Join(thumbDir, folder)
+			}
+			if err := processToPhotoPath(srcPath, targetFilename, thumbDir, maxBytes); err != nil {
+				return err
+			}
+			// 删除旧缩略图
+			oldPath := filepath.Join(conf.C.Storage.PhotoPath, existingPhoto.FilePath)
+			newThumbPath := filepath.Join(thumbDir, targetFilename)
+			if oldPath != newThumbPath {
+				_ = os.Remove(oldPath)
+			}
 		}
-		// 删除旧文件
-		oldPath := filepath.Join(conf.C.Storage.PhotoPath, existingPhoto.FilePath)
-		if oldPath != filepath.Join(conf.C.Storage.PhotoPath, targetFilename) {
-			_ = os.Remove(oldPath)
-		}
-		overwritePhoto(ctx, existingPhoto.ID, targetFilename, newShotAt)
+		overwritePhoto(ctx, existingPhoto.ID, targetFilename, folder, newShotAt, isNEF)
 		return kctx.Result(200, map[string]any{
 			"status":   "stored",
 			"photo_id": existingPhoto.ID,
@@ -316,7 +347,12 @@ func (s *PhotoServer) handleConflict(
 
 	case "keep_both":
 		newFilename := addSuffix(targetFilename)
-		photoID := s.doUpload(ctx, file, newFilename, newShotAt)
+		var photoID string
+		if isNEF {
+			photoID = s.doNefUpload(ctx, file, newFilename, folder)
+		} else {
+			photoID = s.doUpload(ctx, file, newFilename, folder, newShotAt)
+		}
 		return kctx.Result(200, map[string]any{
 			"status":   "stored",
 			"photo_id": photoID,
@@ -327,24 +363,46 @@ func (s *PhotoServer) handleConflict(
 	}
 }
 
-// doUpload 执行实际的上传流程（保存文件 + 压缩 + EXIF + 入库）
+// doUpload 执行 JPG 上传流程（保存源文件 + 压缩缩略图 + EXIF + 入库）
 func (s *PhotoServer) doUpload(
 	ctx *papp.AppCtx, file io.Reader, filename string,
-	shotAt *time.Time,
+	folder string, shotAt *time.Time,
 ) string {
-	if err := saveUploadedFile(file, filename, conf.C.Storage.PhotoSrc); err != nil {
+	srcDir := conf.C.Storage.PhotoSrc
+	thumbDir := conf.C.Storage.PhotoPath
+	if folder != "" {
+		srcDir = filepath.Join(srcDir, folder)
+		thumbDir = filepath.Join(thumbDir, folder)
+	}
+	if err := saveUploadedFile(file, filename, srcDir); err != nil {
 		plogger.Warnf("save uploaded file failed: %v", err)
 		return ""
 	}
 
-	srcPath := filepath.Join(conf.C.Storage.PhotoSrc, filename)
+	srcPath := filepath.Join(srcDir, filename)
 	maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
-	if err := processToPhotoPath(srcPath, filename, conf.C.Storage.PhotoPath, maxBytes); err != nil {
+	if err := processToPhotoPath(srcPath, filename, thumbDir, maxBytes); err != nil {
 		plogger.Warnf("process to photo path failed: %v", err)
 		return ""
 	}
 
-	return createPhotoRecord(ctx, filename, shotAt)
+	return createPhotoRecord(ctx, filename, folder, "jpg", shotAt)
+}
+
+// doNefUpload 执行 NEF 上传流程（仅保存源文件 + 入库，不压缩不生成缩略图）
+func (s *PhotoServer) doNefUpload(
+	ctx *papp.AppCtx, file io.Reader, filename string,
+	folder string,
+) string {
+	srcDir := conf.C.Storage.PhotoSrc
+	if folder != "" {
+		srcDir = filepath.Join(srcDir, folder)
+	}
+	if err := saveUploadedFile(file, filename, srcDir); err != nil {
+		plogger.Warnf("save NEF file failed: %v", err)
+		return ""
+	}
+	return createPhotoRecord(ctx, filename, folder, "nef", nil)
 }
 
 // ================================================================
@@ -421,9 +479,20 @@ func buildConflictInfo(existing *data.PhotoDO, newShotAt *time.Time) map[string]
 	}
 }
 
-func createPhotoRecord(ctx *papp.AppCtx, filename string, shotAt *time.Time) string {
-	fullPath := filepath.Join(conf.C.Storage.PhotoPath, filename)
-	ei := getExifInfo(fullPath)
+func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileType string, shotAt *time.Time) string {
+	relPath := filename
+	if folder != "" {
+		relPath = filepath.Join(folder, filename)
+	}
+
+	var srcPath string
+	if fileType == "nef" {
+		srcPath = filepath.Join(conf.C.Storage.PhotoSrc, relPath)
+	} else {
+		srcPath = filepath.Join(conf.C.Storage.PhotoPath, relPath)
+	}
+
+	ei := getExifInfo(srcPath)
 	if ei == nil {
 		ei = &exifInfo{}
 	}
@@ -437,12 +506,16 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, shotAt *time.Time) str
 		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
-	width, height := getImageSize(fullPath)
+	width, height := 0, 0
+	if fileType != "nef" {
+		width, height = getImageSize(srcPath)
+	}
 
 	photoDO := &data.PhotoDO{
 		ID:           putil.UUID(),
 		Filename:     filename,
-		FilePath:     filename,
+		FilePath:     relPath,
+		FileType:     fileType,
 		Timeline:     timeline,
 		Width:        int32(width),
 		Height:       int32(height),
@@ -476,9 +549,20 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, shotAt *time.Time) str
 	return photoDO.ID
 }
 
-func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, shotAt *time.Time) {
-	fullPath := filepath.Join(conf.C.Storage.PhotoPath, filename)
-	ei := getExifInfo(fullPath)
+func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, shotAt *time.Time, isNEF bool) {
+	relPath := filename
+	if folder != "" {
+		relPath = filepath.Join(folder, filename)
+	}
+
+	var srcPath string
+	if isNEF {
+		srcPath = filepath.Join(conf.C.Storage.PhotoSrc, relPath)
+	} else {
+		srcPath = filepath.Join(conf.C.Storage.PhotoPath, relPath)
+	}
+
+	ei := getExifInfo(srcPath)
 	if ei == nil {
 		ei = &exifInfo{}
 	}
@@ -491,9 +575,13 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, shotAt *time.Tim
 		entries, _ := loadTimeline(conf.C.Storage.TimelinePath)
 		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
-	width, height := getImageSize(fullPath)
 
-	updates := map[string]any{"description": ""}
+	width, height := 0, 0
+	if !isNEF {
+		width, height = getImageSize(srcPath)
+	}
+
+	updates := map[string]any{"description": "", "file_path": relPath}
 	if timeline != "" {
 		updates["timeline"] = timeline
 	}
