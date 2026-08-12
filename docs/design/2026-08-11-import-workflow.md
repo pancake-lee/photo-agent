@@ -171,7 +171,7 @@ Wails 桌面应用（Windows 客户端）
 - [x] Makefile：`make build` / `make build-windows` / `make dev`
 - [x] 构建验证：`CGO_ENABLED=1 go build` 成功，前端资源嵌入二进制
 
-> 已知限制：`wails build` 与 Go 1.24 不兼容（`golang.org/x/tools` 版本过旧），改用 `go build` 直接构建。W3 需要 JS bindings 时再处理。
+> 已知限制：`wails build` 与 Go 1.24 不兼容（`golang.org/x/tools` 版本过旧），改用 `go build` 直接构建。JS bindings 无需 `wails build` 预生成（Wails v2 运行时动态分发），W3 已用 `go build` 直接添加绑定方法。
 
 ### DevTools 调试方案 ✅ (2026-08-12)
 
@@ -218,15 +218,17 @@ WebView2 的上下文菜单在检测到页面有文字被选中时，会包含"�
 - `GET /api/v1/storage/info` — 返回存储根路径下总文件数（JPG/NEF）、已有月份文件夹、已有活动文件夹、上次同步时间
 - 文件夹命名规则支持：`202608/`（随手拍）和 `202608_山西旅游/`（有活动）
 
-#### 阶段 3：Wails Go 后端 — 本地文件操作能力
+#### 阶段 3：Wails Go 后端 — 本地文件操作能力 ✅ (2026-08-12)
 
-客户端 Go 层实现文件扫描、比对、EXIF 读取、拷贝/删除操作，通过 Wails 绑定暴露给前端。
+客户端 Go 层实现文件扫描、比对、EXIF 读取、复制操作，通过 Wails 绑定暴露给前端。
 
 - 扫描 `full/`、`like/`、`nef/` 三个中转目录，返回文件列表和计数
 - 比对逻辑：like 中有同名 JPG 的 NEF 保留，仅 full 中有但 like 中无的 NEF 标记删除
 - EXIF 读取：提取拍摄时间，检测时间范围异常（混入其他活动的照片）
-- 文件操作：按确认结果执行拷贝（保留的 NEF 拷到中转 like 目录）、删除（其余 NEF）
+- 文件操作：按确认结果复制保留的 NEF 到中转 like 目录，不删除任何文件
 - 所有操作通过 Wails 绑定暴露为 JS 可调用的函数
+
+> 执行阶段由「拷贝 + 删除」改为「仅复制、不删除」：NEF 删除交还用户自行完成，避免误删（详见 note.md）。
 
 #### 阶段 4：前端导入工作流页面（#/import）
 
@@ -246,7 +248,7 @@ WebView2 的上下文菜单在检测到页面有文字被选中时，会包含"�
 - 展示统计摘要：full 中 JPG 总数、like 中 JPG 总数、nef 中 NEF 总数、将删除的 NEF 数、将保留的 NEF 数
 - 展示时间分布：文件时间范围，异常日期警告，无对应 NEF 的 JPG 警告
 - 操作明细：删除列表、迁移列表（可折叠，按时间倒序）
-- 用户确认后执行：拷贝保留的 NEF、删除其余的 NEF、清空中转目录
+- 用户确认后执行：复制保留的 NEF 到 like 目录（不删除，nef/ 交由用户自行清理）
 
 **步骤 3 — 上传同步**
 
