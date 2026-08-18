@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,6 +56,9 @@ func assertStrSlice(t *testing.T, got, want []string) {
 	}
 }
 
+// testFolder 测试用归档目录名。
+const testFolder = "202608-山西旅游"
+
 func TestBaseNameOf(t *testing.T) {
 	cases := map[string]string{
 		"IMG_0001.NEF":  "img_0001",
@@ -71,6 +75,8 @@ func TestBaseNameOf(t *testing.T) {
 }
 
 func TestCompareNef(t *testing.T) {
+	fullDir := filepath.Join(t.TempDir(), "full")
+	likeDir := filepath.Join(t.TempDir(), "like")
 	full := []FileInfo{
 		{Name: "IMG_0001.JPG"}, {Name: "IMG_0002.JPG"}, {Name: "IMG_0003.JPG"}, {Name: "IMG_0004.JPG"},
 	}
@@ -79,12 +85,38 @@ func TestCompareNef(t *testing.T) {
 		{Name: "IMG_0001.NEF"}, {Name: "IMG_0002.NEF"}, {Name: "IMG_0003.NEF"}, {Name: "ORPHAN.NEF"},
 	}
 
-	keep, del, unmatched, missing := compareNef(full, like, nef)
+	favorite, retained, discarded, migrated, missing := compareNef(fullDir, likeDir, full, like, nil, nef)
 
-	assertStrSlice(t, keep, []string{"IMG_0002.NEF"})
-	assertStrSlice(t, del, []string{"IMG_0001.NEF", "IMG_0003.NEF"})
-	assertStrSlice(t, unmatched, []string{"ORPHAN.NEF"})
-	assertStrSlice(t, missing, []string{"img_0004"})
+	assertStrSlice(t, favorite, []string{"IMG_0002.NEF"})
+	assertStrSlice(t, retained, []string{"IMG_0001.NEF", "IMG_0003.NEF"})
+	assertStrSlice(t, discarded, []string{"ORPHAN.NEF"})
+	assertStrSlice(t, migrated, []string{})
+	if len(missing) != 1 {
+		t.Fatalf("missing len = %d, want 1", len(missing))
+	}
+	if missing[0].Name != "IMG_0004.JPG" || missing[0].Dir != "full" {
+		t.Fatalf("missing ref wrong: %+v", missing[0])
+	}
+	if missing[0].Path != filepath.Join(fullDir, "IMG_0004.JPG") {
+		t.Fatalf("missing path wrong: %+v", missing[0])
+	}
+}
+
+func TestCompareNefMigrated(t *testing.T) {
+	fullDir := filepath.Join(t.TempDir(), "full")
+	likeDir := filepath.Join(t.TempDir(), "like")
+	full := []FileInfo{{Name: "IMG_0001.JPG"}, {Name: "IMG_0002.JPG"}}
+	like := []FileInfo{{Name: "IMG_0001.JPG"}}
+	// like 中已有 IMG_0001.NEF，表示已迁移
+	likeNef := []FileInfo{{Name: "IMG_0001.NEF"}}
+	nef := []FileInfo{{Name: "IMG_0001.NEF"}, {Name: "IMG_0002.NEF"}}
+
+	favorite, retained, discarded, migrated, _ := compareNef(fullDir, likeDir, full, like, likeNef, nef)
+
+	assertStrSlice(t, favorite, []string{})
+	assertStrSlice(t, migrated, []string{"IMG_0001.NEF"})
+	assertStrSlice(t, retained, []string{"IMG_0002.NEF"})
+	assertStrSlice(t, discarded, []string{})
 }
 
 func TestTimeRangeAndOutliers(t *testing.T) {
@@ -149,7 +181,7 @@ func TestCreateStagingDirs(t *testing.T) {
 	dir := t.TempDir()
 	staging := filepath.Join(dir, "staging")
 
-	res, err := createStagingDirs(staging)
+	res, err := createStagingDirs(staging, testFolder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +194,7 @@ func TestCreateStagingDirs(t *testing.T) {
 		}
 	}
 
-	res2, _ := createStagingDirs(staging)
+	res2, _ := createStagingDirs(staging, testFolder)
 	for _, d := range res2.Dirs {
 		if d.Status != "existed" {
 			t.Fatalf("dir %s status = %s, want existed", d.Name, d.Status)
@@ -173,16 +205,16 @@ func TestCreateStagingDirs(t *testing.T) {
 func TestScanStaging(t *testing.T) {
 	dir := t.TempDir()
 	staging := filepath.Join(dir, "staging")
-	if _, err := createStagingDirs(staging); err != nil {
+	if _, err := createStagingDirs(staging, testFolder); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(staging, "full", "A.JPG"), []byte("x"))
-	writeFile(t, filepath.Join(staging, "full", "B.jpeg"), []byte("x"))
-	writeFile(t, filepath.Join(staging, "full", "skip.txt"), []byte("x"))
-	writeFile(t, filepath.Join(staging, "like", "C.JPG"), []byte("x"))
-	writeFile(t, filepath.Join(staging, "nef", "D.NEF"), []byte("x"))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "A.JPG"), []byte("x"))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "B.jpeg"), []byte("x"))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "skip.txt"), []byte("x"))
+	writeFile(t, filepath.Join(staging, "like", testFolder, "C.JPG"), []byte("x"))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "D.NEF"), []byte("x"))
 
-	scan, err := scanStaging(staging)
+	scan, err := scanStaging(staging, testFolder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,56 +226,66 @@ func TestScanStaging(t *testing.T) {
 func TestAnalyzeStaging(t *testing.T) {
 	dir := t.TempDir()
 	staging := filepath.Join(dir, "staging")
-	if _, err := createStagingDirs(staging); err != nil {
+	if _, err := createStagingDirs(staging, testFolder); err != nil {
 		t.Fatal(err)
 	}
 	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
 
-	writeFile(t, filepath.Join(staging, "full", "IMG_0001.JPG"), buildExifJpeg(base))
-	writeFile(t, filepath.Join(staging, "full", "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
-	writeFile(t, filepath.Join(staging, "full", "IMG_0003.JPG"), buildExifJpeg(base.Add(48*time.Hour)))
-	writeFile(t, filepath.Join(staging, "like", "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
-	writeFile(t, filepath.Join(staging, "nef", "IMG_0001.NEF"), []byte("n1"))
-	writeFile(t, filepath.Join(staging, "nef", "IMG_0002.NEF"), []byte("n2"))
-	writeFile(t, filepath.Join(staging, "nef", "IMG_0003.NEF"), []byte("n3"))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0001.JPG"), buildExifJpeg(base))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0003.JPG"), buildExifJpeg(base.Add(48*time.Hour)))
+	writeFile(t, filepath.Join(staging, "like", testFolder, "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0001.NEF"), []byte("n1"))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0002.NEF"), []byte("n2"))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0003.NEF"), []byte("n3"))
 
-	analysis, err := analyzeStaging(staging)
+	analysis, err := analyzeStaging(staging, testFolder)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if analysis.FullJpgCount != 3 || analysis.LikeJpgCount != 1 || analysis.NefCount != 3 {
 		t.Fatalf("counts wrong: %+v", analysis)
 	}
-	if analysis.KeepCount != 1 || analysis.DeleteCount != 2 {
-		t.Fatalf("keep/delete wrong: keep=%d delete=%d", analysis.KeepCount, analysis.DeleteCount)
+	if analysis.FavoriteCount != 1 || analysis.RetainedCount != 2 {
+		t.Fatalf("favorite/retained wrong: favorite=%d retained=%d", analysis.FavoriteCount, analysis.RetainedCount)
 	}
-	if len(analysis.KeepList) != 1 || analysis.KeepList[0].Name != "IMG_0002.NEF" {
-		t.Fatalf("keep list wrong: %+v", analysis.KeepList)
+	if analysis.DiscardedCount != 0 {
+		t.Fatalf("expected 0 discarded, got %d", analysis.DiscardedCount)
 	}
-	if analysis.KeepList[0].ShotAt == "" {
-		t.Fatal("expected shot_at on keep decision")
+	if analysis.MigratedCount != 0 {
+		t.Fatalf("expected 0 migrated, got %d", analysis.MigratedCount)
 	}
-	if len(analysis.Outliers) != 0 || len(analysis.NoDateList) != 0 {
+	if len(analysis.FavoriteList) != 1 || analysis.FavoriteList[0].Name != "IMG_0002.NEF" {
+		t.Fatalf("favorite list wrong: %+v", analysis.FavoriteList)
+	}
+	if analysis.FavoriteList[0].ShotAt == "" {
+		t.Fatal("expected shot_at on favorite decision")
+	}
+	if len(analysis.Outliers) != 0 || len(analysis.NoDate) != 0 {
 		t.Fatalf("unexpected outliers/no_date: %+v", analysis)
+	}
+	if analysis.Outliers == nil || analysis.MissingNef == nil ||
+		analysis.FavoriteList == nil || analysis.NoDate == nil {
+		t.Fatalf("expected non-nil empty slices for JSON serialization: %+v", analysis)
 	}
 }
 
 func TestAnalyzeStagingDetectsOutlier(t *testing.T) {
 	dir := t.TempDir()
 	staging := filepath.Join(dir, "staging")
-	if _, err := createStagingDirs(staging); err != nil {
+	if _, err := createStagingDirs(staging, testFolder); err != nil {
 		t.Fatal(err)
 	}
 	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
 
-	writeFile(t, filepath.Join(staging, "full", "IMG_0001.JPG"), buildExifJpeg(base))
-	writeFile(t, filepath.Join(staging, "full", "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
-	writeFile(t, filepath.Join(staging, "full", "IMG_0003.JPG"), buildExifJpeg(base.AddDate(0, 0, -12)))
-	writeFile(t, filepath.Join(staging, "nef", "IMG_0001.NEF"), []byte("n1"))
-	writeFile(t, filepath.Join(staging, "nef", "IMG_0002.NEF"), []byte("n2"))
-	writeFile(t, filepath.Join(staging, "nef", "IMG_0003.NEF"), []byte("n3"))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0001.JPG"), buildExifJpeg(base))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0003.JPG"), buildExifJpeg(base.AddDate(0, 0, -12)))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0001.NEF"), []byte("n1"))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0002.NEF"), []byte("n2"))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0003.NEF"), []byte("n3"))
 
-	analysis, err := analyzeStaging(staging)
+	analysis, err := analyzeStaging(staging, testFolder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,19 +294,132 @@ func TestAnalyzeStagingDetectsOutlier(t *testing.T) {
 	}
 }
 
+func TestAnalyzeStagingMigrated(t *testing.T) {
+	dir := t.TempDir()
+	staging := filepath.Join(dir, "staging")
+	if _, err := createStagingDirs(staging, testFolder); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0001.JPG"), buildExifJpeg(base))
+	writeFile(t, filepath.Join(staging, "like", testFolder, "IMG_0001.JPG"), buildExifJpeg(base))
+	// 迁移已发生：like 中已有对应 NEF
+	writeFile(t, filepath.Join(staging, "like", testFolder, "IMG_0001.NEF"), []byte("n1"))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0001.NEF"), []byte("n1"))
+
+	analysis, err := analyzeStaging(staging, testFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if analysis.FavoriteCount != 0 {
+		t.Fatalf("expected 0 favorite after migration, got %d", analysis.FavoriteCount)
+	}
+	if analysis.MigratedCount != 1 {
+		t.Fatalf("expected 1 migrated, got %d", analysis.MigratedCount)
+	}
+}
+
+func TestAnalyzeStagingMissingNef(t *testing.T) {
+	dir := t.TempDir()
+	staging := filepath.Join(dir, "staging")
+	if _, err := createStagingDirs(staging, testFolder); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0001.JPG"), buildExifJpeg(base))
+	writeFile(t, filepath.Join(staging, "full", testFolder, "IMG_0002.JPG"), buildExifJpeg(base.Add(24*time.Hour)))
+	writeFile(t, filepath.Join(staging, "nef", testFolder, "IMG_0001.NEF"), []byte("n1"))
+
+	analysis, err := analyzeStaging(staging, testFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(analysis.MissingNef) != 1 {
+		t.Fatalf("expected 1 missing NEF, got %+v", analysis.MissingNef)
+	}
+	got := analysis.MissingNef[0]
+	if got.Name != "IMG_0002.JPG" || got.Dir != "full" {
+		t.Fatalf("missing NEF ref wrong: %+v", got)
+	}
+	if got.Path != filepath.Join(staging, "full", testFolder, "IMG_0002.JPG") {
+		t.Fatalf("missing NEF path wrong: %+v", got)
+	}
+}
+
+func TestPreviewImage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.JPG")
+	data := []byte{0xff, 0xd8, 0xff, 0xd9}
+	writeFile(t, path, data)
+
+	b64, err := previewImage(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b64 != base64.StdEncoding.EncodeToString(data) {
+		t.Fatalf("preview base64 mismatch: got %q", b64)
+	}
+}
+
+func TestCopyFilePreservesModTime(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.nef")
+	dst := filepath.Join(dir, "sub", "dst.nef")
+	writeFile(t, src, []byte("nef-data"))
+
+	modTime := time.Date(2026, 8, 8, 13, 13, 38, 0, time.UTC)
+	if err := os.Chtimes(src, modTime, modTime); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyFile(src, dst); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(modTime) {
+		t.Errorf("dst mtime not preserved: got %v, want %v", info.ModTime(), modTime)
+	}
+}
+
+func TestScanDirPopulatesShotTime(t *testing.T) {
+	dir := t.TempDir()
+	shotAt := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	writeFile(t, filepath.Join(dir, "with_exif.JPG"), buildExifJpeg(shotAt))
+	writeFile(t, filepath.Join(dir, "no_exif.JPG"), []byte("not a jpeg with exif"))
+
+	files, err := scanDir(dir, isJpg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]FileInfo{}
+	for _, f := range files {
+		byName[f.Name] = f
+	}
+	if got := byName["with_exif.JPG"].ShotTime; got == 0 {
+		t.Errorf("expected non-zero shot_time for with_exif.JPG")
+	}
+	if got := byName["no_exif.JPG"].ShotTime; got != 0 {
+		t.Errorf("expected zero shot_time for no_exif.JPG, got %d", got)
+	}
+}
+
 func TestMigrateKeptNefCopiesOnly(t *testing.T) {
 	dir := t.TempDir()
 	staging := filepath.Join(dir, "staging")
-	if _, err := createStagingDirs(staging); err != nil {
+	if _, err := createStagingDirs(staging, testFolder); err != nil {
 		t.Fatal(err)
 	}
-	nefDir := filepath.Join(staging, "nef")
-	likeDir := filepath.Join(staging, "like")
+	nefDir := filepath.Join(staging, "nef", testFolder)
+	likeDir := filepath.Join(staging, "like", testFolder)
 
 	writeFile(t, filepath.Join(nefDir, "IMG_0001.NEF"), []byte("nef1"))
 	writeFile(t, filepath.Join(nefDir, "IMG_0002.NEF"), []byte("nef2"))
 
-	res, err := migrateKeptNef(staging, []string{"IMG_0001.NEF"})
+	res, err := migrateKeptNef(staging, testFolder, []string{"IMG_0001.NEF"})
 	if err != nil {
 		t.Fatal(err)
 	}

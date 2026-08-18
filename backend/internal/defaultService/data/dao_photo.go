@@ -2,6 +2,8 @@ package data
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"backend/internal/pkg/db"
@@ -60,6 +62,9 @@ func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*m
 
 	q := db.GetQuery().Photo
 	do := q.WithContext(ctx)
+
+	// 图片管理列表不展示 NEF 原始文件（仅存储，不参与展示）。
+	do = do.Where(q.FileType.Neq("nef"))
 
 	if params.Timeline != "" {
 		do = do.Where(q.Timeline.Eq(params.Timeline))
@@ -157,6 +162,47 @@ func (*photoDAO) GetByFilename(ctx *papp.AppCtx, filename string) (*model.Photo,
 	return photo, nil
 }
 
+// BaseNameOf 返回文件名去掉扩展名后的小写基础名（如 DSC_1234.JPG → dsc_1234）。
+func BaseNameOf(name string) string {
+	ext := filepath.Ext(name)
+	return strings.ToLower(strings.TrimSuffix(name, ext))
+}
+
+// GetNefBaseNames 返回所有 NEF 文件的小写基础名集合，用于判断 JPG 是否有对应原始文件。
+func (*photoDAO) GetNefBaseNames(ctx *papp.AppCtx) (map[string]bool, error) {
+	q := db.GetQuery().Photo
+	var filenames []string
+	if err := q.WithContext(ctx).
+		Where(q.FileType.Eq("nef")).
+		Pluck(q.Filename, &filenames); err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+	set := make(map[string]bool, len(filenames))
+	for _, name := range filenames {
+		set[BaseNameOf(name)] = true
+	}
+	return set, nil
+}
+
+// GetExistingFilenames 返回 names 中已存在于数据库的 filename 集合（精确匹配）。
+func (*photoDAO) GetExistingFilenames(ctx *papp.AppCtx, names []string) (map[string]bool, error) {
+	if len(names) == 0 {
+		return map[string]bool{}, nil
+	}
+	q := db.GetQuery().Photo
+	var existing []string
+	if err := q.WithContext(ctx).
+		Where(q.Filename.In(names...)).
+		Pluck(q.Filename, &existing); err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+	set := make(map[string]bool, len(existing))
+	for _, n := range existing {
+		set[n] = true
+	}
+	return set, nil
+}
+
 // StatItem 单项统计
 type StatItem struct {
 	Name  string `json:"name"`
@@ -206,15 +252,15 @@ func (*photoDAO) GetPhotoStats(ctx *papp.AppCtx) (*PhotoStats, error) {
 	q := db.GetQuery().Photo // 类型安全字段引用
 	stats := &PhotoStats{}
 
-	// 总数
-	total, err := q.WithContext(ctx).Count()
+	// 总数（图片管理不展示 NEF，统计口径与列表一致，均排除 NEF）
+	total, err := q.WithContext(ctx).Where(q.FileType.Neq("nef")).Count()
 	if err != nil {
 		return nil, ctx.Log.LogErr(err)
 	}
 	stats.Total = total
 
 	// 描述统计
-	withDesc, err := q.WithContext(ctx).Where(q.Description.Neq("")).Count()
+	withDesc, err := q.WithContext(ctx).Where(q.FileType.Neq("nef"), q.Description.Neq("")).Count()
 	if err != nil {
 		return nil, ctx.Log.LogErr(err)
 	}
@@ -224,7 +270,7 @@ func (*photoDAO) GetPhotoStats(ctx *papp.AppCtx) (*PhotoStats, error) {
 	// 品牌分布
 	if err := q.WithContext(ctx).
 		Select(q.Brand.As("name"), q.Brand.Count().As("count")).
-		Where(q.Brand.Neq("")).
+		Where(q.FileType.Neq("nef"), q.Brand.Neq("")).
 		Group(q.Brand).
 		Order(q.Brand.Count().Desc()).
 		Scan(&stats.Brands); err != nil {
@@ -234,7 +280,7 @@ func (*photoDAO) GetPhotoStats(ctx *papp.AppCtx) (*PhotoStats, error) {
 	// 镜头分布
 	if err := q.WithContext(ctx).
 		Select(q.Lens.As("name"), q.Lens.Count().As("count")).
-		Where(q.Lens.Neq("")).
+		Where(q.FileType.Neq("nef"), q.Lens.Neq("")).
 		Group(q.Lens).
 		Order(q.Lens.Count().Desc()).
 		Scan(&stats.Lens); err != nil {
@@ -249,6 +295,7 @@ func (*photoDAO) GetPhotoStats(ctx *papp.AppCtx) (*PhotoStats, error) {
 		latCol, latCol,
 	)
 	if err := pdb.GetGormDB().WithContext(ctx).Model(&model.Photo{}).
+		Where("file_type != ?", "nef").
 		Select(gpsSQL).Scan(&stats.GPS).Error; err != nil {
 		return nil, ctx.Log.LogErr(err)
 	}
@@ -257,6 +304,7 @@ func (*photoDAO) GetPhotoStats(ctx *papp.AppCtx) (*PhotoStats, error) {
 	shotCol := string(q.ShotAt.ColumnName())
 	monthlySQL := fmt.Sprintf("strftime('%%Y-%%m', %s) as month, COUNT(*) as count", shotCol)
 	if err := pdb.GetGormDB().WithContext(ctx).Model(&model.Photo{}).
+		Where("file_type != ?", "nef").
 		Select(monthlySQL).
 		Where(shotCol + " IS NOT NULL").
 		Group("month").Order("month").
@@ -267,6 +315,7 @@ func (*photoDAO) GetPhotoStats(ctx *papp.AppCtx) (*PhotoStats, error) {
 	// 时段分布（SQLite strftime + CAST）
 	hourlySQL := fmt.Sprintf("CAST(strftime('%%H', %s) AS INTEGER) as hour, COUNT(*) as count", shotCol)
 	if err := pdb.GetGormDB().WithContext(ctx).Model(&model.Photo{}).
+		Where("file_type != ?", "nef").
 		Select(hourlySQL).
 		Where(shotCol + " IS NOT NULL").
 		Group("hour").Order("hour").
@@ -291,7 +340,7 @@ func computeFocalRangeStats(ctx *papp.AppCtx) ([]FocalRangeStat, error) {
 	}
 	if err := q.WithContext(ctx).
 		Select(q.FocalLength).
-		Where(q.FocalLength.Neq("")).
+		Where(q.FileType.Neq("nef"), q.FocalLength.Neq("")).
 		Scan(&rows); err != nil {
 		return nil, ctx.Log.LogErr(err)
 	}

@@ -208,6 +208,7 @@ type PhotoItem struct {
 	ImportedAt     int64                  `protobuf:"varint,26,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
 	HasDescription bool                   `protobuf:"varint,27,opt,name=has_description,json=hasDescription,proto3" json:"has_description,omitempty"`
 	ThumbnailUrl   string                 `protobuf:"bytes,28,opt,name=thumbnail_url,json=thumbnailUrl,proto3" json:"thumbnail_url,omitempty"`
+	HasNef         bool                   `protobuf:"varint,29,opt,name=has_nef,json=hasNef,proto3" json:"has_nef,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -436,6 +437,13 @@ func (x *PhotoItem) GetThumbnailUrl() string {
 		return x.ThumbnailUrl
 	}
 	return ""
+}
+
+func (x *PhotoItem) GetHasNef() bool {
+	if x != nil {
+		return x.HasNef
+	}
+	return false
 }
 
 type SearchPhotosResponse struct {
@@ -1172,7 +1180,7 @@ const file_photo_service_proto_rawDesc = "" +
 	"\vshot_at_end\x18\r \x01(\tR\tshotAtEnd\x12\x17\n" +
 	"\asort_by\x18\x0e \x01(\tR\x06sortBy\x12\x1d\n" +
 	"\n" +
-	"sort_order\x18\x0f \x01(\tR\tsortOrder\"\x82\x06\n" +
+	"sort_order\x18\x0f \x01(\tR\tsortOrder\"\x9b\x06\n" +
 	"\tPhotoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
@@ -1203,7 +1211,8 @@ const file_photo_service_proto_rawDesc = "" +
 	"\vimported_at\x18\x1a \x01(\x03R\n" +
 	"importedAt\x12'\n" +
 	"\x0fhas_description\x18\x1b \x01(\bR\x0ehasDescription\x12#\n" +
-	"\rthumbnail_url\x18\x1c \x01(\tR\fthumbnailUrl\"\xa4\x01\n" +
+	"\rthumbnail_url\x18\x1c \x01(\tR\fthumbnailUrl\x12\x17\n" +
+	"\ahas_nef\x18\x1d \x01(\bR\x06hasNef\"\xa4\x01\n" +
 	"\x14SearchPhotosResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x12\n" +

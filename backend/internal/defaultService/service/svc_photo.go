@@ -85,9 +85,13 @@ func (s *PhotoServer) SearchPhotos(
 		params.PageSize = 100
 	}
 
+	// NEF 基础名集合，用于在 JPG 上标记「有对应原始文件」。查询失败时集合为空，仅不显示标识。
+	nefSet, _ := data.PhotoDAO.GetNefBaseNames(ctx)
+
 	items := make([]*api.PhotoItem, len(photos))
 	for i, p := range photos {
 		items[i] = photoDO2Item(p)
+		items[i].HasNef = nefSet[data.BaseNameOf(p.Filename)]
 	}
 
 	totalPages := int32(0)
@@ -244,15 +248,19 @@ func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 // NEF 流程：保存到 photo_src → 入库（跳过压缩/VLM/Embedding）。
 func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	req := kctx.Request()
+	plogger.Infof("upload request: %s %s", req.Method, req.URL.Path)
 
 	if err := req.ParseMultipartForm(32 << 20); err != nil {
+		plogger.Warnf("upload parse multipart form failed: %v", err)
 		return fmt.Errorf("parse multipart form failed: %w", err)
 	}
 
 	originalName := req.FormValue("original_name")
 	originalShotAt := req.FormValue("original_shot_at")
+	modTimeStr := req.FormValue("mod_time")
 	conflictResolution := req.FormValue("conflict_resolution")
 	folder := req.FormValue("folder")
+	plogger.Infof("upload: name=%s folder=%s", originalName, folder)
 
 	file, header, err := req.FormFile("file")
 	if err != nil {
@@ -265,7 +273,11 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 		ext = ".jpg"
 	}
 	targetFilename := sanitizeFilename(originalName, ext)
-	newShotAt := parseShotAt(originalShotAt)
+	newShotAt := parseTime(originalShotAt)
+	modTime := parseTime(modTimeStr)
+
+	// 回写文件的修改时间：忠实保留客户端文件的原始修改时间，不用拍摄时间覆盖。
+	fileMtime := modTime
 
 	_ctx := req.Context()
 	ctx := papp.NewAppCtx(_ctx)
@@ -275,15 +287,15 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	// 检查冲突
 	existingPhoto, _ := data.PhotoDAO.GetByFilename(ctx, targetFilename)
 	if existingPhoto != nil {
-		return s.handleConflict(kctx, ctx, file, targetFilename, existingPhoto, newShotAt, conflictResolution, folder, isNEF)
+		return s.handleConflict(kctx, ctx, file, targetFilename, existingPhoto, newShotAt, conflictResolution, folder, isNEF, fileMtime)
 	}
 
 	// 无冲突：保存 → 入库
 	var photoID string
 	if isNEF {
-		photoID = s.doNefUpload(ctx, file, targetFilename, folder)
+		photoID = s.doNefUpload(ctx, file, targetFilename, folder, fileMtime)
 	} else {
-		photoID = s.doUpload(ctx, file, targetFilename, folder, newShotAt)
+		photoID = s.doUpload(ctx, file, targetFilename, folder, newShotAt, fileMtime)
 	}
 	plogger.Infof("Photo uploaded: %s -> id=%s", targetFilename, photoID)
 	return kctx.Result(200, map[string]any{
@@ -297,7 +309,7 @@ func (s *PhotoServer) handleConflict(
 	kctx khttp.Context, ctx *papp.AppCtx,
 	file interface{ io.Reader }, targetFilename string,
 	existingPhoto *data.PhotoDO, newShotAt *time.Time,
-	resolution string, folder string, isNEF bool,
+	resolution string, folder string, isNEF bool, fileMtime *time.Time,
 ) error {
 	if resolution == "" {
 		return kctx.Result(200, map[string]any{
@@ -313,7 +325,7 @@ func (s *PhotoServer) handleConflict(
 		if folder != "" {
 			destDir = filepath.Join(destDir, folder)
 		}
-		if err := saveUploadedFile(file, targetFilename, destDir); err != nil {
+		if err := saveUploadedFile(file, targetFilename, destDir, fileMtime); err != nil {
 			return err
 		}
 		if !isNEF {
@@ -323,7 +335,7 @@ func (s *PhotoServer) handleConflict(
 			if folder != "" {
 				thumbDir = filepath.Join(thumbDir, folder)
 			}
-			if err := processToPhotoPath(srcPath, targetFilename, thumbDir, maxBytes); err != nil {
+			if err := processToPhotoPath(srcPath, targetFilename, thumbDir, maxBytes, fileMtime); err != nil {
 				return err
 			}
 			// 删除旧缩略图
@@ -349,9 +361,9 @@ func (s *PhotoServer) handleConflict(
 		newFilename := addSuffix(targetFilename)
 		var photoID string
 		if isNEF {
-			photoID = s.doNefUpload(ctx, file, newFilename, folder)
+			photoID = s.doNefUpload(ctx, file, newFilename, folder, fileMtime)
 		} else {
-			photoID = s.doUpload(ctx, file, newFilename, folder, newShotAt)
+			photoID = s.doUpload(ctx, file, newFilename, folder, newShotAt, fileMtime)
 		}
 		return kctx.Result(200, map[string]any{
 			"status":   "stored",
@@ -366,7 +378,7 @@ func (s *PhotoServer) handleConflict(
 // doUpload 执行 JPG 上传流程（保存源文件 + 压缩缩略图 + EXIF + 入库）
 func (s *PhotoServer) doUpload(
 	ctx *papp.AppCtx, file io.Reader, filename string,
-	folder string, shotAt *time.Time,
+	folder string, shotAt *time.Time, fileMtime *time.Time,
 ) string {
 	srcDir := conf.C.Storage.PhotoSrc
 	thumbDir := conf.C.Storage.PhotoPath
@@ -374,14 +386,14 @@ func (s *PhotoServer) doUpload(
 		srcDir = filepath.Join(srcDir, folder)
 		thumbDir = filepath.Join(thumbDir, folder)
 	}
-	if err := saveUploadedFile(file, filename, srcDir); err != nil {
+	if err := saveUploadedFile(file, filename, srcDir, fileMtime); err != nil {
 		plogger.Warnf("save uploaded file failed: %v", err)
 		return ""
 	}
 
 	srcPath := filepath.Join(srcDir, filename)
 	maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
-	if err := processToPhotoPath(srcPath, filename, thumbDir, maxBytes); err != nil {
+	if err := processToPhotoPath(srcPath, filename, thumbDir, maxBytes, fileMtime); err != nil {
 		plogger.Warnf("process to photo path failed: %v", err)
 		return ""
 	}
@@ -392,13 +404,13 @@ func (s *PhotoServer) doUpload(
 // doNefUpload 执行 NEF 上传流程（仅保存源文件 + 入库，不压缩不生成缩略图）
 func (s *PhotoServer) doNefUpload(
 	ctx *papp.AppCtx, file io.Reader, filename string,
-	folder string,
+	folder string, fileMtime *time.Time,
 ) string {
 	srcDir := conf.C.Storage.PhotoSrc
 	if folder != "" {
 		srcDir = filepath.Join(srcDir, folder)
 	}
-	if err := saveUploadedFile(file, filename, srcDir); err != nil {
+	if err := saveUploadedFile(file, filename, srcDir, fileMtime); err != nil {
 		plogger.Warnf("save NEF file failed: %v", err)
 		return ""
 	}
@@ -450,7 +462,7 @@ func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
 	return item
 }
 
-func parseShotAt(s string) *time.Time {
+func parseTime(s string) *time.Time {
 	if s == "" {
 		return nil
 	}

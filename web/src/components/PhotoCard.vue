@@ -70,6 +70,7 @@ function formatExifTooltip(): string {
               :alt="photo.filename"
               loading="lazy"
             />
+            <div v-if="photo.has_nef" class="photo-nef-badge" title="有对应 NEF 原始文件">NEF</div>
             <div class="photo-status">
               <NSpin v-if="processing" size="small" />
               <NButton
@@ -182,6 +183,17 @@ function formatExifTooltip(): string {
   position: absolute;
   bottom: 6px;
   right: 6px;
+}
+.photo-nef-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
 }
 .photo-embed-status {
   position: absolute;

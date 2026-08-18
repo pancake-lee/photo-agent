@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	uuid "github.com/satori/go.uuid"
 )
@@ -34,8 +35,8 @@ func sanitizeFilename(originalName, ext string) string {
 	return baseWithoutExt + ext
 }
 
-// saveUploadedFile 将上传的文件内容写入指定目录
-func saveUploadedFile(src io.Reader, filename string, targetDir string) error {
+// saveUploadedFile 将上传的文件内容写入指定目录，modTime 非空时回写文件修改时间。
+func saveUploadedFile(src io.Reader, filename string, targetDir string, modTime *time.Time) error {
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return fmt.Errorf("create target dir failed: %w", err)
 	}
@@ -49,6 +50,12 @@ func saveUploadedFile(src io.Reader, filename string, targetDir string) error {
 
 	if _, err := io.Copy(dst, src); err != nil {
 		return fmt.Errorf("write file failed: %w", err)
+	}
+
+	if modTime != nil {
+		if err := os.Chtimes(targetPath, *modTime, *modTime); err != nil {
+			return fmt.Errorf("set file mtime failed: %w", err)
+		}
 	}
 
 	return nil
@@ -96,8 +103,9 @@ func copyFileContents(src, dst string) error {
 	return dstFile.Sync()
 }
 
-// processToPhotoPath 从 photo_src 复制到 photo_path，超过限制时用 ImageMagick 压缩
-func processToPhotoPath(srcPath, filename, photoPath string, maxBytes int64) error {
+// processToPhotoPath 从 photo_src 复制到 photo_path，超过限制时用 ImageMagick 压缩，
+// modTime 非空时在复制/压缩后回写文件修改时间。
+func processToPhotoPath(srcPath, filename, photoPath string, maxBytes int64, modTime *time.Time) error {
 	targetPath := filepath.Join(photoPath, filename)
 
 	if err := os.MkdirAll(photoPath, 0755); err != nil {
@@ -114,7 +122,15 @@ func processToPhotoPath(srcPath, filename, photoPath string, maxBytes int64) err
 	}
 
 	if maxBytes > 0 && info.Size() > maxBytes {
-		return compressInPlace(targetPath)
+		if err := compressInPlace(targetPath); err != nil {
+			return err
+		}
+	}
+
+	if modTime != nil {
+		if err := os.Chtimes(targetPath, *modTime, *modTime); err != nil {
+			return fmt.Errorf("set thumb mtime failed: %w", err)
+		}
 	}
 
 	return nil

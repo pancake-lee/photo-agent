@@ -27,6 +27,7 @@ export interface Photo {
 export interface PhotoListItem extends Photo {
   has_description: boolean
   thumbnail_url: string
+  has_nef: boolean
 }
 
 // 照片详情响应

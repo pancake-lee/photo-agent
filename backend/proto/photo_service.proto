@@ -89,6 +89,7 @@ message PhotoItem {
     int64 imported_at = 26;
     bool has_description = 27;
     string thumbnail_url = 28;
+    bool has_nef = 29;
 }
 
 message SearchPhotosResponse {

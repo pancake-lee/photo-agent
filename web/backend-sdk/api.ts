@@ -979,11 +979,17 @@ export interface ApiPhotoItem {
      */
     hasDescription?: boolean;
     /**
-     * 
+     *
      * @type {string}
      * @memberof ApiPhotoItem
      */
     thumbnailUrl?: string;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ApiPhotoItem
+     */
+    hasNef?: boolean;
 }
 /**
  * 

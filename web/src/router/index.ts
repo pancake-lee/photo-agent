@@ -32,6 +32,11 @@ const routes = [
     name: 'settings',
     component: () => import('../views/SettingsView.vue'),
   },
+  {
+    path: '/import',
+    name: 'import',
+    component: () => import('../views/ImportWorkflow.vue'),
+  },
 ]
 
 const router = createRouter({

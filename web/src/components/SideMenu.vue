@@ -10,10 +10,12 @@ import {
   BulbOutline,
   SettingsOutline,
   ChatbubblesOutline,
+  CloudUploadOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
 import { useChat } from '../composables/useChat'
+import { isWails } from '../utils/env'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,33 +51,46 @@ async function handleMenuClick(key: string) {
 
 // ── 顶部固定菜单选项 ──
 
-const topMenuOptions = computed<MenuOption[]>(() => [
-  {
-    label: '图片管理',
-    key: '/photos',
-    icon: renderIcon(ImageOutline),
-  },
-  {
-    label: '黄金用例',
-    key: '/golden-queries',
-    icon: renderIcon(BookmarkOutline),
-  },
-  {
-    label: '组图发现',
-    key: '/cluster',
-    icon: renderIcon(GitNetworkOutline),
-  },
-  {
-    label: '主题发现',
-    key: '/suggest',
-    icon: renderIcon(BulbOutline),
-  },
-  {
+const topMenuOptions = computed<MenuOption[]>(() => {
+  const options: MenuOption[] = [
+    {
+      label: '图片管理',
+      key: '/photos',
+      icon: renderIcon(ImageOutline),
+    },
+    {
+      label: '黄金用例',
+      key: '/golden-queries',
+      icon: renderIcon(BookmarkOutline),
+    },
+    {
+      label: '组图发现',
+      key: '/cluster',
+      icon: renderIcon(GitNetworkOutline),
+    },
+    {
+      label: '主题发现',
+      key: '/suggest',
+      icon: renderIcon(BulbOutline),
+    },
+  ]
+
+  // 导入工作流仅在 Wails 桌面环境可用（依赖客户端本地文件操作）
+  if (isWails()) {
+    options.push({
+      label: '导入',
+      key: '/import',
+      icon: renderIcon(CloudUploadOutline),
+    })
+  }
+
+  options.push({
     label: '新建对话',
     key: '/chat/new',
     icon: renderIcon(AddOutline),
-  },
-])
+  })
+  return options
+})
 
 // ── 当前选中 key ──
 
@@ -86,6 +101,7 @@ const selectedKey = computed(() => {
   if (path === '/golden-queries') return '/golden-queries'
   if (path === '/cluster') return '/cluster'
   if (path === '/suggest') return '/suggest'
+  if (path === '/import') return '/import'
   if (path === '/settings') return '/settings'
   return '/photos'
 })

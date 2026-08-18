@@ -32,6 +32,7 @@ function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
     imported_at: item.importedAt ?? '',
     has_description: item.hasDescription ?? false,
     thumbnail_url: item.id ? `${getApiBase()}/photos/${item.id}/image` : '',
+    has_nef: item.hasNef ?? false,
   }
 }
 
