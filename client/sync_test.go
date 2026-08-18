@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -296,6 +297,64 @@ func TestSyncLikeDirSkipExisting(t *testing.T) {
 	defer mu.Unlock()
 	if len(uploaded) != 1 || uploaded[0] != "IMG_0002.NEF" {
 		t.Fatalf("expected only IMG_0002.NEF uploaded, got %v", uploaded)
+	}
+}
+
+// TestUploadWithRetrySucceedsAfterFailure 验证首次失败后自动重试成功，不计入失败。
+func TestUploadWithRetrySucceedsAfterFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "IMG_0001.NEF")
+	writeFile(t, path, []byte("nef-bytes"))
+
+	var attempts int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseMultipartForm(32 << 20)
+		if atomic.AddInt32(&attempts, 1) == 1 {
+			// 首次请求模拟网络抖动：直接断开连接
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatalf("server does not support hijack")
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Fatalf("hijack failed: %v", err)
+			}
+			conn.Close()
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"stored"}`)
+	}))
+	defer server.Close()
+
+	status, errMsg := uploadWithRetry(server.URL, "202608", path, "")
+	if status != "stored" || errMsg != "" {
+		t.Fatalf("unexpected: status=%q err=%q", status, errMsg)
+	}
+	if got := atomic.LoadInt32(&attempts); got != 2 {
+		t.Fatalf("expected 2 attempts (first fail + retry), got %d", got)
+	}
+}
+
+// TestUploadWithRetryExhausted 验证持续失败时只尝试 1+uploadRetries 次，最终计入失败。
+func TestUploadWithRetryExhausted(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "IMG_0001.NEF")
+	writeFile(t, path, []byte("nef-bytes"))
+
+	var attempts int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	status, errMsg := uploadWithRetry(server.URL, "202608", path, "")
+	if status != "failed" || errMsg == "" {
+		t.Fatalf("unexpected: status=%q err=%q", status, errMsg)
+	}
+	if got := atomic.LoadInt32(&attempts); got != int32(uploadRetries+1) {
+		t.Fatalf("expected %d attempts, got %d", uploadRetries+1, got)
 	}
 }
 

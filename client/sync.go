@@ -28,6 +28,13 @@ const syncConcurrency = 3
 // uploadTimeout 单个文件上传超时（NEF 体积较大，给足时间）。
 const uploadTimeout = 10 * time.Minute
 
+// uploadRetries 单文件失败后的自动重试次数（首次 + 1 次重试，共 2 次尝试）。
+// 仅覆盖瞬时网络抖动，持续失败交由用户手动「开始同步」+ skip 模式重试。
+const uploadRetries = 1
+
+// retryDelay 重试前固定等待时长。
+const retryDelay = 2 * time.Second
+
 // storageInfoTimeout 服务端状态查询（连接并验证）超时。
 const storageInfoTimeout = 2 * time.Second
 
@@ -199,7 +206,7 @@ func syncLikeDir(stagingPath, folderName, serverURL, resolution string, onProgre
 		go func(idx int, name string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			status, errMsg := uploadOneFile(serverURL, folderName, filepath.Join(likeDir, name), resolution)
+			status, errMsg := uploadWithRetry(serverURL, folderName, filepath.Join(likeDir, name), resolution)
 			result.Files[idx] = SyncFileResult{Name: name, Status: status}
 			if errMsg != "" {
 				result.Files[idx].Error = errMsg
@@ -218,6 +225,20 @@ func syncLikeDir(stagingPath, folderName, serverURL, resolution string, onProgre
 	}
 	result.ElapsedMs = time.Since(start).Milliseconds()
 	return result, nil
+}
+
+// uploadWithRetry 上传单个文件，失败后自动重试 uploadRetries 次。
+// 最终仍失败才返回失败状态，瞬时网络抖动由自动重试消化。
+func uploadWithRetry(serverURL, folder, filePath, resolution string) (status string, errMsg string) {
+	for attempt := 0; ; attempt++ {
+		status, errMsg = uploadOneFile(serverURL, folder, filePath, resolution)
+		if status != "failed" || attempt >= uploadRetries {
+			return status, errMsg
+		}
+		log.Printf("sync: %s attempt %d failed (%s), retrying in %s",
+			filepath.Base(filePath), attempt+1, errMsg, retryDelay)
+		time.Sleep(retryDelay)
+	}
 }
 
 // uploadOneFile 上传单个文件到服务端。返回状态与错误信息（错误信息为空表示成功）。

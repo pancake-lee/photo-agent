@@ -1,0 +1,127 @@
+{
+  "report_id": "eval-7b1d9c3e2f8a",
+  "backlog_id": "导入工作流 W5-W9",
+  "created_at": "2026-08-18T11:10:00",
+  "target": "导入工作流（Windows 客户端）第二轮评估：W5 配置模板 StorageRoot 分叉 + W6 overwrite 不回写 shot_at + W7 NEF EXIF 读取策略不一致 + W8 storage/info warning 未展示 + W9 上传进度反馈",
+  "scorecard": {
+    "overall": 8.3,
+    "dimensions": [
+      {
+        "name": "正确性",
+        "category": "代码质量",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "W5 消除 StorageRoot/PhotoSrc 分叉：storage/info 改扫 PhotoSrc，与上传落盘目录同源，实测 146 JPG + 113 NEF 计数一致",
+          "W6 overwrite 回写 shot_at/latitude/longitude/altitude，与 createPhotoRecord 字段口径完全对齐（exifInfo 字段均为指针，nil 判断正确）"
+        ],
+        "weaknesses": [
+          "conf.go PhotoSrc 默认值 ./data/photos_src 与 config 模板 ./data/photos/src 仍有细微不一致（默认值仅兜底，配置存在时不生效）"
+        ]
+      },
+      {
+        "name": "健壮性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "W7 澄清 NEF EXIF 读取职责（服务端读、客户端跳过），消除前后端对 goexif 对 NEF 安全性的矛盾判断"
+        ],
+        "weaknesses": [
+          "uploadOneFile 仍无重试，网络抖动导致单文件 failed 需手动重跑整个同步（skip 模式可跳过已传文件、部分缓解但非真正重试）",
+          "countFiles 的 WalkDir 回调遇 err 直接 return nil，子目录无权限时静默少算"
+        ]
+      },
+      {
+        "name": "可维护性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "W9 进度回调经 onProgress 参数注入 + atomic 计数，保持 syncLikeDir 纯函数边界，单测无需 Wails 环境",
+          "onSyncProgress 封装在 wails.ts，SyncProgress 类型集中定义，前后端类型对应"
+        ],
+        "weaknesses": [
+          "ImportWorkflow.vue 已近 900 行（模板+脚本+样式混排），本轮又 +60 行，后续维护成本持续上升"
+        ]
+      },
+      {
+        "name": "简洁性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "W9 用原子计数 + 单一 report 函数实现进度，无过度设计；W5 直接删字段而非加兼容分支，符合根因优先"
+        ],
+        "weaknesses": []
+      },
+      {
+        "name": "准确性",
+        "category": "功能效果",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "storage/info 改扫 PhotoSrc 后，总文件数/月份/活动目录统计与上传落盘位置天然一致"
+        ],
+        "weaknesses": [
+          "countFiles 仍把 png/webp 计入 jpg_count，字段名与实际口径轻微不符（当前存储仅 jpg/nef 未暴露）"
+        ]
+      },
+      {
+        "name": "完整性",
+        "category": "功能效果",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "W8 补全 warning 渲染：storage/info 返回的 warning 经 NAlert 展示，存储根不可访问时有可见提示",
+          "W1-W9 九个条目全部落地，三步流程覆盖新建/分析/上传全链路"
+        ],
+        "weaknesses": [
+          "上传完成后无「清空中转目录」收尾步骤，闭环靠用户自觉（设计原文有清空意图，UI 未落地）"
+        ]
+      },
+      {
+        "name": "一致性",
+        "category": "功能效果",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "W7 修正后，前后端对「谁读 NEF EXIF」的说明一致",
+          "warning 字段前后端类型对齐（服务端 json omitempty ↔ TS optional），W8 消费后闭环"
+        ],
+        "weaknesses": []
+      },
+      {
+        "name": "可用性",
+        "category": "用户价值",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "W5-W9 修复后主流程无阻塞坑点，三步引导直接可用"
+        ],
+        "weaknesses": [
+          "服务器地址默认 localhost:10004，无历史地址记忆（中转路径已有 localStorage 记忆，服务器地址未同样处理）"
+        ]
+      },
+      {
+        "name": "交互体验",
+        "category": "用户价值",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "W9 上传过程有逐文件进度 + 百分比进度条（已完成 X/N），长等待不再无法判断是否卡死",
+          "同步完成后进度条替换为成功/失败/耗时统计，衔接自然",
+          "进度事件经 mutex 串行化 EventsEmit，避免并发 goroutine 回调竞态"
+        ],
+        "weaknesses": [
+          "服务器地址验证后失效，同步阶段（10min 超时）才报错，中间无提前感知"
+        ]
+      }
+    ]
+  },
+  "summary": "导入工作流第二轮评估通过，W5-W9 五个衍生问题全部修复到位，整体从 7.7 升至 8.3。正确性与交互体验提升最明显：配置分叉消除（storage/info 与上传落盘同源）、overwrite 回写 shot_at、上传长任务有了逐文件进度反馈。W7 同时消除了前后端对 NEF EXIF 读取的矛盾判断，W8 补全了 warning 渲染。剩余为边界与收尾层面的小问题（上传无重试、无清空中转收尾、服务器地址无记忆），不影响主流程可用。惊喜度与 AI 增量两维度对文件导入类工具不适用，未纳入评分。",
+  "findings_for_backlog": [
+    "uploadOneFile 无重试机制，网络抖动导致单文件失败后需用户手动重新同步（skip 模式可部分缓解）",
+    "上传完成后无「清空中转目录」收尾步骤，设计原文有清空意图但 UI 未落地"
+  ]
+}

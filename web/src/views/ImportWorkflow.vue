@@ -95,6 +95,41 @@ const progressPercent = computed(() => {
 /** 是否存在重名文件，用于二次确认时展示「跳过/覆盖」还是「直接上传」。 */
 const hasConflicts = computed(() => (conflictCheck.value?.existing.length ?? 0) > 0)
 
+/** 本次归档的 like/ 是否全部同步成功（无失败且至少有一个文件已传/已跳过）。 */
+const likeAllSynced = computed(() => {
+  const r = syncResult.value
+  if (!r) return false
+  return r.failed === 0
+})
+
+/** 收尾建议行：上传完成后按目录给出可删/需确认的文本建议（程序不删任何文件）。 */
+const cleanupAdviceRows = computed(() => {
+  const r = syncResult.value
+  if (!r) return []
+  const folder = folderName.value
+  return [
+    {
+      dir: `like/${folder}/`,
+      ok: likeAllSynced.value,
+      tip: likeAllSynced.value
+        ? '已全部同步到服务器，可安全删除'
+        : `有 ${r.failed} 个文件未上传成功，请先点击「开始同步」重试后再删除`,
+    },
+    {
+      dir: `nef/${folder}/`,
+      ok: likeAllSynced.value,
+      tip: likeAllSynced.value
+        ? '收藏的 NEF 已迁移到 like 并同步，可安全删除（留存/废弃的 NEF 未上传服务器，删除前请自行确认）'
+        : 'like 目录尚有文件未同步完成，暂缓删除',
+    },
+    {
+      dir: `full/${folder}/`,
+      ok: false,
+      tip: '留存照片（未收藏）不会上传服务器，确认设备中仍保留这些照片后再删除',
+    },
+  ]
+})
+
 // ── 派生状态 ──
 
 /** 归档目录名：YYYYMM-活动名（有活动）或 YYYYMM（随手拍）。 */
@@ -316,7 +351,17 @@ async function confirmSync(resolution: 'skip' | 'overwrite') {
     wailsApi.log(`confirmSync: 开始同步 resolution=${resolution}`)
     syncResult.value = await wailsApi.syncToServer(_staging, _folder, _server, resolution)
     wailsApi.log(`confirmSync: 同步完成 total=${syncResult.value?.total}`)
-    message.success('同步完成')
+    if (syncResult.value.failed > 0) {
+      message.warning(`同步完成，${syncResult.value.failed} 个文件失败，可再次点击「开始同步」重试`)
+    } else {
+      message.success('同步完成')
+    }
+    // 同步后刷新服务器状态（总文件数/上次同步时间），失败不阻塞结果展示
+    try {
+      storageInfo.value = await wailsApi.getStorageInfo(_server)
+    } catch {
+      // 保留同步前状态即可，用户可手动点「连接并验证」重新获取
+    }
   } catch (e) {
     wailsApi.log(`confirmSync: 同步失败 ${wailsError(e)}`)
     message.error(wailsError(e))
@@ -663,6 +708,17 @@ onUnmounted(() => {
                 </div>
               </NCollapseItem>
             </NCollapse>
+
+            <!-- W11 收尾建议：程序不删除任何文件，仅提示本次归档子目录可否安全删除 -->
+            <NAlert type="info" :bordered="false" class="cleanup-title">
+              收尾建议（本次导入完成后，以下目录仅指 <b>{{ folderName }}</b> 归档子目录，请勿删除中转根目录下其他内容）
+            </NAlert>
+            <div class="cleanup-list">
+              <div v-for="row in cleanupAdviceRows" :key="row.dir" class="cleanup-row">
+                <span class="dir-name">{{ row.dir }}</span>
+                <span class="cleanup-tip" :class="row.ok ? 'tip-ok' : 'tip-warn'">{{ row.tip }}</span>
+              </div>
+            </div>
           </div>
 
           <NSpace justify="end" class="step-actions">
@@ -920,5 +976,35 @@ onUnmounted(() => {
   margin: 0;
   color: var(--n-text-color-3);
   font-size: 13px;
+}
+.cleanup-title {
+  margin-top: 4px;
+}
+.cleanup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cleanup-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--n-color-embedded);
+  font-size: 13px;
+}
+.cleanup-row .dir-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cleanup-tip {
+  color: var(--n-text-color-3);
+}
+.tip-ok {
+  color: var(--n-success-color);
+}
+.tip-warn {
+  color: var(--n-warning-color);
 }
 </style>
