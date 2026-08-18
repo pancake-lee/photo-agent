@@ -135,6 +135,21 @@ async function deleteSession(sessionId: string) {
   }
 }
 
+// 批量删除：串行逐个调用，返回成功/失败计数。不因单个失败中断。
+async function deleteSessions(sessionIds: string[]): Promise<{ ok: number; fail: number }> {
+  let ok = 0
+  let fail = 0
+  for (const id of sessionIds) {
+    try {
+      await deleteSession(id)
+      ok++
+    } catch {
+      fail++
+    }
+  }
+  return { ok, fail }
+}
+
 function resetChat() {
   currentSession.value = null
   messages.value = []
@@ -151,6 +166,7 @@ export function useChat() {
     loadSession,
     sendMessage,
     deleteSession,
+    deleteSessions,
     resetChat,
   }
 }

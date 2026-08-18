@@ -8,6 +8,15 @@ import type { PhotoListItem, PhotoDetail, PhotoStats } from '../types/photo'
 // 适配器：SDK camelCase → 现有 snake_case 类型
 // ------------------------------------------------------------------ #
 
+// 后端把 shot_at/imported_at 存为 int64 Unix 秒，protojson 序列化成字符串
+// （如 "1723456789"）。转成 ISO 字符串供前端 new Date 解析；0/空/非法返回 null。
+function adaptUnixSec(s?: string): string | null {
+  if (!s || s === '0') return null
+  const sec = Number(s)
+  if (!Number.isFinite(sec) || sec <= 0) return null
+  return new Date(sec * 1000).toISOString()
+}
+
 function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
   return {
     id: item.id ?? '',
@@ -16,7 +25,7 @@ function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
     timeline: item.timeline ?? '',
     tags: item.tags ?? '',
     description: item.description ?? '',
-    shot_at: item.shotAt ?? null,
+    shot_at: adaptUnixSec(item.shotAt),
     width: item.width ?? 0,
     height: item.height ?? 0,
     brand: item.brand ?? '',
@@ -29,7 +38,7 @@ function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
     latitude: item.latitude ?? null,
     longitude: item.longitude ?? null,
     altitude: item.altitude ?? null,
-    imported_at: item.importedAt ?? '',
+    imported_at: adaptUnixSec(item.importedAt) ?? '',
     has_description: item.hasDescription ?? false,
     thumbnail_url: item.id ? `${getApiBase()}/photos/${item.id}/image` : '',
     has_nef: item.hasNef ?? false,
@@ -45,7 +54,7 @@ function adaptPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetail {
     timeline: photo?.timeline ?? '',
     tags: photo?.tags ?? '',
     description: photo?.description ?? '',
-    shot_at: photo?.shotAt ?? null,
+    shot_at: adaptUnixSec(photo?.shotAt),
     width: photo?.width ?? 0,
     height: photo?.height ?? 0,
     brand: photo?.brand ?? '',
@@ -58,7 +67,7 @@ function adaptPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetail {
     latitude: photo?.latitude ?? null,
     longitude: photo?.longitude ?? null,
     altitude: photo?.altitude ?? null,
-    imported_at: photo?.importedAt ?? '',
+    imported_at: adaptUnixSec(photo?.importedAt) ?? '',
     has_description: photo?.hasDescription ?? false,
     thumbnail_url: photo?.id ? `${getApiBase()}/photos/${photo.id}/image` : '',
     image_url: photo?.id ? `${getApiBase()}/photos/${photo.id}/image` : '',

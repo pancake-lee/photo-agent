@@ -17,6 +17,10 @@ func main() {
 	// 尽早初始化日志，捕获启动期与运行期崩溃信息（panic / 致命错误 / 访问违例）
 	setupLogging()
 
+	// 单实例约束：检测到旧实例时通知其退出并等待，随后自己继续启动。
+	// 必须在 wails.Run 之前完成，避免新旧两个窗口同时存在。
+	ensureSingleInstance()
+
 	app := NewApp()
 
 	defer func() {

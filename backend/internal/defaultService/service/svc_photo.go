@@ -497,12 +497,8 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 		relPath = filepath.Join(folder, filename)
 	}
 
-	var srcPath string
-	if fileType == "nef" {
-		srcPath = filepath.Join(conf.C.Storage.PhotoSrc, relPath)
-	} else {
-		srcPath = filepath.Join(conf.C.Storage.PhotoPath, relPath)
-	}
+	// 尺寸与 EXIF 统一从源文件（原图）读取，避免读缩略图（PhotoPath）得到压缩后尺寸。
+	srcPath := filepath.Join(conf.C.Storage.PhotoSrc, relPath)
 
 	ei := getExifInfo(srcPath)
 	if ei == nil {
@@ -567,12 +563,8 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 		relPath = filepath.Join(folder, filename)
 	}
 
-	var srcPath string
-	if isNEF {
-		srcPath = filepath.Join(conf.C.Storage.PhotoSrc, relPath)
-	} else {
-		srcPath = filepath.Join(conf.C.Storage.PhotoPath, relPath)
-	}
+	// 尺寸与 EXIF 统一从源文件（原图）读取，避免读缩略图（PhotoPath）得到压缩后尺寸。
+	srcPath := filepath.Join(conf.C.Storage.PhotoSrc, relPath)
 
 	ei := getExifInfo(srcPath)
 	if ei == nil {

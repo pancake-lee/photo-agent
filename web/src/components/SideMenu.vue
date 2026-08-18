@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NLayoutSider, NMenu, NIcon } from 'naive-ui'
+import { NLayoutSider, NMenu, NIcon, NCheckbox, NModal, NButton, NSpace, useMessage } from 'naive-ui'
 import {
   ImageOutline,
   AddOutline,
@@ -19,7 +19,8 @@ import { isWails } from '../utils/env'
 
 const route = useRoute()
 const router = useRouter()
-const { sessions, fetchSessions, createSession } = useChat()
+const message = useMessage()
+const { sessions, fetchSessions, createSession, deleteSessions } = useChat()
 
 function renderIcon(icon: Component) {
   return () => h(NIcon, null, { default: () => h(icon) })
@@ -111,6 +112,66 @@ const selectedKey = computed(() => {
 function goChat(sessionId: string) {
   router.push(`/chat/${sessionId}`)
 }
+
+// ── 多选模式：批量删除会话 ──
+
+const multiSelectMode = ref(false)
+const selectedIds = ref(new Set<string>())
+const showDeleteConfirm = ref(false)
+const isDeleting = ref(false)
+
+const selectedCount = computed(() => selectedIds.value.size)
+
+function toggleMultiSelectMode() {
+  multiSelectMode.value = !multiSelectMode.value
+  selectedIds.value = new Set()
+}
+
+function exitMultiSelectMode() {
+  multiSelectMode.value = false
+  selectedIds.value = new Set()
+}
+
+function toggleSelected(sessionId: string) {
+  const next = new Set(selectedIds.value)
+  if (next.has(sessionId)) {
+    next.delete(sessionId)
+  } else {
+    next.add(sessionId)
+  }
+  selectedIds.value = next
+}
+
+async function confirmDelete() {
+  const ids = [...selectedIds.value]
+  isDeleting.value = true
+  try {
+    const { ok, fail } = await deleteSessions(ids)
+    if (fail > 0) {
+      message.error(`删除完成：成功 ${ok} 个，失败 ${fail} 个`)
+    } else {
+      message.success(`已删除 ${ok} 个对话`)
+    }
+    // 当前打开的会话被删时重定向到图片管理页
+    if (ids.includes(route.params.sessionId as string)) {
+      router.push('/photos')
+    }
+    showDeleteConfirm.value = false
+    exitMultiSelectMode()
+    fetchSessions()
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+// Esc 退出多选模式
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && multiSelectMode.value) {
+    exitMultiSelectMode()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
 </script>
 
 <template>
@@ -137,10 +198,20 @@ function goChat(sessionId: string) {
       <div class="menu-divider" />
 
       <!-- ═══ 中部：聊天会话列表（可滚动） ═══ -->
-      <div class="chat-area">
+      <div class="chat-area" :class="{ 'multi-select-mode': multiSelectMode }">
         <div class="chat-area-header">
           <NIcon size="14"><ChatbubblesOutline /></NIcon>
-          <span>对话</span>
+          <span class="chat-area-title" @click="multiSelectMode && exitMultiSelectMode()">
+            对话
+          </span>
+          <button
+            class="multi-select-btn"
+            :class="{ danger: multiSelectMode }"
+            :disabled="multiSelectMode && selectedCount === 0"
+            @click="multiSelectMode ? (showDeleteConfirm = true) : toggleMultiSelectMode()"
+          >
+            {{ multiSelectMode ? `删除${selectedCount > 0 ? `(${selectedCount})` : ''}` : '多选' }}
+          </button>
         </div>
 
         <div class="chat-list">
@@ -148,9 +219,19 @@ function goChat(sessionId: string) {
             v-for="s in sessions"
             :key="s.session_id"
             class="chat-item"
-            :class="{ active: selectedKey === `/chat/${s.session_id}` }"
-            @click="goChat(s.session_id)"
+            :class="{
+              active: selectedKey === `/chat/${s.session_id}`,
+              checked: multiSelectMode && selectedIds.has(s.session_id),
+            }"
+            @click="multiSelectMode ? toggleSelected(s.session_id) : goChat(s.session_id)"
           >
+            <NCheckbox
+              v-if="multiSelectMode"
+              :checked="selectedIds.has(s.session_id)"
+              class="chat-item-checkbox"
+              @click.stop
+              @update:checked="toggleSelected(s.session_id)"
+            />
             <span class="chat-item-text">{{ s.title }}</span>
           </div>
 
@@ -159,6 +240,24 @@ function goChat(sessionId: string) {
           </div>
         </div>
       </div>
+
+      <!-- ═══ 批量删除确认弹窗 ═══ -->
+      <NModal
+        v-model:show="showDeleteConfirm"
+        preset="card"
+        title="删除确认"
+        style="width: min(90vw, 400px)"
+      >
+        <div class="delete-confirm-body">
+          确定删除 {{ selectedCount }} 个对话？删除后不可恢复。
+        </div>
+        <template #footer>
+          <NSpace justify="end">
+            <NButton :disabled="isDeleting" @click="showDeleteConfirm = false">取消</NButton>
+            <NButton type="error" :loading="isDeleting" @click="confirmDelete">删除</NButton>
+          </NSpace>
+        </template>
+      </NModal>
 
       <!-- ═══ 底部：设置（固定） ═══ -->
       <div class="bottom-section">
@@ -242,6 +341,57 @@ function goChat(sessionId: string) {
   flex-shrink: 0;
 }
 
+/* 多选模式下"对话"标题可点击退出 */
+.chat-area-title {
+  cursor: inherit;
+}
+
+.multi-select-mode .chat-area-title {
+  cursor: pointer;
+}
+
+/* ── 多选/删除按钮（对话标题右侧靠右） ── */
+
+.multi-select-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--n-text-color-3);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.multi-select-btn:hover {
+  color: var(--n-text-color);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 删除态：红色语义色（危险操作） */
+.multi-select-btn.danger {
+  color: #e5484d;
+}
+
+.multi-select-btn.danger:hover {
+  color: #ff6369;
+  background: rgba(229, 72, 77, 0.12);
+}
+
+.multi-select-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.multi-select-btn:disabled:hover {
+  color: #e5484d;
+  background: transparent;
+}
+
 .chat-list {
   flex: 1 1 0;
   overflow-y: auto;
@@ -275,6 +425,23 @@ function goChat(sessionId: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 多选模式下选中项高亮（与路由 active 同样式） */
+.chat-item.checked {
+  color: var(--n-text-color);
+  background: rgba(99, 132, 255, 0.15);
+}
+
+.chat-item-checkbox {
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.delete-confirm-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--n-text-color-2);
 }
 
 .chat-empty {
