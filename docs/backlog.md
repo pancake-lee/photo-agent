@@ -16,10 +16,15 @@
 | 待规划 | Phase 4    | 4.1  | 发布历史分析                   |      |
 | 待规划 | Phase 4    | 4.2  | 系列感维护                     |      |
 | 待规划 | 缺陷修复   | B2   | 时间线规律维度无候选           |      |
-| Done   | 导入工作流 | W1   | Wails 工程搭建 + 嵌入前端      |      |
-| Done   | 导入工作流 | W2   | 服务端 NEF 存储 + storage/info |      |
-| Done   | 导入工作流 | W3   | 客户端文件操作能力             |      |
-| Done   | 导入工作流 | W4   | 前端导入三步流程页面           |      |
+| Done   | 导入工作流 | W1   | Wails 工程搭建 + 嵌入前端      | 7.7  |
+| Done   | 导入工作流 | W2   | 服务端 NEF 存储 + storage/info | 7.7  |
+| Done   | 导入工作流 | W3   | 客户端文件操作能力             | 7.7  |
+| Done   | 导入工作流 | W4   | 前端导入三步流程页面           | 7.7  |
+| Done   | 导入工作流 | W5   | 配置模板 StorageRoot 分叉      |      |
+| Done   | 导入工作流 | W6   | overwrite 不回写 shot_at       |      |
+| Done   | 导入工作流 | W7   | NEF EXIF 读取策略前后端不一致  |      |
+| Done   | 导入工作流 | W8   | storage/info warning 未展示    |      |
+| Done   | 导入工作流 | W9   | 上传阶段无进度反馈             |      |
 
 ---
 
@@ -134,6 +139,7 @@
 
 > 设计方案：[docs/design/2026-08-11-import-workflow.md](../design/2026-08-11-import-workflow.md)
 > 技术选型：Wails（Go+Vue3），客户端放 `client/`，与服务端 HTTP 通信，NEF 仅存储不处理。
+> **评估**：7.7（正确性 8 健壮性 7 可维护性 8 简洁性 8 准确性 8 完整性 7 一致性 8 可用性 8 交互体验 7），详见 [报告](../data/eval_reports/eval-import-workflow-2026-08-18.json)。实测 146 JPG + 113 NEF 落盘入库正确；衍生问题 W5-W9。
 
 ### W1 Wails 工程搭建 + 嵌入现有前端
 
@@ -187,6 +193,53 @@
   - [x] 上传结果反馈（成功数/失败数/耗时）
   - [x] 客户端上传/存储查询单元测试通过（httptest 验证 multipart 与 folder 字段）
   - [ ] 桌面环境实机验证（需 Windows 图形环境）
+
+### W5 配置模板 StorageRoot 分叉
+
+- **状态**：Done
+- **背景**：`configs/config.yaml` 模板中 `Storage.PhotoSrc` 为 `./data/photos/src`，而新增的 `Storage.StorageRoot` 为 `./data/photos_src`。上传落盘走 `PhotoSrc`，`storage/info` 扫描走 `StorageRoot`，两者指向不同目录。当前用户实际 `.local/pancake.yaml` 里两者同为 `/root/share/photo-agent/pic-like/` 才未暴露，若按模板部署会导致「总文件数」与「本次新增」对不上。
+- **方案**：去掉独立的 StorageRoot 配置字段，storage/info 直接扫描上传落盘使用的 PhotoSrc 作为源文件根目录，使「总文件数/月份/活动目录」统计与上传落盘位置天然一致，消除模板分叉。
+- **分析**：PhotoSrc 本就是「照片按月/活动组织」的源文件根目录，StorageRoot 与之语义重复；分叉源于模板只更新了 PhotoSrc 未同步 StorageRoot。
+- **验收**：
+  - [x] storage/info 扫描目录与上传落盘目录一致（都走 PhotoSrc）
+  - [x] config 模板与 conf.go 不再存在 StorageRoot 与 PhotoSrc 分叉
+
+### W6 overwrite 不回写 shot_at
+
+- **状态**：Done
+- **背景**：`svc_photo.go` 的 `overwritePhoto` 更新 description/file_path/timeline/品牌/镜头/焦距/光圈/ISO/曝光时间/宽高，但未更新 shot_at 及 GPS 字段。覆盖同名文件（导入工作流步骤 3 选「覆盖服务器现有文件」）时，新文件的拍摄时间不会写回 DB。同文件名通常拍摄时间相同，边界上仍缺失。
+- **方案**：覆盖同名文件时，同步按新文件回写拍摄时间与 GPS 字段，与新建记录 createPhotoRecord 的字段口径对齐。
+- **分析**：overwritePhoto 已读取新文件 EXIF 却未把 shot_at/GPS 写进更新字段，属遗漏。
+- **验收**：
+  - [x] 覆盖同名文件时 shot_at/GPS 按新文件更新
+
+### W7 NEF EXIF 读取策略前后端不一致
+
+- **状态**：Done
+- **背景**：客户端 `client/sync.go` 为避免 goexif 对 NEF 卡死，跳过 NEF 的 EXIF 读取（注释明确）。但服务端 `createPhotoRecord` 对 NEF 仍调用 `getExifInfo`（内部 `exif.Decode`）。若 goexif 真会卡死某些 NEF，服务端上传时同样会卡死；当前 113 个 NEF 未触发，属潜在风险。
+- **方案**：保留服务端入库时读 NEF EXIF 的现状（实测 113 个 NEF 均成功、无卡死），仅修正客户端注释里「防 goexif 卡死」的误导理由，改为说明服务端已读、客户端无需重复读。客户端行为不变。
+- **分析**：实测 113 个 NEF 的 shot_at 均成功提取，说明 goexif 对当前 NEF 安全；客户端跳过本身合理（服务端会读），但注释理由不成立，易误导后续维护者。
+- **验收**：
+  - [x] 客户端注释理由修正，前后端对「谁读 NEF EXIF」的说明一致
+
+### W8 storage/info warning 未展示
+
+- **状态**：Done
+- **背景**：`svc_storage.go` 在存储根不可访问时返回 200 + `warning` 字段，但前端 `ImportWorkflow.vue` 未渲染 warning，`StorageInfo` 接口的 `warning` 字段未被消费。存储根不可访问时用户看到全 0 状态却无任何提示。
+- **方案**：步骤 3 展示服务器状态时，warning 非空则用警示组件展示（如「存储根不可访问」），与现有 NAlert 风格一致。
+- **分析**：服务端已设计 warning 字段，前端漏了渲染，属纯前端补全。
+- **验收**：
+  - [x] 存储根不可访问时前端给出可见提示
+
+### W9 上传阶段无进度反馈
+
+- **状态**：Done
+- **背景**：步骤 3 上传大量文件（本次实测 259 个，含约 16MB 的 NEF）时仅按钮 loading 转圈，无逐文件/百分比进度。长等待下用户难以判断是否卡死，只能等最终结果。
+- **方案**：客户端上传循环中每完成一个文件向前端推送一次进度事件（Wails 事件机制），前端监听并展示「已完成 X/N」进度条，同步完成后替换为现有结果统计。
+- **分析**：同步是客户端阻塞调用，前端 await 期间拿不到中间态，需靠 Wails 事件异步推送进度。改动跨客户端 Go（事件推送）与前端（监听 + 进度条 UI）。
+- **验收**：
+  - [x] 上传过程有可感知的进度反馈（已完成 X/N）
+  - [x] 同步完成后进度条替换为成功/失败/耗时统计
 
 ---
 

@@ -115,6 +115,13 @@ export interface SyncResult {
   files: SyncFileResult[]
 }
 
+export interface SyncProgress {
+  completed: number
+  total: number
+  name: string
+  status: string
+}
+
 export interface ConflictCheck {
   total: number
   existing: string[]
@@ -191,6 +198,18 @@ export const wailsApi = {
       console.log('[wails-log]', msg)
     }
   },
+}
+
+/**
+ * 订阅客户端上传进度事件（对应 Go 侧 runtime.EventsEmit("sync:progress", …)）。
+ * 返回取消订阅函数；非 Wails 环境返回 no-op。
+ */
+export function onSyncProgress(cb: (p: SyncProgress) => void): () => void {
+  const runtime = (window as any).runtime
+  if (runtime?.EventsOn) {
+    return runtime.EventsOn('sync:progress', cb)
+  }
+  return () => {}
 }
 
 export { isWails }

@@ -19,8 +19,6 @@ Storage:
   PhotoSrc: "./data/photos/src"
   # 压缩后的图片存储路径
   PhotoPath: "./data/photos/compressed"
-  # storage/info 扫描根目录（源文件按月/活动组织的位置）
-  StorageRoot: "./data/photos_src"
   # vlm 图像识别结果输出路径
   DescriptionsPath: "./data/descriptions.json"
   # 用户提供的时间线文件路径

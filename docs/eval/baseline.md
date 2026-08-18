@@ -42,6 +42,17 @@
 >
 > 📋 3.4 专题中枢：[design/2026-07-27-topic-discovery-hub.md](../design/2026-07-27-topic-discovery-hub.md)
 
+### 2026-08-18 — 导入工作流 W1-W4（Windows 客户端，首轮评估）
+
+- **总体评分**：7.7/10 ✅ 通过（阈值 6.0）
+- **评估对象**：W1 Wails 工程搭建 + W2 服务端 NEF 存储与 storage/info + W3 客户端文件操作 + W4 前端导入三步流程页面（对应 [design/2026-08-11-import-workflow.md](../design/2026-08-11-import-workflow.md)）
+- **实测验证**：146 张 JPG + 113 张 NEF 上传到 `202608-山西旅游/`，DB 记录 146 jpg + 113 nef 一一对应，NEF shot_at 从 EXIF 正确提取入库；客户端单测通过（import_test/sync_test）
+- **代码质量**：（正确性 8 / 健壮性 7 / 可维护性 8 / 简洁性 8）— 纯函数/绑定分离、前后端类型对应、注释充分；无重试、warning 未消费、overwrite 不回写 shot_at
+- **功能效果**：（准确性 8 / 完整性 7 / 一致性 8）— 四阶段全落地，命名/风格一致；warning 字段前端丢弃、无清空中转收尾
+- **用户价值**：（可用性 8 / 交互体验 7）— 三步引导降低误操作、仅复制保安全；长上传无进度反馈
+- **新发现问题**：W5（配置模板 StorageRoot 分叉）、W6（overwrite 不回写 shot_at）、W7（NEF EXIF 读取策略不一致）、W8（storage/info warning 未展示）、W9（上传无进度反馈）
+- **评估报告**：`data/eval_reports/eval-import-workflow-2026-08-18.json`
+
 ### 2026-07-31 — 3.8 主题发现交互式管线（首轮评估）
 
 - **总体评分**：7.3/10 ✅ 通过（阈值 6.0）

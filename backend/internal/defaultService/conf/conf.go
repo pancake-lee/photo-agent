@@ -5,7 +5,6 @@ type Config struct {
 	Storage struct {
 		PhotoPath          string `default:"./data/photos"`
 		PhotoSrc           string `default:"./data/photos_src"`
-		StorageRoot        string `default:"./data/photos_src"`
 		DescriptionsPath   string `default:"./data/descriptions.json"`
 		TimelinePath       string
 		TimelineWindowDays int `default:"7"`

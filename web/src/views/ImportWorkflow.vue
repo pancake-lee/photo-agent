@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   NLayoutContent,
   NLayoutHeader,
@@ -19,9 +19,10 @@ import {
   NSpin,
   NEmpty,
   NModal,
+  NProgress,
   useMessage,
 } from 'naive-ui'
-import { wailsApi, wailsError, isWails } from '../utils/wails'
+import { wailsApi, wailsError, isWails, onSyncProgress } from '../utils/wails'
 import type {
   ConflictCheck,
   CreateStagingResult,
@@ -31,6 +32,7 @@ import type {
   MigrateResult,
   StagingScan,
   StorageInfo,
+  SyncProgress,
   SyncResult,
 } from '../utils/wails'
 import { settings } from '../stores/settings'
@@ -81,6 +83,14 @@ const syncing = ref(false)
 const conflictCheck = ref<ConflictCheck | null>(null)
 const checkingConflicts = ref(false)
 const showSyncConfirm = ref(false)
+const syncProgress = ref<SyncProgress | null>(null)
+
+/** 上传进度百分比（0-100），用于进度条。 */
+const progressPercent = computed(() => {
+  const p = syncProgress.value
+  if (!p || p.total <= 0) return 0
+  return Math.min(100, Math.round((p.completed / p.total) * 100))
+})
 
 /** 是否存在重名文件，用于二次确认时展示「跳过/覆盖」还是「直接上传」。 */
 const hasConflicts = computed(() => (conflictCheck.value?.existing.length ?? 0) > 0)
@@ -300,6 +310,8 @@ async function confirmSync(resolution: 'skip' | 'overwrite') {
   const _folder = folderName.value
   const _server = serverUrl.value.trim()
   syncing.value = true
+  syncResult.value = null
+  syncProgress.value = null
   try {
     wailsApi.log(`confirmSync: 开始同步 resolution=${resolution}`)
     syncResult.value = await wailsApi.syncToServer(_staging, _folder, _server, resolution)
@@ -344,6 +356,18 @@ function hasWarnings(a: ImportAnalysis): boolean {
     a.no_date.length > 0
   )
 }
+
+// ── 上传进度事件订阅 ──
+
+let offProgress: (() => void) | null = null
+onMounted(() => {
+  offProgress = onSyncProgress((p) => {
+    syncProgress.value = p
+  })
+})
+onUnmounted(() => {
+  offProgress?.()
+})
 </script>
 
 <template>
@@ -587,6 +611,15 @@ function hasWarnings(a: ImportAnalysis): boolean {
             </NDescriptions>
 
             <NAlert
+              v-if="storageInfo.warning"
+              type="warning"
+              :bordered="false"
+              class="warn-item"
+            >
+              {{ storageInfo.warning }}
+            </NAlert>
+
+            <NAlert
               :type="folderExistsOnServer ? 'warning' : 'info'"
               :bordered="false"
               class="warn-item"
@@ -599,6 +632,18 @@ function hasWarnings(a: ImportAnalysis): boolean {
               </template>
             </NAlert>
           </template>
+
+          <div v-if="syncing" class="sync-progress">
+            <NProgress
+              type="line"
+              :percentage="progressPercent"
+              :height="8"
+              :border-radius="4"
+            />
+            <p class="sync-progress-text">
+              已完成 {{ syncProgress?.completed ?? 0 }} / {{ syncProgress?.total ?? '—' }} 个文件
+            </p>
+          </div>
 
           <div v-if="syncResult" class="sync-result">
             <NDescriptions bordered :column="4" size="small" class="stats">
@@ -864,5 +909,16 @@ function hasWarnings(a: ImportAnalysis): boolean {
   flex-direction: column;
   gap: 8px;
   margin-top: 8px;
+}
+.sync-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.sync-progress-text {
+  margin: 0;
+  color: var(--n-text-color-3);
+  font-size: 13px;
 }
 </style>

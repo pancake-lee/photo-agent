@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,6 +57,14 @@ type SyncResult struct {
 	Failed    int              `json:"failed"`
 	ElapsedMs int64            `json:"elapsed_ms"`
 	Files     []SyncFileResult `json:"files"`
+}
+
+// SyncProgress 单个文件完成上传/跳过后向前端推送的进度信息。
+type SyncProgress struct {
+	Completed int    `json:"completed"`
+	Total     int    `json:"total"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
 }
 
 // joinURL 拼接服务地址与接口路径，忽略服务地址末尾斜杠。
@@ -135,7 +144,9 @@ func checkConflicts(stagingPath, folderName, serverURL string) (*ConflictCheck, 
 //   - "skip"：跳过服务端已存在的文件（不传输），仅上传新文件；
 //   - "overwrite"：覆盖服务端现有文件；
 //   - ""：不指定，沿用服务端冲突检测（已存在文件返回 conflict）。
-func syncLikeDir(stagingPath, folderName, serverURL, resolution string) (*SyncResult, error) {
+//
+// onProgress 非空时，每完成一个文件（上传成功/失败/跳过）回调一次，用于向前端推送进度。
+func syncLikeDir(stagingPath, folderName, serverURL, resolution string, onProgress func(SyncProgress)) (*SyncResult, error) {
 	likeDir := filepath.Join(stagingPath, "like", folderName)
 	log.Printf("sync: scanning like dir %s (resolution=%s)", likeDir, resolution)
 	files, err := scanDir(likeDir, func(name string) bool {
@@ -165,12 +176,22 @@ func syncLikeDir(stagingPath, folderName, serverURL, resolution string) (*SyncRe
 	}
 	start := time.Now()
 
+	// 完成计数（含跳过与失败），每完成一个文件回调一次进度。
+	var completed int64
+	report := func(name, status string) {
+		c := atomic.AddInt64(&completed, 1)
+		if onProgress != nil {
+			onProgress(SyncProgress{Completed: int(c), Total: len(files), Name: name, Status: status})
+		}
+	}
+
 	sem := make(chan struct{}, syncConcurrency)
 	var wg sync.WaitGroup
 	for i, f := range files {
 		if skipSet[f.Name] {
 			result.Files[i] = SyncFileResult{Name: f.Name, Status: "skipped"}
 			result.Skipped++
+			report(f.Name, "skipped")
 			continue
 		}
 		wg.Add(1)
@@ -183,6 +204,7 @@ func syncLikeDir(stagingPath, folderName, serverURL, resolution string) (*SyncRe
 			if errMsg != "" {
 				result.Files[idx].Error = errMsg
 			}
+			report(name, status)
 		}(i, f.Name)
 	}
 	wg.Wait()
@@ -216,8 +238,8 @@ func uploadOneFile(serverURL, folder, filePath, resolution string) (status strin
 	if info, err := file.Stat(); err == nil {
 		modTime = info.ModTime().UTC().Format(time.RFC3339)
 	}
-	// 仅 JPG 读取 EXIF 拍摄时间：服务端 doNefUpload 会忽略 original_shot_at，
-	// 客户端对 NEF 读 EXIF 属无用功，且部分 NEF 可能让 goexif 卡死，直接跳过。
+	// 仅 JPG 读取 EXIF 拍摄时间：NEF 的拍摄时间由服务端 doNefUpload/createPhotoRecord
+	// 入库时读取（实测 113 个 NEF 均正常、无卡死），客户端无需重复读取。
 	shotAt := ""
 	if isJpg(name) {
 		if t, ok := exifShotAt(filePath); ok {

@@ -85,7 +85,7 @@ func TestSyncLikeDir(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := syncLikeDir(staging, testFolder, server.URL, "")
+	result, err := syncLikeDir(staging, testFolder, server.URL, "", nil)
 	if err != nil {
 		t.Fatalf("syncLikeDir failed: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSyncLikeDirEmpty(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer server.Close()
 
-	result, err := syncLikeDir(staging, testFolder, server.URL, "")
+	result, err := syncLikeDir(staging, testFolder, server.URL, "", nil)
 	if err != nil {
 		t.Fatalf("syncLikeDir failed: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestSyncLikeDirSkipExisting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := syncLikeDir(staging, testFolder, server.URL, "skip")
+	result, err := syncLikeDir(staging, testFolder, server.URL, "skip", nil)
 	if err != nil {
 		t.Fatalf("syncLikeDir failed: %v", err)
 	}
@@ -296,5 +296,58 @@ func TestSyncLikeDirSkipExisting(t *testing.T) {
 	defer mu.Unlock()
 	if len(uploaded) != 1 || uploaded[0] != "IMG_0002.NEF" {
 		t.Fatalf("expected only IMG_0002.NEF uploaded, got %v", uploaded)
+	}
+}
+
+// TestSyncLikeDirProgress 验证上传过程中 onProgress 回调按文件逐次触发，completed 从 1 递增到 total。
+func TestSyncLikeDirProgress(t *testing.T) {
+	staging := t.TempDir()
+	likeDir := filepath.Join(staging, "like", testFolder)
+	if err := os.MkdirAll(likeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(likeDir, "IMG_0001.JPG"), []byte("jpeg-data"))
+	writeFile(t, filepath.Join(likeDir, "IMG_0002.NEF"), []byte("nef-data"))
+	writeFile(t, filepath.Join(likeDir, "IMG_0003.NEF"), []byte("nef-data-3"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"stored"}`)
+	}))
+	defer server.Close()
+
+	var mu sync.Mutex
+	var progresses []SyncProgress
+	result, err := syncLikeDir(staging, testFolder, server.URL, "", func(p SyncProgress) {
+		mu.Lock()
+		progresses = append(progresses, p)
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatalf("syncLikeDir failed: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(progresses) != 3 {
+		t.Fatalf("expected 3 progress callbacks, got %d", len(progresses))
+	}
+	seen := map[int]bool{}
+	for _, p := range progresses {
+		if p.Total != 3 {
+			t.Errorf("unexpected total: %d", p.Total)
+		}
+		if p.Completed < 1 || p.Completed > 3 {
+			t.Errorf("unexpected completed: %d", p.Completed)
+		}
+		seen[p.Completed] = true
+	}
+	for i := 1; i <= 3; i++ {
+		if !seen[i] {
+			t.Errorf("missing progress completed=%d", i)
+		}
+	}
+	if result.Succeeded != 3 {
+		t.Errorf("expected succeeded 3, got %d", result.Succeeded)
 	}
 }

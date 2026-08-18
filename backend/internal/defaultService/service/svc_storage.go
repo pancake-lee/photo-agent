@@ -51,7 +51,8 @@ type storageInfoResp struct {
 // handleStorageInfo 返回存储根目录的状态信息。
 func (s *StorageServer) handleStorageInfo(kctx khttp.Context) error {
 	plogger.Infof("storage/info request: %s %s", kctx.Request().Method, kctx.Request().URL.Path)
-	root := conf.C.Storage.StorageRoot
+	// 扫描上传落盘使用的 PhotoSrc 作为源文件根目录，使「总文件数/月份/活动目录」统计与上传落盘位置一致。
+	root := conf.C.Storage.PhotoSrc
 	resp := storageInfoResp{
 		Root:       root,
 		Months:     []string{},

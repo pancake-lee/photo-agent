@@ -618,6 +618,19 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 	if ei.ExposureTime != "" {
 		updates["exposure_time"] = ei.ExposureTime
 	}
+	// 覆盖同名文件时按新文件回写拍摄时间与 GPS 字段，与 createPhotoRecord 的字段口径对齐。
+	if ei.ShotAt != nil {
+		updates["shot_at"] = *ei.ShotAt
+	}
+	if ei.Latitude != nil {
+		updates["latitude"] = *ei.Latitude
+	}
+	if ei.Longitude != nil {
+		updates["longitude"] = *ei.Longitude
+	}
+	if ei.Altitude != nil {
+		updates["altitude"] = *ei.Altitude
+	}
 	if width > 0 && height > 0 {
 		updates["width"] = width
 		updates["height"] = height

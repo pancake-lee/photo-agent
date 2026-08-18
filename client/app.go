@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"runtime/debug"
+	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -106,7 +107,13 @@ func (a *App) CheckConflicts(stagingPath, folderName, serverURL string) (*Confli
 func (a *App) SyncToServer(stagingPath, folderName, serverURL, resolution string) (*SyncResult, error) {
 	defer a.recoverPanic()
 	log.Printf("SyncToServer: staging=%s folder=%s server=%s resolution=%s", stagingPath, folderName, serverURL, resolution)
-	return syncLikeDir(stagingPath, folderName, serverURL, resolution)
+	// 上传进度事件：并发 goroutine 会并发回调，用锁串行化 EventsEmit，避免事件通道竞态。
+	var emitMu sync.Mutex
+	return syncLikeDir(stagingPath, folderName, serverURL, resolution, func(p SyncProgress) {
+		emitMu.Lock()
+		defer emitMu.Unlock()
+		runtime.EventsEmit(a.ctx, "sync:progress", p)
+	})
 }
 
 // Log 供前端写入客户端日志文件，便于在无法打开 devtools 时排查前端调用链路。
