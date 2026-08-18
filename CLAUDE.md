@@ -103,4 +103,5 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - [docs/design/2026-08-01-topic-discovery-design.md](docs/design/2026-08-01-topic-discovery-design.md) — 主题发现统合设计文档
 - [docs/design/](docs/design/) — 方案设计文档
 - [docs/archive/v1.0.8.md](docs/archive/v1.0.8.md) — v1.0.8 版本归档（主题发现交互式管线）
+- [docs/archive/v1.0.9.md](docs/archive/v1.0.9.md) — v1.0.9 版本归档（导入工作流 Windows 客户端）
 - [docs/archive/](docs/archive/) — 已完成版本的归档
