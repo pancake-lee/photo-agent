@@ -274,6 +274,87 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.SearchPhotosResponse'
+    /api/v1/photos/segments:
+        get:
+            tags:
+                - PhotoService
+            description: 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+            operationId: PhotoService_ListPhotoSegments
+            parameters:
+                - name: timeline
+                  in: query
+                  description: 复用 SearchPhotos 的筛选/排序参数（不含分页）
+                  schema:
+                    type: string
+                - name: tag
+                  in: query
+                  schema:
+                    type: string
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: brand
+                  in: query
+                  schema:
+                    type: string
+                - name: lens
+                  in: query
+                  schema:
+                    type: string
+                - name: focalMin
+                  in: query
+                  schema:
+                    type: string
+                - name: focalMax
+                  in: query
+                  schema:
+                    type: string
+                - name: isoMin
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: isoMax
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: shotAtStart
+                  in: query
+                  schema:
+                    type: string
+                - name: shotAtEnd
+                  in: query
+                  schema:
+                    type: string
+                - name: sortBy
+                  in: query
+                  schema:
+                    type: string
+                - name: sortOrder
+                  in: query
+                  schema:
+                    type: string
+                - name: burstGroupId
+                  in: query
+                  schema:
+                    type: string
+                - name: burstProfile
+                  in: query
+                  schema:
+                    type: string
+                - name: segmentMode
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.ListPhotoSegmentsResponse'
     /api/v1/photos/stats:
         get:
             tags:
@@ -1126,6 +1207,15 @@ components:
                     format: int32
                 count:
                     type: string
+        api.ListPhotoSegmentsResponse:
+            type: object
+            properties:
+                segments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.PhotoSegment'
+                total:
+                    type: string
         api.ListTagsResponse:
             type: object
             properties:
@@ -1315,6 +1405,17 @@ components:
                 burstCount:
                     type: integer
                     format: int32
+        api.PhotoSegment:
+            type: object
+            properties:
+                key:
+                    type: string
+                label:
+                    type: string
+                count:
+                    type: string
+                offset:
+                    type: string
         api.RebuildBurstGroupsResponse:
             type: object
             properties:

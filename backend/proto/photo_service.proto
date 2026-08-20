@@ -70,6 +70,12 @@ service PhotoService {
             body: "*"
         };
     }
+    // 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+    rpc ListPhotoSegments (ListPhotoSegmentsRequest) returns (ListPhotoSegmentsResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/photos/segments"
+        };
+    }
 }
 
 // --------------------------------------------------
@@ -136,6 +142,41 @@ message SearchPhotosResponse {
     int32 page = 3;
     int32 page_size = 4;
     int32 total_pages = 5;
+}
+
+// --------------------------------------------------
+// ListPhotoSegments
+
+message ListPhotoSegmentsRequest {
+    // 复用 SearchPhotos 的筛选/排序参数（不含分页）
+    string timeline = 1;
+    string tag = 2;
+    string keyword = 3;
+    string brand = 4;
+    string lens = 5;
+    string focal_min = 6;
+    string focal_max = 7;
+    int32 iso_min = 8;
+    int32 iso_max = 9;
+    string shot_at_start = 10;
+    string shot_at_end = 11;
+    string sort_by = 12;
+    string sort_order = 13;
+    string burst_group_id = 14;
+    string burst_profile = 15;
+    string segment_mode = 16; // month / activity（按天模式的导航仍用 month）
+}
+
+message PhotoSegment {
+    string key = 1;    // 分段键：month 为 "2006-01"，activity 为 timeline 值（空为未分类）
+    string label = 2;  // 展示文案：month 为 "2006 年 1 月"，activity 为 timeline 名或 "未分类"
+    int64 count = 3;   // 该分段照片数
+    int64 offset = 4;  // 该分段首张照片在完整排序列表中的 0 基位置
+}
+
+message ListPhotoSegmentsResponse {
+    repeated PhotoSegment segments = 1;
+    int64 total = 2;
 }
 
 // --------------------------------------------------

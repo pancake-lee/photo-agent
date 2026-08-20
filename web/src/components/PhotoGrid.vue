@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { NGrid, NGi, NSpin, NEmpty, NAlert, NButton } from 'naive-ui'
+import { computed, inject, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { NSpin, NEmpty, NAlert, NButton } from 'naive-ui'
 import PhotoCard from './PhotoCard.vue'
 import PhotoSegmentDivider from './PhotoSegmentDivider.vue'
 import type { PhotoListItem, BurstViewLevel } from '../types/photo'
@@ -9,8 +9,14 @@ import { computeDividers, type SegmentMode } from '../utils/segment'
 const props = defineProps<{
   photos: PhotoListItem[]
   loading: boolean
-  loadingMore: boolean
-  noMore: boolean
+  /** 向下加载中（滚动到窗口尾部追加） */
+  loadingDown: boolean
+  /** 向上加载中（滚动到窗口头部前插） */
+  loadingUp: boolean
+  /** 窗口已到列表末尾 */
+  noMoreDown: boolean
+  /** 窗口已到列表开头 */
+  noMoreUp: boolean
   error: string | null
   processingIds: Set<string>
   embeddedIds: Set<string>
@@ -26,13 +32,18 @@ const emit = defineEmits<{
   triggerEmbed: [photoId: string]
   deletePhoto: [photoId: string]
   openBurstGroup: [groupId: string, coverId: string]
-  dividerEl: [key: string, el: unknown]
-  loadMore: []
+  dividerEl: [key: string, el: HTMLElement | null]
+  loadDown: []
+  loadUp: []
   retry: []
 }>()
 
+// 滚动容器：由父级 PhotoManagement 通过 provide 注入（.grid-main 有界滚动容器）。
+// 观察器以它为 root，保证 rootMargin 相对的是照片列表自身视口，而非浏览器视口。
+const scrollRoot = inject<Ref<HTMLElement | null>>('photoGridScrollRoot', ref(null))
+
 // 分割线 DOM 挂载/卸载上报（父级用于导航高亮跟随与锚点跳转）
-function onDividerMounted(key: string, el: unknown) {
+function onDividerMounted(key: string, el: HTMLElement) {
   emit('dividerEl', key, el)
 }
 function onDividerUnmounted(key: string) {
@@ -49,13 +60,13 @@ function visiblePhotos(): PhotoListItem[] {
 // 流元素 = 照片或分割线（位于其分段首张照片之前）。
 // 分割线基于实际渲染照片（连拍折叠后）计算，组折叠不影响分割线正确性。
 type FlowItem =
-  | { kind: 'photo'; photo: PhotoListItem; photoIndex: number }
-  | { kind: 'divider'; key: string; label: string; subLabel?: string; count: number; photoIndex: number }
+  | { kind: 'photo'; itemKey: string; photo: PhotoListItem; photoIndex: number }
+  | { kind: 'divider'; itemKey: string; segKey: string; label: string; subLabel?: string; count: number; photoIndex: number }
 
 const flowItems = computed<FlowItem[]>(() => {
   const visible = visiblePhotos()
   if (!props.segmentMode) {
-    return visible.map((photo, i) => ({ kind: 'photo', photo, photoIndex: i }) as FlowItem)
+    return visible.map((photo, i) => ({ kind: 'photo', itemKey: photo.id, photo, photoIndex: i }))
   }
   const dividers = computeDividers(visible, props.segmentMode)
   const dividerByIndex = new Map<number, (typeof dividers)[number]>()
@@ -68,44 +79,73 @@ const flowItems = computed<FlowItem[]>(() => {
   for (let i = 0; i < visible.length; i++) {
     const d = dividerByIndex.get(i)
     if (d) {
-      items.push({ kind: 'divider', key: d.key, label: d.label, subLabel: d.subLabel, count: d.count, photoIndex: i })
+      items.push({
+        kind: 'divider',
+        itemKey: `d-${d.key}-${i}`,
+        segKey: d.key,
+        label: d.label,
+        subLabel: d.subLabel,
+        count: d.count,
+        photoIndex: i,
+      })
     }
-    items.push({ kind: 'photo', photo: visible[i], photoIndex: i })
+    items.push({ kind: 'photo', itemKey: visible[i].id, photo: visible[i], photoIndex: i })
   }
   return items
 })
 
-// ── 触底加载 ──
-// 监听哨兵元素进入视口（根 = 浏览器视口），触发追加下一页。
-// 哨兵随照片网格渲染（列表为空/出错时不渲染），观察时机跟随 DOM 挂载。
-const loadMoreSentinel = ref<HTMLElement | null>(null)
-let observer: IntersectionObserver | null = null
+// ── 双向滚动加载 ──
+// 顶部哨兵 + 底部哨兵各自一个 IntersectionObserver，root = 有界滚动容器。
+// rootMargin 各向扩展 600px，滚动接近窗口上沿/下沿时提前触发前插/追加一页。
+const topSentinel = ref<HTMLElement | null>(null)
+const bottomSentinel = ref<HTMLElement | null>(null)
+let topObserver: IntersectionObserver | null = null
+let bottomObserver: IntersectionObserver | null = null
 
-function ensureObserver() {
-  if (!observer) {
-    observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          if (!props.loading && !props.loadingMore && !props.noMore && !props.error) {
-            emit('loadMore')
-          }
-        }
-      },
-      { rootMargin: '600px 0px' }, // 提前 600px 预加载
-    )
-  }
+function teardownObservers() {
+  topObserver?.disconnect()
+  bottomObserver?.disconnect()
+  topObserver = null
+  bottomObserver = null
 }
 
-watch(loadMoreSentinel, (el, oldEl) => {
-  ensureObserver()
-  if (oldEl) observer?.unobserve(oldEl)
-  if (el) observer?.observe(el)
-})
+function setupObservers() {
+  teardownObservers()
+  const root = scrollRoot.value
+  if (!root) return
 
-onBeforeUnmount(() => {
-  observer?.disconnect()
-  observer = null
-})
+  topObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        if (!props.loading && !props.loadingUp && !props.loadingDown && !props.noMoreUp && !props.error) {
+          emit('loadUp')
+        }
+      }
+    },
+    { root, rootMargin: '600px 0px 0px 0px' },
+  )
+  bottomObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        if (!props.loading && !props.loadingDown && !props.loadingUp && !props.noMoreDown && !props.error) {
+          emit('loadDown')
+        }
+      }
+    },
+    { root, rootMargin: '0px 0px 600px 0px' },
+  )
+
+  if (topSentinel.value) topObserver.observe(topSentinel.value)
+  if (bottomSentinel.value) bottomObserver.observe(bottomSentinel.value)
+}
+
+// 滚动容器注入时机晚于子组件挂载，且哨兵随 loading/空态切换而挂载/卸载，
+// 统一监听三者变化重建观察器。
+watch([() => scrollRoot.value, topSentinel, bottomSentinel], () => {
+  setupObservers()
+}, { flush: 'post' })
+
+onBeforeUnmount(() => teardownObservers())
 </script>
 
 <template>
@@ -125,54 +165,46 @@ onBeforeUnmount(() => {
     <NEmpty description="还没有照片，点击上方按钮开始" />
   </div>
 
-  <!-- 照片网格 -->
-  <template v-else>
-    <NGrid
-      :cols="4"
-      :x-gap="12"
-      :y-gap="12"
-      responsive="screen"
-      item-responsive
-    >
-      <template v-for="item in flowItems" :key="item.kind === 'photo' ? item.photo.id : `d-${item.key}-${item.photoIndex}`">
+  <!-- 照片流 -->
+  <div v-else class="photo-list">
+    <!-- 顶部哨兵：滚动接近窗口上沿时触发向上加载 -->
+    <div ref="topSentinel" class="load-sentinel-top">
+      <NSpin v-if="loadingUp" size="small" />
+    </div>
+
+    <!-- 照片网格：CSS Grid，分割线跨全部列 -->
+    <div class="photo-grid">
+      <template v-for="item in flowItems" :key="item.itemKey">
         <PhotoSegmentDivider
           v-if="item.kind === 'divider'"
-          :seg-key="item.key"
+          :seg-key="item.segKey"
           :label="item.label"
           :sub-label="item.subLabel"
           :count="item.count"
-          @vue:mounted="onDividerMounted(item.key, $event.el)"
-          @vue:unmounted="onDividerUnmounted(item.key)"
+          @mounted="onDividerMounted(item.segKey, $event)"
+          @unmounted="onDividerUnmounted(item.segKey)"
         />
-        <NGi
+        <PhotoCard
           v-else
-          :span="1"
-          :xs="2"
-          :s="1"
-          :m="1"
-          :l="1"
-        >
-          <PhotoCard
-            :photo="item.photo"
-            :view-level="viewLevel"
-            :processing="processingIds.has(item.photo.id)"
-            :is-embedded="embeddedIds.has(item.photo.id)"
-            @view-detail="(id) => $emit('viewDetail', id)"
-            @trigger-describe="(id) => $emit('triggerDescribe', id)"
-            @trigger-embed="(id) => $emit('triggerEmbed', id)"
-            @delete-photo="(id) => $emit('deletePhoto', id)"
-            @open-burst-group="(gid, coverId) => $emit('openBurstGroup', gid, coverId)"
-          />
-        </NGi>
+          :photo="item.photo"
+          :view-level="viewLevel"
+          :processing="processingIds.has(item.photo.id)"
+          :is-embedded="embeddedIds.has(item.photo.id)"
+          @view-detail="(id) => $emit('viewDetail', id)"
+          @trigger-describe="(id) => $emit('triggerDescribe', id)"
+          @trigger-embed="(id) => $emit('triggerEmbed', id)"
+          @delete-photo="(id) => $emit('deletePhoto', id)"
+          @open-burst-group="(gid, coverId) => $emit('openBurstGroup', gid, coverId)"
+        />
       </template>
-    </NGrid>
+    </div>
 
-    <!-- 触底加载哨兵 + 状态提示 -->
-    <div v-show="!noMore || loadingMore" class="load-more" ref="loadMoreSentinel">
-      <NSpin v-if="loadingMore" size="small" />
+    <!-- 底部哨兵 + 状态提示 -->
+    <div v-show="!noMoreDown || loadingDown" ref="bottomSentinel" class="load-more">
+      <NSpin v-if="loadingDown" size="small" />
       <span v-else class="load-more-hint">滚动加载更多…</span>
     </div>
-  </template>
+  </div>
 </template>
 
 <style scoped>
@@ -182,6 +214,20 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   min-height: 300px;
+}
+.photo-list {
+  padding-bottom: 8px;
+}
+.load-sentinel-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
 .load-more {
   display: flex;

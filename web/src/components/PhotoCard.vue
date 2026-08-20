@@ -76,12 +76,13 @@ function formatExifTooltip(): string {
 </script>
 
 <template>
-  <NTooltip trigger="hover">
+  <NTooltip trigger="hover" :delay="300" :to="false">
     <template #trigger>
       <NCard
         :bordered="true"
         size="small"
         class="photo-card"
+        :data-photo-id="photo.id"
         hoverable
         @click="handleCardClick"
       >

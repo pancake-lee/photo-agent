@@ -121,6 +121,7 @@ Class | Method | HTTP request | Description
 *PhotoServiceApi* | [**photo_service_get_burst_groups_status**](docs/PhotoServiceApi.md#photo_service_get_burst_groups_status) | **GET** /api/v1/burst-groups/status | 
 *PhotoServiceApi* | [**photo_service_get_photo_detail**](docs/PhotoServiceApi.md#photo_service_get_photo_detail) | **GET** /api/v1/photos/{id} | 
 *PhotoServiceApi* | [**photo_service_get_photo_stats**](docs/PhotoServiceApi.md#photo_service_get_photo_stats) | **GET** /api/v1/photos/stats | 
+*PhotoServiceApi* | [**photo_service_list_photo_segments**](docs/PhotoServiceApi.md#photo_service_list_photo_segments) | **GET** /api/v1/photos/segments | 
 *PhotoServiceApi* | [**photo_service_rebuild_burst_groups**](docs/PhotoServiceApi.md#photo_service_rebuild_burst_groups) | **POST** /api/v1/burst-groups/rebuild | 
 *PhotoServiceApi* | [**photo_service_search_photos**](docs/PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
 *PhotoServiceApi* | [**photo_service_set_burst_group_cover**](docs/PhotoServiceApi.md#photo_service_set_burst_group_cover) | **PUT** /api/v1/burst-groups/{groupId}/cover | 
@@ -178,12 +179,14 @@ Class | Method | HTTP request | Description
  - [ApiGetPhotosByTimelineResponse](docs/ApiGetPhotosByTimelineResponse.md)
  - [ApiGetVlmQueueStatusResponse](docs/ApiGetVlmQueueStatusResponse.md)
  - [ApiHourlyStat](docs/ApiHourlyStat.md)
+ - [ApiListPhotoSegmentsResponse](docs/ApiListPhotoSegmentsResponse.md)
  - [ApiListTagsResponse](docs/ApiListTagsResponse.md)
  - [ApiListTimelinesResponse](docs/ApiListTimelinesResponse.md)
  - [ApiMonthlyStat](docs/ApiMonthlyStat.md)
  - [ApiPhotoGroupInfo](docs/ApiPhotoGroupInfo.md)
  - [ApiPhotoInfo](docs/ApiPhotoInfo.md)
  - [ApiPhotoItem](docs/ApiPhotoItem.md)
+ - [ApiPhotoSegment](docs/ApiPhotoSegment.md)
  - [ApiRebuildBurstGroupsResponse](docs/ApiRebuildBurstGroupsResponse.md)
  - [ApiSchemaField](docs/ApiSchemaField.md)
  - [ApiSearchPhotosResponse](docs/ApiSearchPhotosResponse.md)

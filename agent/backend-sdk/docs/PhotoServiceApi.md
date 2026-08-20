@@ -9,6 +9,7 @@ Method | HTTP request | Description
 [**photo_service_get_burst_groups_status**](PhotoServiceApi.md#photo_service_get_burst_groups_status) | **GET** /api/v1/burst-groups/status | 
 [**photo_service_get_photo_detail**](PhotoServiceApi.md#photo_service_get_photo_detail) | **GET** /api/v1/photos/{id} | 
 [**photo_service_get_photo_stats**](PhotoServiceApi.md#photo_service_get_photo_stats) | **GET** /api/v1/photos/stats | 
+[**photo_service_list_photo_segments**](PhotoServiceApi.md#photo_service_list_photo_segments) | **GET** /api/v1/photos/segments | 
 [**photo_service_rebuild_burst_groups**](PhotoServiceApi.md#photo_service_rebuild_burst_groups) | **POST** /api/v1/burst-groups/rebuild | 
 [**photo_service_search_photos**](PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
 [**photo_service_set_burst_group_cover**](PhotoServiceApi.md#photo_service_set_burst_group_cover) | **PUT** /api/v1/burst-groups/{groupId}/cover | 
@@ -226,6 +227,83 @@ This endpoint does not need any parameter.
 ### Return type
 
 [**ApiGetPhotoStatsResponse**](ApiGetPhotoStatsResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **photo_service_list_photo_segments**
+> ApiListPhotoSegmentsResponse photo_service_list_photo_segments(timeline=timeline, tag=tag, keyword=keyword, brand=brand, lens=lens, focal_min=focal_min, focal_max=focal_max, iso_min=iso_min, iso_max=iso_max, shot_at_start=shot_at_start, shot_at_end=shot_at_end, sort_by=sort_by, sort_order=sort_order, burst_group_id=burst_group_id, burst_profile=burst_profile, segment_mode=segment_mode)
+
+
+
+分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.PhotoServiceApi()
+timeline = 'timeline_example' # str | 复用 SearchPhotos 的筛选/排序参数（不含分页） (optional)
+tag = 'tag_example' # str |  (optional)
+keyword = 'keyword_example' # str |  (optional)
+brand = 'brand_example' # str |  (optional)
+lens = 'lens_example' # str |  (optional)
+focal_min = 'focal_min_example' # str |  (optional)
+focal_max = 'focal_max_example' # str |  (optional)
+iso_min = 56 # int |  (optional)
+iso_max = 56 # int |  (optional)
+shot_at_start = 'shot_at_start_example' # str |  (optional)
+shot_at_end = 'shot_at_end_example' # str |  (optional)
+sort_by = 'sort_by_example' # str |  (optional)
+sort_order = 'sort_order_example' # str |  (optional)
+burst_group_id = 'burst_group_id_example' # str |  (optional)
+burst_profile = 'burst_profile_example' # str |  (optional)
+segment_mode = 'segment_mode_example' # str |  (optional)
+
+try:
+    api_response = api_instance.photo_service_list_photo_segments(timeline=timeline, tag=tag, keyword=keyword, brand=brand, lens=lens, focal_min=focal_min, focal_max=focal_max, iso_min=iso_min, iso_max=iso_max, shot_at_start=shot_at_start, shot_at_end=shot_at_end, sort_by=sort_by, sort_order=sort_order, burst_group_id=burst_group_id, burst_profile=burst_profile, segment_mode=segment_mode)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling PhotoServiceApi->photo_service_list_photo_segments: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **timeline** | **str**| 复用 SearchPhotos 的筛选/排序参数（不含分页） | [optional] 
+ **tag** | **str**|  | [optional] 
+ **keyword** | **str**|  | [optional] 
+ **brand** | **str**|  | [optional] 
+ **lens** | **str**|  | [optional] 
+ **focal_min** | **str**|  | [optional] 
+ **focal_max** | **str**|  | [optional] 
+ **iso_min** | **int**|  | [optional] 
+ **iso_max** | **int**|  | [optional] 
+ **shot_at_start** | **str**|  | [optional] 
+ **shot_at_end** | **str**|  | [optional] 
+ **sort_by** | **str**|  | [optional] 
+ **sort_order** | **str**|  | [optional] 
+ **burst_group_id** | **str**|  | [optional] 
+ **burst_profile** | **str**|  | [optional] 
+ **segment_mode** | **str**|  | [optional] 
+
+### Return type
+
+[**ApiListPhotoSegmentsResponse**](ApiListPhotoSegmentsResponse.md)
 
 ### Authorization
 

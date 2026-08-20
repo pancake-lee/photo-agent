@@ -482,6 +482,157 @@ class PhotoServiceApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
+    def photo_service_list_photo_segments(self, **kwargs):  # noqa: E501
+        """photo_service_list_photo_segments  # noqa: E501
+
+        分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset  # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.photo_service_list_photo_segments(async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str timeline: 复用 SearchPhotos 的筛选/排序参数（不含分页）
+        :param str tag:
+        :param str keyword:
+        :param str brand:
+        :param str lens:
+        :param str focal_min:
+        :param str focal_max:
+        :param int iso_min:
+        :param int iso_max:
+        :param str shot_at_start:
+        :param str shot_at_end:
+        :param str sort_by:
+        :param str sort_order:
+        :param str burst_group_id:
+        :param str burst_profile:
+        :param str segment_mode:
+        :return: ApiListPhotoSegmentsResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.photo_service_list_photo_segments_with_http_info(**kwargs)  # noqa: E501
+        else:
+            (data) = self.photo_service_list_photo_segments_with_http_info(**kwargs)  # noqa: E501
+            return data
+
+    def photo_service_list_photo_segments_with_http_info(self, **kwargs):  # noqa: E501
+        """photo_service_list_photo_segments  # noqa: E501
+
+        分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset  # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.photo_service_list_photo_segments_with_http_info(async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str timeline: 复用 SearchPhotos 的筛选/排序参数（不含分页）
+        :param str tag:
+        :param str keyword:
+        :param str brand:
+        :param str lens:
+        :param str focal_min:
+        :param str focal_max:
+        :param int iso_min:
+        :param int iso_max:
+        :param str shot_at_start:
+        :param str shot_at_end:
+        :param str sort_by:
+        :param str sort_order:
+        :param str burst_group_id:
+        :param str burst_profile:
+        :param str segment_mode:
+        :return: ApiListPhotoSegmentsResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['timeline', 'tag', 'keyword', 'brand', 'lens', 'focal_min', 'focal_max', 'iso_min', 'iso_max', 'shot_at_start', 'shot_at_end', 'sort_by', 'sort_order', 'burst_group_id', 'burst_profile', 'segment_mode']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method photo_service_list_photo_segments" % key
+                )
+            params[key] = val
+        del params['kwargs']
+
+        collection_formats = {}
+
+        path_params = {}
+
+        query_params = []
+        if 'timeline' in params:
+            query_params.append(('timeline', params['timeline']))  # noqa: E501
+        if 'tag' in params:
+            query_params.append(('tag', params['tag']))  # noqa: E501
+        if 'keyword' in params:
+            query_params.append(('keyword', params['keyword']))  # noqa: E501
+        if 'brand' in params:
+            query_params.append(('brand', params['brand']))  # noqa: E501
+        if 'lens' in params:
+            query_params.append(('lens', params['lens']))  # noqa: E501
+        if 'focal_min' in params:
+            query_params.append(('focalMin', params['focal_min']))  # noqa: E501
+        if 'focal_max' in params:
+            query_params.append(('focalMax', params['focal_max']))  # noqa: E501
+        if 'iso_min' in params:
+            query_params.append(('isoMin', params['iso_min']))  # noqa: E501
+        if 'iso_max' in params:
+            query_params.append(('isoMax', params['iso_max']))  # noqa: E501
+        if 'shot_at_start' in params:
+            query_params.append(('shotAtStart', params['shot_at_start']))  # noqa: E501
+        if 'shot_at_end' in params:
+            query_params.append(('shotAtEnd', params['shot_at_end']))  # noqa: E501
+        if 'sort_by' in params:
+            query_params.append(('sortBy', params['sort_by']))  # noqa: E501
+        if 'sort_order' in params:
+            query_params.append(('sortOrder', params['sort_order']))  # noqa: E501
+        if 'burst_group_id' in params:
+            query_params.append(('burstGroupId', params['burst_group_id']))  # noqa: E501
+        if 'burst_profile' in params:
+            query_params.append(('burstProfile', params['burst_profile']))  # noqa: E501
+        if 'segment_mode' in params:
+            query_params.append(('segmentMode', params['segment_mode']))  # noqa: E501
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/api/v1/photos/segments', 'GET',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='ApiListPhotoSegmentsResponse',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
     def photo_service_rebuild_burst_groups(self, body, **kwargs):  # noqa: E501
         """photo_service_rebuild_burst_groups  # noqa: E501
 

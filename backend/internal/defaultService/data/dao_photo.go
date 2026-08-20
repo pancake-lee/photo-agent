@@ -13,6 +13,7 @@ import (
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/pdb"
 	"gorm.io/gen/field"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -66,6 +67,24 @@ func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*m
 		params.PageSize = 100
 	}
 
+	gdb := photoListScope(ctx, params)
+
+	var total int64
+	if err := gdb.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count photos failed: %w", err)
+	}
+
+	var photos []*model.Photo
+	offset := (params.Page - 1) * params.PageSize
+	if err := gdb.Offset(offset).Limit(params.PageSize).Find(&photos).Error; err != nil {
+		return nil, 0, fmt.Errorf("query photos failed: %w", err)
+	}
+	return photos, total, nil
+}
+
+// photoListScope 构建照片列表的筛选 + 排序条件，返回可直接执行 Count/Find/Scan 的 *gorm.DB。
+// GetPhotoList 与 ListPhotoSegments 共用同一套筛选排序逻辑，保证 offset 与窗口拉取口径对齐。
+func photoListScope(ctx *papp.AppCtx, params GetPhotoListParams) *gorm.DB {
 	q := db.GetQuery().Photo
 	do := q.WithContext(ctx)
 
@@ -157,12 +176,123 @@ func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*m
 		do = do.Order(q.ShotAt.Desc(), q.ImportedAt.Desc())
 	}
 
-	offset := (params.Page - 1) * params.PageSize
-	photos, total, err := do.FindByPage(offset, params.PageSize)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query photos failed: %w", err)
+	return do.UnderlyingDB()
+}
+
+// PhotoSegment 分段导航单项
+type PhotoSegment struct {
+	Key    string `json:"key"`
+	Label  string `json:"label"`
+	Count  int64  `json:"count"`
+	Offset int64  `json:"offset"`
+}
+
+// SegmentMode 分段方式：month（月，含按天模式的导航）/ activity（活动）。
+type SegmentMode string
+
+const (
+	SegmentModeMonth    SegmentMode = "month"
+	SegmentModeActivity SegmentMode = "activity"
+)
+
+// ListPhotoSegments 返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+// offset 是该分段首张照片在完整排序列表中的 0 基位置，供前端据此定位窗口。
+// shot_at 零值照片不归入任何分段（排在流末尾，不进导航）。
+func (*photoDAO) ListPhotoSegments(ctx *papp.AppCtx, params GetPhotoListParams, mode SegmentMode) ([]PhotoSegment, int64, error) {
+	gdb := photoListScope(ctx, params)
+
+	q := db.GetQuery().Photo
+	rows := make([]struct {
+		ShotAt   time.Time
+		Timeline string
+	}, 0)
+
+	if err := gdb.Select(
+		string(q.ShotAt.ColumnName()),
+		string(q.Timeline.ColumnName()),
+	).Scan(&rows).Error; err != nil {
+		return nil, 0, ctx.Log.LogErr(err)
 	}
-	return photos, total, nil
+
+	total := int64(len(rows))
+
+	// 按首现顺序累加：key -> {offset, count}
+	type acc struct {
+		offset int64
+		count  int64
+	}
+	order := make([]string, 0)
+	accs := make(map[string]*acc)
+
+	for i, r := range rows {
+		if r.ShotAt.IsZero() {
+			continue // 零值拍摄时间不进导航
+		}
+		var key string
+		if mode == SegmentModeActivity {
+			key = r.Timeline
+		} else {
+			key = r.ShotAt.UTC().Format("2006-01")
+		}
+		a, ok := accs[key]
+		if !ok {
+			a = &acc{offset: int64(i)}
+			accs[key] = a
+			order = append(order, key)
+		}
+		a.count++
+	}
+
+	segments := make([]PhotoSegment, 0, len(order))
+	for _, key := range order {
+		a := accs[key]
+		segments = append(segments, PhotoSegment{
+			Key:    key,
+			Label:  segmentLabel(key, mode),
+			Count:  a.count,
+			Offset: a.offset,
+		})
+	}
+
+	// 活动模式下「未分类」（空 timeline）排最后
+	if mode == SegmentModeActivity {
+		segments = moveEmptyToEnd(segments)
+	}
+
+	return segments, total, nil
+}
+
+// segmentLabel 生成分段展示文案，与前端 segment.ts 的文案口径保持一致。
+func segmentLabel(key string, mode SegmentMode) string {
+	if mode == SegmentModeActivity {
+		if key == "" {
+			return "未分类"
+		}
+		return key
+	}
+	// month："2006-01" -> "2006 年 1 月"
+	var y, m int
+	if _, err := fmt.Sscanf(key, "%d-%d", &y, &m); err != nil {
+		return key
+	}
+	return fmt.Sprintf("%d 年 %d 月", y, m)
+}
+
+// moveEmptyToEnd 把 key 为空的分段移到末尾（其余保持原顺序）。
+func moveEmptyToEnd(segments []PhotoSegment) []PhotoSegment {
+	result := make([]PhotoSegment, 0, len(segments))
+	var empty *PhotoSegment
+	for i := range segments {
+		if segments[i].Key == "" {
+			empty = &segments[i]
+			continue
+		}
+		result = append(result, segments[i])
+	}
+	if empty != nil {
+		result = append(result, *empty)
+	}
+	return result
 }
 
 // GetByFilename 根据文件名精确查询

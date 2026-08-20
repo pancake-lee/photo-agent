@@ -3,11 +3,20 @@ import { getApiBase } from '../config'
 import { photoApi, timelineApi } from '../backend-sdk-client'
 import { settings } from '../stores/settings'
 import { useBurstGroups } from './useBurstGroups'
-import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse, ApiGetPhotoStatsResponse, ApiListTimelinesResponse } from '../../backend-sdk/api'
+import type {
+  ApiPhotoItem,
+  ApiGetPhotoDetailResponse,
+  ApiSearchPhotosResponse,
+  ApiGetPhotoStatsResponse,
+  ApiListTimelinesResponse,
+  ApiListPhotoSegmentsResponse,
+} from '../../backend-sdk/api'
 import type { PhotoListItem, PhotoDetail, PhotoStats, BurstProfile } from '../types/photo'
 
 // 滚动加载单页条数（后端单页上限 100）
 const SCROLL_PAGE_SIZE = 100
+// 窗口内存上界：10 页 = 1000 张，超出后从滚动反方向整页淘汰
+const MAX_WINDOW_PAGES = 10
 
 // timeline 筛选 sentinel：筛出无活动标签的散图（后端翻译为空串过滤）
 export const TIMELINE_NONE = 'none'
@@ -105,16 +114,32 @@ function adaptStats(s: ApiGetPhotoStatsResponse): PhotoStats {
 }
 
 // ------------------------------------------------------------------ #
+// 分段导航项（后端 ListPhotoSegments 返回）
+// ------------------------------------------------------------------ #
+
+export interface PhotoSegmentNavItem {
+  key: string
+  label: string
+  count: number
+  /** 该分段首张照片在完整排序列表中的 0 基下标 */
+  offset: number
+}
+
+// ------------------------------------------------------------------ #
 // 全局状态
 // ------------------------------------------------------------------ #
 
+// 照片窗口：photos 是完整排序列表上 [windowStart, windowStart+len) 的连续区间
 const photos = ref<PhotoListItem[]>([])
+const windowStart = ref(0)
 const total = ref(0)
-const page = ref(1)
-const pageSize = ref(SCROLL_PAGE_SIZE)
-const loading = ref(false)
-const loadingMore = ref(false)
+const loading = ref(false) // 初始 / 重定位加载
+const loadingDown = ref(false)
+const loadingUp = ref(false)
 const error = ref<string | null>(null)
+
+// 分段导航
+const segments = ref<PhotoSegmentNavItem[]>([])
 
 // 连拍组弹窗状态（空串 = 未打开）
 const burstModalGroup = ref('')
@@ -147,36 +172,79 @@ const showDetail = ref(false)
 const detailLoading = ref(false)
 
 export function usePhotos() {
-  const totalPages = computed(() =>
-    Math.max(1, Math.ceil(total.value / pageSize.value))
-  )
+  // 向下已到列表末尾 / 向上已到列表开头
+  const noMoreDown = computed(() => windowStart.value + photos.value.length >= total.value)
+  const noMoreUp = computed(() => windowStart.value <= 0)
 
-  async function fetchPhotos() {
+  // 拉取某页（1 基）照片，返回 items 与全量 total
+  async function fetchPage(page: number): Promise<{ items: PhotoListItem[]; total: number }> {
+    const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
+      page,
+      SCROLL_PAGE_SIZE,
+      filterTimeline.value || undefined,
+      undefined, // tag
+      searchFilename.value || undefined, // keyword
+      undefined, // brand
+      undefined, // lens
+      undefined, // focalMin
+      undefined, // focalMax
+      undefined, // isoMin
+      undefined, // isoMax
+      filterShotAtStart.value || undefined,
+      filterShotAtEnd.value || undefined,
+      sortBy.value,
+      sortOrder.value,
+      undefined, // burstGroupId
+      currentBurstProfile(),
+    )
+    return {
+      items: (resp.items ?? []).map(adaptPhotoItem),
+      total: parseInt(resp.total ?? '0', 10),
+    }
+  }
+
+  // 窗口重定位：以 offset 为中心加载「目标页 + 上下各一页」，
+  // 覆盖目标分段及其预加载区间（用于初始加载与导航跳转）。
+  async function relocateTo(offset: number) {
     loading.value = true
     error.value = null
-
     try {
-      const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
-        page.value,
-        pageSize.value,
-        filterTimeline.value || undefined,
-        undefined, // tag
-        searchFilename.value || undefined, // keyword
-        undefined, // brand
-        undefined, // lens
-        undefined, // focalMin
-        undefined, // focalMax
-        undefined, // isoMin
-        undefined, // isoMax
-        filterShotAtStart.value || undefined,
-        filterShotAtEnd.value || undefined,
-        sortBy.value,
-        sortOrder.value,
-        undefined, // burstGroupId
-        currentBurstProfile(),
-      )
-      photos.value = (resp.items ?? []).map(adaptPhotoItem)
-      total.value = parseInt(resp.total ?? '0', 10)
+      const rawPage = Math.floor(Math.max(0, offset) / SCROLL_PAGE_SIZE) + 1
+      const first = await fetchPage(rawPage)
+      total.value = first.total
+
+      if (total.value === 0) {
+        photos.value = []
+        windowStart.value = 0
+        return
+      }
+
+      // offset 越界时收敛到合法范围（segments 与窗口同源，正常不会触发）
+      const clampedOffset = Math.max(0, Math.min(offset, total.value - 1))
+      const centerPage = Math.floor(clampedOffset / SCROLL_PAGE_SIZE) + 1
+      let centerItems = first.items
+      if (centerPage !== rawPage) {
+        const refetched = await fetchPage(centerPage)
+        centerItems = refetched.items
+      }
+
+      const lastPage = Math.max(1, Math.ceil(total.value / SCROLL_PAGE_SIZE))
+      const startPage = Math.max(1, centerPage - 1)
+      const endPage = Math.min(lastPage, centerPage + 1)
+
+      const byPage = new Map<number, PhotoListItem[]>()
+      byPage.set(centerPage, centerItems)
+      const neighbors: number[] = []
+      for (let p = startPage; p <= endPage; p++) if (p !== centerPage) neighbors.push(p)
+      const neighborResults = await Promise.all(neighbors.map((p) => fetchPage(p)))
+      neighborResults.forEach((r, i) => byPage.set(neighbors[i], r.items))
+
+      const items: PhotoListItem[] = []
+      for (let p = startPage; p <= endPage; p++) {
+        items.push(...(byPage.get(p) ?? []))
+      }
+      windowStart.value = (startPage - 1) * SCROLL_PAGE_SIZE
+      photos.value = items
     } catch (e) {
       error.value = e instanceof Error ? e.message : '加载失败'
     } finally {
@@ -184,15 +252,88 @@ export function usePhotos() {
     }
   }
 
-  // 滚动加载：追加下一页（已到末页或加载中时忽略）
-  async function loadMorePhotos() {
-    if (loading.value || loadingMore.value) return
-    if (photos.value.length >= total.value) return
-    loadingMore.value = true
+  // 回到「最新」：desc 排序最新在 index 0，asc 排序最新在列表末尾
+  async function relocateToStart() {
+    const offset = sortOrder.value === 'asc' ? Math.max(0, total.value - 1) : 0
+    await relocateTo(offset)
+  }
+
+  // 向下加载（更新/更晚方向）追加一页，返回追加条数
+  async function loadDown(): Promise<number> {
+    if (loading.value || loadingDown.value || loadingUp.value) return 0
+    if (noMoreDown.value) return 0
+    loadingDown.value = true
     try {
-      const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
-        page.value + 1,
-        pageSize.value,
+      const nextIndex = windowStart.value + photos.value.length
+      const page = Math.floor(nextIndex / SCROLL_PAGE_SIZE) + 1
+      const { items } = await fetchPage(page)
+      if (items.length > 0) {
+        photos.value = [...photos.value, ...items]
+        evictTop()
+      }
+      return items.length
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '加载失败'
+      return 0
+    } finally {
+      loadingDown.value = false
+    }
+  }
+
+  // 向上加载（更早方向）前插一页，返回前插条数（组件据此补偿滚动位置）
+  async function loadUp(): Promise<number> {
+    if (loading.value || loadingUp.value || loadingDown.value) return 0
+    if (noMoreUp.value) return 0
+    loadingUp.value = true
+    try {
+      const prevIndex = windowStart.value - 1
+      const page = Math.floor(prevIndex / SCROLL_PAGE_SIZE) + 1
+      const { items } = await fetchPage(page)
+      if (items.length > 0) {
+        photos.value = [...items, ...photos.value]
+        windowStart.value -= items.length
+        evictBottom()
+      }
+      return items.length
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '加载失败'
+      return 0
+    } finally {
+      loadingUp.value = false
+    }
+  }
+
+  // 向下滚动时从窗口头部整页淘汰，保持 windowStart 与页边界对齐
+  function evictTop() {
+    const maxItems = MAX_WINDOW_PAGES * SCROLL_PAGE_SIZE
+    if (photos.value.length > maxItems) {
+      const removePages = Math.ceil((photos.value.length - maxItems) / SCROLL_PAGE_SIZE)
+      const removeCount = removePages * SCROLL_PAGE_SIZE
+      photos.value = photos.value.slice(removeCount)
+      windowStart.value += removeCount
+    }
+  }
+
+  // 向上滚动时从窗口尾部整页淘汰（windowStart 不变）
+  function evictBottom() {
+    const maxItems = MAX_WINDOW_PAGES * SCROLL_PAGE_SIZE
+    if (photos.value.length > maxItems) {
+      const removePages = Math.ceil((photos.value.length - maxItems) / SCROLL_PAGE_SIZE)
+      const removeCount = removePages * SCROLL_PAGE_SIZE
+      photos.value = photos.value.slice(0, photos.value.length - removeCount)
+    }
+  }
+
+  // 分段导航的 offset 是否已落入当前窗口
+  function isLoaded(offset: number): boolean {
+    return offset >= windowStart.value && offset < windowStart.value + photos.value.length
+  }
+
+  // 拉取分段导航（月/活动），按天模式的导航仍用月粒度
+  async function fetchSegments() {
+    try {
+      const mode = settings.segmentMode === 'activity' ? 'activity' : 'month'
+      const resp: ApiListPhotoSegmentsResponse = await photoApi.photoServiceListPhotoSegments(
         filterTimeline.value || undefined,
         undefined, // tag
         searchFilename.value || undefined, // keyword
@@ -208,46 +349,17 @@ export function usePhotos() {
         sortOrder.value,
         undefined, // burstGroupId
         currentBurstProfile(),
+        mode,
       )
-      const items = (resp.items ?? []).map(adaptPhotoItem)
-      if (items.length > 0) {
-        page.value += 1
-        photos.value = [...photos.value, ...items]
-        total.value = parseInt(resp.total ?? '0', 10)
-      } else {
-        // 后端再无可追加数据，用 total 收口避免反复触发
-        total.value = photos.value.length
-      }
+      segments.value = (resp.segments ?? []).map((s) => ({
+        key: s.key ?? '',
+        label: s.label ?? '',
+        count: parseInt(s.count ?? '0', 10),
+        offset: parseInt(s.offset ?? '0', 10),
+      }))
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '加载失败'
-    } finally {
-      loadingMore.value = false
+      console.warn('获取分段导航失败', e)
     }
-  }
-
-  // 是否已全部加载（无更多数据）
-  const noMore = computed(() => photos.value.length >= total.value)
-
-  // 跳转到指定月份：设置 shotAt 起止为该月起止并重置拉取（筛选重置式）
-  function jumpToMonth(month: string) {
-    const [y, m] = month.split('-').map(Number)
-    if (!y || !m) return
-    const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0))
-    const end = new Date(Date.UTC(y, m, 0, 23, 59, 59))
-    filterShotAtStart.value = start.toISOString()
-    filterShotAtEnd.value = end.toISOString()
-    filterTimeline.value = ''
-    page.value = 1
-    fetchPhotos()
-  }
-
-  // 跳转到指定活动：设置 timeline 筛选并重置拉取
-  function jumpToTimeline(timeline: string) {
-    filterTimeline.value = timeline
-    filterShotAtStart.value = ''
-    filterShotAtEnd.value = ''
-    page.value = 1
-    fetchPhotos()
   }
 
   async function fetchStats() {
@@ -286,15 +398,9 @@ export function usePhotos() {
     selectedPhoto.value = null
   }
 
-  function setPage(p: number) {
-    page.value = p
-    fetchPhotos()
-  }
-
-  // 应用筛选（重置到第一页）
-  function applyFilters() {
-    page.value = 1
-    fetchPhotos()
+  // 应用筛选：回到最新并刷新导航
+  async function applyFilters() {
+    await Promise.all([relocateToStart(), fetchSegments()])
   }
 
   // 重置所有筛选（含跳转筛选，恢复默认视图）
@@ -305,8 +411,7 @@ export function usePhotos() {
     sortBy.value = 'shot_at'
     sortOrder.value = 'desc'
     searchFilename.value = ''
-    page.value = 1
-    fetchPhotos()
+    applyFilters()
   }
 
   // 标记单张已入队（乐观更新）
@@ -322,7 +427,6 @@ export function usePhotos() {
     try {
       const resp = await photoApi.photoServiceGetPhotoDetail(photoId)
       const detail = adaptPhotoDetail(resp)
-      // 更新列表中的对应项
       const idx = photos.value.findIndex((p) => p.id === photoId)
       if (idx !== -1) {
         photos.value[idx] = {
@@ -331,7 +435,6 @@ export function usePhotos() {
           has_description: detail.has_description,
         }
       }
-      // 更新详情（如果打开）
       if (selectedPhoto.value?.id === photoId) {
         selectedPhoto.value = detail
       }
@@ -343,11 +446,10 @@ export function usePhotos() {
   // 删除照片
   async function deletePhoto(photoId: string): Promise<void> {
     await photoApi.photoServiceDeletePhoto(photoId)
-    // SDK 调用成功即表示删除成功（异常由 SDK 抛出）
-    // 从本地列表移除
     photos.value = photos.value.filter((p) => p.id !== photoId)
     total.value = Math.max(0, total.value - 1)
-    // 如果正在查看被删除的照片详情，关闭详情
+    // 删除可能清空某段，刷新导航 offset/count
+    fetchSegments()
     if (selectedPhoto.value?.id === photoId) {
       closeDetail()
     }
@@ -363,8 +465,8 @@ export function usePhotos() {
     try {
       const resp: ApiSearchPhotosResponse =
         await photoApi.photoServiceSearchPhotos(
-          1, // page
-          100, // pageSize：组内照片上限（连拍组通常 < 20 张）
+          1,
+          100,
           undefined, // timeline
           undefined, // tag
           undefined, // keyword
@@ -396,24 +498,25 @@ export function usePhotos() {
     burstModalCoverId.value = ''
   }
 
-  // 设为封面：调用后端更新组封面，成功后刷新列表并同步弹窗内封面标记
+  // 设为封面：调用后端更新组封面，成功后刷新窗口与弹窗内封面标记
   async function setBurstCover(groupId: string, photoId: string) {
     const { setCover } = useBurstGroups()
     await setCover(groupId, photoId)
     burstModalCoverId.value = photoId
-    fetchPhotos()
+    relocateToStart()
   }
 
   return {
     photos,
     total,
-    page,
-    pageSize,
+    windowStart,
     loading,
-    loadingMore,
-    noMore,
+    loadingDown,
+    loadingUp,
+    noMoreDown,
+    noMoreUp,
     error,
-    totalPages,
+    segments,
     selectedPhoto,
     showDetail,
     detailLoading,
@@ -429,22 +532,23 @@ export function usePhotos() {
     burstModalMembers,
     burstModalCoverId,
     burstModalLoading,
-    fetchPhotos,
-    loadMorePhotos,
-    jumpToMonth,
-    jumpToTimeline,
+    applyFilters,
+    resetFilters,
+    relocateTo,
+    relocateToStart,
+    loadDown,
+    loadUp,
+    fetchSegments,
     fetchStats,
     fetchTimelines,
     fetchPhotoDetail,
     closeDetail,
-    setPage,
-    applyFilters,
-    resetFilters,
     markPhotoQueued,
     refreshPhoto,
     deletePhoto,
     openBurstGroup,
     closeBurstGroup,
     setBurstCover,
+    isLoaded,
   }
 }

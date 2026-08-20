@@ -24,6 +24,7 @@ const OperationPhotoServiceGetBurstGroupsConfig = "/api.PhotoService/GetBurstGro
 const OperationPhotoServiceGetBurstGroupsStatus = "/api.PhotoService/GetBurstGroupsStatus"
 const OperationPhotoServiceGetPhotoDetail = "/api.PhotoService/GetPhotoDetail"
 const OperationPhotoServiceGetPhotoStats = "/api.PhotoService/GetPhotoStats"
+const OperationPhotoServiceListPhotoSegments = "/api.PhotoService/ListPhotoSegments"
 const OperationPhotoServiceRebuildBurstGroups = "/api.PhotoService/RebuildBurstGroups"
 const OperationPhotoServiceSearchPhotos = "/api.PhotoService/SearchPhotos"
 const OperationPhotoServiceSetBurstGroupCover = "/api.PhotoService/SetBurstGroupCover"
@@ -41,6 +42,8 @@ type PhotoServiceHTTPServer interface {
 	GetPhotoDetail(context.Context, *GetPhotoDetailRequest) (*GetPhotoDetailResponse, error)
 	// GetPhotoStats 综合统计
 	GetPhotoStats(context.Context, *Empty) (*GetPhotoStatsResponse, error)
+	// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+	ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error)
 	// RebuildBurstGroups 触发连拍分组全量重算（异步）
 	RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error)
 	// SearchPhotos 复杂条件分页查询
@@ -65,6 +68,7 @@ func RegisterPhotoServiceHTTPServer(s *http.Server, srv PhotoServiceHTTPServer) 
 	r.GET("/api/v1/burst-groups/config", _PhotoService_GetBurstGroupsConfig0_HTTP_Handler(srv))
 	r.PUT("/api/v1/burst-groups/config", _PhotoService_UpdateBurstGroupsConfig0_HTTP_Handler(srv))
 	r.PUT("/api/v1/burst-groups/{group_id}/cover", _PhotoService_SetBurstGroupCover0_HTTP_Handler(srv))
+	r.GET("/api/v1/photos/segments", _PhotoService_ListPhotoSegments0_HTTP_Handler(srv))
 }
 
 func _PhotoService_SearchPhotos0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
@@ -281,6 +285,25 @@ func _PhotoService_SetBurstGroupCover0_HTTP_Handler(srv PhotoServiceHTTPServer) 
 	}
 }
 
+func _PhotoService_ListPhotoSegments0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListPhotoSegmentsRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceListPhotoSegments)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListPhotoSegments(ctx, req.(*ListPhotoSegmentsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListPhotoSegmentsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type PhotoServiceHTTPClient interface {
 	// DeletePhoto 删除照片（含文件清理）
 	DeletePhoto(ctx context.Context, req *DeletePhotoRequest, opts ...http.CallOption) (rsp *DeletePhotoResponse, err error)
@@ -292,6 +315,8 @@ type PhotoServiceHTTPClient interface {
 	GetPhotoDetail(ctx context.Context, req *GetPhotoDetailRequest, opts ...http.CallOption) (rsp *GetPhotoDetailResponse, err error)
 	// GetPhotoStats 综合统计
 	GetPhotoStats(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetPhotoStatsResponse, err error)
+	// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+	ListPhotoSegments(ctx context.Context, req *ListPhotoSegmentsRequest, opts ...http.CallOption) (rsp *ListPhotoSegmentsResponse, err error)
 	// RebuildBurstGroups 触发连拍分组全量重算（异步）
 	RebuildBurstGroups(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *RebuildBurstGroupsResponse, err error)
 	// SearchPhotos 复杂条件分页查询
@@ -374,6 +399,20 @@ func (c *PhotoServiceHTTPClientImpl) GetPhotoStats(ctx context.Context, in *Empt
 	pattern := "/api/v1/photos/stats"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationPhotoServiceGetPhotoStats))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+func (c *PhotoServiceHTTPClientImpl) ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...http.CallOption) (*ListPhotoSegmentsResponse, error) {
+	var out ListPhotoSegmentsResponse
+	pattern := "/api/v1/photos/segments"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationPhotoServiceListPhotoSegments))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

@@ -120,6 +120,25 @@ describe("PhotoServiceApi", () => {
   test("photoServiceGetPhotoStats", () => {
     return expect(instance.photoServiceGetPhotoStats({})).resolves.toBe(null)
   })
+  test("photoServiceListPhotoSegments", () => {
+    const timeline: string = "timeline_example"
+    const tag: string = "tag_example"
+    const keyword: string = "keyword_example"
+    const brand: string = "brand_example"
+    const lens: string = "lens_example"
+    const focalMin: string = "focalMin_example"
+    const focalMax: string = "focalMax_example"
+    const isoMin: number = 56
+    const isoMax: number = 56
+    const shotAtStart: string = "shotAtStart_example"
+    const shotAtEnd: string = "shotAtEnd_example"
+    const sortBy: string = "sortBy_example"
+    const sortOrder: string = "sortOrder_example"
+    const burstGroupId: string = "burstGroupId_example"
+    const burstProfile: string = "burstProfile_example"
+    const segmentMode: string = "segmentMode_example"
+    return expect(instance.photoServiceListPhotoSegments(timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, segmentMode, {})).resolves.toBe(null)
+  })
   test("photoServiceRebuildBurstGroups", () => {
     const body: api.ApiEmpty = undefined
     return expect(instance.photoServiceRebuildBurstGroups(body, {})).resolves.toBe(null)

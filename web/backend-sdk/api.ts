@@ -801,6 +801,25 @@ export interface ApiHourlyStat {
 /**
  * 
  * @export
+ * @interface ApiListPhotoSegmentsResponse
+ */
+export interface ApiListPhotoSegmentsResponse {
+    /**
+     * 
+     * @type {Array<ApiPhotoSegment>}
+     * @memberof ApiListPhotoSegmentsResponse
+     */
+    segments?: Array<ApiPhotoSegment>;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiListPhotoSegmentsResponse
+     */
+    total?: string;
+}
+/**
+ * 
+ * @export
  * @interface ApiListTagsResponse
  */
 export interface ApiListTagsResponse {
@@ -1277,6 +1296,37 @@ export interface ApiPhotoItem {
      * @memberof ApiPhotoItem
      */
     burstCount?: number;
+}
+/**
+ * 
+ * @export
+ * @interface ApiPhotoSegment
+ */
+export interface ApiPhotoSegment {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoSegment
+     */
+    key?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoSegment
+     */
+    label?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoSegment
+     */
+    count?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoSegment
+     */
+    offset?: string;
 }
 /**
  * 
@@ -2964,6 +3014,108 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
             };
         },
         /**
+         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+         * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
+         * @param {string} [tag] 
+         * @param {string} [keyword] 
+         * @param {string} [brand] 
+         * @param {string} [lens] 
+         * @param {string} [focalMin] 
+         * @param {string} [focalMax] 
+         * @param {number} [isoMin] 
+         * @param {number} [isoMax] 
+         * @param {string} [shotAtStart] 
+         * @param {string} [shotAtEnd] 
+         * @param {string} [sortBy] 
+         * @param {string} [sortOrder] 
+         * @param {string} [burstGroupId] 
+         * @param {string} [burstProfile] 
+         * @param {string} [segmentMode] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceListPhotoSegments(timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, segmentMode?: string, options: any = {}): FetchArgs {
+            const localVarPath = `/api/v1/photos/segments`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (timeline !== undefined) {
+                localVarQueryParameter['timeline'] = timeline;
+            }
+
+            if (tag !== undefined) {
+                localVarQueryParameter['tag'] = tag;
+            }
+
+            if (keyword !== undefined) {
+                localVarQueryParameter['keyword'] = keyword;
+            }
+
+            if (brand !== undefined) {
+                localVarQueryParameter['brand'] = brand;
+            }
+
+            if (lens !== undefined) {
+                localVarQueryParameter['lens'] = lens;
+            }
+
+            if (focalMin !== undefined) {
+                localVarQueryParameter['focalMin'] = focalMin;
+            }
+
+            if (focalMax !== undefined) {
+                localVarQueryParameter['focalMax'] = focalMax;
+            }
+
+            if (isoMin !== undefined) {
+                localVarQueryParameter['isoMin'] = isoMin;
+            }
+
+            if (isoMax !== undefined) {
+                localVarQueryParameter['isoMax'] = isoMax;
+            }
+
+            if (shotAtStart !== undefined) {
+                localVarQueryParameter['shotAtStart'] = shotAtStart;
+            }
+
+            if (shotAtEnd !== undefined) {
+                localVarQueryParameter['shotAtEnd'] = shotAtEnd;
+            }
+
+            if (sortBy !== undefined) {
+                localVarQueryParameter['sortBy'] = sortBy;
+            }
+
+            if (sortOrder !== undefined) {
+                localVarQueryParameter['sortOrder'] = sortOrder;
+            }
+
+            if (burstGroupId !== undefined) {
+                localVarQueryParameter['burstGroupId'] = burstGroupId;
+            }
+
+            if (burstProfile !== undefined) {
+                localVarQueryParameter['burstProfile'] = burstProfile;
+            }
+
+            if (segmentMode !== undefined) {
+                localVarQueryParameter['segmentMode'] = segmentMode;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 触发连拍分组全量重算（异步）
          * @param {ApiEmpty} body 
          * @param {*} [options] Override http request option.
@@ -3303,6 +3455,39 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
+         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+         * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
+         * @param {string} [tag] 
+         * @param {string} [keyword] 
+         * @param {string} [brand] 
+         * @param {string} [lens] 
+         * @param {string} [focalMin] 
+         * @param {string} [focalMax] 
+         * @param {number} [isoMin] 
+         * @param {number} [isoMax] 
+         * @param {string} [shotAtStart] 
+         * @param {string} [shotAtEnd] 
+         * @param {string} [sortBy] 
+         * @param {string} [sortOrder] 
+         * @param {string} [burstGroupId] 
+         * @param {string} [burstProfile] 
+         * @param {string} [segmentMode] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceListPhotoSegments(timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, segmentMode?: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiListPhotoSegmentsResponse> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceListPhotoSegments(timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, segmentMode, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 触发连拍分组全量重算（异步）
          * @param {ApiEmpty} body 
          * @param {*} [options] Override http request option.
@@ -3462,6 +3647,30 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
             return PhotoServiceApiFp(configuration).photoServiceGetPhotoStats(options)(fetch, basePath);
         },
         /**
+         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+         * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
+         * @param {string} [tag] 
+         * @param {string} [keyword] 
+         * @param {string} [brand] 
+         * @param {string} [lens] 
+         * @param {string} [focalMin] 
+         * @param {string} [focalMax] 
+         * @param {number} [isoMin] 
+         * @param {number} [isoMax] 
+         * @param {string} [shotAtStart] 
+         * @param {string} [shotAtEnd] 
+         * @param {string} [sortBy] 
+         * @param {string} [sortOrder] 
+         * @param {string} [burstGroupId] 
+         * @param {string} [burstProfile] 
+         * @param {string} [segmentMode] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceListPhotoSegments(timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, segmentMode?: string, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceListPhotoSegments(timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, segmentMode, options)(fetch, basePath);
+        },
+        /**
          * 触发连拍分组全量重算（异步）
          * @param {ApiEmpty} body 
          * @param {*} [options] Override http request option.
@@ -3584,6 +3793,32 @@ export class PhotoServiceApi extends BaseAPI {
      */
     public photoServiceGetPhotoStats(options?: any) {
         return PhotoServiceApiFp(this.configuration).photoServiceGetPhotoStats(options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+     * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
+     * @param {string} [tag] 
+     * @param {string} [keyword] 
+     * @param {string} [brand] 
+     * @param {string} [lens] 
+     * @param {string} [focalMin] 
+     * @param {string} [focalMax] 
+     * @param {number} [isoMin] 
+     * @param {number} [isoMax] 
+     * @param {string} [shotAtStart] 
+     * @param {string} [shotAtEnd] 
+     * @param {string} [sortBy] 
+     * @param {string} [sortOrder] 
+     * @param {string} [burstGroupId] 
+     * @param {string} [burstProfile] 
+     * @param {string} [segmentMode] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceListPhotoSegments(timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, segmentMode?: string, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceListPhotoSegments(timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, segmentMode, options)(this.fetch, this.basePath);
     }
 
     /**

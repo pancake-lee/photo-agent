@@ -2,8 +2,8 @@
 /**
  * PhotoSegmentNav — 照片列表右侧分段导航。
  *
- * 按当前分段方式列出跳转目标（月份或活动），滚动时高亮跟随当前段落，
- * 点击跳转：目标段落已加载时锚点滚动，未加载时由父级以筛选重置式重新拉取。
+ * 按当前分段方式列出跳转目标（月份或活动），滚动时高亮跟随当前段落。
+ * 导航数据源为后端 ListPhotoSegments，点击后由父级按分段 offset 重定位照片窗口。
  */
 import { NButton } from 'naive-ui'
 import { ArrowUpOutline } from '@vicons/ionicons5'
@@ -12,8 +12,8 @@ export interface NavItem {
   /** 导航键：月份 YYYY-MM 或活动名（空串 = 未分类） */
   key: string
   label: string
-  /** 该段落是否已在当前已加载照片流中（决定点击行为） */
-  loaded: boolean
+  /** 该段照片总数（后端 ListPhotoSegments 返回） */
+  count?: number
 }
 
 const props = defineProps<{
@@ -22,7 +22,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  jump: [key: string, loaded: boolean]
+  jump: [key: string]
   backToLatest: []
 }>()
 </script>
@@ -35,13 +35,11 @@ const emit = defineEmits<{
         v-for="item in items"
         :key="item.key"
         class="segment-nav-item"
-        :class="{
-          active: item.key === activeKey,
-          unloaded: !item.loaded,
-        }"
-        @click="emit('jump', item.key, item.loaded)"
+        :class="{ active: item.key === activeKey }"
+        @click="emit('jump', item.key)"
       >
         <span class="segment-nav-label">{{ item.label }}</span>
+        <span v-if="item.count !== undefined" class="segment-nav-count">{{ item.count }}</span>
       </div>
       <div v-if="items.length === 0" class="segment-nav-empty">暂无导航项</div>
     </div>
@@ -58,12 +56,9 @@ const emit = defineEmits<{
 
 <style scoped>
 .segment-nav {
-  position: sticky;
-  top: 16px;
   display: flex;
   flex-direction: column;
   width: 160px;
-  max-height: calc(100vh - 96px);
   flex-shrink: 0;
 }
 .segment-nav-title {
@@ -73,20 +68,33 @@ const emit = defineEmits<{
 }
 .segment-nav-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   border-left: 1px solid var(--n-border-color);
 }
 .segment-nav-item {
+  display: flex;
+  align-items: center;
   padding: 6px 8px 6px 12px;
   font-size: 13px;
   color: var(--n-text-color-2);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   border-left: 2px solid transparent;
   margin-left: -1px; /* 覆盖列表 border-left，高亮时替换为强调色 */
   transition: none;
+}
+.segment-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.segment-nav-count {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11px;
+  color: var(--n-text-color-3);
+  flex-shrink: 0;
 }
 .segment-nav-item:hover {
   color: var(--n-text-color);
@@ -96,9 +104,6 @@ const emit = defineEmits<{
   color: var(--n-color-primary);
   border-left-color: var(--n-color-primary);
   font-weight: 600;
-}
-.segment-nav-item.unloaded {
-  color: var(--n-text-color-3);
 }
 .segment-nav-empty {
   padding: 8px 12px;

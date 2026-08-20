@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, provide } from 'vue'
 import {
   NLayout,
   NLayoutContent,
@@ -33,7 +33,6 @@ import { useBurstGroups } from '../composables/useBurstGroups'
 import { settings } from '../stores/settings'
 import type { PhotoDetail as PhotoDetailType, BurstViewLevel } from '../types/photo'
 import type { SegmentMode } from '../utils/segment'
-import { computeDividers, navKeyOfDivider } from '../utils/segment'
 import type { ConflictResolution } from '../types/upload'
 
 const message = useMessage()
@@ -43,14 +42,17 @@ const {
   photos,
   total,
   loading,
-  loadingMore,
-  noMore,
+  loadingDown,
+  loadingUp,
+  noMoreDown,
+  noMoreUp,
   error,
   selectedPhoto,
   showDetail,
   detailLoading,
   stats,
   timelines,
+  segments,
   filterTimeline,
   filterShotAtStart,
   filterShotAtEnd,
@@ -60,10 +62,11 @@ const {
   burstModalMembers,
   burstModalCoverId,
   burstModalLoading,
-  fetchPhotos,
-  loadMorePhotos,
-  jumpToMonth,
-  jumpToTimeline,
+  relocateTo,
+  relocateToStart,
+  loadDown,
+  loadUp,
+  fetchSegments,
   fetchStats,
   fetchTimelines,
   fetchPhotoDetail,
@@ -167,48 +170,10 @@ const segmentModeOptions = [
   { label: '按活动', value: 'activity' },
 ]
 
-// 已加载照片流的分割线（导航高亮与跳转依据）
-const dividers = computed(() => computeDividers(photos.value, settings.segmentMode))
-
-// 分段键（降序去重） → 导航高亮键（按天/月都以月份为粒度）
-const loadedNavKeys = computed<Set<string>>(() => {
-  const keys = new Set<string>()
-  for (const d of dividers.value) {
-    keys.add(navKeyOfDivider(d, settings.segmentMode))
-  }
-  return keys
-})
-
-// 右侧导航列表：月份导航复用 stats.monthly，活动导航复用 timelines + 已加载照片推导顺序
-const navItems = computed<NavItem[]>(() => {
-  if (settings.segmentMode === 'activity') {
-    // 活动按其已加载照片的最早 shot_at 排序（时间倒序），未分类排最后
-    const minShotAt = new Map<string, number>()
-    for (const p of photos.value) {
-      const key = p.timeline || ''
-      if (!p.shot_at) continue
-      const t = new Date(p.shot_at).getTime()
-      const prev = minShotAt.get(key)
-      if (prev === undefined || t < prev) minShotAt.set(key, t)
-    }
-    const items: NavItem[] = timelines.value
-      .filter((t) => minShotAt.has(t))
-      .map((t) => ({ key: t, label: t, loaded: true }))
-    items.sort((a, b) => (minShotAt.get(b.key) ?? 0) - (minShotAt.get(a.key) ?? 0))
-    // 未分类散图项排在活动之后（有散图已加载时才显示）
-    if (minShotAt.has('') || loadedNavKeys.value.has('')) {
-      items.push({ key: '', label: '未分类', loaded: loadedNavKeys.value.has('') })
-    }
-    return items
-  }
-
-  // 月份导航（按天/按月共用）：最新在上
-  const monthly = stats.value?.monthly ?? []
-  return monthly
-    .slice()
-    .sort((a, b) => (a.month < b.month ? 1 : -1))
-    .map((m) => ({ key: m.month, label: m.month, loaded: loadedNavKeys.value.has(m.month) }))
-})
+// 右侧导航列表：直接使用后端 ListPhotoSegments 返回的分段（含 count 与 offset）
+const navItems = computed<NavItem[]>(() =>
+  segments.value.map((s) => ({ key: s.key, label: s.label, count: s.count })),
+)
 
 // 当前滚动位置所处段落的导航键（取视口内最后一条已越过顶部的分割线）
 const activeNavKey = ref('')
@@ -221,24 +186,10 @@ function setDividerEl(key: string, el: unknown) {
   else dividerEls.delete(key)
 }
 
-// 页面滚动容器：NLayoutContent 的 .n-layout-scroll-container（非 window）
-const scrollContainer = ref<HTMLElement | null>(null)
-const contentView = ref<HTMLElement | null>(null)
-
-function findScrollContainer(): HTMLElement | null {
-  if (scrollContainer.value) return scrollContainer.value
-  // 从分割线向上找最近的可滚动祖先（NLayoutContent 的 scroll-container）
-  const firstEl = dividerEls.values().next().value
-  let node: HTMLElement | null = firstEl ?? contentView.value
-  while (node) {
-    if (node.classList?.contains('n-layout-scroll-container')) {
-      scrollContainer.value = node
-      return node
-    }
-    node = node.parentElement
-  }
-  return null
-}
+// 照片列表自身的有界滚动容器（.grid-main），既是 PhotoGrid 内 IntersectionObserver 的 root，
+// 也是导航锚点滚动与滚动高亮跟随的目标。
+const gridScrollRef = ref<HTMLElement | null>(null)
+provide('photoGridScrollRoot', gridScrollRef)
 
 // 滚动高亮跟随：分割线越过视口顶部时更新当前段落。
 // 取流中最后一条已越过视口顶部（top ≤ 80px）的分割线；都在顶部之前时取首段。
@@ -272,49 +223,78 @@ function updateActiveNav() {
 }
 
 onMounted(() => {
-  findScrollContainer()
-  scrollContainer.value?.addEventListener('scroll', updateActiveNav, { passive: true })
+  gridScrollRef.value?.addEventListener('scroll', updateActiveNav, { passive: true })
 })
 onUnmounted(() => {
-  scrollContainer.value?.removeEventListener('scroll', updateActiveNav)
+  gridScrollRef.value?.removeEventListener('scroll', updateActiveNav)
 })
 
 // ── 导航点击跳转 ──
-async function handleNavJump(key: string, loaded: boolean) {
-  if (loaded) {
-    // 已加载段落：锚点滚动到该分割线
-    const el = dividerEls.get(key)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      updateActiveNav()
-      return
-    }
-    // 月份粒度导航但分割线是天粒度：滚到该月第一条分割线
-    const target = [...dividerEls.entries()].find(([k]) => k.startsWith(key))
-    if (target) {
-      target[1].scrollIntoView({ behavior: 'smooth', block: 'start' })
-      updateActiveNav()
-    }
-    return
-  }
-
-  // 未加载段落：筛选重置式跳转
-  if (settings.segmentMode === 'activity') {
-    jumpToTimeline(key || 'none')
-  } else {
-    jumpToMonth(key)
-  }
-  // 等列表重置渲染后回到顶部
+async function handleNavJump(key: string) {
+  const seg = segments.value.find((s) => s.key === key)
+  if (!seg) return
+  await relocateTo(seg.offset)
   await nextTick()
-  const sc = scrollContainer.value
-  if (sc) sc.scrollTop = 0
-  else window.scrollTo({ top: 0 })
+  // 定位到该分段分割线：精确匹配；月粒度导航但分割线为天粒度时前缀匹配
+  let el = dividerEls.get(key)
+  if (!el && settings.segmentMode !== 'activity') {
+    const target = [...dividerEls.entries()].find(([k]) => k.startsWith(key))
+    el = target?.[1]
+  }
+  const sc = gridScrollRef.value
+  if (el) {
+    el.scrollIntoView({ behavior: 'auto', block: 'start' })
+  } else if (sc) {
+    sc.scrollTop = 0
+  }
   updateActiveNav()
 }
 
 // 回到最新：清空跳转筛选恢复默认视图
 function handleBackToLatest() {
   resetFilters()
+}
+
+// ── 双向加载滚动补偿 ──
+// 前插/整页淘汰会改变滚动内容高度，使视口内容跳变。以「锚点照片」插入前后的
+// getBoundingClientRect().top 差值补偿滚动，保证视口内照片不跳变。
+// overflow-anchor 已在 .grid-main 禁用，避免浏览器默认锚定与手动补偿叠加。
+
+// 视口内最上 / 最下的已渲染照片元素（连拍折叠时未渲染成员不含 data-photo-id）
+function firstRenderedPhotoEl(): HTMLElement | null {
+  return gridScrollRef.value?.querySelector<HTMLElement>('[data-photo-id]') ?? null
+}
+function lastRenderedPhotoEl(): HTMLElement | null {
+  const sc = gridScrollRef.value
+  if (!sc) return null
+  const els = sc.querySelectorAll<HTMLElement>('[data-photo-id]')
+  return els.length ? els[els.length - 1] : null
+}
+
+// 向上前插补偿：锚点 = 原窗口最上照片，前插后它应保持原视口位置
+async function handleLoadUp() {
+  if (loading.value || loadingUp.value || loadingDown.value) return
+  const anchor = firstRenderedPhotoEl()
+  const before = anchor?.getBoundingClientRect().top
+  const added = await loadUp()
+  if (!added || anchor == null || before === undefined) return
+  await nextTick()
+  const after = anchor.getBoundingClientRect().top
+  const sc = gridScrollRef.value
+  if (sc) sc.scrollTop += after - before
+}
+
+// 向下追加补偿：锚点 = 原窗口最下照片，整页淘汰顶部后它应保持原视口位置
+async function handleLoadDown() {
+  if (loading.value || loadingUp.value || loadingDown.value) return
+  const anchor = lastRenderedPhotoEl()
+  const before = anchor?.getBoundingClientRect().top
+  const added = await loadDown()
+  if (!added || anchor == null || before === undefined) return
+  await nextTick()
+  const after = anchor.getBoundingClientRect().top
+  const sc = gridScrollRef.value
+  if (sc) sc.scrollTop += after - before
 }
 
 // ── 方法 ──
@@ -336,7 +316,7 @@ async function handleStopVlm() {
   await stopQueue()
   message.info('VLM 预处理已中止')
   // 刷新列表和统计
-  fetchPhotos()
+  relocateToStart()
   fetchStats()
 }
 
@@ -367,7 +347,7 @@ async function handleStartEmbed() {
 async function handleStopEmbed() {
   await stopEmbedQueue()
   message.info('Embed 已中止')
-  fetchPhotos()
+  relocateToStart()
   fetchStats()
   fetchEmbedStats()
 }
@@ -413,7 +393,7 @@ async function handleRebuildBurst() {
       message.success(
         `连拍分组完成，精细 ${burstStatus.value.group_count} 组 / 模糊 ${burstStatus.value.coarse_group_count} 组`,
       )
-      fetchPhotos()
+      relocateToStart()
     })
     if (st === 'already_running') {
       message.info('连拍分组已在进行中')
@@ -465,7 +445,8 @@ async function handleUploadStart() {
   showConflictModal.value = false
   closeUploadModal()
   message.success('上传完成')
-  fetchPhotos()
+  relocateToStart()
+  fetchSegments()
   fetchStats()
 }
 
@@ -517,17 +498,18 @@ function handleSegmentModeChange(mode: SegmentMode) {
   settings.segmentMode = mode
   dividerEls.clear()
   activeNavKey.value = ''
+  fetchSegments()
 }
 
 // ── VLM 完成回调：自动刷新列表和统计 ──
 onComplete(() => {
-  fetchPhotos()
+  relocateToStart()
   fetchStats()
 })
 
 // ── Embed 完成回调 ──
 onEmbedComplete(() => {
-  fetchPhotos()
+  relocateToStart()
   fetchStats()
   fetchEmbedStats()
 })
@@ -540,7 +522,7 @@ watch(photos, (newPhotos) => {
 
 // ── 初始化 ──
 onMounted(async () => {
-  await fetchPhotos()
+  await applyFilters()
   fetchStats()
   fetchTimelines()
   fetchEmbedStats()
@@ -654,7 +636,7 @@ onUnmounted(() => {
 
       <!-- 主内容区 -->
       <NLayoutContent>
-        <div ref="contentView" class="content-wrapper">
+        <div class="content-wrapper">
           <!-- 统计摘要 + 排序搜索 -->
           <div class="stats-bar">
             <div class="stats-summary">
@@ -768,12 +750,14 @@ onUnmounted(() => {
 
           <!-- 照片流 + 右侧分段导航 -->
           <div class="grid-with-nav">
-            <div class="grid-main">
+            <div ref="gridScrollRef" class="grid-main">
               <PhotoGrid
                 :photos="photos"
                 :loading="loading"
-                :loading-more="loadingMore"
-                :no-more="noMore"
+                :loading-down="loadingDown"
+                :loading-up="loadingUp"
+                :no-more-down="noMoreDown"
+                :no-more-up="noMoreUp"
                 :error="error"
                 :processing-ids="processingIds"
                 :embedded-ids="embeddedIds"
@@ -785,8 +769,9 @@ onUnmounted(() => {
                 @delete-photo="handleDeletePhoto"
                 @open-burst-group="handleOpenBurstGroup"
                 @divider-el="setDividerEl"
-                @load-more="loadMorePhotos"
-                @retry="fetchPhotos"
+                @load-down="handleLoadDown"
+                @load-up="handleLoadUp"
+                @retry="relocateToStart"
               />
             </div>
             <PhotoSegmentNav
@@ -873,7 +858,12 @@ onUnmounted(() => {
   padding: 4px 16px;
 }
 .content-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
   padding: 20px 24px;
+  overflow: hidden;
 }
 .stats-bar {
   display: flex;
@@ -911,11 +901,16 @@ onUnmounted(() => {
 }
 .grid-with-nav {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
   gap: 16px;
 }
 .grid-main {
   flex: 1;
   min-width: 0; /* 允许网格收缩 */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-anchor: none; /* 禁用浏览器滚动锚定，滚动补偿由 handleLoadUp/handleLoadDown 手动处理 */
 }
 </style>

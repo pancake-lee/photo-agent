@@ -29,6 +29,7 @@ const (
 	PhotoService_GetBurstGroupsConfig_FullMethodName    = "/api.PhotoService/GetBurstGroupsConfig"
 	PhotoService_UpdateBurstGroupsConfig_FullMethodName = "/api.PhotoService/UpdateBurstGroupsConfig"
 	PhotoService_SetBurstGroupCover_FullMethodName      = "/api.PhotoService/SetBurstGroupCover"
+	PhotoService_ListPhotoSegments_FullMethodName       = "/api.PhotoService/ListPhotoSegments"
 )
 
 // PhotoServiceClient is the client API for PhotoService service.
@@ -57,6 +58,8 @@ type PhotoServiceClient interface {
 	UpdateBurstGroupsConfig(ctx context.Context, in *UpdateBurstGroupsConfigRequest, opts ...grpc.CallOption) (*Empty, error)
 	// 设置连拍组封面
 	SetBurstGroupCover(ctx context.Context, in *SetBurstGroupCoverRequest, opts ...grpc.CallOption) (*Empty, error)
+	// 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+	ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...grpc.CallOption) (*ListPhotoSegmentsResponse, error)
 }
 
 type photoServiceClient struct {
@@ -167,6 +170,16 @@ func (c *photoServiceClient) SetBurstGroupCover(ctx context.Context, in *SetBurs
 	return out, nil
 }
 
+func (c *photoServiceClient) ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...grpc.CallOption) (*ListPhotoSegmentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPhotoSegmentsResponse)
+	err := c.cc.Invoke(ctx, PhotoService_ListPhotoSegments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PhotoServiceServer is the server API for PhotoService service.
 // All implementations must embed UnimplementedPhotoServiceServer
 // for forward compatibility.
@@ -193,6 +206,8 @@ type PhotoServiceServer interface {
 	UpdateBurstGroupsConfig(context.Context, *UpdateBurstGroupsConfigRequest) (*Empty, error)
 	// 设置连拍组封面
 	SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error)
+	// 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+	ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error)
 	mustEmbedUnimplementedPhotoServiceServer()
 }
 
@@ -232,6 +247,9 @@ func (UnimplementedPhotoServiceServer) UpdateBurstGroupsConfig(context.Context, 
 }
 func (UnimplementedPhotoServiceServer) SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetBurstGroupCover not implemented")
+}
+func (UnimplementedPhotoServiceServer) ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPhotoSegments not implemented")
 }
 func (UnimplementedPhotoServiceServer) mustEmbedUnimplementedPhotoServiceServer() {}
 func (UnimplementedPhotoServiceServer) testEmbeddedByValue()                      {}
@@ -434,6 +452,24 @@ func _PhotoService_SetBurstGroupCover_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PhotoService_ListPhotoSegments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPhotoSegmentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).ListPhotoSegments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_ListPhotoSegments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).ListPhotoSegments(ctx, req.(*ListPhotoSegmentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PhotoService_ServiceDesc is the grpc.ServiceDesc for PhotoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -480,6 +516,10 @@ var PhotoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetBurstGroupCover",
 			Handler:    _PhotoService_SetBurstGroupCover_Handler,
+		},
+		{
+			MethodName: "ListPhotoSegments",
+			Handler:    _PhotoService_ListPhotoSegments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -123,6 +123,52 @@ func (s *PhotoServer) SearchPhotos(
 	}, nil
 }
 
+// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+func (s *PhotoServer) ListPhotoSegments(
+	_ctx context.Context, req *api.ListPhotoSegmentsRequest,
+) (*api.ListPhotoSegmentsResponse, error) {
+	ctx := papp.NewAppCtx(_ctx)
+
+	params := data.GetPhotoListParams{
+		Timeline:     req.Timeline,
+		Tag:          req.Tag,
+		Keyword:      req.Keyword,
+		Brand:        req.Brand,
+		Lens:         req.Lens,
+		FocalMin:     req.FocalMin,
+		FocalMax:     req.FocalMax,
+		ISOMin:       req.IsoMin,
+		ISOMax:       req.IsoMax,
+		ShotAtStart:  req.ShotAtStart,
+		ShotAtEnd:    req.ShotAtEnd,
+		SortBy:       req.SortBy,
+		SortOrder:    req.SortOrder,
+		BurstGroupID: req.BurstGroupId,
+		BurstProfile: req.BurstProfile,
+	}
+
+	mode := data.SegmentMode(req.SegmentMode)
+	if mode != data.SegmentModeActivity {
+		mode = data.SegmentModeMonth
+	}
+
+	segments, total, err := data.PhotoDAO.ListPhotoSegments(ctx, params, mode)
+	if err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+
+	resp := &api.ListPhotoSegmentsResponse{Total: total}
+	for _, seg := range segments {
+		resp.Segments = append(resp.Segments, &api.PhotoSegment{
+			Key:    seg.Key,
+			Label:  seg.Label,
+			Count:  seg.Count,
+			Offset: seg.Offset,
+		})
+	}
+	return resp, nil
+}
+
 // GetPhotoStats 综合统计
 func (s *PhotoServer) GetPhotoStats(
 	_ctx context.Context, _ *api.Empty,
