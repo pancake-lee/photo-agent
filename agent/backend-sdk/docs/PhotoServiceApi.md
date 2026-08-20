@@ -5,8 +5,10 @@ All URIs are relative to *http://127.0.0.1:8080*
 Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**photo_service_delete_photo**](PhotoServiceApi.md#photo_service_delete_photo) | **DELETE** /api/v1/photos/{id} | 
+[**photo_service_get_burst_groups_status**](PhotoServiceApi.md#photo_service_get_burst_groups_status) | **GET** /api/v1/burst-groups/status | 
 [**photo_service_get_photo_detail**](PhotoServiceApi.md#photo_service_get_photo_detail) | **GET** /api/v1/photos/{id} | 
 [**photo_service_get_photo_stats**](PhotoServiceApi.md#photo_service_get_photo_stats) | **GET** /api/v1/photos/stats | 
+[**photo_service_rebuild_burst_groups**](PhotoServiceApi.md#photo_service_rebuild_burst_groups) | **POST** /api/v1/burst-groups/rebuild | 
 [**photo_service_search_photos**](PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
 [**photo_service_update_photo_tags**](PhotoServiceApi.md#photo_service_update_photo_tags) | **PUT** /api/v1/photos/{id}/tags | 
 
@@ -45,6 +47,49 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**ApiDeletePhotoResponse**](ApiDeletePhotoResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **photo_service_get_burst_groups_status**
+> ApiGetBurstGroupsStatusResponse photo_service_get_burst_groups_status()
+
+
+
+查询连拍分组重算进度
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.PhotoServiceApi()
+
+try:
+    api_response = api_instance.photo_service_get_burst_groups_status()
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling PhotoServiceApi->photo_service_get_burst_groups_status: %s\n" % e)
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**ApiGetBurstGroupsStatusResponse**](ApiGetBurstGroupsStatusResponse.md)
 
 ### Authorization
 
@@ -147,8 +192,55 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **photo_service_rebuild_burst_groups**
+> ApiRebuildBurstGroupsResponse photo_service_rebuild_burst_groups(body)
+
+
+
+触发连拍分组全量重算（异步）
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.PhotoServiceApi()
+body = swagger_client.ApiEmpty() # ApiEmpty | 
+
+try:
+    api_response = api_instance.photo_service_rebuild_burst_groups(body)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling PhotoServiceApi->photo_service_rebuild_burst_groups: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **body** | [**ApiEmpty**](ApiEmpty.md)|  | 
+
+### Return type
+
+[**ApiRebuildBurstGroupsResponse**](ApiRebuildBurstGroupsResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **photo_service_search_photos**
-> ApiSearchPhotosResponse photo_service_search_photos(page=page, page_size=page_size, timeline=timeline, tag=tag, keyword=keyword, brand=brand, lens=lens, focal_min=focal_min, focal_max=focal_max, iso_min=iso_min, iso_max=iso_max, shot_at_start=shot_at_start, shot_at_end=shot_at_end, sort_by=sort_by, sort_order=sort_order)
+> ApiSearchPhotosResponse photo_service_search_photos(page=page, page_size=page_size, timeline=timeline, tag=tag, keyword=keyword, brand=brand, lens=lens, focal_min=focal_min, focal_max=focal_max, iso_min=iso_min, iso_max=iso_max, shot_at_start=shot_at_start, shot_at_end=shot_at_end, sort_by=sort_by, sort_order=sort_order, burst_group_id=burst_group_id)
 
 
 
@@ -179,9 +271,10 @@ shot_at_start = 'shot_at_start_example' # str |  (optional)
 shot_at_end = 'shot_at_end_example' # str |  (optional)
 sort_by = 'sort_by_example' # str |  (optional)
 sort_order = 'sort_order_example' # str |  (optional)
+burst_group_id = 'burst_group_id_example' # str |  (optional)
 
 try:
-    api_response = api_instance.photo_service_search_photos(page=page, page_size=page_size, timeline=timeline, tag=tag, keyword=keyword, brand=brand, lens=lens, focal_min=focal_min, focal_max=focal_max, iso_min=iso_min, iso_max=iso_max, shot_at_start=shot_at_start, shot_at_end=shot_at_end, sort_by=sort_by, sort_order=sort_order)
+    api_response = api_instance.photo_service_search_photos(page=page, page_size=page_size, timeline=timeline, tag=tag, keyword=keyword, brand=brand, lens=lens, focal_min=focal_min, focal_max=focal_max, iso_min=iso_min, iso_max=iso_max, shot_at_start=shot_at_start, shot_at_end=shot_at_end, sort_by=sort_by, sort_order=sort_order, burst_group_id=burst_group_id)
     pprint(api_response)
 except ApiException as e:
     print("Exception when calling PhotoServiceApi->photo_service_search_photos: %s\n" % e)
@@ -206,6 +299,7 @@ Name | Type | Description  | Notes
  **shot_at_end** | **str**|  | [optional] 
  **sort_by** | **str**|  | [optional] 
  **sort_order** | **str**|  | [optional] 
+ **burst_group_id** | **str**|  | [optional] 
 
 ### Return type
 

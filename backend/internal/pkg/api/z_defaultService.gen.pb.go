@@ -25,42 +25,446 @@ const (
 )
 
 // --------------------------------------------------
+// tbl : photo_groups
+type PhotoGroupInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ID            string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	CoverPhotoID  string                 `protobuf:"bytes,2,opt,name=coverPhotoID,proto3" json:"coverPhotoID,omitempty"`
+	PhotoCount    int32                  `protobuf:"varint,3,opt,name=photoCount,proto3" json:"photoCount,omitempty"`
+	TimeStart     int64                  `protobuf:"varint,4,opt,name=timeStart,proto3" json:"timeStart,omitempty"`
+	TimeEnd       int64                  `protobuf:"varint,5,opt,name=timeEnd,proto3" json:"timeEnd,omitempty"`
+	HashMax       int32                  `protobuf:"varint,6,opt,name=hashMax,proto3" json:"hashMax,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,7,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PhotoGroupInfo) Reset() {
+	*x = PhotoGroupInfo{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoGroupInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoGroupInfo) ProtoMessage() {}
+
+func (x *PhotoGroupInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoGroupInfo.ProtoReflect.Descriptor instead.
+func (*PhotoGroupInfo) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PhotoGroupInfo) GetID() string {
+	if x != nil {
+		return x.ID
+	}
+	return ""
+}
+
+func (x *PhotoGroupInfo) GetCoverPhotoID() string {
+	if x != nil {
+		return x.CoverPhotoID
+	}
+	return ""
+}
+
+func (x *PhotoGroupInfo) GetPhotoCount() int32 {
+	if x != nil {
+		return x.PhotoCount
+	}
+	return 0
+}
+
+func (x *PhotoGroupInfo) GetTimeStart() int64 {
+	if x != nil {
+		return x.TimeStart
+	}
+	return 0
+}
+
+func (x *PhotoGroupInfo) GetTimeEnd() int64 {
+	if x != nil {
+		return x.TimeEnd
+	}
+	return 0
+}
+
+func (x *PhotoGroupInfo) GetHashMax() int32 {
+	if x != nil {
+		return x.HashMax
+	}
+	return 0
+}
+
+func (x *PhotoGroupInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+type AddPhotoGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PhotoGroup    *PhotoGroupInfo        `protobuf:"bytes,1,opt,name=photo_group,json=photoGroup,proto3" json:"photo_group,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddPhotoGroupRequest) Reset() {
+	*x = AddPhotoGroupRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddPhotoGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddPhotoGroupRequest) ProtoMessage() {}
+
+func (x *AddPhotoGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddPhotoGroupRequest.ProtoReflect.Descriptor instead.
+func (*AddPhotoGroupRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AddPhotoGroupRequest) GetPhotoGroup() *PhotoGroupInfo {
+	if x != nil {
+		return x.PhotoGroup
+	}
+	return nil
+}
+
+type AddPhotoGroupResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PhotoGroup    *PhotoGroupInfo        `protobuf:"bytes,1,opt,name=photo_group,json=photoGroup,proto3" json:"photo_group,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddPhotoGroupResponse) Reset() {
+	*x = AddPhotoGroupResponse{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddPhotoGroupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddPhotoGroupResponse) ProtoMessage() {}
+
+func (x *AddPhotoGroupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddPhotoGroupResponse.ProtoReflect.Descriptor instead.
+func (*AddPhotoGroupResponse) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AddPhotoGroupResponse) GetPhotoGroup() *PhotoGroupInfo {
+	if x != nil {
+		return x.PhotoGroup
+	}
+	return nil
+}
+
+type GetPhotoGroupListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IDList        []string               `protobuf:"bytes,1,rep,name=IDList,proto3" json:"IDList,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPhotoGroupListRequest) Reset() {
+	*x = GetPhotoGroupListRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPhotoGroupListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPhotoGroupListRequest) ProtoMessage() {}
+
+func (x *GetPhotoGroupListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPhotoGroupListRequest.ProtoReflect.Descriptor instead.
+func (*GetPhotoGroupListRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetPhotoGroupListRequest) GetIDList() []string {
+	if x != nil {
+		return x.IDList
+	}
+	return nil
+}
+
+type GetPhotoGroupListResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PhotoGroupList []*PhotoGroupInfo      `protobuf:"bytes,1,rep,name=photoGroupList,proto3" json:"photoGroupList,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetPhotoGroupListResponse) Reset() {
+	*x = GetPhotoGroupListResponse{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPhotoGroupListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPhotoGroupListResponse) ProtoMessage() {}
+
+func (x *GetPhotoGroupListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPhotoGroupListResponse.ProtoReflect.Descriptor instead.
+func (*GetPhotoGroupListResponse) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetPhotoGroupListResponse) GetPhotoGroupList() []*PhotoGroupInfo {
+	if x != nil {
+		return x.PhotoGroupList
+	}
+	return nil
+}
+
+type UpdatePhotoGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PhotoGroup    *PhotoGroupInfo        `protobuf:"bytes,1,opt,name=photoGroup,proto3" json:"photoGroup,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePhotoGroupRequest) Reset() {
+	*x = UpdatePhotoGroupRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePhotoGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePhotoGroupRequest) ProtoMessage() {}
+
+func (x *UpdatePhotoGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePhotoGroupRequest.ProtoReflect.Descriptor instead.
+func (*UpdatePhotoGroupRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UpdatePhotoGroupRequest) GetPhotoGroup() *PhotoGroupInfo {
+	if x != nil {
+		return x.PhotoGroup
+	}
+	return nil
+}
+
+type UpdatePhotoGroupResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PhotoGroup    *PhotoGroupInfo        `protobuf:"bytes,1,opt,name=photoGroup,proto3" json:"photoGroup,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePhotoGroupResponse) Reset() {
+	*x = UpdatePhotoGroupResponse{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePhotoGroupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePhotoGroupResponse) ProtoMessage() {}
+
+func (x *UpdatePhotoGroupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePhotoGroupResponse.ProtoReflect.Descriptor instead.
+func (*UpdatePhotoGroupResponse) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UpdatePhotoGroupResponse) GetPhotoGroup() *PhotoGroupInfo {
+	if x != nil {
+		return x.PhotoGroup
+	}
+	return nil
+}
+
+type DelPhotoGroupByIDListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IDList        []string               `protobuf:"bytes,1,rep,name=IDList,proto3" json:"IDList,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DelPhotoGroupByIDListRequest) Reset() {
+	*x = DelPhotoGroupByIDListRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DelPhotoGroupByIDListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DelPhotoGroupByIDListRequest) ProtoMessage() {}
+
+func (x *DelPhotoGroupByIDListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DelPhotoGroupByIDListRequest.ProtoReflect.Descriptor instead.
+func (*DelPhotoGroupByIDListRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DelPhotoGroupByIDListRequest) GetIDList() []string {
+	if x != nil {
+		return x.IDList
+	}
+	return nil
+}
+
+// --------------------------------------------------
 // tbl : photos
 type PhotoInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	Filename      string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
 	FilePath      string                 `protobuf:"bytes,3,opt,name=filePath,proto3" json:"filePath,omitempty"`
-	Timeline      string                 `protobuf:"bytes,4,opt,name=timeline,proto3" json:"timeline,omitempty"`
-	Tags          string                 `protobuf:"bytes,5,opt,name=tags,proto3" json:"tags,omitempty"`
-	Description   string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
-	Objects       string                 `protobuf:"bytes,7,opt,name=objects,proto3" json:"objects,omitempty"`
-	Colors        string                 `protobuf:"bytes,8,opt,name=colors,proto3" json:"colors,omitempty"`
-	Scene         string                 `protobuf:"bytes,9,opt,name=scene,proto3" json:"scene,omitempty"`
-	Lighting      string                 `protobuf:"bytes,10,opt,name=lighting,proto3" json:"lighting,omitempty"`
-	Mood          string                 `protobuf:"bytes,11,opt,name=mood,proto3" json:"mood,omitempty"`
-	Composition   string                 `protobuf:"bytes,12,opt,name=composition,proto3" json:"composition,omitempty"`
-	ShotAt        int64                  `protobuf:"varint,13,opt,name=shotAt,proto3" json:"shotAt,omitempty"`
-	Width         int32                  `protobuf:"varint,14,opt,name=width,proto3" json:"width,omitempty"`
-	Height        int32                  `protobuf:"varint,15,opt,name=height,proto3" json:"height,omitempty"`
-	Brand         string                 `protobuf:"bytes,16,opt,name=brand,proto3" json:"brand,omitempty"`
-	Model         string                 `protobuf:"bytes,17,opt,name=model,proto3" json:"model,omitempty"`
-	Lens          string                 `protobuf:"bytes,18,opt,name=lens,proto3" json:"lens,omitempty"`
-	FocalLength   string                 `protobuf:"bytes,19,opt,name=focalLength,proto3" json:"focalLength,omitempty"`
-	Aperture      string                 `protobuf:"bytes,20,opt,name=aperture,proto3" json:"aperture,omitempty"`
-	Iso           int32                  `protobuf:"varint,21,opt,name=iso,proto3" json:"iso,omitempty"`
-	ExposureTime  string                 `protobuf:"bytes,22,opt,name=exposureTime,proto3" json:"exposureTime,omitempty"`
-	Latitude      float64                `protobuf:"fixed64,23,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	Longitude     float64                `protobuf:"fixed64,24,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	Altitude      float64                `protobuf:"fixed64,25,opt,name=altitude,proto3" json:"altitude,omitempty"`
-	ImportedAt    int64                  `protobuf:"varint,26,opt,name=importedAt,proto3" json:"importedAt,omitempty"`
+	FileType      string                 `protobuf:"bytes,4,opt,name=fileType,proto3" json:"fileType,omitempty"`
+	Timeline      string                 `protobuf:"bytes,5,opt,name=timeline,proto3" json:"timeline,omitempty"`
+	Tags          string                 `protobuf:"bytes,6,opt,name=tags,proto3" json:"tags,omitempty"`
+	Description   string                 `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
+	Objects       string                 `protobuf:"bytes,8,opt,name=objects,proto3" json:"objects,omitempty"`
+	Colors        string                 `protobuf:"bytes,9,opt,name=colors,proto3" json:"colors,omitempty"`
+	Scene         string                 `protobuf:"bytes,10,opt,name=scene,proto3" json:"scene,omitempty"`
+	Lighting      string                 `protobuf:"bytes,11,opt,name=lighting,proto3" json:"lighting,omitempty"`
+	Mood          string                 `protobuf:"bytes,12,opt,name=mood,proto3" json:"mood,omitempty"`
+	Composition   string                 `protobuf:"bytes,13,opt,name=composition,proto3" json:"composition,omitempty"`
+	ShotAt        int64                  `protobuf:"varint,14,opt,name=shotAt,proto3" json:"shotAt,omitempty"`
+	Width         int32                  `protobuf:"varint,15,opt,name=width,proto3" json:"width,omitempty"`
+	Height        int32                  `protobuf:"varint,16,opt,name=height,proto3" json:"height,omitempty"`
+	Brand         string                 `protobuf:"bytes,17,opt,name=brand,proto3" json:"brand,omitempty"`
+	Model         string                 `protobuf:"bytes,18,opt,name=model,proto3" json:"model,omitempty"`
+	Lens          string                 `protobuf:"bytes,19,opt,name=lens,proto3" json:"lens,omitempty"`
+	FocalLength   string                 `protobuf:"bytes,20,opt,name=focalLength,proto3" json:"focalLength,omitempty"`
+	Aperture      string                 `protobuf:"bytes,21,opt,name=aperture,proto3" json:"aperture,omitempty"`
+	Iso           int32                  `protobuf:"varint,22,opt,name=iso,proto3" json:"iso,omitempty"`
+	ExposureTime  string                 `protobuf:"bytes,23,opt,name=exposureTime,proto3" json:"exposureTime,omitempty"`
+	Latitude      float64                `protobuf:"fixed64,24,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	Longitude     float64                `protobuf:"fixed64,25,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Altitude      float64                `protobuf:"fixed64,26,opt,name=altitude,proto3" json:"altitude,omitempty"`
+	BurstGroupID  string                 `protobuf:"bytes,27,opt,name=burstGroupID,proto3" json:"burstGroupID,omitempty"`
+	ImportedAt    int64                  `protobuf:"varint,28,opt,name=importedAt,proto3" json:"importedAt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PhotoInfo) Reset() {
 	*x = PhotoInfo{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[0]
+	mi := &file_z_defaultService_gen_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -72,7 +476,7 @@ func (x *PhotoInfo) String() string {
 func (*PhotoInfo) ProtoMessage() {}
 
 func (x *PhotoInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[0]
+	mi := &file_z_defaultService_gen_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -85,7 +489,7 @@ func (x *PhotoInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoInfo.ProtoReflect.Descriptor instead.
 func (*PhotoInfo) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{0}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PhotoInfo) GetID() string {
@@ -105,6 +509,13 @@ func (x *PhotoInfo) GetFilename() string {
 func (x *PhotoInfo) GetFilePath() string {
 	if x != nil {
 		return x.FilePath
+	}
+	return ""
+}
+
+func (x *PhotoInfo) GetFileType() string {
+	if x != nil {
+		return x.FileType
 	}
 	return ""
 }
@@ -263,6 +674,13 @@ func (x *PhotoInfo) GetAltitude() float64 {
 	return 0
 }
 
+func (x *PhotoInfo) GetBurstGroupID() string {
+	if x != nil {
+		return x.BurstGroupID
+	}
+	return ""
+}
+
 func (x *PhotoInfo) GetImportedAt() int64 {
 	if x != nil {
 		return x.ImportedAt
@@ -279,7 +697,7 @@ type AddPhotoRequest struct {
 
 func (x *AddPhotoRequest) Reset() {
 	*x = AddPhotoRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[1]
+	mi := &file_z_defaultService_gen_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -291,7 +709,7 @@ func (x *AddPhotoRequest) String() string {
 func (*AddPhotoRequest) ProtoMessage() {}
 
 func (x *AddPhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[1]
+	mi := &file_z_defaultService_gen_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -304,7 +722,7 @@ func (x *AddPhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPhotoRequest.ProtoReflect.Descriptor instead.
 func (*AddPhotoRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{1}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AddPhotoRequest) GetPhoto() *PhotoInfo {
@@ -323,7 +741,7 @@ type AddPhotoResponse struct {
 
 func (x *AddPhotoResponse) Reset() {
 	*x = AddPhotoResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[2]
+	mi := &file_z_defaultService_gen_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -335,7 +753,7 @@ func (x *AddPhotoResponse) String() string {
 func (*AddPhotoResponse) ProtoMessage() {}
 
 func (x *AddPhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[2]
+	mi := &file_z_defaultService_gen_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +766,7 @@ func (x *AddPhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPhotoResponse.ProtoReflect.Descriptor instead.
 func (*AddPhotoResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{2}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AddPhotoResponse) GetPhoto() *PhotoInfo {
@@ -367,7 +785,7 @@ type GetPhotoListRequest struct {
 
 func (x *GetPhotoListRequest) Reset() {
 	*x = GetPhotoListRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[3]
+	mi := &file_z_defaultService_gen_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -379,7 +797,7 @@ func (x *GetPhotoListRequest) String() string {
 func (*GetPhotoListRequest) ProtoMessage() {}
 
 func (x *GetPhotoListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[3]
+	mi := &file_z_defaultService_gen_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -392,7 +810,7 @@ func (x *GetPhotoListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPhotoListRequest.ProtoReflect.Descriptor instead.
 func (*GetPhotoListRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{3}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetPhotoListRequest) GetIDList() []string {
@@ -411,7 +829,7 @@ type GetPhotoListResponse struct {
 
 func (x *GetPhotoListResponse) Reset() {
 	*x = GetPhotoListResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[4]
+	mi := &file_z_defaultService_gen_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +841,7 @@ func (x *GetPhotoListResponse) String() string {
 func (*GetPhotoListResponse) ProtoMessage() {}
 
 func (x *GetPhotoListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[4]
+	mi := &file_z_defaultService_gen_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +854,7 @@ func (x *GetPhotoListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPhotoListResponse.ProtoReflect.Descriptor instead.
 func (*GetPhotoListResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{4}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetPhotoListResponse) GetPhotoList() []*PhotoInfo {
@@ -455,7 +873,7 @@ type UpdatePhotoRequest struct {
 
 func (x *UpdatePhotoRequest) Reset() {
 	*x = UpdatePhotoRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[5]
+	mi := &file_z_defaultService_gen_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -467,7 +885,7 @@ func (x *UpdatePhotoRequest) String() string {
 func (*UpdatePhotoRequest) ProtoMessage() {}
 
 func (x *UpdatePhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[5]
+	mi := &file_z_defaultService_gen_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -480,7 +898,7 @@ func (x *UpdatePhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePhotoRequest.ProtoReflect.Descriptor instead.
 func (*UpdatePhotoRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{5}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UpdatePhotoRequest) GetPhoto() *PhotoInfo {
@@ -499,7 +917,7 @@ type UpdatePhotoResponse struct {
 
 func (x *UpdatePhotoResponse) Reset() {
 	*x = UpdatePhotoResponse{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[6]
+	mi := &file_z_defaultService_gen_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -511,7 +929,7 @@ func (x *UpdatePhotoResponse) String() string {
 func (*UpdatePhotoResponse) ProtoMessage() {}
 
 func (x *UpdatePhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[6]
+	mi := &file_z_defaultService_gen_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -524,7 +942,7 @@ func (x *UpdatePhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePhotoResponse.ProtoReflect.Descriptor instead.
 func (*UpdatePhotoResponse) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{6}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *UpdatePhotoResponse) GetPhoto() *PhotoInfo {
@@ -543,7 +961,7 @@ type DelPhotoByIDListRequest struct {
 
 func (x *DelPhotoByIDListRequest) Reset() {
 	*x = DelPhotoByIDListRequest{}
-	mi := &file_z_defaultService_gen_proto_msgTypes[7]
+	mi := &file_z_defaultService_gen_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -555,7 +973,7 @@ func (x *DelPhotoByIDListRequest) String() string {
 func (*DelPhotoByIDListRequest) ProtoMessage() {}
 
 func (x *DelPhotoByIDListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_z_defaultService_gen_proto_msgTypes[7]
+	mi := &file_z_defaultService_gen_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -568,7 +986,7 @@ func (x *DelPhotoByIDListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DelPhotoByIDListRequest.ProtoReflect.Descriptor instead.
 func (*DelPhotoByIDListRequest) Descriptor() ([]byte, []int) {
-	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{7}
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DelPhotoByIDListRequest) GetIDList() []string {
@@ -582,36 +1000,68 @@ var File_z_defaultService_gen_proto protoreflect.FileDescriptor
 
 const file_z_defaultService_gen_proto_rawDesc = "" +
 	"\n" +
-	"\x1az_defaultService.gen.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\x1a\fcommon.proto\"\xaf\x05\n" +
+	"\x1az_defaultService.gen.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\x1a\fcommon.proto\"\xd4\x01\n" +
+	"\x0ePhotoGroupInfo\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\"\n" +
+	"\fcoverPhotoID\x18\x02 \x01(\tR\fcoverPhotoID\x12\x1e\n" +
+	"\n" +
+	"photoCount\x18\x03 \x01(\x05R\n" +
+	"photoCount\x12\x1c\n" +
+	"\ttimeStart\x18\x04 \x01(\x03R\ttimeStart\x12\x18\n" +
+	"\atimeEnd\x18\x05 \x01(\x03R\atimeEnd\x12\x18\n" +
+	"\ahashMax\x18\x06 \x01(\x05R\ahashMax\x12\x1c\n" +
+	"\tcreatedAt\x18\a \x01(\x03R\tcreatedAt\"L\n" +
+	"\x14AddPhotoGroupRequest\x124\n" +
+	"\vphoto_group\x18\x01 \x01(\v2\x13.api.PhotoGroupInfoR\n" +
+	"photoGroup\"M\n" +
+	"\x15AddPhotoGroupResponse\x124\n" +
+	"\vphoto_group\x18\x01 \x01(\v2\x13.api.PhotoGroupInfoR\n" +
+	"photoGroup\"2\n" +
+	"\x18GetPhotoGroupListRequest\x12\x16\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"X\n" +
+	"\x19GetPhotoGroupListResponse\x12;\n" +
+	"\x0ephotoGroupList\x18\x01 \x03(\v2\x13.api.PhotoGroupInfoR\x0ephotoGroupList\"N\n" +
+	"\x17UpdatePhotoGroupRequest\x123\n" +
+	"\n" +
+	"photoGroup\x18\x01 \x01(\v2\x13.api.PhotoGroupInfoR\n" +
+	"photoGroup\"O\n" +
+	"\x18UpdatePhotoGroupResponse\x123\n" +
+	"\n" +
+	"photoGroup\x18\x01 \x01(\v2\x13.api.PhotoGroupInfoR\n" +
+	"photoGroup\"6\n" +
+	"\x1cDelPhotoGroupByIDListRequest\x12\x16\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"\xef\x05\n" +
 	"\tPhotoInfo\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1a\n" +
 	"\bfilePath\x18\x03 \x01(\tR\bfilePath\x12\x1a\n" +
-	"\btimeline\x18\x04 \x01(\tR\btimeline\x12\x12\n" +
-	"\x04tags\x18\x05 \x01(\tR\x04tags\x12 \n" +
-	"\vdescription\x18\x06 \x01(\tR\vdescription\x12\x18\n" +
-	"\aobjects\x18\a \x01(\tR\aobjects\x12\x16\n" +
-	"\x06colors\x18\b \x01(\tR\x06colors\x12\x14\n" +
-	"\x05scene\x18\t \x01(\tR\x05scene\x12\x1a\n" +
-	"\blighting\x18\n" +
-	" \x01(\tR\blighting\x12\x12\n" +
-	"\x04mood\x18\v \x01(\tR\x04mood\x12 \n" +
-	"\vcomposition\x18\f \x01(\tR\vcomposition\x12\x16\n" +
-	"\x06shotAt\x18\r \x01(\x03R\x06shotAt\x12\x14\n" +
-	"\x05width\x18\x0e \x01(\x05R\x05width\x12\x16\n" +
-	"\x06height\x18\x0f \x01(\x05R\x06height\x12\x14\n" +
-	"\x05brand\x18\x10 \x01(\tR\x05brand\x12\x14\n" +
-	"\x05model\x18\x11 \x01(\tR\x05model\x12\x12\n" +
-	"\x04lens\x18\x12 \x01(\tR\x04lens\x12 \n" +
-	"\vfocalLength\x18\x13 \x01(\tR\vfocalLength\x12\x1a\n" +
-	"\baperture\x18\x14 \x01(\tR\baperture\x12\x10\n" +
-	"\x03iso\x18\x15 \x01(\x05R\x03iso\x12\"\n" +
-	"\fexposureTime\x18\x16 \x01(\tR\fexposureTime\x12\x1a\n" +
-	"\blatitude\x18\x17 \x01(\x01R\blatitude\x12\x1c\n" +
-	"\tlongitude\x18\x18 \x01(\x01R\tlongitude\x12\x1a\n" +
-	"\baltitude\x18\x19 \x01(\x01R\baltitude\x12\x1e\n" +
+	"\bfileType\x18\x04 \x01(\tR\bfileType\x12\x1a\n" +
+	"\btimeline\x18\x05 \x01(\tR\btimeline\x12\x12\n" +
+	"\x04tags\x18\x06 \x01(\tR\x04tags\x12 \n" +
+	"\vdescription\x18\a \x01(\tR\vdescription\x12\x18\n" +
+	"\aobjects\x18\b \x01(\tR\aobjects\x12\x16\n" +
+	"\x06colors\x18\t \x01(\tR\x06colors\x12\x14\n" +
+	"\x05scene\x18\n" +
+	" \x01(\tR\x05scene\x12\x1a\n" +
+	"\blighting\x18\v \x01(\tR\blighting\x12\x12\n" +
+	"\x04mood\x18\f \x01(\tR\x04mood\x12 \n" +
+	"\vcomposition\x18\r \x01(\tR\vcomposition\x12\x16\n" +
+	"\x06shotAt\x18\x0e \x01(\x03R\x06shotAt\x12\x14\n" +
+	"\x05width\x18\x0f \x01(\x05R\x05width\x12\x16\n" +
+	"\x06height\x18\x10 \x01(\x05R\x06height\x12\x14\n" +
+	"\x05brand\x18\x11 \x01(\tR\x05brand\x12\x14\n" +
+	"\x05model\x18\x12 \x01(\tR\x05model\x12\x12\n" +
+	"\x04lens\x18\x13 \x01(\tR\x04lens\x12 \n" +
+	"\vfocalLength\x18\x14 \x01(\tR\vfocalLength\x12\x1a\n" +
+	"\baperture\x18\x15 \x01(\tR\baperture\x12\x10\n" +
+	"\x03iso\x18\x16 \x01(\x05R\x03iso\x12\"\n" +
+	"\fexposureTime\x18\x17 \x01(\tR\fexposureTime\x12\x1a\n" +
+	"\blatitude\x18\x18 \x01(\x01R\blatitude\x12\x1c\n" +
+	"\tlongitude\x18\x19 \x01(\x01R\tlongitude\x12\x1a\n" +
+	"\baltitude\x18\x1a \x01(\x01R\baltitude\x12\"\n" +
+	"\fburstGroupID\x18\x1b \x01(\tR\fburstGroupID\x12\x1e\n" +
 	"\n" +
-	"importedAt\x18\x1a \x01(\x03R\n" +
+	"importedAt\x18\x1c \x01(\x03R\n" +
 	"importedAt\"7\n" +
 	"\x0fAddPhotoRequest\x12$\n" +
 	"\x05photo\x18\x01 \x01(\v2\x0e.api.PhotoInfoR\x05photo\"8\n" +
@@ -626,8 +1076,13 @@ const file_z_defaultService_gen_proto_rawDesc = "" +
 	"\x13UpdatePhotoResponse\x12$\n" +
 	"\x05photo\x18\x01 \x01(\v2\x0e.api.PhotoInfoR\x05photo\"1\n" +
 	"\x17DelPhotoByIDListRequest\x12\x16\n" +
-	"\x06IDList\x18\x01 \x03(\tR\x06IDList2\xd5\x02\n" +
-	"\vdefaultCURD\x12K\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList2\xec\x05\n" +
+	"\vdefaultCURD\x12`\n" +
+	"\rAddPhotoGroup\x12\x19.api.AddPhotoGroupRequest\x1a\x1a.api.AddPhotoGroupResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/photo-groups\x12i\n" +
+	"\x11GetPhotoGroupList\x12\x1d.api.GetPhotoGroupListRequest\x1a\x1e.api.GetPhotoGroupListResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/photo-groups\x12i\n" +
+	"\x10UpdatePhotoGroup\x12\x1c.api.UpdatePhotoGroupRequest\x1a\x1d.api.UpdatePhotoGroupResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*2\r/photo-groups\x12]\n" +
+	"\x15DelPhotoGroupByIDList\x12!.api.DelPhotoGroupByIDListRequest\x1a\n" +
+	".api.Empty\"\x15\x82\xd3\xe4\x93\x02\x0f*\r/photo-groups\x12K\n" +
 	"\bAddPhoto\x12\x14.api.AddPhotoRequest\x1a\x15.api.AddPhotoResponse\"\x12\x82\xd3\xe4\x93\x02\f:\x01*\"\a/photos\x12T\n" +
 	"\fGetPhotoList\x12\x18.api.GetPhotoListRequest\x1a\x19.api.GetPhotoListResponse\"\x0f\x82\xd3\xe4\x93\x02\t\x12\a/photos\x12T\n" +
 	"\vUpdatePhoto\x12\x17.api.UpdatePhotoRequest\x1a\x18.api.UpdatePhotoResponse\"\x12\x82\xd3\xe4\x93\x02\f:\x01*2\a/photos\x12M\n" +
@@ -646,37 +1101,58 @@ func file_z_defaultService_gen_proto_rawDescGZIP() []byte {
 	return file_z_defaultService_gen_proto_rawDescData
 }
 
-var file_z_defaultService_gen_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_z_defaultService_gen_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_z_defaultService_gen_proto_goTypes = []any{
-	(*PhotoInfo)(nil),               // 0: api.PhotoInfo
-	(*AddPhotoRequest)(nil),         // 1: api.AddPhotoRequest
-	(*AddPhotoResponse)(nil),        // 2: api.AddPhotoResponse
-	(*GetPhotoListRequest)(nil),     // 3: api.GetPhotoListRequest
-	(*GetPhotoListResponse)(nil),    // 4: api.GetPhotoListResponse
-	(*UpdatePhotoRequest)(nil),      // 5: api.UpdatePhotoRequest
-	(*UpdatePhotoResponse)(nil),     // 6: api.UpdatePhotoResponse
-	(*DelPhotoByIDListRequest)(nil), // 7: api.DelPhotoByIDListRequest
-	(*Empty)(nil),                   // 8: api.Empty
+	(*PhotoGroupInfo)(nil),               // 0: api.PhotoGroupInfo
+	(*AddPhotoGroupRequest)(nil),         // 1: api.AddPhotoGroupRequest
+	(*AddPhotoGroupResponse)(nil),        // 2: api.AddPhotoGroupResponse
+	(*GetPhotoGroupListRequest)(nil),     // 3: api.GetPhotoGroupListRequest
+	(*GetPhotoGroupListResponse)(nil),    // 4: api.GetPhotoGroupListResponse
+	(*UpdatePhotoGroupRequest)(nil),      // 5: api.UpdatePhotoGroupRequest
+	(*UpdatePhotoGroupResponse)(nil),     // 6: api.UpdatePhotoGroupResponse
+	(*DelPhotoGroupByIDListRequest)(nil), // 7: api.DelPhotoGroupByIDListRequest
+	(*PhotoInfo)(nil),                    // 8: api.PhotoInfo
+	(*AddPhotoRequest)(nil),              // 9: api.AddPhotoRequest
+	(*AddPhotoResponse)(nil),             // 10: api.AddPhotoResponse
+	(*GetPhotoListRequest)(nil),          // 11: api.GetPhotoListRequest
+	(*GetPhotoListResponse)(nil),         // 12: api.GetPhotoListResponse
+	(*UpdatePhotoRequest)(nil),           // 13: api.UpdatePhotoRequest
+	(*UpdatePhotoResponse)(nil),          // 14: api.UpdatePhotoResponse
+	(*DelPhotoByIDListRequest)(nil),      // 15: api.DelPhotoByIDListRequest
+	(*Empty)(nil),                        // 16: api.Empty
 }
 var file_z_defaultService_gen_proto_depIdxs = []int32{
-	0, // 0: api.AddPhotoRequest.photo:type_name -> api.PhotoInfo
-	0, // 1: api.AddPhotoResponse.photo:type_name -> api.PhotoInfo
-	0, // 2: api.GetPhotoListResponse.photoList:type_name -> api.PhotoInfo
-	0, // 3: api.UpdatePhotoRequest.photo:type_name -> api.PhotoInfo
-	0, // 4: api.UpdatePhotoResponse.photo:type_name -> api.PhotoInfo
-	1, // 5: api.defaultCURD.AddPhoto:input_type -> api.AddPhotoRequest
-	3, // 6: api.defaultCURD.GetPhotoList:input_type -> api.GetPhotoListRequest
-	5, // 7: api.defaultCURD.UpdatePhoto:input_type -> api.UpdatePhotoRequest
-	7, // 8: api.defaultCURD.DelPhotoByIDList:input_type -> api.DelPhotoByIDListRequest
-	2, // 9: api.defaultCURD.AddPhoto:output_type -> api.AddPhotoResponse
-	4, // 10: api.defaultCURD.GetPhotoList:output_type -> api.GetPhotoListResponse
-	6, // 11: api.defaultCURD.UpdatePhoto:output_type -> api.UpdatePhotoResponse
-	8, // 12: api.defaultCURD.DelPhotoByIDList:output_type -> api.Empty
-	9, // [9:13] is the sub-list for method output_type
-	5, // [5:9] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0,  // 0: api.AddPhotoGroupRequest.photo_group:type_name -> api.PhotoGroupInfo
+	0,  // 1: api.AddPhotoGroupResponse.photo_group:type_name -> api.PhotoGroupInfo
+	0,  // 2: api.GetPhotoGroupListResponse.photoGroupList:type_name -> api.PhotoGroupInfo
+	0,  // 3: api.UpdatePhotoGroupRequest.photoGroup:type_name -> api.PhotoGroupInfo
+	0,  // 4: api.UpdatePhotoGroupResponse.photoGroup:type_name -> api.PhotoGroupInfo
+	8,  // 5: api.AddPhotoRequest.photo:type_name -> api.PhotoInfo
+	8,  // 6: api.AddPhotoResponse.photo:type_name -> api.PhotoInfo
+	8,  // 7: api.GetPhotoListResponse.photoList:type_name -> api.PhotoInfo
+	8,  // 8: api.UpdatePhotoRequest.photo:type_name -> api.PhotoInfo
+	8,  // 9: api.UpdatePhotoResponse.photo:type_name -> api.PhotoInfo
+	1,  // 10: api.defaultCURD.AddPhotoGroup:input_type -> api.AddPhotoGroupRequest
+	3,  // 11: api.defaultCURD.GetPhotoGroupList:input_type -> api.GetPhotoGroupListRequest
+	5,  // 12: api.defaultCURD.UpdatePhotoGroup:input_type -> api.UpdatePhotoGroupRequest
+	7,  // 13: api.defaultCURD.DelPhotoGroupByIDList:input_type -> api.DelPhotoGroupByIDListRequest
+	9,  // 14: api.defaultCURD.AddPhoto:input_type -> api.AddPhotoRequest
+	11, // 15: api.defaultCURD.GetPhotoList:input_type -> api.GetPhotoListRequest
+	13, // 16: api.defaultCURD.UpdatePhoto:input_type -> api.UpdatePhotoRequest
+	15, // 17: api.defaultCURD.DelPhotoByIDList:input_type -> api.DelPhotoByIDListRequest
+	2,  // 18: api.defaultCURD.AddPhotoGroup:output_type -> api.AddPhotoGroupResponse
+	4,  // 19: api.defaultCURD.GetPhotoGroupList:output_type -> api.GetPhotoGroupListResponse
+	6,  // 20: api.defaultCURD.UpdatePhotoGroup:output_type -> api.UpdatePhotoGroupResponse
+	16, // 21: api.defaultCURD.DelPhotoGroupByIDList:output_type -> api.Empty
+	10, // 22: api.defaultCURD.AddPhoto:output_type -> api.AddPhotoResponse
+	12, // 23: api.defaultCURD.GetPhotoList:output_type -> api.GetPhotoListResponse
+	14, // 24: api.defaultCURD.UpdatePhoto:output_type -> api.UpdatePhotoResponse
+	16, // 25: api.defaultCURD.DelPhotoByIDList:output_type -> api.Empty
+	18, // [18:26] is the sub-list for method output_type
+	10, // [10:18] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_z_defaultService_gen_proto_init() }
@@ -691,7 +1167,7 @@ func file_z_defaultService_gen_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_z_defaultService_gen_proto_rawDesc), len(file_z_defaultService_gen_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -53,6 +53,7 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 	_photo.Latitude = field.NewFloat64(tableName, "latitude")
 	_photo.Longitude = field.NewFloat64(tableName, "longitude")
 	_photo.Altitude = field.NewFloat64(tableName, "altitude")
+	_photo.BurstGroupID = field.NewString(tableName, "burst_group_id")
 	_photo.ImportedAt = field.NewTime(tableName, "imported_at")
 
 	_photo.fillFieldMap()
@@ -90,6 +91,7 @@ type photo struct {
 	Latitude     field.Float64
 	Longitude    field.Float64
 	Altitude     field.Float64
+	BurstGroupID field.String
 	ImportedAt   field.Time
 
 	fieldMap map[string]field.Expr
@@ -133,6 +135,7 @@ func (p *photo) updateTableName(table string) *photo {
 	p.Latitude = field.NewFloat64(table, "latitude")
 	p.Longitude = field.NewFloat64(table, "longitude")
 	p.Altitude = field.NewFloat64(table, "altitude")
+	p.BurstGroupID = field.NewString(table, "burst_group_id")
 	p.ImportedAt = field.NewTime(table, "imported_at")
 
 	p.fillFieldMap()
@@ -158,7 +161,7 @@ func (p *photo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *photo) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 27)
+	p.fieldMap = make(map[string]field.Expr, 28)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["filename"] = p.Filename
 	p.fieldMap["file_path"] = p.FilePath
@@ -185,6 +188,7 @@ func (p *photo) fillFieldMap() {
 	p.fieldMap["latitude"] = p.Latitude
 	p.fieldMap["longitude"] = p.Longitude
 	p.fieldMap["altitude"] = p.Altitude
+	p.fieldMap["burst_group_id"] = p.BurstGroupID
 	p.fieldMap["imported_at"] = p.ImportedAt
 }
 

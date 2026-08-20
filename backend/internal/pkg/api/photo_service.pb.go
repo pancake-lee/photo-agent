@@ -39,6 +39,7 @@ type SearchPhotosRequest struct {
 	ShotAtEnd     string                 `protobuf:"bytes,13,opt,name=shot_at_end,json=shotAtEnd,proto3" json:"shot_at_end,omitempty"`
 	SortBy        string                 `protobuf:"bytes,14,opt,name=sort_by,json=sortBy,proto3" json:"sort_by,omitempty"`
 	SortOrder     string                 `protobuf:"bytes,15,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
+	BurstGroupId  string                 `protobuf:"bytes,16,opt,name=burst_group_id,json=burstGroupId,proto3" json:"burst_group_id,omitempty"` // 按连拍组过滤（展开组内成员时使用）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -178,6 +179,13 @@ func (x *SearchPhotosRequest) GetSortOrder() string {
 	return ""
 }
 
+func (x *SearchPhotosRequest) GetBurstGroupId() string {
+	if x != nil {
+		return x.BurstGroupId
+	}
+	return ""
+}
+
 type PhotoItem struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -209,6 +217,9 @@ type PhotoItem struct {
 	HasDescription bool                   `protobuf:"varint,27,opt,name=has_description,json=hasDescription,proto3" json:"has_description,omitempty"`
 	ThumbnailUrl   string                 `protobuf:"bytes,28,opt,name=thumbnail_url,json=thumbnailUrl,proto3" json:"thumbnail_url,omitempty"`
 	HasNef         bool                   `protobuf:"varint,29,opt,name=has_nef,json=hasNef,proto3" json:"has_nef,omitempty"`
+	BurstGroupId   string                 `protobuf:"bytes,30,opt,name=burst_group_id,json=burstGroupId,proto3" json:"burst_group_id,omitempty"`
+	BurstCover     bool                   `protobuf:"varint,31,opt,name=burst_cover,json=burstCover,proto3" json:"burst_cover,omitempty"` // 是否为连拍组封面（组内 shot_at 最早一张）
+	BurstCount     int32                  `protobuf:"varint,32,opt,name=burst_count,json=burstCount,proto3" json:"burst_count,omitempty"` // 连拍组内照片数（非组内照片为 0）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -444,6 +455,27 @@ func (x *PhotoItem) GetHasNef() bool {
 		return x.HasNef
 	}
 	return false
+}
+
+func (x *PhotoItem) GetBurstGroupId() string {
+	if x != nil {
+		return x.BurstGroupId
+	}
+	return ""
+}
+
+func (x *PhotoItem) GetBurstCover() bool {
+	if x != nil {
+		return x.BurstCover
+	}
+	return false
+}
+
+func (x *PhotoItem) GetBurstCount() int32 {
+	if x != nil {
+		return x.BurstCount
+	}
+	return 0
 }
 
 type SearchPhotosResponse struct {
@@ -1158,11 +1190,123 @@ func (x *DeletePhotoResponse) GetId() string {
 	return ""
 }
 
+type RebuildBurstGroupsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // running | already_running
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RebuildBurstGroupsResponse) Reset() {
+	*x = RebuildBurstGroupsResponse{}
+	mi := &file_photo_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RebuildBurstGroupsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RebuildBurstGroupsResponse) ProtoMessage() {}
+
+func (x *RebuildBurstGroupsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_photo_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RebuildBurstGroupsResponse.ProtoReflect.Descriptor instead.
+func (*RebuildBurstGroupsResponse) Descriptor() ([]byte, []int) {
+	return file_photo_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RebuildBurstGroupsResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type GetBurstGroupsStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Running       bool                   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
+	Processed     int32                  `protobuf:"varint,2,opt,name=processed,proto3" json:"processed,omitempty"`
+	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	GroupCount    int32                  `protobuf:"varint,4,opt,name=group_count,json=groupCount,proto3" json:"group_count,omitempty"` // 当前库内连拍组数（跑完时为最终组数）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBurstGroupsStatusResponse) Reset() {
+	*x = GetBurstGroupsStatusResponse{}
+	mi := &file_photo_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBurstGroupsStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBurstGroupsStatusResponse) ProtoMessage() {}
+
+func (x *GetBurstGroupsStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_photo_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBurstGroupsStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetBurstGroupsStatusResponse) Descriptor() ([]byte, []int) {
+	return file_photo_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetBurstGroupsStatusResponse) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *GetBurstGroupsStatusResponse) GetProcessed() int32 {
+	if x != nil {
+		return x.Processed
+	}
+	return 0
+}
+
+func (x *GetBurstGroupsStatusResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *GetBurstGroupsStatusResponse) GetGroupCount() int32 {
+	if x != nil {
+		return x.GroupCount
+	}
+	return 0
+}
+
 var File_photo_service_proto protoreflect.FileDescriptor
 
 const file_photo_service_proto_rawDesc = "" +
 	"\n" +
-	"\x13photo_service.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\x1a\fcommon.proto\"\xa0\x03\n" +
+	"\x13photo_service.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\x1a\fcommon.proto\"\xc6\x03\n" +
 	"\x13SearchPhotosRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1a\n" +
@@ -1180,7 +1324,8 @@ const file_photo_service_proto_rawDesc = "" +
 	"\vshot_at_end\x18\r \x01(\tR\tshotAtEnd\x12\x17\n" +
 	"\asort_by\x18\x0e \x01(\tR\x06sortBy\x12\x1d\n" +
 	"\n" +
-	"sort_order\x18\x0f \x01(\tR\tsortOrder\"\x9b\x06\n" +
+	"sort_order\x18\x0f \x01(\tR\tsortOrder\x12$\n" +
+	"\x0eburst_group_id\x18\x10 \x01(\tR\fburstGroupId\"\x83\a\n" +
 	"\tPhotoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
@@ -1212,7 +1357,12 @@ const file_photo_service_proto_rawDesc = "" +
 	"importedAt\x12'\n" +
 	"\x0fhas_description\x18\x1b \x01(\bR\x0ehasDescription\x12#\n" +
 	"\rthumbnail_url\x18\x1c \x01(\tR\fthumbnailUrl\x12\x17\n" +
-	"\ahas_nef\x18\x1d \x01(\bR\x06hasNef\"\xa4\x01\n" +
+	"\ahas_nef\x18\x1d \x01(\bR\x06hasNef\x12$\n" +
+	"\x0eburst_group_id\x18\x1e \x01(\tR\fburstGroupId\x12\x1f\n" +
+	"\vburst_cover\x18\x1f \x01(\bR\n" +
+	"burstCover\x12\x1f\n" +
+	"\vburst_count\x18  \x01(\x05R\n" +
+	"burstCount\"\xa4\x01\n" +
 	"\x14SearchPhotosResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x12\n" +
@@ -1262,7 +1412,15 @@ const file_photo_service_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"=\n" +
 	"\x13DeletePhotoResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id2\xea\x03\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"4\n" +
+	"\x1aRebuildBurstGroupsResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"\x8d\x01\n" +
+	"\x1cGetBurstGroupsStatusResponse\x12\x18\n" +
+	"\arunning\x18\x01 \x01(\bR\arunning\x12\x1c\n" +
+	"\tprocessed\x18\x02 \x01(\x05R\tprocessed\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x1f\n" +
+	"\vgroup_count\x18\x04 \x01(\x05R\n" +
+	"groupCount2\xc2\x05\n" +
 	"\fPhotoService\x12[\n" +
 	"\fSearchPhotos\x12\x18.api.SearchPhotosRequest\x1a\x19.api.SearchPhotosResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/v1/photos\x12U\n" +
 	"\rGetPhotoStats\x12\n" +
@@ -1270,7 +1428,11 @@ const file_photo_service_proto_rawDesc = "" +
 	"\x0eGetPhotoDetail\x12\x1a.api.GetPhotoDetailRequest\x1a\x1b.api.GetPhotoDetailResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/v1/photos/{id}\x12_\n" +
 	"\x0fUpdatePhotoTags\x12\x1b.api.UpdatePhotoTagsRequest\x1a\n" +
 	".api.Empty\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/api/v1/photos/{id}/tags\x12]\n" +
-	"\vDeletePhoto\x12\x17.api.DeletePhotoRequest\x1a\x18.api.DeletePhotoResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/api/v1/photos/{id}B\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
+	"\vDeletePhoto\x12\x17.api.DeletePhotoRequest\x1a\x18.api.DeletePhotoResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/api/v1/photos/{id}\x12j\n" +
+	"\x12RebuildBurstGroups\x12\n" +
+	".api.Empty\x1a\x1f.api.RebuildBurstGroupsResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/api/v1/burst-groups/rebuild\x12j\n" +
+	"\x14GetBurstGroupsStatus\x12\n" +
+	".api.Empty\x1a!.api.GetBurstGroupsStatusResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/api/v1/burst-groups/statusB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_photo_service_proto_rawDescOnce sync.Once
@@ -1284,23 +1446,25 @@ func file_photo_service_proto_rawDescGZIP() []byte {
 	return file_photo_service_proto_rawDescData
 }
 
-var file_photo_service_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_photo_service_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_photo_service_proto_goTypes = []any{
-	(*SearchPhotosRequest)(nil),    // 0: api.SearchPhotosRequest
-	(*PhotoItem)(nil),              // 1: api.PhotoItem
-	(*SearchPhotosResponse)(nil),   // 2: api.SearchPhotosResponse
-	(*StatItem)(nil),               // 3: api.StatItem
-	(*FocalRangeStat)(nil),         // 4: api.FocalRangeStat
-	(*GPSStat)(nil),                // 5: api.GPSStat
-	(*MonthlyStat)(nil),            // 6: api.MonthlyStat
-	(*HourlyStat)(nil),             // 7: api.HourlyStat
-	(*GetPhotoStatsResponse)(nil),  // 8: api.GetPhotoStatsResponse
-	(*GetPhotoDetailRequest)(nil),  // 9: api.GetPhotoDetailRequest
-	(*GetPhotoDetailResponse)(nil), // 10: api.GetPhotoDetailResponse
-	(*UpdatePhotoTagsRequest)(nil), // 11: api.UpdatePhotoTagsRequest
-	(*DeletePhotoRequest)(nil),     // 12: api.DeletePhotoRequest
-	(*DeletePhotoResponse)(nil),    // 13: api.DeletePhotoResponse
-	(*Empty)(nil),                  // 14: api.Empty
+	(*SearchPhotosRequest)(nil),          // 0: api.SearchPhotosRequest
+	(*PhotoItem)(nil),                    // 1: api.PhotoItem
+	(*SearchPhotosResponse)(nil),         // 2: api.SearchPhotosResponse
+	(*StatItem)(nil),                     // 3: api.StatItem
+	(*FocalRangeStat)(nil),               // 4: api.FocalRangeStat
+	(*GPSStat)(nil),                      // 5: api.GPSStat
+	(*MonthlyStat)(nil),                  // 6: api.MonthlyStat
+	(*HourlyStat)(nil),                   // 7: api.HourlyStat
+	(*GetPhotoStatsResponse)(nil),        // 8: api.GetPhotoStatsResponse
+	(*GetPhotoDetailRequest)(nil),        // 9: api.GetPhotoDetailRequest
+	(*GetPhotoDetailResponse)(nil),       // 10: api.GetPhotoDetailResponse
+	(*UpdatePhotoTagsRequest)(nil),       // 11: api.UpdatePhotoTagsRequest
+	(*DeletePhotoRequest)(nil),           // 12: api.DeletePhotoRequest
+	(*DeletePhotoResponse)(nil),          // 13: api.DeletePhotoResponse
+	(*RebuildBurstGroupsResponse)(nil),   // 14: api.RebuildBurstGroupsResponse
+	(*GetBurstGroupsStatusResponse)(nil), // 15: api.GetBurstGroupsStatusResponse
+	(*Empty)(nil),                        // 16: api.Empty
 }
 var file_photo_service_proto_depIdxs = []int32{
 	1,  // 0: api.SearchPhotosResponse.items:type_name -> api.PhotoItem
@@ -1312,17 +1476,21 @@ var file_photo_service_proto_depIdxs = []int32{
 	7,  // 6: api.GetPhotoStatsResponse.hourly:type_name -> api.HourlyStat
 	1,  // 7: api.GetPhotoDetailResponse.photo:type_name -> api.PhotoItem
 	0,  // 8: api.PhotoService.SearchPhotos:input_type -> api.SearchPhotosRequest
-	14, // 9: api.PhotoService.GetPhotoStats:input_type -> api.Empty
+	16, // 9: api.PhotoService.GetPhotoStats:input_type -> api.Empty
 	9,  // 10: api.PhotoService.GetPhotoDetail:input_type -> api.GetPhotoDetailRequest
 	11, // 11: api.PhotoService.UpdatePhotoTags:input_type -> api.UpdatePhotoTagsRequest
 	12, // 12: api.PhotoService.DeletePhoto:input_type -> api.DeletePhotoRequest
-	2,  // 13: api.PhotoService.SearchPhotos:output_type -> api.SearchPhotosResponse
-	8,  // 14: api.PhotoService.GetPhotoStats:output_type -> api.GetPhotoStatsResponse
-	10, // 15: api.PhotoService.GetPhotoDetail:output_type -> api.GetPhotoDetailResponse
-	14, // 16: api.PhotoService.UpdatePhotoTags:output_type -> api.Empty
-	13, // 17: api.PhotoService.DeletePhoto:output_type -> api.DeletePhotoResponse
-	13, // [13:18] is the sub-list for method output_type
-	8,  // [8:13] is the sub-list for method input_type
+	16, // 13: api.PhotoService.RebuildBurstGroups:input_type -> api.Empty
+	16, // 14: api.PhotoService.GetBurstGroupsStatus:input_type -> api.Empty
+	2,  // 15: api.PhotoService.SearchPhotos:output_type -> api.SearchPhotosResponse
+	8,  // 16: api.PhotoService.GetPhotoStats:output_type -> api.GetPhotoStatsResponse
+	10, // 17: api.PhotoService.GetPhotoDetail:output_type -> api.GetPhotoDetailResponse
+	16, // 18: api.PhotoService.UpdatePhotoTags:output_type -> api.Empty
+	13, // 19: api.PhotoService.DeletePhoto:output_type -> api.DeletePhotoResponse
+	14, // 20: api.PhotoService.RebuildBurstGroups:output_type -> api.RebuildBurstGroupsResponse
+	15, // 21: api.PhotoService.GetBurstGroupsStatus:output_type -> api.GetBurstGroupsStatusResponse
+	15, // [15:22] is the sub-list for method output_type
+	8,  // [8:15] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -1340,7 +1508,7 @@ func file_photo_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_photo_service_proto_rawDesc), len(file_photo_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

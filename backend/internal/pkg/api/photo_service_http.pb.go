@@ -20,18 +20,24 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationPhotoServiceDeletePhoto = "/api.PhotoService/DeletePhoto"
+const OperationPhotoServiceGetBurstGroupsStatus = "/api.PhotoService/GetBurstGroupsStatus"
 const OperationPhotoServiceGetPhotoDetail = "/api.PhotoService/GetPhotoDetail"
 const OperationPhotoServiceGetPhotoStats = "/api.PhotoService/GetPhotoStats"
+const OperationPhotoServiceRebuildBurstGroups = "/api.PhotoService/RebuildBurstGroups"
 const OperationPhotoServiceSearchPhotos = "/api.PhotoService/SearchPhotos"
 const OperationPhotoServiceUpdatePhotoTags = "/api.PhotoService/UpdatePhotoTags"
 
 type PhotoServiceHTTPServer interface {
 	// DeletePhoto 删除照片（含文件清理）
 	DeletePhoto(context.Context, *DeletePhotoRequest) (*DeletePhotoResponse, error)
+	// GetBurstGroupsStatus 查询连拍分组重算进度
+	GetBurstGroupsStatus(context.Context, *Empty) (*GetBurstGroupsStatusResponse, error)
 	// GetPhotoDetail 单张详情
 	GetPhotoDetail(context.Context, *GetPhotoDetailRequest) (*GetPhotoDetailResponse, error)
 	// GetPhotoStats 综合统计
 	GetPhotoStats(context.Context, *Empty) (*GetPhotoStatsResponse, error)
+	// RebuildBurstGroups 触发连拍分组全量重算（异步）
+	RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error)
 	// SearchPhotos 复杂条件分页查询
 	SearchPhotos(context.Context, *SearchPhotosRequest) (*SearchPhotosResponse, error)
 	// UpdatePhotoTags 更新标签
@@ -45,6 +51,8 @@ func RegisterPhotoServiceHTTPServer(s *http.Server, srv PhotoServiceHTTPServer) 
 	r.GET("/api/v1/photos/{id}", _PhotoService_GetPhotoDetail0_HTTP_Handler(srv))
 	r.PUT("/api/v1/photos/{id}/tags", _PhotoService_UpdatePhotoTags0_HTTP_Handler(srv))
 	r.DELETE("/api/v1/photos/{id}", _PhotoService_DeletePhoto0_HTTP_Handler(srv))
+	r.POST("/api/v1/burst-groups/rebuild", _PhotoService_RebuildBurstGroups0_HTTP_Handler(srv))
+	r.GET("/api/v1/burst-groups/status", _PhotoService_GetBurstGroupsStatus0_HTTP_Handler(srv))
 }
 
 func _PhotoService_SearchPhotos0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
@@ -154,13 +162,58 @@ func _PhotoService_DeletePhoto0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ct
 	}
 }
 
+func _PhotoService_RebuildBurstGroups0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceRebuildBurstGroups)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.RebuildBurstGroups(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RebuildBurstGroupsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _PhotoService_GetBurstGroupsStatus0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceGetBurstGroupsStatus)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetBurstGroupsStatus(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetBurstGroupsStatusResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type PhotoServiceHTTPClient interface {
 	// DeletePhoto 删除照片（含文件清理）
 	DeletePhoto(ctx context.Context, req *DeletePhotoRequest, opts ...http.CallOption) (rsp *DeletePhotoResponse, err error)
+	// GetBurstGroupsStatus 查询连拍分组重算进度
+	GetBurstGroupsStatus(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetBurstGroupsStatusResponse, err error)
 	// GetPhotoDetail 单张详情
 	GetPhotoDetail(ctx context.Context, req *GetPhotoDetailRequest, opts ...http.CallOption) (rsp *GetPhotoDetailResponse, err error)
 	// GetPhotoStats 综合统计
 	GetPhotoStats(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetPhotoStatsResponse, err error)
+	// RebuildBurstGroups 触发连拍分组全量重算（异步）
+	RebuildBurstGroups(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *RebuildBurstGroupsResponse, err error)
 	// SearchPhotos 复杂条件分页查询
 	SearchPhotos(ctx context.Context, req *SearchPhotosRequest, opts ...http.CallOption) (rsp *SearchPhotosResponse, err error)
 	// UpdatePhotoTags 更新标签
@@ -189,6 +242,20 @@ func (c *PhotoServiceHTTPClientImpl) DeletePhoto(ctx context.Context, in *Delete
 	return &out, nil
 }
 
+// GetBurstGroupsStatus 查询连拍分组重算进度
+func (c *PhotoServiceHTTPClientImpl) GetBurstGroupsStatus(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetBurstGroupsStatusResponse, error) {
+	var out GetBurstGroupsStatusResponse
+	pattern := "/api/v1/burst-groups/status"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationPhotoServiceGetBurstGroupsStatus))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetPhotoDetail 单张详情
 func (c *PhotoServiceHTTPClientImpl) GetPhotoDetail(ctx context.Context, in *GetPhotoDetailRequest, opts ...http.CallOption) (*GetPhotoDetailResponse, error) {
 	var out GetPhotoDetailResponse
@@ -211,6 +278,20 @@ func (c *PhotoServiceHTTPClientImpl) GetPhotoStats(ctx context.Context, in *Empt
 	opts = append(opts, http.Operation(OperationPhotoServiceGetPhotoStats))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RebuildBurstGroups 触发连拍分组全量重算（异步）
+func (c *PhotoServiceHTTPClientImpl) RebuildBurstGroups(ctx context.Context, in *Empty, opts ...http.CallOption) (*RebuildBurstGroupsResponse, error) {
+	var out RebuildBurstGroupsResponse
+	pattern := "/api/v1/burst-groups/rebuild"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationPhotoServiceRebuildBurstGroups))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

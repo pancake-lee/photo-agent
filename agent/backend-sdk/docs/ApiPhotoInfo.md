@@ -6,6 +6,7 @@ Name | Type | Description | Notes
 **id** | **str** |  | [optional] 
 **filename** | **str** |  | [optional] 
 **file_path** | **str** |  | [optional] 
+**file_type** | **str** |  | [optional] 
 **timeline** | **str** |  | [optional] 
 **tags** | **str** |  | [optional] 
 **description** | **str** |  | [optional] 
@@ -28,6 +29,7 @@ Name | Type | Description | Notes
 **latitude** | **float** |  | [optional] 
 **longitude** | **float** |  | [optional] 
 **altitude** | **float** |  | [optional] 
+**burst_group_id** | **str** |  | [optional] 
 **imported_at** | **str** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

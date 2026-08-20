@@ -26,5 +26,6 @@ CREATE TABLE photos (
   latitude REAL,
   longitude REAL,
   altitude REAL,
+  burst_group_id TEXT NOT NULL DEFAULT '',
   imported_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

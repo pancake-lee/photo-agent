@@ -19,11 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PhotoService_SearchPhotos_FullMethodName    = "/api.PhotoService/SearchPhotos"
-	PhotoService_GetPhotoStats_FullMethodName   = "/api.PhotoService/GetPhotoStats"
-	PhotoService_GetPhotoDetail_FullMethodName  = "/api.PhotoService/GetPhotoDetail"
-	PhotoService_UpdatePhotoTags_FullMethodName = "/api.PhotoService/UpdatePhotoTags"
-	PhotoService_DeletePhoto_FullMethodName     = "/api.PhotoService/DeletePhoto"
+	PhotoService_SearchPhotos_FullMethodName         = "/api.PhotoService/SearchPhotos"
+	PhotoService_GetPhotoStats_FullMethodName        = "/api.PhotoService/GetPhotoStats"
+	PhotoService_GetPhotoDetail_FullMethodName       = "/api.PhotoService/GetPhotoDetail"
+	PhotoService_UpdatePhotoTags_FullMethodName      = "/api.PhotoService/UpdatePhotoTags"
+	PhotoService_DeletePhoto_FullMethodName          = "/api.PhotoService/DeletePhoto"
+	PhotoService_RebuildBurstGroups_FullMethodName   = "/api.PhotoService/RebuildBurstGroups"
+	PhotoService_GetBurstGroupsStatus_FullMethodName = "/api.PhotoService/GetBurstGroupsStatus"
 )
 
 // PhotoServiceClient is the client API for PhotoService service.
@@ -42,6 +44,10 @@ type PhotoServiceClient interface {
 	UpdatePhotoTags(ctx context.Context, in *UpdatePhotoTagsRequest, opts ...grpc.CallOption) (*Empty, error)
 	// 删除照片（含文件清理）
 	DeletePhoto(ctx context.Context, in *DeletePhotoRequest, opts ...grpc.CallOption) (*DeletePhotoResponse, error)
+	// 触发连拍分组全量重算（异步）
+	RebuildBurstGroups(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RebuildBurstGroupsResponse, error)
+	// 查询连拍分组重算进度
+	GetBurstGroupsStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetBurstGroupsStatusResponse, error)
 }
 
 type photoServiceClient struct {
@@ -102,6 +108,26 @@ func (c *photoServiceClient) DeletePhoto(ctx context.Context, in *DeletePhotoReq
 	return out, nil
 }
 
+func (c *photoServiceClient) RebuildBurstGroups(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RebuildBurstGroupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebuildBurstGroupsResponse)
+	err := c.cc.Invoke(ctx, PhotoService_RebuildBurstGroups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *photoServiceClient) GetBurstGroupsStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetBurstGroupsStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBurstGroupsStatusResponse)
+	err := c.cc.Invoke(ctx, PhotoService_GetBurstGroupsStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PhotoServiceServer is the server API for PhotoService service.
 // All implementations must embed UnimplementedPhotoServiceServer
 // for forward compatibility.
@@ -118,6 +144,10 @@ type PhotoServiceServer interface {
 	UpdatePhotoTags(context.Context, *UpdatePhotoTagsRequest) (*Empty, error)
 	// 删除照片（含文件清理）
 	DeletePhoto(context.Context, *DeletePhotoRequest) (*DeletePhotoResponse, error)
+	// 触发连拍分组全量重算（异步）
+	RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error)
+	// 查询连拍分组重算进度
+	GetBurstGroupsStatus(context.Context, *Empty) (*GetBurstGroupsStatusResponse, error)
 	mustEmbedUnimplementedPhotoServiceServer()
 }
 
@@ -142,6 +172,12 @@ func (UnimplementedPhotoServiceServer) UpdatePhotoTags(context.Context, *UpdateP
 }
 func (UnimplementedPhotoServiceServer) DeletePhoto(context.Context, *DeletePhotoRequest) (*DeletePhotoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePhoto not implemented")
+}
+func (UnimplementedPhotoServiceServer) RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebuildBurstGroups not implemented")
+}
+func (UnimplementedPhotoServiceServer) GetBurstGroupsStatus(context.Context, *Empty) (*GetBurstGroupsStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBurstGroupsStatus not implemented")
 }
 func (UnimplementedPhotoServiceServer) mustEmbedUnimplementedPhotoServiceServer() {}
 func (UnimplementedPhotoServiceServer) testEmbeddedByValue()                      {}
@@ -254,6 +290,42 @@ func _PhotoService_DeletePhoto_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PhotoService_RebuildBurstGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).RebuildBurstGroups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_RebuildBurstGroups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).RebuildBurstGroups(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PhotoService_GetBurstGroupsStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).GetBurstGroupsStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_GetBurstGroupsStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).GetBurstGroupsStatus(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PhotoService_ServiceDesc is the grpc.ServiceDesc for PhotoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -280,6 +352,14 @@ var PhotoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeletePhoto",
 			Handler:    _PhotoService_DeletePhoto_Handler,
+		},
+		{
+			MethodName: "RebuildBurstGroups",
+			Handler:    _PhotoService_RebuildBurstGroups_Handler,
+		},
+		{
+			MethodName: "GetBurstGroupsStatus",
+			Handler:    _PhotoService_GetBurstGroupsStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

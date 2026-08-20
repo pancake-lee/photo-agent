@@ -21,6 +21,7 @@ func DO2DTO_Photo(do *data.PhotoDO) *api.PhotoInfo {
         ID: do.ID,
         Filename: do.Filename,
         FilePath: do.FilePath,
+        FileType: do.FileType,
         Timeline: do.Timeline,
         Tags: do.Tags,
         Description: do.Description,
@@ -43,6 +44,7 @@ func DO2DTO_Photo(do *data.PhotoDO) *api.PhotoInfo {
         Latitude: do.Latitude,
         Longitude: do.Longitude,
         Altitude: do.Altitude,
+        BurstGroupID: do.BurstGroupID,
         ImportedAt: do.ImportedAt.Unix(),
 	}
 }
@@ -54,6 +56,7 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *data.PhotoDO {
         ID: dto.ID,
         Filename: dto.Filename,
         FilePath: dto.FilePath,
+        FileType: dto.FileType,
         Timeline: dto.Timeline,
         Tags: dto.Tags,
         Description: dto.Description,
@@ -76,6 +79,7 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *data.PhotoDO {
         Latitude: dto.Latitude,
         Longitude: dto.Longitude,
         Altitude: dto.Altitude,
+        BurstGroupID: dto.BurstGroupID,
         ImportedAt: time.Unix(dto.ImportedAt, 0),
 	}
 }

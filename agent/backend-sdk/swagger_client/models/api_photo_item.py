@@ -54,7 +54,11 @@ class ApiPhotoItem(object):
         'altitude': 'float',
         'imported_at': 'str',
         'has_description': 'bool',
-        'thumbnail_url': 'str'
+        'thumbnail_url': 'str',
+        'has_nef': 'bool',
+        'burst_group_id': 'str',
+        'burst_cover': 'bool',
+        'burst_count': 'int'
     }
 
     attribute_map = {
@@ -85,10 +89,14 @@ class ApiPhotoItem(object):
         'altitude': 'altitude',
         'imported_at': 'importedAt',
         'has_description': 'hasDescription',
-        'thumbnail_url': 'thumbnailUrl'
+        'thumbnail_url': 'thumbnailUrl',
+        'has_nef': 'hasNef',
+        'burst_group_id': 'burstGroupId',
+        'burst_cover': 'burstCover',
+        'burst_count': 'burstCount'
     }
 
-    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None, has_description=None, thumbnail_url=None):  # noqa: E501
+    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None, has_description=None, thumbnail_url=None, has_nef=None, burst_group_id=None, burst_cover=None, burst_count=None):  # noqa: E501
         """ApiPhotoItem - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._filename = None
@@ -118,6 +126,10 @@ class ApiPhotoItem(object):
         self._imported_at = None
         self._has_description = None
         self._thumbnail_url = None
+        self._has_nef = None
+        self._burst_group_id = None
+        self._burst_cover = None
+        self._burst_count = None
         self.discriminator = None
         if id is not None:
             self.id = id
@@ -175,6 +187,14 @@ class ApiPhotoItem(object):
             self.has_description = has_description
         if thumbnail_url is not None:
             self.thumbnail_url = thumbnail_url
+        if has_nef is not None:
+            self.has_nef = has_nef
+        if burst_group_id is not None:
+            self.burst_group_id = burst_group_id
+        if burst_cover is not None:
+            self.burst_cover = burst_cover
+        if burst_count is not None:
+            self.burst_count = burst_count
 
     @property
     def id(self):
@@ -763,6 +783,90 @@ class ApiPhotoItem(object):
         """
 
         self._thumbnail_url = thumbnail_url
+
+    @property
+    def has_nef(self):
+        """Gets the has_nef of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The has_nef of this ApiPhotoItem.  # noqa: E501
+        :rtype: bool
+        """
+        return self._has_nef
+
+    @has_nef.setter
+    def has_nef(self, has_nef):
+        """Sets the has_nef of this ApiPhotoItem.
+
+
+        :param has_nef: The has_nef of this ApiPhotoItem.  # noqa: E501
+        :type: bool
+        """
+
+        self._has_nef = has_nef
+
+    @property
+    def burst_group_id(self):
+        """Gets the burst_group_id of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The burst_group_id of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._burst_group_id
+
+    @burst_group_id.setter
+    def burst_group_id(self, burst_group_id):
+        """Sets the burst_group_id of this ApiPhotoItem.
+
+
+        :param burst_group_id: The burst_group_id of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._burst_group_id = burst_group_id
+
+    @property
+    def burst_cover(self):
+        """Gets the burst_cover of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The burst_cover of this ApiPhotoItem.  # noqa: E501
+        :rtype: bool
+        """
+        return self._burst_cover
+
+    @burst_cover.setter
+    def burst_cover(self, burst_cover):
+        """Sets the burst_cover of this ApiPhotoItem.
+
+
+        :param burst_cover: The burst_cover of this ApiPhotoItem.  # noqa: E501
+        :type: bool
+        """
+
+        self._burst_cover = burst_cover
+
+    @property
+    def burst_count(self):
+        """Gets the burst_count of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The burst_count of this ApiPhotoItem.  # noqa: E501
+        :rtype: int
+        """
+        return self._burst_count
+
+    @burst_count.setter
+    def burst_count(self, burst_count):
+        """Sets the burst_count of this ApiPhotoItem.
+
+
+        :param burst_count: The burst_count of this ApiPhotoItem.  # noqa: E501
+        :type: int
+        """
+
+        self._burst_count = burst_count
 
     def to_dict(self):
         """Returns the model properties as a dict"""

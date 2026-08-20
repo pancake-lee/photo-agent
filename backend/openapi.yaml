@@ -100,6 +100,38 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.UpdateAbandonCodeResponse'
+    /api/v1/burst-groups/rebuild:
+        post:
+            tags:
+                - PhotoService
+            description: 触发连拍分组全量重算（异步）
+            operationId: PhotoService_RebuildBurstGroups
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.Empty'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.RebuildBurstGroupsResponse'
+    /api/v1/burst-groups/status:
+        get:
+            tags:
+                - PhotoService
+            description: 查询连拍分组重算进度
+            operationId: PhotoService_GetBurstGroupsStatus
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetBurstGroupsStatusResponse'
     /api/v1/photos:
         get:
             tags:
@@ -168,6 +200,10 @@ paths:
                   schema:
                     type: string
                 - name: sortOrder
+                  in: query
+                  schema:
+                    type: string
+                - name: burstGroupId
                   in: query
                   schema:
                     type: string
@@ -476,6 +512,80 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.StopVlmQueueResponse'
+    /photo-groups:
+        get:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_GetPhotoGroupList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetPhotoGroupListResponse'
+        post:
+            tags:
+                - DefaultCURD
+            description: |-
+                --------------------------------------------------
+                 tbl : photo_groups
+            operationId: DefaultCURD_AddPhotoGroup
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.AddPhotoGroupRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.AddPhotoGroupResponse'
+        delete:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_DelPhotoGroupByIDList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
+        patch:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_UpdatePhotoGroup
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdatePhotoGroupRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UpdatePhotoGroupResponse'
     /photos:
         get:
             tags:
@@ -574,6 +684,16 @@ components:
             properties:
                 abandonCode:
                     $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.AddPhotoGroupRequest:
+            type: object
+            properties:
+                photoGroup:
+                    $ref: '#/components/schemas/api.PhotoGroupInfo'
+        api.AddPhotoGroupResponse:
+            type: object
+            properties:
+                photoGroup:
+                    $ref: '#/components/schemas/api.PhotoGroupInfo'
         api.AddPhotoRequest:
             type: object
             properties:
@@ -698,6 +818,20 @@ components:
             properties:
                 values:
                     $ref: '#/components/schemas/api.AttributeValues'
+        api.GetBurstGroupsStatusResponse:
+            type: object
+            properties:
+                running:
+                    type: boolean
+                processed:
+                    type: integer
+                    format: int32
+                total:
+                    type: integer
+                    format: int32
+                groupCount:
+                    type: integer
+                    format: int32
         api.GetPhotoDetailResponse:
             type: object
             properties:
@@ -709,6 +843,13 @@ components:
                     type: string
                 descriptionTime:
                     type: string
+        api.GetPhotoGroupListResponse:
+            type: object
+            properties:
+                photoGroupList:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.PhotoGroupInfo'
         api.GetPhotoListResponse:
             type: object
             properties:
@@ -814,6 +955,28 @@ components:
                     type: string
                 count:
                     type: string
+        api.PhotoGroupInfo:
+            type: object
+            properties:
+                ID:
+                    type: string
+                coverPhotoID:
+                    type: string
+                photoCount:
+                    type: integer
+                    format: int32
+                timeStart:
+                    type: string
+                timeEnd:
+                    type: string
+                hashMax:
+                    type: integer
+                    format: int32
+                createdAt:
+                    type: string
+            description: |-
+                --------------------------------------------------
+                 tbl : photo_groups
         api.PhotoInfo:
             type: object
             properties:
@@ -822,6 +985,8 @@ components:
                 filename:
                     type: string
                 filePath:
+                    type: string
+                fileType:
                     type: string
                 timeline:
                     type: string
@@ -873,6 +1038,8 @@ components:
                 altitude:
                     type: number
                     format: double
+                burstGroupID:
+                    type: string
                 importedAt:
                     type: string
             description: |-
@@ -942,6 +1109,20 @@ components:
                 hasDescription:
                     type: boolean
                 thumbnailUrl:
+                    type: string
+                hasNef:
+                    type: boolean
+                burstGroupId:
+                    type: string
+                burstCover:
+                    type: boolean
+                burstCount:
+                    type: integer
+                    format: int32
+        api.RebuildBurstGroupsResponse:
+            type: object
+            properties:
+                status:
                     type: string
         api.SchemaField:
             type: object
@@ -1031,6 +1212,16 @@ components:
             properties:
                 abandonCode:
                     $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.UpdatePhotoGroupRequest:
+            type: object
+            properties:
+                photoGroup:
+                    $ref: '#/components/schemas/api.PhotoGroupInfo'
+        api.UpdatePhotoGroupResponse:
+            type: object
+            properties:
+                photoGroup:
+                    $ref: '#/components/schemas/api.PhotoGroupInfo'
         api.UpdatePhotoRequest:
             type: object
             properties:

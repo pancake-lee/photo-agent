@@ -21,10 +21,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DefaultCURD_AddPhoto_FullMethodName         = "/api.defaultCURD/AddPhoto"
-	DefaultCURD_GetPhotoList_FullMethodName     = "/api.defaultCURD/GetPhotoList"
-	DefaultCURD_UpdatePhoto_FullMethodName      = "/api.defaultCURD/UpdatePhoto"
-	DefaultCURD_DelPhotoByIDList_FullMethodName = "/api.defaultCURD/DelPhotoByIDList"
+	DefaultCURD_AddPhotoGroup_FullMethodName         = "/api.defaultCURD/AddPhotoGroup"
+	DefaultCURD_GetPhotoGroupList_FullMethodName     = "/api.defaultCURD/GetPhotoGroupList"
+	DefaultCURD_UpdatePhotoGroup_FullMethodName      = "/api.defaultCURD/UpdatePhotoGroup"
+	DefaultCURD_DelPhotoGroupByIDList_FullMethodName = "/api.defaultCURD/DelPhotoGroupByIDList"
+	DefaultCURD_AddPhoto_FullMethodName              = "/api.defaultCURD/AddPhoto"
+	DefaultCURD_GetPhotoList_FullMethodName          = "/api.defaultCURD/GetPhotoList"
+	DefaultCURD_UpdatePhoto_FullMethodName           = "/api.defaultCURD/UpdatePhoto"
+	DefaultCURD_DelPhotoByIDList_FullMethodName      = "/api.defaultCURD/DelPhotoByIDList"
 )
 
 // DefaultCURDClient is the client API for DefaultCURD service.
@@ -33,6 +37,12 @@ const (
 //
 // --------------------------------------------------
 type DefaultCURDClient interface {
+	// --------------------------------------------------
+	// tbl : photo_groups
+	AddPhotoGroup(ctx context.Context, in *AddPhotoGroupRequest, opts ...grpc.CallOption) (*AddPhotoGroupResponse, error)
+	GetPhotoGroupList(ctx context.Context, in *GetPhotoGroupListRequest, opts ...grpc.CallOption) (*GetPhotoGroupListResponse, error)
+	UpdatePhotoGroup(ctx context.Context, in *UpdatePhotoGroupRequest, opts ...grpc.CallOption) (*UpdatePhotoGroupResponse, error)
+	DelPhotoGroupByIDList(ctx context.Context, in *DelPhotoGroupByIDListRequest, opts ...grpc.CallOption) (*Empty, error)
 	// --------------------------------------------------
 	// tbl : photos
 	AddPhoto(ctx context.Context, in *AddPhotoRequest, opts ...grpc.CallOption) (*AddPhotoResponse, error)
@@ -47,6 +57,46 @@ type defaultCURDClient struct {
 
 func NewDefaultCURDClient(cc grpc.ClientConnInterface) DefaultCURDClient {
 	return &defaultCURDClient{cc}
+}
+
+func (c *defaultCURDClient) AddPhotoGroup(ctx context.Context, in *AddPhotoGroupRequest, opts ...grpc.CallOption) (*AddPhotoGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddPhotoGroupResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_AddPhotoGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) GetPhotoGroupList(ctx context.Context, in *GetPhotoGroupListRequest, opts ...grpc.CallOption) (*GetPhotoGroupListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPhotoGroupListResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_GetPhotoGroupList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) UpdatePhotoGroup(ctx context.Context, in *UpdatePhotoGroupRequest, opts ...grpc.CallOption) (*UpdatePhotoGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdatePhotoGroupResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_UpdatePhotoGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) DelPhotoGroupByIDList(ctx context.Context, in *DelPhotoGroupByIDListRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, DefaultCURD_DelPhotoGroupByIDList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *defaultCURDClient) AddPhoto(ctx context.Context, in *AddPhotoRequest, opts ...grpc.CallOption) (*AddPhotoResponse, error) {
@@ -96,6 +146,12 @@ func (c *defaultCURDClient) DelPhotoByIDList(ctx context.Context, in *DelPhotoBy
 // --------------------------------------------------
 type DefaultCURDServer interface {
 	// --------------------------------------------------
+	// tbl : photo_groups
+	AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error)
+	GetPhotoGroupList(context.Context, *GetPhotoGroupListRequest) (*GetPhotoGroupListResponse, error)
+	UpdatePhotoGroup(context.Context, *UpdatePhotoGroupRequest) (*UpdatePhotoGroupResponse, error)
+	DelPhotoGroupByIDList(context.Context, *DelPhotoGroupByIDListRequest) (*Empty, error)
+	// --------------------------------------------------
 	// tbl : photos
 	AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error)
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
@@ -111,6 +167,18 @@ type DefaultCURDServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDefaultCURDServer struct{}
 
+func (UnimplementedDefaultCURDServer) AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddPhotoGroup not implemented")
+}
+func (UnimplementedDefaultCURDServer) GetPhotoGroupList(context.Context, *GetPhotoGroupListRequest) (*GetPhotoGroupListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPhotoGroupList not implemented")
+}
+func (UnimplementedDefaultCURDServer) UpdatePhotoGroup(context.Context, *UpdatePhotoGroupRequest) (*UpdatePhotoGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdatePhotoGroup not implemented")
+}
+func (UnimplementedDefaultCURDServer) DelPhotoGroupByIDList(context.Context, *DelPhotoGroupByIDListRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DelPhotoGroupByIDList not implemented")
+}
 func (UnimplementedDefaultCURDServer) AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddPhoto not implemented")
 }
@@ -142,6 +210,78 @@ func RegisterDefaultCURDServer(s grpc.ServiceRegistrar, srv DefaultCURDServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&DefaultCURD_ServiceDesc, srv)
+}
+
+func _DefaultCURD_AddPhotoGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPhotoGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).AddPhotoGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_AddPhotoGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).AddPhotoGroup(ctx, req.(*AddPhotoGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_GetPhotoGroupList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPhotoGroupListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).GetPhotoGroupList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_GetPhotoGroupList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).GetPhotoGroupList(ctx, req.(*GetPhotoGroupListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_UpdatePhotoGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePhotoGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).UpdatePhotoGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_UpdatePhotoGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).UpdatePhotoGroup(ctx, req.(*UpdatePhotoGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_DelPhotoGroupByIDList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelPhotoGroupByIDListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).DelPhotoGroupByIDList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_DelPhotoGroupByIDList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).DelPhotoGroupByIDList(ctx, req.(*DelPhotoGroupByIDListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _DefaultCURD_AddPhoto_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -223,6 +363,22 @@ var DefaultCURD_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.defaultCURD",
 	HandlerType: (*DefaultCURDServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AddPhotoGroup",
+			Handler:    _DefaultCURD_AddPhotoGroup_Handler,
+		},
+		{
+			MethodName: "GetPhotoGroupList",
+			Handler:    _DefaultCURD_GetPhotoGroupList_Handler,
+		},
+		{
+			MethodName: "UpdatePhotoGroup",
+			Handler:    _DefaultCURD_UpdatePhotoGroup_Handler,
+		},
+		{
+			MethodName: "DelPhotoGroupByIDList",
+			Handler:    _DefaultCURD_DelPhotoGroupByIDList_Handler,
+		},
 		{
 			MethodName: "AddPhoto",
 			Handler:    _DefaultCURD_AddPhoto_Handler,

@@ -150,6 +150,11 @@ api-cli:
 	java -jar ~/swagger-codegen-cli.jar generate \
 		-i ./openapi.yaml \
 		-l typescript-fetch \
-		-o ../web/backend-sdk \
-	
+		-o ../web/backend-sdk
+
+	# typescript-fetch 生成代码会声明未使用的 configuration 参数（TS6133），
+	# 且 BaseAPI.configuration 未在构造器赋值（TS2564），vue-tsc 全量检查报错。
+	# 生成文件不带 @ts-nocheck，这里补上，避免每次重新生成 SDK 后丢失。
+	sed -i '1a// @ts-nocheck' ../web/backend-sdk/api.ts
+
 

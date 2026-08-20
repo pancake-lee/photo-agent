@@ -9,6 +9,30 @@ option go_package = "backend/internal/pkg/api;api";
 // --------------------------------------------------
 service defaultCURD { // 该命名应该全文唯一
     // --------------------------------------------------
+    // tbl : photo_groups
+    rpc AddPhotoGroup (AddPhotoGroupRequest) returns (AddPhotoGroupResponse) {
+        option (google.api.http) = {
+            post: "/photo-groups"
+            body: "*"
+        };
+    }
+    rpc GetPhotoGroupList (GetPhotoGroupListRequest) returns (GetPhotoGroupListResponse) {
+        option (google.api.http) = {
+            get: "/photo-groups"
+        };
+    }
+    rpc UpdatePhotoGroup(UpdatePhotoGroupRequest) returns (UpdatePhotoGroupResponse) {
+        option (google.api.http) = {
+            patch: "/photo-groups"
+            body: "*"
+        };
+    }
+    rpc DelPhotoGroupByIDList (DelPhotoGroupByIDListRequest) returns (Empty) {
+        option (google.api.http) = {
+            delete: "/photo-groups"
+        };
+    }
+    // --------------------------------------------------
     // tbl : photos
     rpc AddPhoto (AddPhotoRequest) returns (AddPhotoResponse) {
         option (google.api.http) = {
@@ -36,34 +60,76 @@ service defaultCURD { // 该命名应该全文唯一
 
 
 // --------------------------------------------------
+// tbl : photo_groups
+message PhotoGroupInfo {
+    string ID = 1;
+    string coverPhotoID = 2;
+    int32 photoCount = 3;
+    int64 timeStart = 4;
+    int64 timeEnd = 5;
+    int32 hashMax = 6;
+    int64 createdAt = 7;
+}
+
+message AddPhotoGroupRequest {
+    PhotoGroupInfo photo_group = 1;
+}
+
+message AddPhotoGroupResponse {
+    PhotoGroupInfo photo_group = 1;
+}
+
+message GetPhotoGroupListRequest {
+    repeated string IDList = 1;
+}
+message GetPhotoGroupListResponse {
+    repeated PhotoGroupInfo photoGroupList = 1;
+}
+
+message UpdatePhotoGroupRequest {
+    PhotoGroupInfo photoGroup = 1;
+}
+
+message UpdatePhotoGroupResponse {
+    PhotoGroupInfo photoGroup = 1;
+}
+
+message DelPhotoGroupByIDListRequest {
+    repeated string IDList = 1;
+}
+
+
+// --------------------------------------------------
 // tbl : photos
 message PhotoInfo {
     string ID = 1;
     string filename = 2;
     string filePath = 3;
-    string timeline = 4;
-    string tags = 5;
-    string description = 6;
-    string objects = 7;
-    string colors = 8;
-    string scene = 9;
-    string lighting = 10;
-    string mood = 11;
-    string composition = 12;
-    int64 shotAt = 13;
-    int32 width = 14;
-    int32 height = 15;
-    string brand = 16;
-    string model = 17;
-    string lens = 18;
-    string focalLength = 19;
-    string aperture = 20;
-    int32 iso = 21;
-    string exposureTime = 22;
-    double latitude = 23;
-    double longitude = 24;
-    double altitude = 25;
-    int64 importedAt = 26;
+    string fileType = 4;
+    string timeline = 5;
+    string tags = 6;
+    string description = 7;
+    string objects = 8;
+    string colors = 9;
+    string scene = 10;
+    string lighting = 11;
+    string mood = 12;
+    string composition = 13;
+    int64 shotAt = 14;
+    int32 width = 15;
+    int32 height = 16;
+    string brand = 17;
+    string model = 18;
+    string lens = 19;
+    string focalLength = 20;
+    string aperture = 21;
+    int32 iso = 22;
+    string exposureTime = 23;
+    double latitude = 24;
+    double longitude = 25;
+    double altitude = 26;
+    string burstGroupID = 27;
+    int64 importedAt = 28;
 }
 
 message AddPhotoRequest {

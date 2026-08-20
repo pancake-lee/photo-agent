@@ -126,6 +126,32 @@ export interface ApiAddAbandonCodeResponse {
 /**
  * 
  * @export
+ * @interface ApiAddPhotoGroupRequest
+ */
+export interface ApiAddPhotoGroupRequest {
+    /**
+     * 
+     * @type {ApiPhotoGroupInfo}
+     * @memberof ApiAddPhotoGroupRequest
+     */
+    photoGroup?: ApiPhotoGroupInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiAddPhotoGroupResponse
+ */
+export interface ApiAddPhotoGroupResponse {
+    /**
+     * 
+     * @type {ApiPhotoGroupInfo}
+     * @memberof ApiAddPhotoGroupResponse
+     */
+    photoGroup?: ApiPhotoGroupInfo;
+}
+/**
+ * 
+ * @export
  * @interface ApiAddPhotoRequest
  */
 export interface ApiAddPhotoRequest {
@@ -399,6 +425,37 @@ export interface ApiGetAttributeValuesResponse {
 /**
  * 
  * @export
+ * @interface ApiGetBurstGroupsStatusResponse
+ */
+export interface ApiGetBurstGroupsStatusResponse {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof ApiGetBurstGroupsStatusResponse
+     */
+    running?: boolean;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetBurstGroupsStatusResponse
+     */
+    processed?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetBurstGroupsStatusResponse
+     */
+    total?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetBurstGroupsStatusResponse
+     */
+    groupCount?: number;
+}
+/**
+ * 
+ * @export
  * @interface ApiGetPhotoDetailResponse
  */
 export interface ApiGetPhotoDetailResponse {
@@ -426,6 +483,19 @@ export interface ApiGetPhotoDetailResponse {
      * @memberof ApiGetPhotoDetailResponse
      */
     descriptionTime?: string;
+}
+/**
+ * 
+ * @export
+ * @interface ApiGetPhotoGroupListResponse
+ */
+export interface ApiGetPhotoGroupListResponse {
+    /**
+     * 
+     * @type {Array<ApiPhotoGroupInfo>}
+     * @memberof ApiGetPhotoGroupListResponse
+     */
+    photoGroupList?: Array<ApiPhotoGroupInfo>;
 }
 /**
  * 
@@ -648,6 +718,55 @@ export interface ApiMonthlyStat {
     count?: string;
 }
 /**
+ * --------------------------------------------------  tbl : photo_groups
+ * @export
+ * @interface ApiPhotoGroupInfo
+ */
+export interface ApiPhotoGroupInfo {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoGroupInfo
+     */
+    ID?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoGroupInfo
+     */
+    coverPhotoID?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiPhotoGroupInfo
+     */
+    photoCount?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoGroupInfo
+     */
+    timeStart?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoGroupInfo
+     */
+    timeEnd?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiPhotoGroupInfo
+     */
+    hashMax?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoGroupInfo
+     */
+    createdAt?: string;
+}
+/**
  * --------------------------------------------------  tbl : photos
  * @export
  * @interface ApiPhotoInfo
@@ -671,6 +790,12 @@ export interface ApiPhotoInfo {
      * @memberof ApiPhotoInfo
      */
     filePath?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoInfo
+     */
+    fileType?: string;
     /**
      * 
      * @type {string}
@@ -803,6 +928,12 @@ export interface ApiPhotoInfo {
      * @memberof ApiPhotoInfo
      */
     altitude?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoInfo
+     */
+    burstGroupID?: string;
     /**
      * 
      * @type {string}
@@ -979,17 +1110,48 @@ export interface ApiPhotoItem {
      */
     hasDescription?: boolean;
     /**
-     *
+     * 
      * @type {string}
      * @memberof ApiPhotoItem
      */
     thumbnailUrl?: string;
     /**
-     *
+     * 
      * @type {boolean}
      * @memberof ApiPhotoItem
      */
     hasNef?: boolean;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
+    burstGroupId?: string;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof ApiPhotoItem
+     */
+    burstCover?: boolean;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiPhotoItem
+     */
+    burstCount?: number;
+}
+/**
+ * 
+ * @export
+ * @interface ApiRebuildBurstGroupsResponse
+ */
+export interface ApiRebuildBurstGroupsResponse {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiRebuildBurstGroupsResponse
+     */
+    status?: string;
 }
 /**
  * 
@@ -1204,6 +1366,32 @@ export interface ApiUpdateAbandonCodeResponse {
      * @memberof ApiUpdateAbandonCodeResponse
      */
     abandonCode?: ApiAbandonCodeInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdatePhotoGroupRequest
+ */
+export interface ApiUpdatePhotoGroupRequest {
+    /**
+     * 
+     * @type {ApiPhotoGroupInfo}
+     * @memberof ApiUpdatePhotoGroupRequest
+     */
+    photoGroup?: ApiPhotoGroupInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdatePhotoGroupResponse
+ */
+export interface ApiUpdatePhotoGroupResponse {
+    /**
+     * 
+     * @type {ApiPhotoGroupInfo}
+     * @memberof ApiUpdatePhotoGroupResponse
+     */
+    photoGroup?: ApiPhotoGroupInfo;
 }
 /**
  * 
@@ -1644,6 +1832,37 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
             };
         },
         /**
+         * --------------------------------------------------  tbl : photo_groups
+         * @param {ApiAddPhotoGroupRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling defaultCURDAddPhotoGroup.');
+            }
+            const localVarPath = `/photo-groups`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'POST' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiAddPhotoGroupRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 
          * @param {Array<string>} [iDList] 
          * @param {*} [options] Override http request option.
@@ -1653,6 +1872,60 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
             const localVarPath = `/photos`;
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (iDList) {
+                localVarQueryParameter['IDList'] = iDList;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelPhotoGroupByIDList(iDList?: Array<string>, options: any = {}): FetchArgs {
+            const localVarPath = `/photo-groups`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (iDList) {
+                localVarQueryParameter['IDList'] = iDList;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetPhotoGroupList(iDList?: Array<string>, options: any = {}): FetchArgs {
+            const localVarPath = `/photo-groups`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
@@ -1728,6 +2001,37 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * 
+         * @param {ApiUpdatePhotoGroupRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdatePhotoGroup(body: ApiUpdatePhotoGroupRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling defaultCURDUpdatePhotoGroup.');
+            }
+            const localVarPath = `/photo-groups`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'PATCH' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiUpdatePhotoGroupRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -1756,6 +2060,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
             };
         },
         /**
+         * --------------------------------------------------  tbl : photo_groups
+         * @param {ApiAddPhotoGroupRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiAddPhotoGroupResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDAddPhotoGroup(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 
          * @param {Array<string>} [iDList] 
          * @param {*} [options] Override http request option.
@@ -1763,6 +2085,42 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
          */
         defaultCURDDelPhotoByIDList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
             const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDDelPhotoByIDList(iDList, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelPhotoGroupByIDList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDDelPhotoGroupByIDList(iDList, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetPhotoGroupList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetPhotoGroupListResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDGetPhotoGroupList(iDList, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -1809,6 +2167,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
                 });
             };
         },
+        /**
+         * 
+         * @param {ApiUpdatePhotoGroupRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdatePhotoGroup(body: ApiUpdatePhotoGroupRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiUpdatePhotoGroupResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDUpdatePhotoGroup(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
     }
 };
 
@@ -1828,6 +2204,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
             return DefaultCURDApiFp(configuration).defaultCURDAddPhoto(body, options)(fetch, basePath);
         },
         /**
+         * --------------------------------------------------  tbl : photo_groups
+         * @param {ApiAddPhotoGroupRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDAddPhotoGroup(body, options)(fetch, basePath);
+        },
+        /**
          * 
          * @param {Array<string>} [iDList] 
          * @param {*} [options] Override http request option.
@@ -1835,6 +2220,24 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
          */
         defaultCURDDelPhotoByIDList(iDList?: Array<string>, options?: any) {
             return DefaultCURDApiFp(configuration).defaultCURDDelPhotoByIDList(iDList, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelPhotoGroupByIDList(iDList?: Array<string>, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDDelPhotoGroupByIDList(iDList, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetPhotoGroupList(iDList?: Array<string>, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDGetPhotoGroupList(iDList, options)(fetch, basePath);
         },
         /**
          * 
@@ -1853,6 +2256,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
          */
         defaultCURDUpdatePhoto(body: ApiUpdatePhotoRequest, options?: any) {
             return DefaultCURDApiFp(configuration).defaultCURDUpdatePhoto(body, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {ApiUpdatePhotoGroupRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdatePhotoGroup(body: ApiUpdatePhotoGroupRequest, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDUpdatePhotoGroup(body, options)(fetch, basePath);
         },
     };
 };
@@ -1876,6 +2288,17 @@ export class DefaultCURDApi extends BaseAPI {
     }
 
     /**
+     * --------------------------------------------------  tbl : photo_groups
+     * @param {ApiAddPhotoGroupRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDAddPhotoGroup(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
      * 
      * @param {Array<string>} [iDList] 
      * @param {*} [options] Override http request option.
@@ -1884,6 +2307,28 @@ export class DefaultCURDApi extends BaseAPI {
      */
     public defaultCURDDelPhotoByIDList(iDList?: Array<string>, options?: any) {
         return DefaultCURDApiFp(this.configuration).defaultCURDDelPhotoByIDList(iDList, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
+     * @param {Array<string>} [iDList] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDDelPhotoGroupByIDList(iDList?: Array<string>, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDDelPhotoGroupByIDList(iDList, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
+     * @param {Array<string>} [iDList] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDGetPhotoGroupList(iDList?: Array<string>, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDGetPhotoGroupList(iDList, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -1908,6 +2353,17 @@ export class DefaultCURDApi extends BaseAPI {
         return DefaultCURDApiFp(this.configuration).defaultCURDUpdatePhoto(body, options)(this.fetch, this.basePath);
     }
 
+    /**
+     * 
+     * @param {ApiUpdatePhotoGroupRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDUpdatePhotoGroup(body: ApiUpdatePhotoGroupRequest, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDUpdatePhotoGroup(body, options)(this.fetch, this.basePath);
+    }
+
 }
 /**
  * PhotoServiceApi - fetch parameter creator
@@ -1930,6 +2386,28 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
                 .replace(`{${"id"}}`, encodeURIComponent(String(id)));
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 查询连拍分组重算进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceGetBurstGroupsStatus(options: any = {}): FetchArgs {
+            const localVarPath = `/api/v1/burst-groups/status`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
@@ -1994,6 +2472,37 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
             };
         },
         /**
+         * 触发连拍分组全量重算（异步）
+         * @param {ApiEmpty} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceRebuildBurstGroups(body: ApiEmpty, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling photoServiceRebuildBurstGroups.');
+            }
+            const localVarPath = `/api/v1/burst-groups/rebuild`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'POST' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiEmpty" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 复杂条件分页查询
          * @param {number} [page] 
          * @param {number} [pageSize] 
@@ -2010,10 +2519,11 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
          * @param {string} [shotAtEnd] 
          * @param {string} [sortBy] 
          * @param {string} [sortOrder] 
+         * @param {string} [burstGroupId] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, options: any = {}): FetchArgs {
+        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options: any = {}): FetchArgs {
             const localVarPath = `/api/v1/photos`;
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
@@ -2078,6 +2588,10 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
 
             if (sortOrder !== undefined) {
                 localVarQueryParameter['sortOrder'] = sortOrder;
+            }
+
+            if (burstGroupId !== undefined) {
+                localVarQueryParameter['burstGroupId'] = burstGroupId;
             }
 
             localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
@@ -2155,6 +2669,23 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
+         * 查询连拍分组重算进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceGetBurstGroupsStatus(options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetBurstGroupsStatusResponse> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceGetBurstGroupsStatus(options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 单张详情
          * @param {string} id 
          * @param {*} [options] Override http request option.
@@ -2190,6 +2721,24 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
+         * 触发连拍分组全量重算（异步）
+         * @param {ApiEmpty} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceRebuildBurstGroups(body: ApiEmpty, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiRebuildBurstGroupsResponse> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceRebuildBurstGroups(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 复杂条件分页查询
          * @param {number} [page] 
          * @param {number} [pageSize] 
@@ -2206,11 +2755,12 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
          * @param {string} [shotAtEnd] 
          * @param {string} [sortBy] 
          * @param {string} [sortOrder] 
+         * @param {string} [burstGroupId] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiSearchPhotosResponse> {
-            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, options);
+        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiSearchPhotosResponse> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2259,6 +2809,14 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
             return PhotoServiceApiFp(configuration).photoServiceDeletePhoto(id, options)(fetch, basePath);
         },
         /**
+         * 查询连拍分组重算进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceGetBurstGroupsStatus(options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceGetBurstGroupsStatus(options)(fetch, basePath);
+        },
+        /**
          * 单张详情
          * @param {string} id 
          * @param {*} [options] Override http request option.
@@ -2274,6 +2832,15 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
          */
         photoServiceGetPhotoStats(options?: any) {
             return PhotoServiceApiFp(configuration).photoServiceGetPhotoStats(options)(fetch, basePath);
+        },
+        /**
+         * 触发连拍分组全量重算（异步）
+         * @param {ApiEmpty} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceRebuildBurstGroups(body: ApiEmpty, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceRebuildBurstGroups(body, options)(fetch, basePath);
         },
         /**
          * 复杂条件分页查询
@@ -2292,11 +2859,12 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
          * @param {string} [shotAtEnd] 
          * @param {string} [sortBy] 
          * @param {string} [sortOrder] 
+         * @param {string} [burstGroupId] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, options?: any) {
-            return PhotoServiceApiFp(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, options)(fetch, basePath);
+        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, options)(fetch, basePath);
         },
         /**
          * 更新标签
@@ -2330,6 +2898,16 @@ export class PhotoServiceApi extends BaseAPI {
     }
 
     /**
+     * 查询连拍分组重算进度
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceGetBurstGroupsStatus(options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceGetBurstGroupsStatus(options)(this.fetch, this.basePath);
+    }
+
+    /**
      * 单张详情
      * @param {string} id 
      * @param {*} [options] Override http request option.
@@ -2351,6 +2929,17 @@ export class PhotoServiceApi extends BaseAPI {
     }
 
     /**
+     * 触发连拍分组全量重算（异步）
+     * @param {ApiEmpty} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceRebuildBurstGroups(body: ApiEmpty, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceRebuildBurstGroups(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
      * 复杂条件分页查询
      * @param {number} [page] 
      * @param {number} [pageSize] 
@@ -2367,12 +2956,13 @@ export class PhotoServiceApi extends BaseAPI {
      * @param {string} [shotAtEnd] 
      * @param {string} [sortBy] 
      * @param {string} [sortOrder] 
+     * @param {string} [burstGroupId] 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof PhotoServiceApi
      */
-    public photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, options?: any) {
-        return PhotoServiceApiFp(this.configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, options)(this.fetch, this.basePath);
+    public photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, options)(this.fetch, this.basePath);
     }
 
     /**

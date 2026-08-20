@@ -30,6 +30,7 @@ class ApiPhotoInfo(object):
         'id': 'str',
         'filename': 'str',
         'file_path': 'str',
+        'file_type': 'str',
         'timeline': 'str',
         'tags': 'str',
         'description': 'str',
@@ -52,6 +53,7 @@ class ApiPhotoInfo(object):
         'latitude': 'float',
         'longitude': 'float',
         'altitude': 'float',
+        'burst_group_id': 'str',
         'imported_at': 'str'
     }
 
@@ -59,6 +61,7 @@ class ApiPhotoInfo(object):
         'id': 'ID',
         'filename': 'filename',
         'file_path': 'filePath',
+        'file_type': 'fileType',
         'timeline': 'timeline',
         'tags': 'tags',
         'description': 'description',
@@ -81,14 +84,16 @@ class ApiPhotoInfo(object):
         'latitude': 'latitude',
         'longitude': 'longitude',
         'altitude': 'altitude',
+        'burst_group_id': 'burstGroupID',
         'imported_at': 'importedAt'
     }
 
-    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None):  # noqa: E501
+    def __init__(self, id=None, filename=None, file_path=None, file_type=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, burst_group_id=None, imported_at=None):  # noqa: E501
         """ApiPhotoInfo - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._filename = None
         self._file_path = None
+        self._file_type = None
         self._timeline = None
         self._tags = None
         self._description = None
@@ -111,6 +116,7 @@ class ApiPhotoInfo(object):
         self._latitude = None
         self._longitude = None
         self._altitude = None
+        self._burst_group_id = None
         self._imported_at = None
         self.discriminator = None
         if id is not None:
@@ -119,6 +125,8 @@ class ApiPhotoInfo(object):
             self.filename = filename
         if file_path is not None:
             self.file_path = file_path
+        if file_type is not None:
+            self.file_type = file_type
         if timeline is not None:
             self.timeline = timeline
         if tags is not None:
@@ -163,6 +171,8 @@ class ApiPhotoInfo(object):
             self.longitude = longitude
         if altitude is not None:
             self.altitude = altitude
+        if burst_group_id is not None:
+            self.burst_group_id = burst_group_id
         if imported_at is not None:
             self.imported_at = imported_at
 
@@ -228,6 +238,27 @@ class ApiPhotoInfo(object):
         """
 
         self._file_path = file_path
+
+    @property
+    def file_type(self):
+        """Gets the file_type of this ApiPhotoInfo.  # noqa: E501
+
+
+        :return: The file_type of this ApiPhotoInfo.  # noqa: E501
+        :rtype: str
+        """
+        return self._file_type
+
+    @file_type.setter
+    def file_type(self, file_type):
+        """Sets the file_type of this ApiPhotoInfo.
+
+
+        :param file_type: The file_type of this ApiPhotoInfo.  # noqa: E501
+        :type: str
+        """
+
+        self._file_type = file_type
 
     @property
     def timeline(self):
@@ -690,6 +721,27 @@ class ApiPhotoInfo(object):
         """
 
         self._altitude = altitude
+
+    @property
+    def burst_group_id(self):
+        """Gets the burst_group_id of this ApiPhotoInfo.  # noqa: E501
+
+
+        :return: The burst_group_id of this ApiPhotoInfo.  # noqa: E501
+        :rtype: str
+        """
+        return self._burst_group_id
+
+    @burst_group_id.setter
+    def burst_group_id(self, burst_group_id):
+        """Sets the burst_group_id of this ApiPhotoInfo.
+
+
+        :param burst_group_id: The burst_group_id of this ApiPhotoInfo.  # noqa: E501
+        :type: str
+        """
+
+        self._burst_group_id = burst_group_id
 
     @property
     def imported_at(self):

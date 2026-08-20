@@ -37,6 +37,19 @@ service PhotoService {
             delete: "/api/v1/photos/{id}"
         };
     }
+    // 触发连拍分组全量重算（异步）
+    rpc RebuildBurstGroups (Empty) returns (RebuildBurstGroupsResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/burst-groups/rebuild"
+            body: "*"
+        };
+    }
+    // 查询连拍分组重算进度
+    rpc GetBurstGroupsStatus (Empty) returns (GetBurstGroupsStatusResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/burst-groups/status"
+        };
+    }
 }
 
 // --------------------------------------------------
@@ -58,6 +71,7 @@ message SearchPhotosRequest {
     string shot_at_end = 13;
     string sort_by = 14;
     string sort_order = 15;
+    string burst_group_id = 16; // 按连拍组过滤（展开组内成员时使用）
 }
 
 message PhotoItem {
@@ -90,6 +104,9 @@ message PhotoItem {
     bool has_description = 27;
     string thumbnail_url = 28;
     bool has_nef = 29;
+    string burst_group_id = 30;
+    bool burst_cover = 31;  // 是否为连拍组封面（组内 shot_at 最早一张）
+    int32 burst_count = 32; // 连拍组内照片数（非组内照片为 0）
 }
 
 message SearchPhotosResponse {
@@ -173,4 +190,18 @@ message DeletePhotoRequest {
 message DeletePhotoResponse {
     string status = 1;
     string id = 2;
+}
+
+// --------------------------------------------------
+// RebuildBurstGroups / GetBurstGroupsStatus
+
+message RebuildBurstGroupsResponse {
+    string status = 1; // running | already_running
+}
+
+message GetBurstGroupsStatusResponse {
+    bool running = 1;
+    int32 processed = 2;
+    int32 total = 3;
+    int32 group_count = 4; // 当前库内连拍组数（跑完时为最终组数）
 }

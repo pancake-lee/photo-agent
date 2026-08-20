@@ -105,12 +105,18 @@ Class | Method | HTTP request | Description
 *AbandonCodeCURDApi* | [**abandon_code_curd_get_abandon_code_list**](docs/AbandonCodeCURDApi.md#abandon_code_curd_get_abandon_code_list) | **GET** /abandon-code | 
 *AbandonCodeCURDApi* | [**abandon_code_curd_update_abandon_code**](docs/AbandonCodeCURDApi.md#abandon_code_curd_update_abandon_code) | **PATCH** /abandon-code | 
 *DefaultCURDApi* | [**default_curd_add_photo**](docs/DefaultCURDApi.md#default_curd_add_photo) | **POST** /photos | 
+*DefaultCURDApi* | [**default_curd_add_photo_group**](docs/DefaultCURDApi.md#default_curd_add_photo_group) | **POST** /photo-groups | 
 *DefaultCURDApi* | [**default_curd_del_photo_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_photo_by_id_list) | **DELETE** /photos | 
+*DefaultCURDApi* | [**default_curd_del_photo_group_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_photo_group_by_id_list) | **DELETE** /photo-groups | 
+*DefaultCURDApi* | [**default_curd_get_photo_group_list**](docs/DefaultCURDApi.md#default_curd_get_photo_group_list) | **GET** /photo-groups | 
 *DefaultCURDApi* | [**default_curd_get_photo_list**](docs/DefaultCURDApi.md#default_curd_get_photo_list) | **GET** /photos | 
 *DefaultCURDApi* | [**default_curd_update_photo**](docs/DefaultCURDApi.md#default_curd_update_photo) | **PATCH** /photos | 
+*DefaultCURDApi* | [**default_curd_update_photo_group**](docs/DefaultCURDApi.md#default_curd_update_photo_group) | **PATCH** /photo-groups | 
 *PhotoServiceApi* | [**photo_service_delete_photo**](docs/PhotoServiceApi.md#photo_service_delete_photo) | **DELETE** /api/v1/photos/{id} | 
+*PhotoServiceApi* | [**photo_service_get_burst_groups_status**](docs/PhotoServiceApi.md#photo_service_get_burst_groups_status) | **GET** /api/v1/burst-groups/status | 
 *PhotoServiceApi* | [**photo_service_get_photo_detail**](docs/PhotoServiceApi.md#photo_service_get_photo_detail) | **GET** /api/v1/photos/{id} | 
 *PhotoServiceApi* | [**photo_service_get_photo_stats**](docs/PhotoServiceApi.md#photo_service_get_photo_stats) | **GET** /api/v1/photos/stats | 
+*PhotoServiceApi* | [**photo_service_rebuild_burst_groups**](docs/PhotoServiceApi.md#photo_service_rebuild_burst_groups) | **POST** /api/v1/burst-groups/rebuild | 
 *PhotoServiceApi* | [**photo_service_search_photos**](docs/PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
 *PhotoServiceApi* | [**photo_service_update_photo_tags**](docs/PhotoServiceApi.md#photo_service_update_photo_tags) | **PUT** /api/v1/photos/{id}/tags | 
 *QueryServiceApi* | [**query_service_execute_sql**](docs/QueryServiceApi.md#query_service_execute_sql) | **POST** /api/v1/sql/query | 
@@ -132,6 +138,8 @@ Class | Method | HTTP request | Description
  - [ApiAbandonCodeInfo](docs/ApiAbandonCodeInfo.md)
  - [ApiAddAbandonCodeRequest](docs/ApiAddAbandonCodeRequest.md)
  - [ApiAddAbandonCodeResponse](docs/ApiAddAbandonCodeResponse.md)
+ - [ApiAddPhotoGroupRequest](docs/ApiAddPhotoGroupRequest.md)
+ - [ApiAddPhotoGroupResponse](docs/ApiAddPhotoGroupResponse.md)
  - [ApiAddPhotoRequest](docs/ApiAddPhotoRequest.md)
  - [ApiAddPhotoResponse](docs/ApiAddPhotoResponse.md)
  - [ApiAttributeValues](docs/ApiAttributeValues.md)
@@ -147,7 +155,9 @@ Class | Method | HTTP request | Description
  - [ApiGPSStat](docs/ApiGPSStat.md)
  - [ApiGetAbandonCodeListResponse](docs/ApiGetAbandonCodeListResponse.md)
  - [ApiGetAttributeValuesResponse](docs/ApiGetAttributeValuesResponse.md)
+ - [ApiGetBurstGroupsStatusResponse](docs/ApiGetBurstGroupsStatusResponse.md)
  - [ApiGetPhotoDetailResponse](docs/ApiGetPhotoDetailResponse.md)
+ - [ApiGetPhotoGroupListResponse](docs/ApiGetPhotoGroupListResponse.md)
  - [ApiGetPhotoListResponse](docs/ApiGetPhotoListResponse.md)
  - [ApiGetPhotoSchemaResponse](docs/ApiGetPhotoSchemaResponse.md)
  - [ApiGetPhotoStatsResponse](docs/ApiGetPhotoStatsResponse.md)
@@ -158,8 +168,10 @@ Class | Method | HTTP request | Description
  - [ApiListTagsResponse](docs/ApiListTagsResponse.md)
  - [ApiListTimelinesResponse](docs/ApiListTimelinesResponse.md)
  - [ApiMonthlyStat](docs/ApiMonthlyStat.md)
+ - [ApiPhotoGroupInfo](docs/ApiPhotoGroupInfo.md)
  - [ApiPhotoInfo](docs/ApiPhotoInfo.md)
  - [ApiPhotoItem](docs/ApiPhotoItem.md)
+ - [ApiRebuildBurstGroupsResponse](docs/ApiRebuildBurstGroupsResponse.md)
  - [ApiSchemaField](docs/ApiSchemaField.md)
  - [ApiSearchPhotosResponse](docs/ApiSearchPhotosResponse.md)
  - [ApiStartVlmQueueRequest](docs/ApiStartVlmQueueRequest.md)
@@ -170,6 +182,8 @@ Class | Method | HTTP request | Description
  - [ApiUnbindTagsResponse](docs/ApiUnbindTagsResponse.md)
  - [ApiUpdateAbandonCodeRequest](docs/ApiUpdateAbandonCodeRequest.md)
  - [ApiUpdateAbandonCodeResponse](docs/ApiUpdateAbandonCodeResponse.md)
+ - [ApiUpdatePhotoGroupRequest](docs/ApiUpdatePhotoGroupRequest.md)
+ - [ApiUpdatePhotoGroupResponse](docs/ApiUpdatePhotoGroupResponse.md)
  - [ApiUpdatePhotoRequest](docs/ApiUpdatePhotoRequest.md)
  - [ApiUpdatePhotoResponse](docs/ApiUpdatePhotoResponse.md)
  - [ApiUpdatePhotoTagsRequest](docs/ApiUpdatePhotoTagsRequest.md)

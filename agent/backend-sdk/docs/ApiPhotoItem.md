@@ -31,6 +31,10 @@ Name | Type | Description | Notes
 **imported_at** | **str** |  | [optional] 
 **has_description** | **bool** |  | [optional] 
 **thumbnail_url** | **str** |  | [optional] 
+**has_nef** | **bool** |  | [optional] 
+**burst_group_id** | **str** |  | [optional] 
+**burst_cover** | **bool** |  | [optional] 
+**burst_count** | **int** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

@@ -20,6 +20,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		db:          db,
 		AbandonCode: newAbandonCode(db, opts...),
 		Photo:       newPhoto(db, opts...),
+		PhotoGroup:  newPhotoGroup(db, opts...),
 	}
 }
 
@@ -28,6 +29,7 @@ type Query struct {
 
 	AbandonCode abandonCode
 	Photo       photo
+	PhotoGroup  photoGroup
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -37,6 +39,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		db:          db,
 		AbandonCode: q.AbandonCode.clone(db),
 		Photo:       q.Photo.clone(db),
+		PhotoGroup:  q.PhotoGroup.clone(db),
 	}
 }
 
@@ -53,18 +56,21 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		db:          db,
 		AbandonCode: q.AbandonCode.replaceDB(db),
 		Photo:       q.Photo.replaceDB(db),
+		PhotoGroup:  q.PhotoGroup.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
 	AbandonCode *abandonCodeDo
 	Photo       *photoDo
+	PhotoGroup  *photoGroupDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
 		AbandonCode: q.AbandonCode.WithContext(ctx),
 		Photo:       q.Photo.WithContext(ctx),
+		PhotoGroup:  q.PhotoGroup.WithContext(ctx),
 	}
 }
 

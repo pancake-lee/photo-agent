@@ -20,25 +20,121 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationDefaultCURDAddPhoto = "/api.defaultCURD/AddPhoto"
+const OperationDefaultCURDAddPhotoGroup = "/api.defaultCURD/AddPhotoGroup"
 const OperationDefaultCURDDelPhotoByIDList = "/api.defaultCURD/DelPhotoByIDList"
+const OperationDefaultCURDDelPhotoGroupByIDList = "/api.defaultCURD/DelPhotoGroupByIDList"
+const OperationDefaultCURDGetPhotoGroupList = "/api.defaultCURD/GetPhotoGroupList"
 const OperationDefaultCURDGetPhotoList = "/api.defaultCURD/GetPhotoList"
 const OperationDefaultCURDUpdatePhoto = "/api.defaultCURD/UpdatePhoto"
+const OperationDefaultCURDUpdatePhotoGroup = "/api.defaultCURD/UpdatePhotoGroup"
 
 type DefaultCURDHTTPServer interface {
 	// AddPhoto --------------------------------------------------
 	// tbl : photos
 	AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error)
+	// AddPhotoGroup --------------------------------------------------
+	// tbl : photo_groups
+	AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error)
 	DelPhotoByIDList(context.Context, *DelPhotoByIDListRequest) (*Empty, error)
+	DelPhotoGroupByIDList(context.Context, *DelPhotoGroupByIDListRequest) (*Empty, error)
+	GetPhotoGroupList(context.Context, *GetPhotoGroupListRequest) (*GetPhotoGroupListResponse, error)
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
 	UpdatePhoto(context.Context, *UpdatePhotoRequest) (*UpdatePhotoResponse, error)
+	UpdatePhotoGroup(context.Context, *UpdatePhotoGroupRequest) (*UpdatePhotoGroupResponse, error)
 }
 
 func RegisterDefaultCURDHTTPServer(s *http.Server, srv DefaultCURDHTTPServer) {
 	r := s.Route("/")
+	r.POST("/photo-groups", _DefaultCURD_AddPhotoGroup0_HTTP_Handler(srv))
+	r.GET("/photo-groups", _DefaultCURD_GetPhotoGroupList0_HTTP_Handler(srv))
+	r.PATCH("/photo-groups", _DefaultCURD_UpdatePhotoGroup0_HTTP_Handler(srv))
+	r.DELETE("/photo-groups", _DefaultCURD_DelPhotoGroupByIDList0_HTTP_Handler(srv))
 	r.POST("/photos", _DefaultCURD_AddPhoto0_HTTP_Handler(srv))
 	r.GET("/photos", _DefaultCURD_GetPhotoList0_HTTP_Handler(srv))
 	r.PATCH("/photos", _DefaultCURD_UpdatePhoto0_HTTP_Handler(srv))
 	r.DELETE("/photos", _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv))
+}
+
+func _DefaultCURD_AddPhotoGroup0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in AddPhotoGroupRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDAddPhotoGroup)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.AddPhotoGroup(ctx, req.(*AddPhotoGroupRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*AddPhotoGroupResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_GetPhotoGroupList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetPhotoGroupListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDGetPhotoGroupList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetPhotoGroupList(ctx, req.(*GetPhotoGroupListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetPhotoGroupListResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_UpdatePhotoGroup0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UpdatePhotoGroupRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDUpdatePhotoGroup)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UpdatePhotoGroup(ctx, req.(*UpdatePhotoGroupRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UpdatePhotoGroupResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_DelPhotoGroupByIDList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DelPhotoGroupByIDListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDDelPhotoGroupByIDList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DelPhotoGroupByIDList(ctx, req.(*DelPhotoGroupByIDListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
 }
 
 func _DefaultCURD_AddPhoto0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
@@ -127,9 +223,15 @@ type DefaultCURDHTTPClient interface {
 	// AddPhoto --------------------------------------------------
 	// tbl : photos
 	AddPhoto(ctx context.Context, req *AddPhotoRequest, opts ...http.CallOption) (rsp *AddPhotoResponse, err error)
+	// AddPhotoGroup --------------------------------------------------
+	// tbl : photo_groups
+	AddPhotoGroup(ctx context.Context, req *AddPhotoGroupRequest, opts ...http.CallOption) (rsp *AddPhotoGroupResponse, err error)
 	DelPhotoByIDList(ctx context.Context, req *DelPhotoByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
+	DelPhotoGroupByIDList(ctx context.Context, req *DelPhotoGroupByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
+	GetPhotoGroupList(ctx context.Context, req *GetPhotoGroupListRequest, opts ...http.CallOption) (rsp *GetPhotoGroupListResponse, err error)
 	GetPhotoList(ctx context.Context, req *GetPhotoListRequest, opts ...http.CallOption) (rsp *GetPhotoListResponse, err error)
 	UpdatePhoto(ctx context.Context, req *UpdatePhotoRequest, opts ...http.CallOption) (rsp *UpdatePhotoResponse, err error)
+	UpdatePhotoGroup(ctx context.Context, req *UpdatePhotoGroupRequest, opts ...http.CallOption) (rsp *UpdatePhotoGroupResponse, err error)
 }
 
 type DefaultCURDHTTPClientImpl struct {
@@ -155,6 +257,21 @@ func (c *DefaultCURDHTTPClientImpl) AddPhoto(ctx context.Context, in *AddPhotoRe
 	return &out, nil
 }
 
+// AddPhotoGroup --------------------------------------------------
+// tbl : photo_groups
+func (c *DefaultCURDHTTPClientImpl) AddPhotoGroup(ctx context.Context, in *AddPhotoGroupRequest, opts ...http.CallOption) (*AddPhotoGroupResponse, error) {
+	var out AddPhotoGroupResponse
+	pattern := "/photo-groups"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationDefaultCURDAddPhotoGroup))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *DefaultCURDHTTPClientImpl) DelPhotoByIDList(ctx context.Context, in *DelPhotoByIDListRequest, opts ...http.CallOption) (*Empty, error) {
 	var out Empty
 	pattern := "/photos"
@@ -162,6 +279,32 @@ func (c *DefaultCURDHTTPClientImpl) DelPhotoByIDList(ctx context.Context, in *De
 	opts = append(opts, http.Operation(OperationDefaultCURDDelPhotoByIDList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *DefaultCURDHTTPClientImpl) DelPhotoGroupByIDList(ctx context.Context, in *DelPhotoGroupByIDListRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/photo-groups"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationDefaultCURDDelPhotoGroupByIDList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *DefaultCURDHTTPClientImpl) GetPhotoGroupList(ctx context.Context, in *GetPhotoGroupListRequest, opts ...http.CallOption) (*GetPhotoGroupListResponse, error) {
+	var out GetPhotoGroupListResponse
+	pattern := "/photo-groups"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationDefaultCURDGetPhotoGroupList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +329,19 @@ func (c *DefaultCURDHTTPClientImpl) UpdatePhoto(ctx context.Context, in *UpdateP
 	pattern := "/photos"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationDefaultCURDUpdatePhoto))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PATCH", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *DefaultCURDHTTPClientImpl) UpdatePhotoGroup(ctx context.Context, in *UpdatePhotoGroupRequest, opts ...http.CallOption) (*UpdatePhotoGroupResponse, error) {
+	var out UpdatePhotoGroupResponse
+	pattern := "/photo-groups"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationDefaultCURDUpdatePhotoGroup))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "PATCH", path, in, &out, opts...)
 	if err != nil {

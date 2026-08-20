@@ -38,6 +38,7 @@ type Photo struct {
 	Latitude     float64   `gorm:"column:latitude" json:"latitude"`
 	Longitude    float64   `gorm:"column:longitude" json:"longitude"`
 	Altitude     float64   `gorm:"column:altitude" json:"altitude"`
+	BurstGroupID string    `gorm:"column:burst_group_id;not null" json:"burst_group_id"`
 	ImportedAt   time.Time `gorm:"column:imported_at;not null;default:CURRENT_TIMESTAMP" json:"imported_at"`
 }
 
