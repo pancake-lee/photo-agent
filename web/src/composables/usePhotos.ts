@@ -1,8 +1,10 @@
 import { ref, computed } from 'vue'
 import { DEFAULT_PAGE_SIZE, getApiBase } from '../config'
 import { photoApi, timelineApi } from '../backend-sdk-client'
+import { settings } from '../stores/settings'
+import { useBurstGroups } from './useBurstGroups'
 import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse, ApiGetPhotoStatsResponse, ApiListTimelinesResponse } from '../../backend-sdk/api'
-import type { PhotoListItem, PhotoDetail, PhotoStats } from '../types/photo'
+import type { PhotoListItem, PhotoDetail, PhotoStats, BurstProfile } from '../types/photo'
 
 // ------------------------------------------------------------------ #
 // 适配器：SDK camelCase → 现有 snake_case 类型
@@ -107,10 +109,16 @@ const pageSize = ref(DEFAULT_PAGE_SIZE)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// 连拍分组展示状态：当前展开的分组 id（空串 = 全部收起）
-const expandedBurstGroup = ref('')
-// 展开组的成员照片（按 burst_group_id 拉取）
-const burstMembers = ref<PhotoListItem[]>([])
+// 连拍组弹窗状态（空串 = 未打开）
+const burstModalGroup = ref('')
+const burstModalMembers = ref<PhotoListItem[]>([])
+const burstModalCoverId = ref('')
+const burstModalLoading = ref(false)
+
+/** 当前展示级别对应的连拍档位（全部展开时无档位） */
+function currentBurstProfile(): BurstProfile | undefined {
+  return settings.burstViewLevel === 'all' ? undefined : settings.burstViewLevel
+}
 
 // 筛选/排序/搜索状态
 const filterTimeline = ref('')
@@ -157,6 +165,8 @@ export function usePhotos() {
         filterShotAtEnd.value || undefined,
         sortBy.value,
         sortOrder.value,
+        undefined, // burstGroupId
+        currentBurstProfile(),
       )
       photos.value = (resp.items ?? []).map(adaptPhotoItem)
       total.value = parseInt(resp.total ?? '0', 10)
@@ -270,30 +280,55 @@ export function usePhotos() {
     }
   }
 
-  // 展开/收起连拍组：展开时按 burst_group_id 拉取组内成员
-  async function toggleBurstGroup(groupId: string) {
+  // 打开连拍组弹窗：按 burst_group_id 拉取组内成员（档位与当前展示级别一致）
+  async function openBurstGroup(groupId: string, coverId: string) {
     if (!groupId) return
-    if (expandedBurstGroup.value === groupId) {
-      expandedBurstGroup.value = ''
-      burstMembers.value = []
-      return
-    }
-    expandedBurstGroup.value = groupId
+    burstModalGroup.value = groupId
+    burstModalCoverId.value = coverId
+    burstModalMembers.value = []
+    burstModalLoading.value = true
     try {
       const resp: ApiSearchPhotosResponse =
         await photoApi.photoServiceSearchPhotos(
-          1,
-          100, // 组内照片上限（连拍组通常 < 20 张）
-          undefined, undefined, undefined, undefined, undefined,
-          undefined, undefined, undefined, undefined, undefined,
-          undefined, undefined, undefined,
-          groupId,
+          1, // page
+          100, // pageSize：组内照片上限（连拍组通常 < 20 张）
+          undefined, // timeline
+          undefined, // tag
+          undefined, // keyword
+          undefined, // brand
+          undefined, // lens
+          undefined, // focalMin
+          undefined, // focalMax
+          undefined, // isoMin
+          undefined, // isoMax
+          undefined, // shotAtStart
+          undefined, // shotAtEnd
+          'shot_at', // sortBy：组内按拍摄时间正序浏览
+          'asc', // sortOrder
+          groupId, // burstGroupId
+          currentBurstProfile(), // burstProfile
         )
-      burstMembers.value = (resp.items ?? []).map(adaptPhotoItem)
+      burstModalMembers.value = (resp.items ?? []).map(adaptPhotoItem)
     } catch (e) {
       console.warn('获取连拍组成员失败', e)
-      burstMembers.value = []
+      burstModalMembers.value = []
+    } finally {
+      burstModalLoading.value = false
     }
+  }
+
+  function closeBurstGroup() {
+    burstModalGroup.value = ''
+    burstModalMembers.value = []
+    burstModalCoverId.value = ''
+  }
+
+  // 设为封面：调用后端更新组封面，成功后刷新列表并同步弹窗内封面标记
+  async function setBurstCover(groupId: string, photoId: string) {
+    const { setCover } = useBurstGroups()
+    await setCover(groupId, photoId)
+    burstModalCoverId.value = photoId
+    fetchPhotos()
   }
 
   return {
@@ -315,8 +350,10 @@ export function usePhotos() {
     sortBy,
     sortOrder,
     searchFilename,
-    expandedBurstGroup,
-    burstMembers,
+    burstModalGroup,
+    burstModalMembers,
+    burstModalCoverId,
+    burstModalLoading,
     fetchPhotos,
     fetchStats,
     fetchTimelines,
@@ -328,6 +365,8 @@ export function usePhotos() {
     markPhotoQueued,
     refreshPhoto,
     deletePhoto,
-    toggleBurstGroup,
+    openBurstGroup,
+    closeBurstGroup,
+    setBurstCover,
   }
 }

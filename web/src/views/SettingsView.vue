@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import {
   NLayoutContent,
   NLayoutHeader,
@@ -10,13 +10,15 @@ import {
   NSpace,
   NIcon,
   NCard,
-  NProgress,
+  NInputNumber,
+  NDivider,
   useMessage,
 } from 'naive-ui'
-import { RefreshOutline, GridOutline } from '@vicons/ionicons5'
+import { RefreshOutline, SaveOutline } from '@vicons/ionicons5'
 import { settings, resetSettings } from '../stores/settings'
 import { isWails } from '../utils/env'
 import { useBurstGroups } from '../composables/useBurstGroups'
+import type { BurstProfileConfig } from '../types/photo'
 
 const message = useMessage()
 
@@ -24,37 +26,65 @@ const message = useMessage()
 const localBackendUrl = ref(settings.backendUrl)
 const localAgentUrl = ref(settings.agentUrl)
 
-// ── 连拍分组 ──
-const { status: burstStatus, rebuild: rebuildBurst, fetchStatus: fetchBurstStatus, stopPolling } = useBurstGroups()
+// ── 连拍分组两档阈值 ──
+const { fetchConfig, saveConfig } = useBurstGroups()
 
-const burstProgress = computed(() => {
-  if (burstStatus.value.total <= 0) return 0
-  return Math.round((burstStatus.value.processed / burstStatus.value.total) * 100)
+const burstConfig = reactive<{ fine: BurstProfileConfig; coarse: BurstProfileConfig }>({
+  fine: { time_window_sec: 5, hash_threshold: 10, ssim_threshold: 0.85, ssim_gray_min: 8, ssim_gray_max: 12 },
+  coarse: { time_window_sec: 30, hash_threshold: 18, ssim_threshold: 0.6, ssim_gray_min: 12, ssim_gray_max: 24 },
 })
 
-async function handleRebuildBurst() {
+const burstSaving = ref(false)
+
+interface FieldMeta {
+  key: keyof BurstProfileConfig
+  label: string
+  hint: string
+  min: number
+  max: number
+  step?: number
+  precision?: number
+}
+
+const profileFields: FieldMeta[] = [
+  { key: 'time_window_sec', label: '时间窗（秒）', hint: '相邻两张拍摄间隔超过此秒数则切分新组', min: 1, max: 3600 },
+  { key: 'hash_threshold', label: '哈希阈值（0-64）', hint: 'dHash 汉明距离超过此值判定为不同场景', min: 0, max: 64 },
+  { key: 'ssim_threshold', label: 'SSIM 阈值（0-1）', hint: '灰区二次验证，SSIM 低于此值判定为不同', min: 0, max: 1, step: 0.05, precision: 2 },
+  { key: 'ssim_gray_min', label: '灰区下界', hint: '哈希距离进入此值才触发 SSIM 二次验证', min: 0, max: 64 },
+  { key: 'ssim_gray_max', label: '灰区上界', hint: '哈希距离超过此值直接判定为不同', min: 0, max: 64 },
+]
+
+function updateField(profile: 'fine' | 'coarse', key: keyof BurstProfileConfig, v: number | null) {
+  if (v == null) return
+  burstConfig[profile][key] = v
+}
+
+async function loadBurstConfig() {
   try {
-    const st = await rebuildBurst(() => {
-      message.success(`连拍分组完成，共 ${burstStatus.value.group_count} 组`)
-    })
-    if (st === 'already_running') {
-      message.info('连拍分组已在进行中')
-    } else {
-      message.success('连拍分组重算已启动')
-    }
+    const cfg = await fetchConfig()
+    burstConfig.fine = cfg.fine
+    burstConfig.coarse = cfg.coarse
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '启动失败')
+    message.error(e instanceof Error ? e.message : '读取连拍参数失败')
+  }
+}
+
+async function handleSaveBurstConfig() {
+  burstSaving.value = true
+  try {
+    await saveConfig({ ...burstConfig })
+    message.success('连拍参数已保存，下次重算生效')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '保存失败')
+  } finally {
+    burstSaving.value = false
   }
 }
 
 onMounted(() => {
   localBackendUrl.value = settings.backendUrl
   localAgentUrl.value = settings.agentUrl
-  fetchBurstStatus()
-})
-
-onUnmounted(() => {
-  stopPolling()
+  loadBurstConfig()
 })
 
 function saveBackend() {
@@ -133,38 +163,70 @@ function handleReset() {
         </NCard>
 
         <NCard title="连拍分组" size="small" class="burst-card">
-          <div class="burst-row">
-            <div class="burst-info">
-              <div class="burst-stat">
-                当前连拍组：<strong>{{ burstStatus.group_count }}</strong> 组
-              </div>
-              <div v-if="burstStatus.running" class="burst-progress">
-                <NProgress
-                  type="line"
-                  :percentage="burstProgress"
-                  :height="8"
-                  :show-indicator="false"
-                  processing
+          <p class="burst-hint">
+            连拍分组分「精细」「模糊」两档，重算时一次产出两档结果。图片管理页用「展示」按钮循环切换三级显示。
+            重算入口在图片管理页顶栏。
+          </p>
+
+          <!-- 精细档 -->
+          <div class="burst-profile-title">精细档</div>
+          <NForm label-placement="left" :show-feedback="false" label-width="168" size="small">
+            <NFormItem
+              v-for="f in profileFields"
+              :key="`fine-${f.key}`"
+              :label="f.label"
+            >
+              <div class="burst-field">
+                <NInputNumber
+                  :value="burstConfig.fine[f.key]"
+                  :min="f.min"
+                  :max="f.max"
+                  :step="f.step ?? 1"
+                  :precision="f.precision"
+                  style="width: 160px"
+                  @update:value="(v: number | null) => updateField('fine', f.key, v)"
                 />
-                <span class="burst-progress-text">
-                  {{ burstStatus.processed }}/{{ burstStatus.total }}
-                </span>
+                <span class="burst-field-hint">{{ f.hint }}</span>
               </div>
-              <p v-else class="burst-hint">
-                识别时间上连续、内容高度相似的照片并归组，图片管理页以封面折叠展示。
-              </p>
-            </div>
+            </NFormItem>
+          </NForm>
+
+          <NDivider />
+
+          <!-- 模糊档 -->
+          <div class="burst-profile-title">模糊档</div>
+          <NForm label-placement="left" :show-feedback="false" label-width="168" size="small">
+            <NFormItem
+              v-for="f in profileFields"
+              :key="`coarse-${f.key}`"
+              :label="f.label"
+            >
+              <div class="burst-field">
+                <NInputNumber
+                  :value="burstConfig.coarse[f.key]"
+                  :min="f.min"
+                  :max="f.max"
+                  :step="f.step ?? 1"
+                  :precision="f.precision"
+                  style="width: 160px"
+                  @update:value="(v: number | null) => updateField('coarse', f.key, v)"
+                />
+                <span class="burst-field-hint">{{ f.hint }}</span>
+              </div>
+            </NFormItem>
+          </NForm>
+
+          <div class="burst-save-row">
             <NButton
               type="primary"
               size="small"
-              :loading="burstStatus.running"
-              :disabled="burstStatus.running"
-              @click="handleRebuildBurst"
+              :loading="burstSaving"
+              @click="handleSaveBurstConfig"
             >
               <template #icon>
-                <NIcon size="14"><GridOutline /></NIcon>
+                <NIcon size="14"><SaveOutline /></NIcon>
               </template>
-              {{ burstStatus.running ? '重算中' : '重新分组' }}
+              保存参数
             </NButton>
           </div>
         </NCard>
@@ -199,7 +261,7 @@ function handleReset() {
   padding: 24px;
 }
 .settings-container {
-  max-width: 640px;
+  max-width: 800px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -232,34 +294,28 @@ code {
   border-radius: 4px;
   font-size: 12px;
 }
-.burst-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+.burst-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  line-height: 1.6;
 }
-.burst-info {
-  flex: 1;
-  min-width: 0;
-}
-.burst-stat {
+.burst-profile-title {
   font-size: 13px;
-  margin-bottom: 6px;
+  font-weight: 500;
+  margin-bottom: 8px;
 }
-.burst-progress {
+.burst-field {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.burst-progress-text {
+.burst-field-hint {
   font-size: 12px;
   color: var(--n-text-color-3);
-  white-space: nowrap;
+  line-height: 1.5;
 }
-.burst-hint {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  line-height: 1.6;
+.burst-save-row {
+  margin-top: 12px;
 }
 </style>

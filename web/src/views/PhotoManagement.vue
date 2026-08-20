@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   NLayout,
   NLayoutContent,
@@ -15,20 +15,23 @@ import {
   NInput,
   useMessage,
 } from 'naive-ui'
-import { PlayOutline, CloudUploadOutline, SearchOutline, LayersOutline } from '@vicons/ionicons5'
+import { PlayOutline, CloudUploadOutline, SearchOutline, LayersOutline, GridOutline, AlbumsOutline } from '@vicons/ionicons5'
 
 import PhotoGrid from '../components/PhotoGrid.vue'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
 import UploadModal from '../components/UploadModal.vue'
 import ConflictModal from '../components/ConflictModal.vue'
+import BurstGroupModal from '../components/BurstGroupModal.vue'
 
 import { usePhotos } from '../composables/usePhotos'
 import { useUpload } from '../composables/useUpload'
 import { useVlmQueue } from '../composables/useVlmQueue'
 import { useEmbedQueue } from '../composables/useEmbedQueue'
 import { useEmbedStatus } from '../composables/useEmbedStatus'
-import type { PhotoDetail as PhotoDetailType } from '../types/photo'
+import { useBurstGroups } from '../composables/useBurstGroups'
+import { settings } from '../stores/settings'
+import type { PhotoDetail as PhotoDetailType, BurstViewLevel } from '../types/photo'
 import type { ConflictResolution } from '../types/upload'
 
 const message = useMessage()
@@ -52,8 +55,10 @@ const {
   sortBy,
   sortOrder,
   searchFilename,
-  expandedBurstGroup,
-  burstMembers,
+  burstModalGroup,
+  burstModalMembers,
+  burstModalCoverId,
+  burstModalLoading,
   fetchPhotos,
   fetchStats,
   fetchTimelines,
@@ -63,7 +68,9 @@ const {
   applyFilters,
   resetFilters,
   deletePhoto,
-  toggleBurstGroup,
+  openBurstGroup,
+  closeBurstGroup,
+  setBurstCover,
 } = usePhotos()
 
 // ── 上传 ──
@@ -105,6 +112,14 @@ const {
   fetchEmbedStats,
 } = useEmbedStatus()
 
+// ── 连拍分组 ──
+const {
+  status: burstStatus,
+  rebuild: rebuildBurst,
+  fetchStatus: fetchBurstStatus,
+  stopPolling: stopBurstPolling,
+} = useBurstGroups()
+
 // ── 处理中的照片 ID ──
 const processingIds = ref<Set<string>>(new Set())
 
@@ -123,6 +138,9 @@ const vlmRunning = computed(() => vlmStatus.value.running)
 const embedRunning = computed(() => embedStatus.value.running)
 const embedCompleted = computed(() => embedStatus.value.completed)
 const embedTotal = computed(() => embedStatus.value.total)
+const burstRunning = computed(() => burstStatus.value.running)
+const burstProcessed = computed(() => burstStatus.value.processed)
+const burstTotal = computed(() => burstStatus.value.total)
 
 // 待 Embed 数量 = 有描述的 - 已嵌入的（避免负数）
 const pendingEmbedCount = computed(() => {
@@ -232,9 +250,48 @@ async function handleDeletePhoto(photoId: string) {
   }
 }
 
-// 展开/收起连拍组
-function handleToggleBurstGroup(groupId: string) {
-  toggleBurstGroup(groupId)
+// ── 连拍分组重算 ──
+async function handleRebuildBurst() {
+  try {
+    const st = await rebuildBurst(() => {
+      message.success(
+        `连拍分组完成，精细 ${burstStatus.value.group_count} 组 / 模糊 ${burstStatus.value.coarse_group_count} 组`,
+      )
+      fetchPhotos()
+    })
+    if (st === 'already_running') {
+      message.info('连拍分组已在进行中')
+    } else {
+      message.success('连拍分组重算已启动')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '启动失败')
+  }
+}
+
+// ── 连拍展示级别循环切换 ──
+const viewLevelOrder: BurstViewLevel[] = ['all', 'fine', 'coarse']
+const viewLevelLabels: Record<BurstViewLevel, string> = {
+  all: '全部展开',
+  fine: '精细连拍',
+  coarse: '模糊连拍',
+}
+
+function handleCycleViewLevel() {
+  const idx = viewLevelOrder.indexOf(settings.burstViewLevel)
+  settings.burstViewLevel = viewLevelOrder[(idx + 1) % viewLevelOrder.length]
+  applyFilters()
+}
+
+// ── 连拍组弹窗 ──
+function handleOpenBurstGroup(groupId: string, coverId: string) {
+  openBurstGroup(groupId, coverId)
+}
+
+function handleBurstSetCover(photoId: string) {
+  setBurstCover(burstModalGroup.value, photoId)
+    .then(() => message.success('已设为封面'))
+    .catch((e) => message.error(e instanceof Error ? e.message : '设为封面失败'))
 }
 
 async function handleUploadStart() {
@@ -324,6 +381,11 @@ onMounted(async () => {
   fetchStats()
   fetchTimelines()
   fetchEmbedStats()
+  fetchBurstStatus()
+})
+
+onUnmounted(() => {
+  stopBurstPolling()
 })
 </script>
 
@@ -393,6 +455,29 @@ onMounted(async () => {
               开始批量Embed
             </NButton>
 
+            <!-- 连拍分组重算 -->
+            <template v-if="burstRunning">
+              <NTooltip trigger="hover">
+                <template #trigger>
+                  <NTag
+                    type="info"
+                    size="large"
+                    class="progress-tag"
+                    :style="{ cursor: 'pointer' }"
+                  >
+                    连拍 {{ burstProcessed }}/{{ burstTotal }}
+                  </NTag>
+                </template>
+                正在重算连拍分组
+              </NTooltip>
+            </template>
+            <NButton v-else @click="handleRebuildBurst">
+              <template #icon>
+                <NIcon><GridOutline /></NIcon>
+              </template>
+              连拍分组
+            </NButton>
+
             <!-- 上传按钮 -->
             <NButton @click="openUploadModal">
               <template #icon>
@@ -430,6 +515,22 @@ onMounted(async () => {
 
             <div class="stats-actions">
               <NSpace align="center">
+                <!-- 连拍展示级别循环切换 -->
+                <NTooltip trigger="hover">
+                  <template #trigger>
+                    <NButton
+                      size="small"
+                      @click="handleCycleViewLevel"
+                    >
+                      <template #icon>
+                        <NIcon><AlbumsOutline /></NIcon>
+                      </template>
+                      展示：{{ viewLevelLabels[settings.burstViewLevel] }}
+                    </NButton>
+                  </template>
+                  点击切换连拍展示级别（全部展开 / 精细折叠 / 模糊折叠）
+                </NTooltip>
+
                 <!-- 排序 -->
                 <span class="filter-label">排序</span>
                 <NSelect
@@ -507,13 +608,12 @@ onMounted(async () => {
             :error="error"
             :processing-ids="processingIds"
             :embedded-ids="embeddedIds"
-            :expanded-burst-group="expandedBurstGroup"
-            :burst-members="burstMembers"
+            :view-level="settings.burstViewLevel"
             @view-detail="fetchPhotoDetail"
             @trigger-describe="handleTriggerDescribe"
             @trigger-embed="handleTriggerEmbed"
             @delete-photo="handleDeletePhoto"
-            @toggle-burst-group="handleToggleBurstGroup"
+            @open-burst-group="handleOpenBurstGroup"
             @retry="fetchPhotos"
           />
 
@@ -538,6 +638,18 @@ onMounted(async () => {
     @trigger-describe="handleTriggerDescribe"
     @trigger-embed="handleTriggerEmbed"
     @view-description="handleViewDescription"
+  />
+
+  <!-- 连拍组弹窗 -->
+  <BurstGroupModal
+    :show="burstModalGroup !== ''"
+    :group-id="burstModalGroup"
+    :members="burstModalMembers"
+    :cover-id="burstModalCoverId"
+    :loading="burstModalLoading"
+    @close="closeBurstGroup"
+    @view-detail="fetchPhotoDetail"
+    @set-cover="handleBurstSetCover"
   />
 
   <!-- 描述内容弹窗 -->

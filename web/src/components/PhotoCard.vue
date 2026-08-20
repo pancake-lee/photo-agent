@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NCard, NButton, NIcon, NSpin, NTooltip, NPopconfirm } from 'naive-ui'
 import {
   CheckmarkCircle,
@@ -6,22 +7,42 @@ import {
   TrashOutline,
   LayersOutline,
 } from '@vicons/ionicons5'
-import type { PhotoListItem } from '../types/photo'
+import type { PhotoListItem, BurstViewLevel } from '../types/photo'
 import { formatDate } from '../utils/format'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   photo: PhotoListItem
   processing?: boolean
   isEmbedded?: boolean
-}>()
+  /** 连拍展示级别：all 全部展开 / fine 精细折叠 / coarse 模糊折叠 */
+  viewLevel?: BurstViewLevel
+}>(), {
+  viewLevel: 'fine',
+})
 
 const emit = defineEmits<{
   viewDetail: [photoId: string]
   triggerDescribe: [photoId: string]
   triggerEmbed: [photoId: string]
   deletePhoto: [photoId: string]
-  toggleBurstGroup: [groupId: string]
+  openBurstGroup: [groupId: string, coverId: string]
 }>()
+
+/** 折叠级别下的连拍组封面：点击卡片打开连拍组弹窗，而非照片详情 */
+const isCollapsedCover = computed(
+  () =>
+    props.viewLevel !== 'all' &&
+    props.photo.burst_cover &&
+    props.photo.burst_count > 1,
+)
+
+function handleCardClick() {
+  if (isCollapsedCover.value) {
+    emit('openBurstGroup', props.photo.burst_group_id, props.photo.id)
+  } else {
+    emit('viewDetail', props.photo.id)
+  }
+}
 
 function handleStatusClick() {
   if (props.processing) return
@@ -62,7 +83,7 @@ function formatExifTooltip(): string {
         size="small"
         class="photo-card"
         hoverable
-        @click="$emit('viewDetail', photo.id)"
+        @click="handleCardClick"
       >
         <template #cover>
           <div class="photo-thumb">
@@ -73,10 +94,9 @@ function formatExifTooltip(): string {
             />
             <div v-if="photo.has_nef" class="photo-nef-badge" title="有对应 NEF 原始文件">NEF</div>
             <div
-              v-if="photo.burst_cover && photo.burst_count > 1"
+              v-if="isCollapsedCover"
               class="photo-burst-badge"
-              title="连拍组封面，点击展开组内照片"
-              @click.stop="emit('toggleBurstGroup', photo.burst_group_id)"
+              title="连拍组封面，点击查看组内照片"
             >×{{ photo.burst_count }}</div>
             <div class="photo-status">
               <NSpin v-if="processing" size="small" />

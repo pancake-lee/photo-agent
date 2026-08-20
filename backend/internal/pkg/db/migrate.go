@@ -27,6 +27,13 @@ func Migrate() error {
 		}
 		plogger.Info("DB migrate: added burst_group_id column to photos")
 	}
+	if !g.Migrator().HasColumn(&model.Photo{}, "burst_group_coarse_id") {
+		// 模糊档分组列，同上显式带 DEFAULT ''
+		if err := g.Exec("ALTER TABLE photos ADD COLUMN burst_group_coarse_id TEXT NOT NULL DEFAULT ''").Error; err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: added burst_group_coarse_id column to photos")
+	}
 
 	// photo_groups 表按需补建
 	if !g.Migrator().HasTable(&model.PhotoGroup{}) {
@@ -34,6 +41,21 @@ func Migrate() error {
 			return err
 		}
 		plogger.Info("DB migrate: created photo_groups table")
+	}
+	if !g.Migrator().HasColumn(&model.PhotoGroup{}, "profile") {
+		// 存量组记录由旧版单档参数算出，等价精细档，默认值落 'fine'
+		if err := g.Exec("ALTER TABLE photo_groups ADD COLUMN profile TEXT NOT NULL DEFAULT 'fine'").Error; err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: added profile column to photo_groups")
+	}
+
+	// app_settings 表按需补建（网页可编辑的运行期配置）
+	if !g.Migrator().HasTable(&model.AppSetting{}) {
+		if err := g.Migrator().CreateTable(&model.AppSetting{}); err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: created app_settings table")
 	}
 
 	return nil

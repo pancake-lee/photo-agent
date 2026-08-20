@@ -71,6 +71,7 @@ func (s *PhotoServer) SearchPhotos(
 		SortBy:       req.SortBy,
 		SortOrder:    req.SortOrder,
 		BurstGroupID: req.BurstGroupId,
+		BurstProfile: req.BurstProfile,
 	}
 
 	photos, total, err := data.PhotoDAO.GetPhotoList(ctx, params)
@@ -90,14 +91,19 @@ func (s *PhotoServer) SearchPhotos(
 	nefSet, _ := data.PhotoDAO.GetNefBaseNames(ctx)
 
 	// 连拍组信息，用于拼装 burst_cover/burst_count。查询失败时映射为空，仅不显示角标。
-	groupMap, _ := data.PhotoGroupDAO.GetByIDList(ctx, burstGroupIDsOf(photos))
+	// burst 字段按本次请求的档位取对应分组列（缺省精细档）。
+	groupMap, _ := data.PhotoGroupDAO.GetByIDList(ctx, burstGroupIDsOf(photos, req.BurstProfile))
 
 	items := make([]*api.PhotoItem, len(photos))
 	for i, p := range photos {
 		items[i] = photoDO2Item(p)
 		items[i].HasNef = nefSet[data.BaseNameOf(p.Filename)]
-		if g := groupMap[p.BurstGroupID]; g != nil {
-			items[i].BurstGroupId = p.BurstGroupID
+		groupID := p.BurstGroupID
+		if req.BurstProfile == "coarse" {
+			groupID = p.BurstGroupCoarseID
+		}
+		if g := groupMap[groupID]; g != nil {
+			items[i].BurstGroupId = groupID
 			items[i].BurstCover = g.CoverPhotoID == p.ID
 			items[i].BurstCount = g.PhotoCount
 		}
@@ -430,14 +436,18 @@ func (s *PhotoServer) doNefUpload(
 // 辅助函数
 // ================================================================
 
-// burstGroupIDsOf 收集照片列表中出现的非空连拍组 id（去重）。
-func burstGroupIDsOf(photos []*data.PhotoDO) []string {
+// burstGroupIDsOf 收集照片列表中出现的非空连拍组 id（去重），按档位取对应分组列。
+func burstGroupIDsOf(photos []*data.PhotoDO, profile string) []string {
 	seen := make(map[string]bool)
 	idList := make([]string, 0, len(photos))
 	for _, p := range photos {
-		if p.BurstGroupID != "" && !seen[p.BurstGroupID] {
-			seen[p.BurstGroupID] = true
-			idList = append(idList, p.BurstGroupID)
+		groupID := p.BurstGroupID
+		if profile == "coarse" {
+			groupID = p.BurstGroupCoarseID
+		}
+		if groupID != "" && !seen[groupID] {
+			seen[groupID] = true
+			idList = append(idList, groupID)
 		}
 	}
 	return idList

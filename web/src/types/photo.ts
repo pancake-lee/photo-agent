@@ -108,5 +108,27 @@ export interface BurstGroupsStatus {
   running: boolean
   processed: number
   total: number
-  group_count: number
+  group_count: number        // 精细档组数
+  coarse_group_count: number // 模糊档组数
+}
+
+// 连拍参数档位：fine 精细 / coarse 模糊
+export type BurstProfile = 'fine' | 'coarse'
+
+// 图片管理展示级别：全部展开 / 精细折叠 / 模糊折叠
+export type BurstViewLevel = 'all' | 'fine' | 'coarse'
+
+// 单档分组阈值
+export interface BurstProfileConfig {
+  time_window_sec: number
+  hash_threshold: number
+  ssim_threshold: number
+  ssim_gray_min: number
+  ssim_gray_max: number
+}
+
+// 两档分组阈值
+export interface BurstConfig {
+  fine: BurstProfileConfig
+  coarse: BurstProfileConfig
 }

@@ -47,6 +47,7 @@ type GetPhotoListParams struct {
 	SortBy       string
 	SortOrder    string
 	BurstGroupID string
+	BurstProfile string // fine / coarse（缺省 fine），决定组过滤与展示字段所用列
 }
 
 // GetPhotoList 查询照片列表（分页、过滤、排序）
@@ -116,7 +117,11 @@ func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*m
 		}
 	}
 	if params.BurstGroupID != "" {
-		do = do.Where(q.BurstGroupID.Eq(params.BurstGroupID))
+		if params.BurstProfile == "coarse" {
+			do = do.Where(q.BurstGroupCoarseID.Eq(params.BurstGroupID))
+		} else {
+			do = do.Where(q.BurstGroupID.Eq(params.BurstGroupID))
+		}
 	}
 
 	// 排序

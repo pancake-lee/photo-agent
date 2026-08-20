@@ -5,17 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 )
 
-// burstTestDefaults 测试用默认阈值（与 configs/config.yaml 模板一致）
-func burstTestDefaults() {
-	conf.C.Burst.TimeWindowSec = 5
-	conf.C.Burst.HashThreshold = 10
-	conf.C.Burst.SsimThreshold = 0.85
-	conf.C.Burst.SsimGrayMin = 8
-	conf.C.Burst.SsimGrayMax = 12
+// burstTestParams 测试用精细档阈值（与 configs/config.yaml 模板 Fine 档一致）
+func burstTestParams() burstParams {
+	return burstParams{
+		TimeWindowSec: 5,
+		HashThreshold: 10,
+		SsimThreshold: 0.85,
+		SsimGrayMin:   8,
+		SsimGrayMax:   12,
+	}
 }
 
 // mkBurstPhoto 构造测试照片：id 从 A/B/C... 编号，shotAt 递增。
@@ -54,7 +55,6 @@ func grayWithBits(base float64, flipCount int) []float64 {
 }
 
 func TestSplitByTimeWindow(t *testing.T) {
-	burstTestDefaults()
 	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
 
 	// 0s, 2s, 4s 同组；10s 间隔超 5s 切分；再 1s 同组
@@ -76,7 +76,7 @@ func TestSplitByTimeWindow(t *testing.T) {
 }
 
 func TestSplitBySimilarity_HashSplit(t *testing.T) {
-	burstTestDefaults()
+	bp := burstTestParams()
 	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
 
 	// A/B 相同图（距离 0），B/C 距离超灰区上界（构图完全不同），C/D 相同
@@ -87,7 +87,7 @@ func TestSplitBySimilarity_HashSplit(t *testing.T) {
 		mkBurstPhoto('D', base.Add(5*time.Second), grayWithBits(100, 40)),
 	}
 
-	groups := splitBySimilarity(list)
+	groups := splitBySimilarity(list, bp)
 	if len(groups) != 2 {
 		t.Fatalf("groups = %d, want 2", len(groups))
 	}
@@ -113,7 +113,7 @@ func grayWithRowMarks(base, mark float64, rows int) []float64 {
 }
 
 func TestSplitBySimilarity_GrayZoneSSIM(t *testing.T) {
-	burstTestDefaults()
+	bp := burstTestParams()
 	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
 
 	// 灰区构造：3 行标记 → 距离 12（灰区上界内）。
@@ -135,10 +135,10 @@ func TestSplitBySimilarity_GrayZoneSSIM(t *testing.T) {
 		mkBurstPhoto('A', base, gFlat),
 		mkBurstPhoto('B', base.Add(2*time.Second), gMarkSmall),
 	}
-	if s := calcSSIM(gFlat, gMarkSmall); s < conf.C.Burst.SsimThreshold {
-		t.Fatalf("setup: SSIM(small) = %f, want >= %f", s, conf.C.Burst.SsimThreshold)
+	if s := calcSSIM(gFlat, gMarkSmall); s < bp.SsimThreshold {
+		t.Fatalf("setup: SSIM(small) = %f, want >= %f", s, bp.SsimThreshold)
 	}
-	if groups := splitBySimilarity(list); len(groups) != 1 {
+	if groups := splitBySimilarity(list, bp); len(groups) != 1 {
 		t.Fatalf("groups = %d, want 1 (gray zone SSIM pass)", len(groups))
 	}
 
@@ -147,16 +147,15 @@ func TestSplitBySimilarity_GrayZoneSSIM(t *testing.T) {
 		mkBurstPhoto('A', base, gFlat),
 		mkBurstPhoto('B', base.Add(2*time.Second), gMarkLarge),
 	}
-	if s := calcSSIM(gFlat, gMarkLarge); s >= conf.C.Burst.SsimThreshold {
-		t.Fatalf("setup: SSIM(large) = %f, want < %f", s, conf.C.Burst.SsimThreshold)
+	if s := calcSSIM(gFlat, gMarkLarge); s >= bp.SsimThreshold {
+		t.Fatalf("setup: SSIM(large) = %f, want < %f", s, bp.SsimThreshold)
 	}
-	if groups := splitBySimilarity(list2); len(groups) != 2 {
+	if groups := splitBySimilarity(list2, bp); len(groups) != 2 {
 		t.Fatalf("groups = %d, want 2 (gray zone SSIM fail)", len(groups))
 	}
 }
 
 func TestSplitBurstGroups_SingleNotGroup(t *testing.T) {
-	burstTestDefaults()
 	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
 
 	// 时间窗内只有 1 张（前后间隔都超窗），算法产出的组仅 1 张，
@@ -165,7 +164,7 @@ func TestSplitBurstGroups_SingleNotGroup(t *testing.T) {
 		mkBurstPhoto('A', base, flatGray(100)),
 		mkBurstPhoto('B', base.Add(30*time.Second), flatGray(100)),
 	}
-	groups := splitBurstGroups(list)
+	groups := splitBurstGroups(list, burstTestParams())
 	if len(groups) != 2 {
 		t.Fatalf("groups = %d, want 2", len(groups))
 	}
@@ -173,6 +172,48 @@ func TestSplitBurstGroups_SingleNotGroup(t *testing.T) {
 		if len(g) != 1 {
 			t.Errorf("group size = %d, want 1", len(g))
 		}
+	}
+}
+
+// TestSplitBurstGroups_CoarseProfile 模糊档更宽的时间窗把精细档拆开的两段归为一组。
+func TestSplitBurstGroups_CoarseProfile(t *testing.T) {
+	base := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+
+	// 间隔 10s：超精细档 5s 窗，但在模糊档 30s 窗内；内容相同
+	list := []burstPhotoInfo{
+		mkBurstPhoto('A', base, flatGray(100)),
+		mkBurstPhoto('B', base.Add(10*time.Second), flatGray(100)),
+	}
+
+	fine := burstTestParams()
+	if groups := splitBurstGroups(list, fine); len(groups) != 2 {
+		t.Fatalf("fine groups = %d, want 2", len(groups))
+	}
+
+	coarse := burstTestParams()
+	coarse.TimeWindowSec = 30
+	if groups := splitBurstGroups(list, coarse); len(groups) != 1 {
+		t.Fatalf("coarse groups = %d, want 1", len(groups))
+	}
+}
+
+func TestValidateBurstConfig(t *testing.T) {
+	valid := burstConfig{Fine: burstTestParams(), Coarse: burstTestParams()}
+	if err := validateBurstConfig(valid); err != nil {
+		t.Errorf("valid config rejected: %v", err)
+	}
+
+	bad := valid
+	bad.Fine.HashThreshold = 65
+	if err := validateBurstConfig(bad); err == nil {
+		t.Error("hash_threshold 65 should be rejected")
+	}
+
+	bad = valid
+	bad.Coarse.SsimGrayMin = 20
+	bad.Coarse.SsimGrayMax = 12
+	if err := validateBurstConfig(bad); err == nil {
+		t.Error("gray min > max should be rejected")
 	}
 }
 

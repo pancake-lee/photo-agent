@@ -1,15 +1,19 @@
 import { reactive, watch } from 'vue'
+import type { BurstViewLevel } from '../types/photo'
 
 const STORAGE_KEY = 'photo-agent-settings'
 
 export interface AppSettings {
   backendUrl: string
   agentUrl: string
+  /** 图片管理连拍展示级别：全部展开 / 精细折叠 / 模糊折叠 */
+  burstViewLevel: BurstViewLevel
 }
 
 const defaults: AppSettings = {
   backendUrl: 'http://localhost:10004',
   agentUrl: 'http://localhost:10005',
+  burstViewLevel: 'fine',
 }
 
 function load(): AppSettings {
