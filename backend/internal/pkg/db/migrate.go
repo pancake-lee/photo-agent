@@ -19,7 +19,10 @@ func Migrate() error {
 		plogger.Info("DB migrate: added file_type column to photos")
 	}
 	if !g.Migrator().HasColumn(&model.Photo{}, "burst_group_id") {
-		if err := g.Migrator().AddColumn(&model.Photo{}, "BurstGroupID"); err != nil {
+		// 生成模型丢失了空串默认值(gorm/gen 不输出 default:'')，AddColumn 会生成
+		// `ADD burst_group_id text NOT NULL` 无默认值，SQLite 在表已有数据时拒绝。
+		// 这里显式带 DEFAULT ''，与 sql/photos.sql 的列定义保持一致。
+		if err := g.Exec("ALTER TABLE photos ADD COLUMN burst_group_id TEXT NOT NULL DEFAULT ''").Error; err != nil {
 			return err
 		}
 		plogger.Info("DB migrate: added burst_group_id column to photos")
