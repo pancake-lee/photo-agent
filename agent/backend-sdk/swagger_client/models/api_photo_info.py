@@ -54,6 +54,7 @@ class ApiPhotoInfo(object):
         'longitude': 'float',
         'altitude': 'float',
         'burst_group_id': 'str',
+        'burst_group_coarse_id': 'str',
         'imported_at': 'str'
     }
 
@@ -85,10 +86,11 @@ class ApiPhotoInfo(object):
         'longitude': 'longitude',
         'altitude': 'altitude',
         'burst_group_id': 'burstGroupID',
+        'burst_group_coarse_id': 'burstGroupCoarseID',
         'imported_at': 'importedAt'
     }
 
-    def __init__(self, id=None, filename=None, file_path=None, file_type=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, burst_group_id=None, imported_at=None):  # noqa: E501
+    def __init__(self, id=None, filename=None, file_path=None, file_type=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, burst_group_id=None, burst_group_coarse_id=None, imported_at=None):  # noqa: E501
         """ApiPhotoInfo - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._filename = None
@@ -117,6 +119,7 @@ class ApiPhotoInfo(object):
         self._longitude = None
         self._altitude = None
         self._burst_group_id = None
+        self._burst_group_coarse_id = None
         self._imported_at = None
         self.discriminator = None
         if id is not None:
@@ -173,6 +176,8 @@ class ApiPhotoInfo(object):
             self.altitude = altitude
         if burst_group_id is not None:
             self.burst_group_id = burst_group_id
+        if burst_group_coarse_id is not None:
+            self.burst_group_coarse_id = burst_group_coarse_id
         if imported_at is not None:
             self.imported_at = imported_at
 
@@ -742,6 +747,27 @@ class ApiPhotoInfo(object):
         """
 
         self._burst_group_id = burst_group_id
+
+    @property
+    def burst_group_coarse_id(self):
+        """Gets the burst_group_coarse_id of this ApiPhotoInfo.  # noqa: E501
+
+
+        :return: The burst_group_coarse_id of this ApiPhotoInfo.  # noqa: E501
+        :rtype: str
+        """
+        return self._burst_group_coarse_id
+
+    @burst_group_coarse_id.setter
+    def burst_group_coarse_id(self, burst_group_coarse_id):
+        """Sets the burst_group_coarse_id of this ApiPhotoInfo.
+
+
+        :param burst_group_coarse_id: The burst_group_coarse_id of this ApiPhotoInfo.  # noqa: E501
+        :type: str
+        """
+
+        self._burst_group_coarse_id = burst_group_coarse_id
 
     @property
     def imported_at(self):

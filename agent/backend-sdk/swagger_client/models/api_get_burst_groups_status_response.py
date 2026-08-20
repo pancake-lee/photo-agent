@@ -30,22 +30,25 @@ class ApiGetBurstGroupsStatusResponse(object):
         'running': 'bool',
         'processed': 'int',
         'total': 'int',
-        'group_count': 'int'
+        'group_count': 'int',
+        'coarse_group_count': 'int'
     }
 
     attribute_map = {
         'running': 'running',
         'processed': 'processed',
         'total': 'total',
-        'group_count': 'groupCount'
+        'group_count': 'groupCount',
+        'coarse_group_count': 'coarseGroupCount'
     }
 
-    def __init__(self, running=None, processed=None, total=None, group_count=None):  # noqa: E501
+    def __init__(self, running=None, processed=None, total=None, group_count=None, coarse_group_count=None):  # noqa: E501
         """ApiGetBurstGroupsStatusResponse - a model defined in Swagger"""  # noqa: E501
         self._running = None
         self._processed = None
         self._total = None
         self._group_count = None
+        self._coarse_group_count = None
         self.discriminator = None
         if running is not None:
             self.running = running
@@ -55,6 +58,8 @@ class ApiGetBurstGroupsStatusResponse(object):
             self.total = total
         if group_count is not None:
             self.group_count = group_count
+        if coarse_group_count is not None:
+            self.coarse_group_count = coarse_group_count
 
     @property
     def running(self):
@@ -139,6 +144,27 @@ class ApiGetBurstGroupsStatusResponse(object):
         """
 
         self._group_count = group_count
+
+    @property
+    def coarse_group_count(self):
+        """Gets the coarse_group_count of this ApiGetBurstGroupsStatusResponse.  # noqa: E501
+
+
+        :return: The coarse_group_count of this ApiGetBurstGroupsStatusResponse.  # noqa: E501
+        :rtype: int
+        """
+        return self._coarse_group_count
+
+    @coarse_group_count.setter
+    def coarse_group_count(self, coarse_group_count):
+        """Sets the coarse_group_count of this ApiGetBurstGroupsStatusResponse.
+
+
+        :param coarse_group_count: The coarse_group_count of this ApiGetBurstGroupsStatusResponse.  # noqa: E501
+        :type: int
+        """
+
+        self._coarse_group_count = coarse_group_count
 
     def to_dict(self):
         """Returns the model properties as a dict"""

@@ -100,6 +100,37 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.UpdateAbandonCodeResponse'
+    /api/v1/burst-groups/config:
+        get:
+            tags:
+                - PhotoService
+            description: 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+            operationId: PhotoService_GetBurstGroupsConfig
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetBurstGroupsConfigResponse'
+        put:
+            tags:
+                - PhotoService
+            description: 保存连拍分组两档位阈值（写入 app_settings）
+            operationId: PhotoService_UpdateBurstGroupsConfig
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdateBurstGroupsConfigRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
     /api/v1/burst-groups/rebuild:
         post:
             tags:
@@ -132,6 +163,31 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.GetBurstGroupsStatusResponse'
+    /api/v1/burst-groups/{groupId}/cover:
+        put:
+            tags:
+                - PhotoService
+            description: 设置连拍组封面
+            operationId: PhotoService_SetBurstGroupCover
+            parameters:
+                - name: groupId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.SetBurstGroupCoverRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
     /api/v1/photos:
         get:
             tags:
@@ -204,6 +260,10 @@ paths:
                   schema:
                     type: string
                 - name: burstGroupId
+                  in: query
+                  schema:
+                    type: string
+                - name: burstProfile
                   in: query
                   schema:
                     type: string
@@ -512,6 +572,80 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.StopVlmQueueResponse'
+    /app-settings:
+        get:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_GetAppSettingList
+            parameters:
+                - name: keyList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetAppSettingListResponse'
+        post:
+            tags:
+                - DefaultCURD
+            description: |-
+                --------------------------------------------------
+                 tbl : app_settings
+            operationId: DefaultCURD_AddAppSetting
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.AddAppSettingRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.AddAppSettingResponse'
+        delete:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_DelAppSettingByKeyList
+            parameters:
+                - name: keyList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
+        patch:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_UpdateAppSetting
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdateAppSettingRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UpdateAppSettingResponse'
     /photo-groups:
         get:
             tags:
@@ -684,6 +818,16 @@ components:
             properties:
                 abandonCode:
                     $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.AddAppSettingRequest:
+            type: object
+            properties:
+                appSetting:
+                    $ref: '#/components/schemas/api.AppSettingInfo'
+        api.AddAppSettingResponse:
+            type: object
+            properties:
+                appSetting:
+                    $ref: '#/components/schemas/api.AppSettingInfo'
         api.AddPhotoGroupRequest:
             type: object
             properties:
@@ -704,6 +848,18 @@ components:
             properties:
                 photo:
                     $ref: '#/components/schemas/api.PhotoInfo'
+        api.AppSettingInfo:
+            type: object
+            properties:
+                key:
+                    type: string
+                value:
+                    type: string
+                updatedAt:
+                    type: string
+            description: |-
+                --------------------------------------------------
+                 tbl : app_settings
         api.AttributeValues:
             type: object
             properties:
@@ -748,6 +904,25 @@ components:
                     format: int32
                 message:
                     type: string
+        api.BurstProfileConfig:
+            type: object
+            properties:
+                timeWindowSec:
+                    type: integer
+                    format: int32
+                hashThreshold:
+                    type: integer
+                    format: int32
+                ssimThreshold:
+                    type: number
+                    format: double
+                ssimGrayMin:
+                    type: integer
+                    format: int32
+                ssimGrayMax:
+                    type: integer
+                    format: int32
+            description: BurstProfileConfig 单个档位的分组阈值
         api.DeletePhotoResponse:
             type: object
             properties:
@@ -813,11 +988,25 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.GetAppSettingListResponse:
+            type: object
+            properties:
+                appSettingList:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.AppSettingInfo'
         api.GetAttributeValuesResponse:
             type: object
             properties:
                 values:
                     $ref: '#/components/schemas/api.AttributeValues'
+        api.GetBurstGroupsConfigResponse:
+            type: object
+            properties:
+                fine:
+                    $ref: '#/components/schemas/api.BurstProfileConfig'
+                coarse:
+                    $ref: '#/components/schemas/api.BurstProfileConfig'
         api.GetBurstGroupsStatusResponse:
             type: object
             properties:
@@ -830,6 +1019,9 @@ components:
                     type: integer
                     format: int32
                 groupCount:
+                    type: integer
+                    format: int32
+                coarseGroupCount:
                     type: integer
                     format: int32
         api.GetPhotoDetailResponse:
@@ -962,6 +1154,8 @@ components:
                     type: string
                 coverPhotoID:
                     type: string
+                profile:
+                    type: string
                 photoCount:
                     type: integer
                     format: int32
@@ -1039,6 +1233,8 @@ components:
                     type: number
                     format: double
                 burstGroupID:
+                    type: string
+                burstGroupCoarseID:
                     type: string
                 importedAt:
                     type: string
@@ -1157,6 +1353,13 @@ components:
                 totalPages:
                     type: integer
                     format: int32
+        api.SetBurstGroupCoverRequest:
+            type: object
+            properties:
+                groupId:
+                    type: string
+                photoId:
+                    type: string
         api.StartVlmQueueRequest:
             type: object
             properties:
@@ -1212,6 +1415,23 @@ components:
             properties:
                 abandonCode:
                     $ref: '#/components/schemas/api.AbandonCodeInfo'
+        api.UpdateAppSettingRequest:
+            type: object
+            properties:
+                appSetting:
+                    $ref: '#/components/schemas/api.AppSettingInfo'
+        api.UpdateAppSettingResponse:
+            type: object
+            properties:
+                appSetting:
+                    $ref: '#/components/schemas/api.AppSettingInfo'
+        api.UpdateBurstGroupsConfigRequest:
+            type: object
+            properties:
+                fine:
+                    $ref: '#/components/schemas/api.BurstProfileConfig'
+                coarse:
+                    $ref: '#/components/schemas/api.BurstProfileConfig'
         api.UpdatePhotoGroupRequest:
             type: object
             properties:

@@ -5,6 +5,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **id** | **str** |  | [optional] 
 **cover_photo_id** | **str** |  | [optional] 
+**profile** | **str** |  | [optional] 
 **photo_count** | **int** |  | [optional] 
 **time_start** | **str** |  | [optional] 
 **time_end** | **str** |  | [optional] 

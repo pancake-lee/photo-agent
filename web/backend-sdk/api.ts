@@ -126,6 +126,32 @@ export interface ApiAddAbandonCodeResponse {
 /**
  * 
  * @export
+ * @interface ApiAddAppSettingRequest
+ */
+export interface ApiAddAppSettingRequest {
+    /**
+     * 
+     * @type {ApiAppSettingInfo}
+     * @memberof ApiAddAppSettingRequest
+     */
+    appSetting?: ApiAppSettingInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiAddAppSettingResponse
+ */
+export interface ApiAddAppSettingResponse {
+    /**
+     * 
+     * @type {ApiAppSettingInfo}
+     * @memberof ApiAddAppSettingResponse
+     */
+    appSetting?: ApiAppSettingInfo;
+}
+/**
+ * 
+ * @export
  * @interface ApiAddPhotoGroupRequest
  */
 export interface ApiAddPhotoGroupRequest {
@@ -174,6 +200,31 @@ export interface ApiAddPhotoResponse {
      * @memberof ApiAddPhotoResponse
      */
     photo?: ApiPhotoInfo;
+}
+/**
+ * --------------------------------------------------  tbl : app_settings
+ * @export
+ * @interface ApiAppSettingInfo
+ */
+export interface ApiAppSettingInfo {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiAppSettingInfo
+     */
+    key?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiAppSettingInfo
+     */
+    value?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiAppSettingInfo
+     */
+    updatedAt?: string;
 }
 /**
  * 
@@ -255,6 +306,43 @@ export interface ApiBindTagsResponse {
      * @memberof ApiBindTagsResponse
      */
     message?: string;
+}
+/**
+ * BurstProfileConfig 单个档位的分组阈值
+ * @export
+ * @interface ApiBurstProfileConfig
+ */
+export interface ApiBurstProfileConfig {
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiBurstProfileConfig
+     */
+    timeWindowSec?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiBurstProfileConfig
+     */
+    hashThreshold?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiBurstProfileConfig
+     */
+    ssimThreshold?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiBurstProfileConfig
+     */
+    ssimGrayMin?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiBurstProfileConfig
+     */
+    ssimGrayMax?: number;
 }
 /**
  * 
@@ -412,6 +500,19 @@ export interface ApiGetAbandonCodeListResponse {
 /**
  * 
  * @export
+ * @interface ApiGetAppSettingListResponse
+ */
+export interface ApiGetAppSettingListResponse {
+    /**
+     * 
+     * @type {Array<ApiAppSettingInfo>}
+     * @memberof ApiGetAppSettingListResponse
+     */
+    appSettingList?: Array<ApiAppSettingInfo>;
+}
+/**
+ * 
+ * @export
  * @interface ApiGetAttributeValuesResponse
  */
 export interface ApiGetAttributeValuesResponse {
@@ -421,6 +522,25 @@ export interface ApiGetAttributeValuesResponse {
      * @memberof ApiGetAttributeValuesResponse
      */
     values?: ApiAttributeValues;
+}
+/**
+ * 
+ * @export
+ * @interface ApiGetBurstGroupsConfigResponse
+ */
+export interface ApiGetBurstGroupsConfigResponse {
+    /**
+     * 
+     * @type {ApiBurstProfileConfig}
+     * @memberof ApiGetBurstGroupsConfigResponse
+     */
+    fine?: ApiBurstProfileConfig;
+    /**
+     * 
+     * @type {ApiBurstProfileConfig}
+     * @memberof ApiGetBurstGroupsConfigResponse
+     */
+    coarse?: ApiBurstProfileConfig;
 }
 /**
  * 
@@ -452,6 +572,12 @@ export interface ApiGetBurstGroupsStatusResponse {
      * @memberof ApiGetBurstGroupsStatusResponse
      */
     groupCount?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetBurstGroupsStatusResponse
+     */
+    coarseGroupCount?: number;
 }
 /**
  * 
@@ -737,6 +863,12 @@ export interface ApiPhotoGroupInfo {
     coverPhotoID?: string;
     /**
      * 
+     * @type {string}
+     * @memberof ApiPhotoGroupInfo
+     */
+    profile?: string;
+    /**
+     * 
      * @type {number}
      * @memberof ApiPhotoGroupInfo
      */
@@ -934,6 +1066,12 @@ export interface ApiPhotoInfo {
      * @memberof ApiPhotoInfo
      */
     burstGroupID?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoInfo
+     */
+    burstGroupCoarseID?: string;
     /**
      * 
      * @type {string}
@@ -1236,6 +1374,25 @@ export interface ApiSearchPhotosResponse {
 /**
  * 
  * @export
+ * @interface ApiSetBurstGroupCoverRequest
+ */
+export interface ApiSetBurstGroupCoverRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSetBurstGroupCoverRequest
+     */
+    groupId?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSetBurstGroupCoverRequest
+     */
+    photoId?: string;
+}
+/**
+ * 
+ * @export
  * @interface ApiStartVlmQueueRequest
  */
 export interface ApiStartVlmQueueRequest {
@@ -1366,6 +1523,51 @@ export interface ApiUpdateAbandonCodeResponse {
      * @memberof ApiUpdateAbandonCodeResponse
      */
     abandonCode?: ApiAbandonCodeInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdateAppSettingRequest
+ */
+export interface ApiUpdateAppSettingRequest {
+    /**
+     * 
+     * @type {ApiAppSettingInfo}
+     * @memberof ApiUpdateAppSettingRequest
+     */
+    appSetting?: ApiAppSettingInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdateAppSettingResponse
+ */
+export interface ApiUpdateAppSettingResponse {
+    /**
+     * 
+     * @type {ApiAppSettingInfo}
+     * @memberof ApiUpdateAppSettingResponse
+     */
+    appSetting?: ApiAppSettingInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdateBurstGroupsConfigRequest
+ */
+export interface ApiUpdateBurstGroupsConfigRequest {
+    /**
+     * 
+     * @type {ApiBurstProfileConfig}
+     * @memberof ApiUpdateBurstGroupsConfigRequest
+     */
+    fine?: ApiBurstProfileConfig;
+    /**
+     * 
+     * @type {ApiBurstProfileConfig}
+     * @memberof ApiUpdateBurstGroupsConfigRequest
+     */
+    coarse?: ApiBurstProfileConfig;
 }
 /**
  * 
@@ -1801,6 +2003,37 @@ export class AbandonCodeCURDApi extends BaseAPI {
 export const DefaultCURDApiFetchParamCreator = function (configuration?: Configuration) {
     return {
         /**
+         * --------------------------------------------------  tbl : app_settings
+         * @param {ApiAddAppSettingRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddAppSetting(body: ApiAddAppSettingRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling defaultCURDAddAppSetting.');
+            }
+            const localVarPath = `/app-settings`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'POST' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiAddAppSettingRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * --------------------------------------------------  tbl : photos
          * @param {ApiAddPhotoRequest} body 
          * @param {*} [options] Override http request option.
@@ -1864,6 +2097,33 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
         },
         /**
          * 
+         * @param {Array<string>} [keyList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelAppSettingByKeyList(keyList?: Array<string>, options: any = {}): FetchArgs {
+            const localVarPath = `/app-settings`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (keyList) {
+                localVarQueryParameter['keyList'] = keyList;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @param {Array<string>} [iDList] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -1904,6 +2164,33 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
 
             if (iDList) {
                 localVarQueryParameter['IDList'] = iDList;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [keyList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetAppSettingList(keyList?: Array<string>, options: any = {}): FetchArgs {
+            const localVarPath = `/app-settings`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (keyList) {
+                localVarQueryParameter['keyList'] = keyList;
             }
 
             localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
@@ -1964,6 +2251,37 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
             // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
             localVarUrlObj.search = null;
             localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @param {ApiUpdateAppSettingRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdateAppSetting(body: ApiUpdateAppSettingRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling defaultCURDUpdateAppSetting.');
+            }
+            const localVarPath = `/app-settings`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'PATCH' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiUpdateAppSettingRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
 
             return {
                 url: url.format(localVarUrlObj),
@@ -2042,6 +2360,24 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
 export const DefaultCURDApiFp = function(configuration?: Configuration) {
     return {
         /**
+         * --------------------------------------------------  tbl : app_settings
+         * @param {ApiAddAppSettingRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddAppSetting(body: ApiAddAppSettingRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiAddAppSettingResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDAddAppSetting(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * --------------------------------------------------  tbl : photos
          * @param {ApiAddPhotoRequest} body 
          * @param {*} [options] Override http request option.
@@ -2067,6 +2403,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
          */
         defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiAddPhotoGroupResponse> {
             const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDAddPhotoGroup(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [keyList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelAppSettingByKeyList(keyList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDDelAppSettingByKeyList(keyList, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2115,6 +2469,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @param {Array<string>} [keyList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetAppSettingList(keyList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetAppSettingListResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDGetAppSettingList(keyList, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
          * @param {Array<string>} [iDList] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2139,6 +2511,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
          */
         defaultCURDGetPhotoList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetPhotoListResponse> {
             const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDGetPhotoList(iDList, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
+         * @param {ApiUpdateAppSettingRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdateAppSetting(body: ApiUpdateAppSettingRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiUpdateAppSettingResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDUpdateAppSetting(body, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2195,6 +2585,15 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
 export const DefaultCURDApiFactory = function (configuration?: Configuration, fetch?: FetchAPI, basePath?: string) {
     return {
         /**
+         * --------------------------------------------------  tbl : app_settings
+         * @param {ApiAddAppSettingRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddAppSetting(body: ApiAddAppSettingRequest, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDAddAppSetting(body, options)(fetch, basePath);
+        },
+        /**
          * --------------------------------------------------  tbl : photos
          * @param {ApiAddPhotoRequest} body 
          * @param {*} [options] Override http request option.
@@ -2211,6 +2610,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
          */
         defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any) {
             return DefaultCURDApiFp(configuration).defaultCURDAddPhotoGroup(body, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {Array<string>} [keyList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelAppSettingByKeyList(keyList?: Array<string>, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDDelAppSettingByKeyList(keyList, options)(fetch, basePath);
         },
         /**
          * 
@@ -2232,6 +2640,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
         },
         /**
          * 
+         * @param {Array<string>} [keyList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetAppSettingList(keyList?: Array<string>, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDGetAppSettingList(keyList, options)(fetch, basePath);
+        },
+        /**
+         * 
          * @param {Array<string>} [iDList] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2247,6 +2664,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
          */
         defaultCURDGetPhotoList(iDList?: Array<string>, options?: any) {
             return DefaultCURDApiFp(configuration).defaultCURDGetPhotoList(iDList, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {ApiUpdateAppSettingRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdateAppSetting(body: ApiUpdateAppSettingRequest, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDUpdateAppSetting(body, options)(fetch, basePath);
         },
         /**
          * 
@@ -2277,6 +2703,17 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
  */
 export class DefaultCURDApi extends BaseAPI {
     /**
+     * --------------------------------------------------  tbl : app_settings
+     * @param {ApiAddAppSettingRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDAddAppSetting(body: ApiAddAppSettingRequest, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDAddAppSetting(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
      * --------------------------------------------------  tbl : photos
      * @param {ApiAddPhotoRequest} body 
      * @param {*} [options] Override http request option.
@@ -2296,6 +2733,17 @@ export class DefaultCURDApi extends BaseAPI {
      */
     public defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any) {
         return DefaultCURDApiFp(this.configuration).defaultCURDAddPhotoGroup(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
+     * @param {Array<string>} [keyList] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDDelAppSettingByKeyList(keyList?: Array<string>, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDDelAppSettingByKeyList(keyList, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -2322,6 +2770,17 @@ export class DefaultCURDApi extends BaseAPI {
 
     /**
      * 
+     * @param {Array<string>} [keyList] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDGetAppSettingList(keyList?: Array<string>, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDGetAppSettingList(keyList, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
      * @param {Array<string>} [iDList] 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -2340,6 +2799,17 @@ export class DefaultCURDApi extends BaseAPI {
      */
     public defaultCURDGetPhotoList(iDList?: Array<string>, options?: any) {
         return DefaultCURDApiFp(this.configuration).defaultCURDGetPhotoList(iDList, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
+     * @param {ApiUpdateAppSettingRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDUpdateAppSetting(body: ApiUpdateAppSettingRequest, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDUpdateAppSetting(body, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -2386,6 +2856,28 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
                 .replace(`{${"id"}}`, encodeURIComponent(String(id)));
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceGetBurstGroupsConfig(options: any = {}): FetchArgs {
+            const localVarPath = `/api/v1/burst-groups/config`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
@@ -2520,10 +3012,11 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
          * @param {string} [sortBy] 
          * @param {string} [sortOrder] 
          * @param {string} [burstGroupId] 
+         * @param {string} [burstProfile] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options: any = {}): FetchArgs {
+        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, options: any = {}): FetchArgs {
             const localVarPath = `/api/v1/photos`;
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
@@ -2594,10 +3087,82 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
                 localVarQueryParameter['burstGroupId'] = burstGroupId;
             }
 
+            if (burstProfile !== undefined) {
+                localVarQueryParameter['burstProfile'] = burstProfile;
+            }
+
             localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
             // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
             localVarUrlObj.search = null;
             localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 设置连拍组封面
+         * @param {ApiSetBurstGroupCoverRequest} body 
+         * @param {string} groupId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceSetBurstGroupCover(body: ApiSetBurstGroupCoverRequest, groupId: string, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling photoServiceSetBurstGroupCover.');
+            }
+            // verify required parameter 'groupId' is not null or undefined
+            if (groupId === null || groupId === undefined) {
+                throw new RequiredError('groupId','Required parameter groupId was null or undefined when calling photoServiceSetBurstGroupCover.');
+            }
+            const localVarPath = `/api/v1/burst-groups/{groupId}/cover`
+                .replace(`{${"groupId"}}`, encodeURIComponent(String(groupId)));
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'PUT' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiSetBurstGroupCoverRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 保存连拍分组两档位阈值（写入 app_settings）
+         * @param {ApiUpdateBurstGroupsConfigRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceUpdateBurstGroupsConfig(body: ApiUpdateBurstGroupsConfigRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling photoServiceUpdateBurstGroupsConfig.');
+            }
+            const localVarPath = `/api/v1/burst-groups/config`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'PUT' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiUpdateBurstGroupsConfigRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
 
             return {
                 url: url.format(localVarUrlObj),
@@ -2658,6 +3223,23 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
          */
         photoServiceDeletePhoto(id: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiDeletePhotoResponse> {
             const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceDeletePhoto(id, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceGetBurstGroupsConfig(options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetBurstGroupsConfigResponse> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceGetBurstGroupsConfig(options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2756,11 +3338,49 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
          * @param {string} [sortBy] 
          * @param {string} [sortOrder] 
          * @param {string} [burstGroupId] 
+         * @param {string} [burstProfile] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiSearchPhotosResponse> {
-            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, options);
+        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiSearchPhotosResponse> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 设置连拍组封面
+         * @param {ApiSetBurstGroupCoverRequest} body 
+         * @param {string} groupId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceSetBurstGroupCover(body: ApiSetBurstGroupCoverRequest, groupId: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceSetBurstGroupCover(body, groupId, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 保存连拍分组两档位阈值（写入 app_settings）
+         * @param {ApiUpdateBurstGroupsConfigRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceUpdateBurstGroupsConfig(body: ApiUpdateBurstGroupsConfigRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceUpdateBurstGroupsConfig(body, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2807,6 +3427,14 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
          */
         photoServiceDeletePhoto(id: string, options?: any) {
             return PhotoServiceApiFp(configuration).photoServiceDeletePhoto(id, options)(fetch, basePath);
+        },
+        /**
+         * 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceGetBurstGroupsConfig(options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceGetBurstGroupsConfig(options)(fetch, basePath);
         },
         /**
          * 查询连拍分组重算进度
@@ -2860,11 +3488,31 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
          * @param {string} [sortBy] 
          * @param {string} [sortOrder] 
          * @param {string} [burstGroupId] 
+         * @param {string} [burstProfile] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options?: any) {
-            return PhotoServiceApiFp(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, options)(fetch, basePath);
+        photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, options)(fetch, basePath);
+        },
+        /**
+         * 设置连拍组封面
+         * @param {ApiSetBurstGroupCoverRequest} body 
+         * @param {string} groupId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceSetBurstGroupCover(body: ApiSetBurstGroupCoverRequest, groupId: string, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceSetBurstGroupCover(body, groupId, options)(fetch, basePath);
+        },
+        /**
+         * 保存连拍分组两档位阈值（写入 app_settings）
+         * @param {ApiUpdateBurstGroupsConfigRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceUpdateBurstGroupsConfig(body: ApiUpdateBurstGroupsConfigRequest, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceUpdateBurstGroupsConfig(body, options)(fetch, basePath);
         },
         /**
          * 更新标签
@@ -2895,6 +3543,16 @@ export class PhotoServiceApi extends BaseAPI {
      */
     public photoServiceDeletePhoto(id: string, options?: any) {
         return PhotoServiceApiFp(this.configuration).photoServiceDeletePhoto(id, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceGetBurstGroupsConfig(options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceGetBurstGroupsConfig(options)(this.fetch, this.basePath);
     }
 
     /**
@@ -2957,12 +3615,36 @@ export class PhotoServiceApi extends BaseAPI {
      * @param {string} [sortBy] 
      * @param {string} [sortOrder] 
      * @param {string} [burstGroupId] 
+     * @param {string} [burstProfile] 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof PhotoServiceApi
      */
-    public photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, options?: any) {
-        return PhotoServiceApiFp(this.configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, options)(this.fetch, this.basePath);
+    public photoServiceSearchPhotos(page?: number, pageSize?: number, timeline?: string, tag?: string, keyword?: string, brand?: string, lens?: string, focalMin?: string, focalMax?: string, isoMin?: number, isoMax?: number, shotAtStart?: string, shotAtEnd?: string, sortBy?: string, sortOrder?: string, burstGroupId?: string, burstProfile?: string, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 设置连拍组封面
+     * @param {ApiSetBurstGroupCoverRequest} body 
+     * @param {string} groupId 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceSetBurstGroupCover(body: ApiSetBurstGroupCoverRequest, groupId: string, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceSetBurstGroupCover(body, groupId, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 保存连拍分组两档位阈值（写入 app_settings）
+     * @param {ApiUpdateBurstGroupsConfigRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceUpdateBurstGroupsConfig(body: ApiUpdateBurstGroupsConfigRequest, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceUpdateBurstGroupsConfig(body, options)(this.fetch, this.basePath);
     }
 
     /**

@@ -50,6 +50,26 @@ service PhotoService {
             get: "/api/v1/burst-groups/status"
         };
     }
+    // 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+    rpc GetBurstGroupsConfig (Empty) returns (GetBurstGroupsConfigResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/burst-groups/config"
+        };
+    }
+    // 保存连拍分组两档位阈值（写入 app_settings）
+    rpc UpdateBurstGroupsConfig (UpdateBurstGroupsConfigRequest) returns (Empty) {
+        option (google.api.http) = {
+            put: "/api/v1/burst-groups/config"
+            body: "*"
+        };
+    }
+    // 设置连拍组封面
+    rpc SetBurstGroupCover (SetBurstGroupCoverRequest) returns (Empty) {
+        option (google.api.http) = {
+            put: "/api/v1/burst-groups/{group_id}/cover"
+            body: "*"
+        };
+    }
 }
 
 // --------------------------------------------------
@@ -72,6 +92,7 @@ message SearchPhotosRequest {
     string sort_by = 14;
     string sort_order = 15;
     string burst_group_id = 16; // 按连拍组过滤（展开组内成员时使用）
+    string burst_profile = 17;  // 连拍档位：fine / coarse，缺省 fine。决定 burst 字段与组过滤所用列
 }
 
 message PhotoItem {
@@ -203,5 +224,33 @@ message GetBurstGroupsStatusResponse {
     bool running = 1;
     int32 processed = 2;
     int32 total = 3;
-    int32 group_count = 4; // 当前库内连拍组数（跑完时为最终组数）
+    int32 group_count = 4;         // 精细档组数（跑完时为最终组数）
+    int32 coarse_group_count = 5;  // 模糊档组数
+}
+
+// --------------------------------------------------
+// GetBurstGroupsConfig / UpdateBurstGroupsConfig / SetBurstGroupCover
+
+// BurstProfileConfig 单个档位的分组阈值
+message BurstProfileConfig {
+    int32 time_window_sec = 1; // 相邻两张拍摄间隔阈值（秒）
+    int32 hash_threshold = 2;  // dHash 汉明距离阈值（64bit，0-64）
+    double ssim_threshold = 3; // 灰区二次验证阈值
+    int32 ssim_gray_min = 4;   // 触发 SSIM 验证的哈希距离下界
+    int32 ssim_gray_max = 5;   // 触发 SSIM 验证的哈希距离上界
+}
+
+message GetBurstGroupsConfigResponse {
+    BurstProfileConfig fine = 1;
+    BurstProfileConfig coarse = 2;
+}
+
+message UpdateBurstGroupsConfigRequest {
+    BurstProfileConfig fine = 1;
+    BurstProfileConfig coarse = 2;
+}
+
+message SetBurstGroupCoverRequest {
+    string group_id = 1;
+    string photo_id = 2;
 }

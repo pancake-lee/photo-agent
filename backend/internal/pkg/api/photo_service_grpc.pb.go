@@ -19,13 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PhotoService_SearchPhotos_FullMethodName         = "/api.PhotoService/SearchPhotos"
-	PhotoService_GetPhotoStats_FullMethodName        = "/api.PhotoService/GetPhotoStats"
-	PhotoService_GetPhotoDetail_FullMethodName       = "/api.PhotoService/GetPhotoDetail"
-	PhotoService_UpdatePhotoTags_FullMethodName      = "/api.PhotoService/UpdatePhotoTags"
-	PhotoService_DeletePhoto_FullMethodName          = "/api.PhotoService/DeletePhoto"
-	PhotoService_RebuildBurstGroups_FullMethodName   = "/api.PhotoService/RebuildBurstGroups"
-	PhotoService_GetBurstGroupsStatus_FullMethodName = "/api.PhotoService/GetBurstGroupsStatus"
+	PhotoService_SearchPhotos_FullMethodName            = "/api.PhotoService/SearchPhotos"
+	PhotoService_GetPhotoStats_FullMethodName           = "/api.PhotoService/GetPhotoStats"
+	PhotoService_GetPhotoDetail_FullMethodName          = "/api.PhotoService/GetPhotoDetail"
+	PhotoService_UpdatePhotoTags_FullMethodName         = "/api.PhotoService/UpdatePhotoTags"
+	PhotoService_DeletePhoto_FullMethodName             = "/api.PhotoService/DeletePhoto"
+	PhotoService_RebuildBurstGroups_FullMethodName      = "/api.PhotoService/RebuildBurstGroups"
+	PhotoService_GetBurstGroupsStatus_FullMethodName    = "/api.PhotoService/GetBurstGroupsStatus"
+	PhotoService_GetBurstGroupsConfig_FullMethodName    = "/api.PhotoService/GetBurstGroupsConfig"
+	PhotoService_UpdateBurstGroupsConfig_FullMethodName = "/api.PhotoService/UpdateBurstGroupsConfig"
+	PhotoService_SetBurstGroupCover_FullMethodName      = "/api.PhotoService/SetBurstGroupCover"
 )
 
 // PhotoServiceClient is the client API for PhotoService service.
@@ -48,6 +51,12 @@ type PhotoServiceClient interface {
 	RebuildBurstGroups(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RebuildBurstGroupsResponse, error)
 	// 查询连拍分组重算进度
 	GetBurstGroupsStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetBurstGroupsStatusResponse, error)
+	// 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+	GetBurstGroupsConfig(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetBurstGroupsConfigResponse, error)
+	// 保存连拍分组两档位阈值（写入 app_settings）
+	UpdateBurstGroupsConfig(ctx context.Context, in *UpdateBurstGroupsConfigRequest, opts ...grpc.CallOption) (*Empty, error)
+	// 设置连拍组封面
+	SetBurstGroupCover(ctx context.Context, in *SetBurstGroupCoverRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type photoServiceClient struct {
@@ -128,6 +137,36 @@ func (c *photoServiceClient) GetBurstGroupsStatus(ctx context.Context, in *Empty
 	return out, nil
 }
 
+func (c *photoServiceClient) GetBurstGroupsConfig(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetBurstGroupsConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBurstGroupsConfigResponse)
+	err := c.cc.Invoke(ctx, PhotoService_GetBurstGroupsConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *photoServiceClient) UpdateBurstGroupsConfig(ctx context.Context, in *UpdateBurstGroupsConfigRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PhotoService_UpdateBurstGroupsConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *photoServiceClient) SetBurstGroupCover(ctx context.Context, in *SetBurstGroupCoverRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PhotoService_SetBurstGroupCover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PhotoServiceServer is the server API for PhotoService service.
 // All implementations must embed UnimplementedPhotoServiceServer
 // for forward compatibility.
@@ -148,6 +187,12 @@ type PhotoServiceServer interface {
 	RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error)
 	// 查询连拍分组重算进度
 	GetBurstGroupsStatus(context.Context, *Empty) (*GetBurstGroupsStatusResponse, error)
+	// 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+	GetBurstGroupsConfig(context.Context, *Empty) (*GetBurstGroupsConfigResponse, error)
+	// 保存连拍分组两档位阈值（写入 app_settings）
+	UpdateBurstGroupsConfig(context.Context, *UpdateBurstGroupsConfigRequest) (*Empty, error)
+	// 设置连拍组封面
+	SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error)
 	mustEmbedUnimplementedPhotoServiceServer()
 }
 
@@ -178,6 +223,15 @@ func (UnimplementedPhotoServiceServer) RebuildBurstGroups(context.Context, *Empt
 }
 func (UnimplementedPhotoServiceServer) GetBurstGroupsStatus(context.Context, *Empty) (*GetBurstGroupsStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBurstGroupsStatus not implemented")
+}
+func (UnimplementedPhotoServiceServer) GetBurstGroupsConfig(context.Context, *Empty) (*GetBurstGroupsConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBurstGroupsConfig not implemented")
+}
+func (UnimplementedPhotoServiceServer) UpdateBurstGroupsConfig(context.Context, *UpdateBurstGroupsConfigRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateBurstGroupsConfig not implemented")
+}
+func (UnimplementedPhotoServiceServer) SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetBurstGroupCover not implemented")
 }
 func (UnimplementedPhotoServiceServer) mustEmbedUnimplementedPhotoServiceServer() {}
 func (UnimplementedPhotoServiceServer) testEmbeddedByValue()                      {}
@@ -326,6 +380,60 @@ func _PhotoService_GetBurstGroupsStatus_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PhotoService_GetBurstGroupsConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).GetBurstGroupsConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_GetBurstGroupsConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).GetBurstGroupsConfig(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PhotoService_UpdateBurstGroupsConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateBurstGroupsConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).UpdateBurstGroupsConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_UpdateBurstGroupsConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).UpdateBurstGroupsConfig(ctx, req.(*UpdateBurstGroupsConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PhotoService_SetBurstGroupCover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetBurstGroupCoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).SetBurstGroupCover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_SetBurstGroupCover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).SetBurstGroupCover(ctx, req.(*SetBurstGroupCoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PhotoService_ServiceDesc is the grpc.ServiceDesc for PhotoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -360,6 +468,18 @@ var PhotoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBurstGroupsStatus",
 			Handler:    _PhotoService_GetBurstGroupsStatus_Handler,
+		},
+		{
+			MethodName: "GetBurstGroupsConfig",
+			Handler:    _PhotoService_GetBurstGroupsConfig_Handler,
+		},
+		{
+			MethodName: "UpdateBurstGroupsConfig",
+			Handler:    _PhotoService_UpdateBurstGroupsConfig_Handler,
+		},
+		{
+			MethodName: "SetBurstGroupCover",
+			Handler:    _PhotoService_SetBurstGroupCover_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

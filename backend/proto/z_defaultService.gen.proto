@@ -9,6 +9,30 @@ option go_package = "backend/internal/pkg/api;api";
 // --------------------------------------------------
 service defaultCURD { // 该命名应该全文唯一
     // --------------------------------------------------
+    // tbl : app_settings
+    rpc AddAppSetting (AddAppSettingRequest) returns (AddAppSettingResponse) {
+        option (google.api.http) = {
+            post: "/app-settings"
+            body: "*"
+        };
+    }
+    rpc GetAppSettingList (GetAppSettingListRequest) returns (GetAppSettingListResponse) {
+        option (google.api.http) = {
+            get: "/app-settings"
+        };
+    }
+    rpc UpdateAppSetting(UpdateAppSettingRequest) returns (UpdateAppSettingResponse) {
+        option (google.api.http) = {
+            patch: "/app-settings"
+            body: "*"
+        };
+    }
+    rpc DelAppSettingByKeyList (DelAppSettingByKeyListRequest) returns (Empty) {
+        option (google.api.http) = {
+            delete: "/app-settings"
+        };
+    }
+    // --------------------------------------------------
     // tbl : photo_groups
     rpc AddPhotoGroup (AddPhotoGroupRequest) returns (AddPhotoGroupResponse) {
         option (google.api.http) = {
@@ -60,15 +84,52 @@ service defaultCURD { // 该命名应该全文唯一
 
 
 // --------------------------------------------------
+// tbl : app_settings
+message AppSettingInfo {
+    string key = 1;
+    string value = 2;
+    int64 updatedAt = 3;
+}
+
+message AddAppSettingRequest {
+    AppSettingInfo app_setting = 1;
+}
+
+message AddAppSettingResponse {
+    AppSettingInfo app_setting = 1;
+}
+
+message GetAppSettingListRequest {
+    repeated string keyList = 1;
+}
+message GetAppSettingListResponse {
+    repeated AppSettingInfo appSettingList = 1;
+}
+
+message UpdateAppSettingRequest {
+    AppSettingInfo appSetting = 1;
+}
+
+message UpdateAppSettingResponse {
+    AppSettingInfo appSetting = 1;
+}
+
+message DelAppSettingByKeyListRequest {
+    repeated string keyList = 1;
+}
+
+
+// --------------------------------------------------
 // tbl : photo_groups
 message PhotoGroupInfo {
     string ID = 1;
     string coverPhotoID = 2;
-    int32 photoCount = 3;
-    int64 timeStart = 4;
-    int64 timeEnd = 5;
-    int32 hashMax = 6;
-    int64 createdAt = 7;
+    string profile = 3;
+    int32 photoCount = 4;
+    int64 timeStart = 5;
+    int64 timeEnd = 6;
+    int32 hashMax = 7;
+    int64 createdAt = 8;
 }
 
 message AddPhotoGroupRequest {
@@ -129,7 +190,8 @@ message PhotoInfo {
     double longitude = 25;
     double altitude = 26;
     string burstGroupID = 27;
-    int64 importedAt = 28;
+    string burstGroupCoarseID = 28;
+    int64 importedAt = 29;
 }
 
 message AddPhotoRequest {

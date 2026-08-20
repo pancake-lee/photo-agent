@@ -104,20 +104,27 @@ Class | Method | HTTP request | Description
 *AbandonCodeCURDApi* | [**abandon_code_curd_del_abandon_code_by_idx1_list**](docs/AbandonCodeCURDApi.md#abandon_code_curd_del_abandon_code_by_idx1_list) | **DELETE** /abandon-code | 
 *AbandonCodeCURDApi* | [**abandon_code_curd_get_abandon_code_list**](docs/AbandonCodeCURDApi.md#abandon_code_curd_get_abandon_code_list) | **GET** /abandon-code | 
 *AbandonCodeCURDApi* | [**abandon_code_curd_update_abandon_code**](docs/AbandonCodeCURDApi.md#abandon_code_curd_update_abandon_code) | **PATCH** /abandon-code | 
+*DefaultCURDApi* | [**default_curd_add_app_setting**](docs/DefaultCURDApi.md#default_curd_add_app_setting) | **POST** /app-settings | 
 *DefaultCURDApi* | [**default_curd_add_photo**](docs/DefaultCURDApi.md#default_curd_add_photo) | **POST** /photos | 
 *DefaultCURDApi* | [**default_curd_add_photo_group**](docs/DefaultCURDApi.md#default_curd_add_photo_group) | **POST** /photo-groups | 
+*DefaultCURDApi* | [**default_curd_del_app_setting_by_key_list**](docs/DefaultCURDApi.md#default_curd_del_app_setting_by_key_list) | **DELETE** /app-settings | 
 *DefaultCURDApi* | [**default_curd_del_photo_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_photo_by_id_list) | **DELETE** /photos | 
 *DefaultCURDApi* | [**default_curd_del_photo_group_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_photo_group_by_id_list) | **DELETE** /photo-groups | 
+*DefaultCURDApi* | [**default_curd_get_app_setting_list**](docs/DefaultCURDApi.md#default_curd_get_app_setting_list) | **GET** /app-settings | 
 *DefaultCURDApi* | [**default_curd_get_photo_group_list**](docs/DefaultCURDApi.md#default_curd_get_photo_group_list) | **GET** /photo-groups | 
 *DefaultCURDApi* | [**default_curd_get_photo_list**](docs/DefaultCURDApi.md#default_curd_get_photo_list) | **GET** /photos | 
+*DefaultCURDApi* | [**default_curd_update_app_setting**](docs/DefaultCURDApi.md#default_curd_update_app_setting) | **PATCH** /app-settings | 
 *DefaultCURDApi* | [**default_curd_update_photo**](docs/DefaultCURDApi.md#default_curd_update_photo) | **PATCH** /photos | 
 *DefaultCURDApi* | [**default_curd_update_photo_group**](docs/DefaultCURDApi.md#default_curd_update_photo_group) | **PATCH** /photo-groups | 
 *PhotoServiceApi* | [**photo_service_delete_photo**](docs/PhotoServiceApi.md#photo_service_delete_photo) | **DELETE** /api/v1/photos/{id} | 
+*PhotoServiceApi* | [**photo_service_get_burst_groups_config**](docs/PhotoServiceApi.md#photo_service_get_burst_groups_config) | **GET** /api/v1/burst-groups/config | 
 *PhotoServiceApi* | [**photo_service_get_burst_groups_status**](docs/PhotoServiceApi.md#photo_service_get_burst_groups_status) | **GET** /api/v1/burst-groups/status | 
 *PhotoServiceApi* | [**photo_service_get_photo_detail**](docs/PhotoServiceApi.md#photo_service_get_photo_detail) | **GET** /api/v1/photos/{id} | 
 *PhotoServiceApi* | [**photo_service_get_photo_stats**](docs/PhotoServiceApi.md#photo_service_get_photo_stats) | **GET** /api/v1/photos/stats | 
 *PhotoServiceApi* | [**photo_service_rebuild_burst_groups**](docs/PhotoServiceApi.md#photo_service_rebuild_burst_groups) | **POST** /api/v1/burst-groups/rebuild | 
 *PhotoServiceApi* | [**photo_service_search_photos**](docs/PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
+*PhotoServiceApi* | [**photo_service_set_burst_group_cover**](docs/PhotoServiceApi.md#photo_service_set_burst_group_cover) | **PUT** /api/v1/burst-groups/{groupId}/cover | 
+*PhotoServiceApi* | [**photo_service_update_burst_groups_config**](docs/PhotoServiceApi.md#photo_service_update_burst_groups_config) | **PUT** /api/v1/burst-groups/config | 
 *PhotoServiceApi* | [**photo_service_update_photo_tags**](docs/PhotoServiceApi.md#photo_service_update_photo_tags) | **PUT** /api/v1/photos/{id}/tags | 
 *QueryServiceApi* | [**query_service_execute_sql**](docs/QueryServiceApi.md#query_service_execute_sql) | **POST** /api/v1/sql/query | 
 *QueryServiceApi* | [**query_service_get_attribute_values**](docs/QueryServiceApi.md#query_service_get_attribute_values) | **GET** /api/v1/sql/photos/attribute-values | 
@@ -138,13 +145,17 @@ Class | Method | HTTP request | Description
  - [ApiAbandonCodeInfo](docs/ApiAbandonCodeInfo.md)
  - [ApiAddAbandonCodeRequest](docs/ApiAddAbandonCodeRequest.md)
  - [ApiAddAbandonCodeResponse](docs/ApiAddAbandonCodeResponse.md)
+ - [ApiAddAppSettingRequest](docs/ApiAddAppSettingRequest.md)
+ - [ApiAddAppSettingResponse](docs/ApiAddAppSettingResponse.md)
  - [ApiAddPhotoGroupRequest](docs/ApiAddPhotoGroupRequest.md)
  - [ApiAddPhotoGroupResponse](docs/ApiAddPhotoGroupResponse.md)
  - [ApiAddPhotoRequest](docs/ApiAddPhotoRequest.md)
  - [ApiAddPhotoResponse](docs/ApiAddPhotoResponse.md)
+ - [ApiAppSettingInfo](docs/ApiAppSettingInfo.md)
  - [ApiAttributeValues](docs/ApiAttributeValues.md)
  - [ApiBindTagsRequest](docs/ApiBindTagsRequest.md)
  - [ApiBindTagsResponse](docs/ApiBindTagsResponse.md)
+ - [ApiBurstProfileConfig](docs/ApiBurstProfileConfig.md)
  - [ApiDeletePhotoResponse](docs/ApiDeletePhotoResponse.md)
  - [ApiDescribePhotoRequest](docs/ApiDescribePhotoRequest.md)
  - [ApiDescribePhotoResponse](docs/ApiDescribePhotoResponse.md)
@@ -154,7 +165,9 @@ Class | Method | HTTP request | Description
  - [ApiFocalRangeStat](docs/ApiFocalRangeStat.md)
  - [ApiGPSStat](docs/ApiGPSStat.md)
  - [ApiGetAbandonCodeListResponse](docs/ApiGetAbandonCodeListResponse.md)
+ - [ApiGetAppSettingListResponse](docs/ApiGetAppSettingListResponse.md)
  - [ApiGetAttributeValuesResponse](docs/ApiGetAttributeValuesResponse.md)
+ - [ApiGetBurstGroupsConfigResponse](docs/ApiGetBurstGroupsConfigResponse.md)
  - [ApiGetBurstGroupsStatusResponse](docs/ApiGetBurstGroupsStatusResponse.md)
  - [ApiGetPhotoDetailResponse](docs/ApiGetPhotoDetailResponse.md)
  - [ApiGetPhotoGroupListResponse](docs/ApiGetPhotoGroupListResponse.md)
@@ -174,6 +187,7 @@ Class | Method | HTTP request | Description
  - [ApiRebuildBurstGroupsResponse](docs/ApiRebuildBurstGroupsResponse.md)
  - [ApiSchemaField](docs/ApiSchemaField.md)
  - [ApiSearchPhotosResponse](docs/ApiSearchPhotosResponse.md)
+ - [ApiSetBurstGroupCoverRequest](docs/ApiSetBurstGroupCoverRequest.md)
  - [ApiStartVlmQueueRequest](docs/ApiStartVlmQueueRequest.md)
  - [ApiStartVlmQueueResponse](docs/ApiStartVlmQueueResponse.md)
  - [ApiStatItem](docs/ApiStatItem.md)
@@ -182,6 +196,9 @@ Class | Method | HTTP request | Description
  - [ApiUnbindTagsResponse](docs/ApiUnbindTagsResponse.md)
  - [ApiUpdateAbandonCodeRequest](docs/ApiUpdateAbandonCodeRequest.md)
  - [ApiUpdateAbandonCodeResponse](docs/ApiUpdateAbandonCodeResponse.md)
+ - [ApiUpdateAppSettingRequest](docs/ApiUpdateAppSettingRequest.md)
+ - [ApiUpdateAppSettingResponse](docs/ApiUpdateAppSettingResponse.md)
+ - [ApiUpdateBurstGroupsConfigRequest](docs/ApiUpdateBurstGroupsConfigRequest.md)
  - [ApiUpdatePhotoGroupRequest](docs/ApiUpdatePhotoGroupRequest.md)
  - [ApiUpdatePhotoGroupResponse](docs/ApiUpdatePhotoGroupResponse.md)
  - [ApiUpdatePhotoRequest](docs/ApiUpdatePhotoRequest.md)

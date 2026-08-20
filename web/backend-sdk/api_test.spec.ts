@@ -47,6 +47,10 @@ describe("DefaultCURDApi", () => {
     instance = new api.DefaultCURDApi(config)
   });
 
+  test("defaultCURDAddAppSetting", () => {
+    const body: api.ApiAddAppSettingRequest = undefined
+    return expect(instance.defaultCURDAddAppSetting(body, {})).resolves.toBe(null)
+  })
   test("defaultCURDAddPhoto", () => {
     const body: api.ApiAddPhotoRequest = undefined
     return expect(instance.defaultCURDAddPhoto(body, {})).resolves.toBe(null)
@@ -54,6 +58,10 @@ describe("DefaultCURDApi", () => {
   test("defaultCURDAddPhotoGroup", () => {
     const body: api.ApiAddPhotoGroupRequest = undefined
     return expect(instance.defaultCURDAddPhotoGroup(body, {})).resolves.toBe(null)
+  })
+  test("defaultCURDDelAppSettingByKeyList", () => {
+    const keyList: Array<string> = undefined
+    return expect(instance.defaultCURDDelAppSettingByKeyList(keyList, {})).resolves.toBe(null)
   })
   test("defaultCURDDelPhotoByIDList", () => {
     const iDList: Array<string> = undefined
@@ -63,6 +71,10 @@ describe("DefaultCURDApi", () => {
     const iDList: Array<string> = undefined
     return expect(instance.defaultCURDDelPhotoGroupByIDList(iDList, {})).resolves.toBe(null)
   })
+  test("defaultCURDGetAppSettingList", () => {
+    const keyList: Array<string> = undefined
+    return expect(instance.defaultCURDGetAppSettingList(keyList, {})).resolves.toBe(null)
+  })
   test("defaultCURDGetPhotoGroupList", () => {
     const iDList: Array<string> = undefined
     return expect(instance.defaultCURDGetPhotoGroupList(iDList, {})).resolves.toBe(null)
@@ -70,6 +82,10 @@ describe("DefaultCURDApi", () => {
   test("defaultCURDGetPhotoList", () => {
     const iDList: Array<string> = undefined
     return expect(instance.defaultCURDGetPhotoList(iDList, {})).resolves.toBe(null)
+  })
+  test("defaultCURDUpdateAppSetting", () => {
+    const body: api.ApiUpdateAppSettingRequest = undefined
+    return expect(instance.defaultCURDUpdateAppSetting(body, {})).resolves.toBe(null)
   })
   test("defaultCURDUpdatePhoto", () => {
     const body: api.ApiUpdatePhotoRequest = undefined
@@ -90,6 +106,9 @@ describe("PhotoServiceApi", () => {
   test("photoServiceDeletePhoto", () => {
     const id: string = "id_example"
     return expect(instance.photoServiceDeletePhoto(id, {})).resolves.toBe(null)
+  })
+  test("photoServiceGetBurstGroupsConfig", () => {
+    return expect(instance.photoServiceGetBurstGroupsConfig({})).resolves.toBe(null)
   })
   test("photoServiceGetBurstGroupsStatus", () => {
     return expect(instance.photoServiceGetBurstGroupsStatus({})).resolves.toBe(null)
@@ -122,7 +141,17 @@ describe("PhotoServiceApi", () => {
     const sortBy: string = "sortBy_example"
     const sortOrder: string = "sortOrder_example"
     const burstGroupId: string = "burstGroupId_example"
-    return expect(instance.photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, {})).resolves.toBe(null)
+    const burstProfile: string = "burstProfile_example"
+    return expect(instance.photoServiceSearchPhotos(page, pageSize, timeline, tag, keyword, brand, lens, focalMin, focalMax, isoMin, isoMax, shotAtStart, shotAtEnd, sortBy, sortOrder, burstGroupId, burstProfile, {})).resolves.toBe(null)
+  })
+  test("photoServiceSetBurstGroupCover", () => {
+    const body: api.ApiSetBurstGroupCoverRequest = undefined
+    const groupId: string = "groupId_example"
+    return expect(instance.photoServiceSetBurstGroupCover(body, groupId, {})).resolves.toBe(null)
+  })
+  test("photoServiceUpdateBurstGroupsConfig", () => {
+    const body: api.ApiUpdateBurstGroupsConfigRequest = undefined
+    return expect(instance.photoServiceUpdateBurstGroupsConfig(body, {})).resolves.toBe(null)
   })
   test("photoServiceUpdatePhotoTags", () => {
     const body: api.ApiUpdatePhotoTagsRequest = undefined

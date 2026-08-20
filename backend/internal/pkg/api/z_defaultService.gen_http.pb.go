@@ -19,32 +19,46 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationDefaultCURDAddAppSetting = "/api.defaultCURD/AddAppSetting"
 const OperationDefaultCURDAddPhoto = "/api.defaultCURD/AddPhoto"
 const OperationDefaultCURDAddPhotoGroup = "/api.defaultCURD/AddPhotoGroup"
+const OperationDefaultCURDDelAppSettingByKeyList = "/api.defaultCURD/DelAppSettingByKeyList"
 const OperationDefaultCURDDelPhotoByIDList = "/api.defaultCURD/DelPhotoByIDList"
 const OperationDefaultCURDDelPhotoGroupByIDList = "/api.defaultCURD/DelPhotoGroupByIDList"
+const OperationDefaultCURDGetAppSettingList = "/api.defaultCURD/GetAppSettingList"
 const OperationDefaultCURDGetPhotoGroupList = "/api.defaultCURD/GetPhotoGroupList"
 const OperationDefaultCURDGetPhotoList = "/api.defaultCURD/GetPhotoList"
+const OperationDefaultCURDUpdateAppSetting = "/api.defaultCURD/UpdateAppSetting"
 const OperationDefaultCURDUpdatePhoto = "/api.defaultCURD/UpdatePhoto"
 const OperationDefaultCURDUpdatePhotoGroup = "/api.defaultCURD/UpdatePhotoGroup"
 
 type DefaultCURDHTTPServer interface {
+	// AddAppSetting --------------------------------------------------
+	// tbl : app_settings
+	AddAppSetting(context.Context, *AddAppSettingRequest) (*AddAppSettingResponse, error)
 	// AddPhoto --------------------------------------------------
 	// tbl : photos
 	AddPhoto(context.Context, *AddPhotoRequest) (*AddPhotoResponse, error)
 	// AddPhotoGroup --------------------------------------------------
 	// tbl : photo_groups
 	AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error)
+	DelAppSettingByKeyList(context.Context, *DelAppSettingByKeyListRequest) (*Empty, error)
 	DelPhotoByIDList(context.Context, *DelPhotoByIDListRequest) (*Empty, error)
 	DelPhotoGroupByIDList(context.Context, *DelPhotoGroupByIDListRequest) (*Empty, error)
+	GetAppSettingList(context.Context, *GetAppSettingListRequest) (*GetAppSettingListResponse, error)
 	GetPhotoGroupList(context.Context, *GetPhotoGroupListRequest) (*GetPhotoGroupListResponse, error)
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
+	UpdateAppSetting(context.Context, *UpdateAppSettingRequest) (*UpdateAppSettingResponse, error)
 	UpdatePhoto(context.Context, *UpdatePhotoRequest) (*UpdatePhotoResponse, error)
 	UpdatePhotoGroup(context.Context, *UpdatePhotoGroupRequest) (*UpdatePhotoGroupResponse, error)
 }
 
 func RegisterDefaultCURDHTTPServer(s *http.Server, srv DefaultCURDHTTPServer) {
 	r := s.Route("/")
+	r.POST("/app-settings", _DefaultCURD_AddAppSetting0_HTTP_Handler(srv))
+	r.GET("/app-settings", _DefaultCURD_GetAppSettingList0_HTTP_Handler(srv))
+	r.PATCH("/app-settings", _DefaultCURD_UpdateAppSetting0_HTTP_Handler(srv))
+	r.DELETE("/app-settings", _DefaultCURD_DelAppSettingByKeyList0_HTTP_Handler(srv))
 	r.POST("/photo-groups", _DefaultCURD_AddPhotoGroup0_HTTP_Handler(srv))
 	r.GET("/photo-groups", _DefaultCURD_GetPhotoGroupList0_HTTP_Handler(srv))
 	r.PATCH("/photo-groups", _DefaultCURD_UpdatePhotoGroup0_HTTP_Handler(srv))
@@ -53,6 +67,88 @@ func RegisterDefaultCURDHTTPServer(s *http.Server, srv DefaultCURDHTTPServer) {
 	r.GET("/photos", _DefaultCURD_GetPhotoList0_HTTP_Handler(srv))
 	r.PATCH("/photos", _DefaultCURD_UpdatePhoto0_HTTP_Handler(srv))
 	r.DELETE("/photos", _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv))
+}
+
+func _DefaultCURD_AddAppSetting0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in AddAppSettingRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDAddAppSetting)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.AddAppSetting(ctx, req.(*AddAppSettingRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*AddAppSettingResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_GetAppSettingList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetAppSettingListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDGetAppSettingList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetAppSettingList(ctx, req.(*GetAppSettingListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetAppSettingListResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_UpdateAppSetting0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UpdateAppSettingRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDUpdateAppSetting)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UpdateAppSetting(ctx, req.(*UpdateAppSettingRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UpdateAppSettingResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_DelAppSettingByKeyList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DelAppSettingByKeyListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDDelAppSettingByKeyList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DelAppSettingByKeyList(ctx, req.(*DelAppSettingByKeyListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
 }
 
 func _DefaultCURD_AddPhotoGroup0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
@@ -220,16 +316,22 @@ func _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv DefaultCURDHTTPServer) func
 }
 
 type DefaultCURDHTTPClient interface {
+	// AddAppSetting --------------------------------------------------
+	// tbl : app_settings
+	AddAppSetting(ctx context.Context, req *AddAppSettingRequest, opts ...http.CallOption) (rsp *AddAppSettingResponse, err error)
 	// AddPhoto --------------------------------------------------
 	// tbl : photos
 	AddPhoto(ctx context.Context, req *AddPhotoRequest, opts ...http.CallOption) (rsp *AddPhotoResponse, err error)
 	// AddPhotoGroup --------------------------------------------------
 	// tbl : photo_groups
 	AddPhotoGroup(ctx context.Context, req *AddPhotoGroupRequest, opts ...http.CallOption) (rsp *AddPhotoGroupResponse, err error)
+	DelAppSettingByKeyList(ctx context.Context, req *DelAppSettingByKeyListRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	DelPhotoByIDList(ctx context.Context, req *DelPhotoByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	DelPhotoGroupByIDList(ctx context.Context, req *DelPhotoGroupByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
+	GetAppSettingList(ctx context.Context, req *GetAppSettingListRequest, opts ...http.CallOption) (rsp *GetAppSettingListResponse, err error)
 	GetPhotoGroupList(ctx context.Context, req *GetPhotoGroupListRequest, opts ...http.CallOption) (rsp *GetPhotoGroupListResponse, err error)
 	GetPhotoList(ctx context.Context, req *GetPhotoListRequest, opts ...http.CallOption) (rsp *GetPhotoListResponse, err error)
+	UpdateAppSetting(ctx context.Context, req *UpdateAppSettingRequest, opts ...http.CallOption) (rsp *UpdateAppSettingResponse, err error)
 	UpdatePhoto(ctx context.Context, req *UpdatePhotoRequest, opts ...http.CallOption) (rsp *UpdatePhotoResponse, err error)
 	UpdatePhotoGroup(ctx context.Context, req *UpdatePhotoGroupRequest, opts ...http.CallOption) (rsp *UpdatePhotoGroupResponse, err error)
 }
@@ -240,6 +342,21 @@ type DefaultCURDHTTPClientImpl struct {
 
 func NewDefaultCURDHTTPClient(client *http.Client) DefaultCURDHTTPClient {
 	return &DefaultCURDHTTPClientImpl{client}
+}
+
+// AddAppSetting --------------------------------------------------
+// tbl : app_settings
+func (c *DefaultCURDHTTPClientImpl) AddAppSetting(ctx context.Context, in *AddAppSettingRequest, opts ...http.CallOption) (*AddAppSettingResponse, error) {
+	var out AddAppSettingResponse
+	pattern := "/app-settings"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationDefaultCURDAddAppSetting))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // AddPhoto --------------------------------------------------
@@ -272,6 +389,19 @@ func (c *DefaultCURDHTTPClientImpl) AddPhotoGroup(ctx context.Context, in *AddPh
 	return &out, nil
 }
 
+func (c *DefaultCURDHTTPClientImpl) DelAppSettingByKeyList(ctx context.Context, in *DelAppSettingByKeyListRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/app-settings"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationDefaultCURDDelAppSettingByKeyList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *DefaultCURDHTTPClientImpl) DelPhotoByIDList(ctx context.Context, in *DelPhotoByIDListRequest, opts ...http.CallOption) (*Empty, error) {
 	var out Empty
 	pattern := "/photos"
@@ -298,6 +428,19 @@ func (c *DefaultCURDHTTPClientImpl) DelPhotoGroupByIDList(ctx context.Context, i
 	return &out, nil
 }
 
+func (c *DefaultCURDHTTPClientImpl) GetAppSettingList(ctx context.Context, in *GetAppSettingListRequest, opts ...http.CallOption) (*GetAppSettingListResponse, error) {
+	var out GetAppSettingListResponse
+	pattern := "/app-settings"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationDefaultCURDGetAppSettingList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *DefaultCURDHTTPClientImpl) GetPhotoGroupList(ctx context.Context, in *GetPhotoGroupListRequest, opts ...http.CallOption) (*GetPhotoGroupListResponse, error) {
 	var out GetPhotoGroupListResponse
 	pattern := "/photo-groups"
@@ -318,6 +461,19 @@ func (c *DefaultCURDHTTPClientImpl) GetPhotoList(ctx context.Context, in *GetPho
 	opts = append(opts, http.Operation(OperationDefaultCURDGetPhotoList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *DefaultCURDHTTPClientImpl) UpdateAppSetting(ctx context.Context, in *UpdateAppSettingRequest, opts ...http.CallOption) (*UpdateAppSettingResponse, error) {
+	var out UpdateAppSettingResponse
+	pattern := "/app-settings"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationDefaultCURDUpdateAppSetting))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PATCH", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
 		db:          db,
 		AbandonCode: newAbandonCode(db, opts...),
+		AppSetting:  newAppSetting(db, opts...),
 		Photo:       newPhoto(db, opts...),
 		PhotoGroup:  newPhotoGroup(db, opts...),
 	}
@@ -28,6 +29,7 @@ type Query struct {
 	db *gorm.DB
 
 	AbandonCode abandonCode
+	AppSetting  appSetting
 	Photo       photo
 	PhotoGroup  photoGroup
 }
@@ -38,6 +40,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
 		db:          db,
 		AbandonCode: q.AbandonCode.clone(db),
+		AppSetting:  q.AppSetting.clone(db),
 		Photo:       q.Photo.clone(db),
 		PhotoGroup:  q.PhotoGroup.clone(db),
 	}
@@ -55,6 +58,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
 		db:          db,
 		AbandonCode: q.AbandonCode.replaceDB(db),
+		AppSetting:  q.AppSetting.replaceDB(db),
 		Photo:       q.Photo.replaceDB(db),
 		PhotoGroup:  q.PhotoGroup.replaceDB(db),
 	}
@@ -62,6 +66,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 
 type queryCtx struct {
 	AbandonCode *abandonCodeDo
+	AppSetting  *appSettingDo
 	Photo       *photoDo
 	PhotoGroup  *photoGroupDo
 }
@@ -69,6 +74,7 @@ type queryCtx struct {
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
 		AbandonCode: q.AbandonCode.WithContext(ctx),
+		AppSetting:  q.AppSetting.WithContext(ctx),
 		Photo:       q.Photo.WithContext(ctx),
 		PhotoGroup:  q.PhotoGroup.WithContext(ctx),
 	}

@@ -21,14 +21,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DefaultCURD_AddPhotoGroup_FullMethodName         = "/api.defaultCURD/AddPhotoGroup"
-	DefaultCURD_GetPhotoGroupList_FullMethodName     = "/api.defaultCURD/GetPhotoGroupList"
-	DefaultCURD_UpdatePhotoGroup_FullMethodName      = "/api.defaultCURD/UpdatePhotoGroup"
-	DefaultCURD_DelPhotoGroupByIDList_FullMethodName = "/api.defaultCURD/DelPhotoGroupByIDList"
-	DefaultCURD_AddPhoto_FullMethodName              = "/api.defaultCURD/AddPhoto"
-	DefaultCURD_GetPhotoList_FullMethodName          = "/api.defaultCURD/GetPhotoList"
-	DefaultCURD_UpdatePhoto_FullMethodName           = "/api.defaultCURD/UpdatePhoto"
-	DefaultCURD_DelPhotoByIDList_FullMethodName      = "/api.defaultCURD/DelPhotoByIDList"
+	DefaultCURD_AddAppSetting_FullMethodName          = "/api.defaultCURD/AddAppSetting"
+	DefaultCURD_GetAppSettingList_FullMethodName      = "/api.defaultCURD/GetAppSettingList"
+	DefaultCURD_UpdateAppSetting_FullMethodName       = "/api.defaultCURD/UpdateAppSetting"
+	DefaultCURD_DelAppSettingByKeyList_FullMethodName = "/api.defaultCURD/DelAppSettingByKeyList"
+	DefaultCURD_AddPhotoGroup_FullMethodName          = "/api.defaultCURD/AddPhotoGroup"
+	DefaultCURD_GetPhotoGroupList_FullMethodName      = "/api.defaultCURD/GetPhotoGroupList"
+	DefaultCURD_UpdatePhotoGroup_FullMethodName       = "/api.defaultCURD/UpdatePhotoGroup"
+	DefaultCURD_DelPhotoGroupByIDList_FullMethodName  = "/api.defaultCURD/DelPhotoGroupByIDList"
+	DefaultCURD_AddPhoto_FullMethodName               = "/api.defaultCURD/AddPhoto"
+	DefaultCURD_GetPhotoList_FullMethodName           = "/api.defaultCURD/GetPhotoList"
+	DefaultCURD_UpdatePhoto_FullMethodName            = "/api.defaultCURD/UpdatePhoto"
+	DefaultCURD_DelPhotoByIDList_FullMethodName       = "/api.defaultCURD/DelPhotoByIDList"
 )
 
 // DefaultCURDClient is the client API for DefaultCURD service.
@@ -37,6 +41,12 @@ const (
 //
 // --------------------------------------------------
 type DefaultCURDClient interface {
+	// --------------------------------------------------
+	// tbl : app_settings
+	AddAppSetting(ctx context.Context, in *AddAppSettingRequest, opts ...grpc.CallOption) (*AddAppSettingResponse, error)
+	GetAppSettingList(ctx context.Context, in *GetAppSettingListRequest, opts ...grpc.CallOption) (*GetAppSettingListResponse, error)
+	UpdateAppSetting(ctx context.Context, in *UpdateAppSettingRequest, opts ...grpc.CallOption) (*UpdateAppSettingResponse, error)
+	DelAppSettingByKeyList(ctx context.Context, in *DelAppSettingByKeyListRequest, opts ...grpc.CallOption) (*Empty, error)
 	// --------------------------------------------------
 	// tbl : photo_groups
 	AddPhotoGroup(ctx context.Context, in *AddPhotoGroupRequest, opts ...grpc.CallOption) (*AddPhotoGroupResponse, error)
@@ -57,6 +67,46 @@ type defaultCURDClient struct {
 
 func NewDefaultCURDClient(cc grpc.ClientConnInterface) DefaultCURDClient {
 	return &defaultCURDClient{cc}
+}
+
+func (c *defaultCURDClient) AddAppSetting(ctx context.Context, in *AddAppSettingRequest, opts ...grpc.CallOption) (*AddAppSettingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddAppSettingResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_AddAppSetting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) GetAppSettingList(ctx context.Context, in *GetAppSettingListRequest, opts ...grpc.CallOption) (*GetAppSettingListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAppSettingListResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_GetAppSettingList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) UpdateAppSetting(ctx context.Context, in *UpdateAppSettingRequest, opts ...grpc.CallOption) (*UpdateAppSettingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAppSettingResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_UpdateAppSetting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) DelAppSettingByKeyList(ctx context.Context, in *DelAppSettingByKeyListRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, DefaultCURD_DelAppSettingByKeyList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *defaultCURDClient) AddPhotoGroup(ctx context.Context, in *AddPhotoGroupRequest, opts ...grpc.CallOption) (*AddPhotoGroupResponse, error) {
@@ -146,6 +196,12 @@ func (c *defaultCURDClient) DelPhotoByIDList(ctx context.Context, in *DelPhotoBy
 // --------------------------------------------------
 type DefaultCURDServer interface {
 	// --------------------------------------------------
+	// tbl : app_settings
+	AddAppSetting(context.Context, *AddAppSettingRequest) (*AddAppSettingResponse, error)
+	GetAppSettingList(context.Context, *GetAppSettingListRequest) (*GetAppSettingListResponse, error)
+	UpdateAppSetting(context.Context, *UpdateAppSettingRequest) (*UpdateAppSettingResponse, error)
+	DelAppSettingByKeyList(context.Context, *DelAppSettingByKeyListRequest) (*Empty, error)
+	// --------------------------------------------------
 	// tbl : photo_groups
 	AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error)
 	GetPhotoGroupList(context.Context, *GetPhotoGroupListRequest) (*GetPhotoGroupListResponse, error)
@@ -167,6 +223,18 @@ type DefaultCURDServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDefaultCURDServer struct{}
 
+func (UnimplementedDefaultCURDServer) AddAppSetting(context.Context, *AddAppSettingRequest) (*AddAppSettingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddAppSetting not implemented")
+}
+func (UnimplementedDefaultCURDServer) GetAppSettingList(context.Context, *GetAppSettingListRequest) (*GetAppSettingListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAppSettingList not implemented")
+}
+func (UnimplementedDefaultCURDServer) UpdateAppSetting(context.Context, *UpdateAppSettingRequest) (*UpdateAppSettingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAppSetting not implemented")
+}
+func (UnimplementedDefaultCURDServer) DelAppSettingByKeyList(context.Context, *DelAppSettingByKeyListRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DelAppSettingByKeyList not implemented")
+}
 func (UnimplementedDefaultCURDServer) AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddPhotoGroup not implemented")
 }
@@ -210,6 +278,78 @@ func RegisterDefaultCURDServer(s grpc.ServiceRegistrar, srv DefaultCURDServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&DefaultCURD_ServiceDesc, srv)
+}
+
+func _DefaultCURD_AddAppSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddAppSettingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).AddAppSetting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_AddAppSetting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).AddAppSetting(ctx, req.(*AddAppSettingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_GetAppSettingList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAppSettingListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).GetAppSettingList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_GetAppSettingList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).GetAppSettingList(ctx, req.(*GetAppSettingListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_UpdateAppSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAppSettingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).UpdateAppSetting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_UpdateAppSetting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).UpdateAppSetting(ctx, req.(*UpdateAppSettingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_DelAppSettingByKeyList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelAppSettingByKeyListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).DelAppSettingByKeyList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_DelAppSettingByKeyList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).DelAppSettingByKeyList(ctx, req.(*DelAppSettingByKeyListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _DefaultCURD_AddPhotoGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -363,6 +503,22 @@ var DefaultCURD_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.defaultCURD",
 	HandlerType: (*DefaultCURDServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AddAppSetting",
+			Handler:    _DefaultCURD_AddAppSetting_Handler,
+		},
+		{
+			MethodName: "GetAppSettingList",
+			Handler:    _DefaultCURD_GetAppSettingList_Handler,
+		},
+		{
+			MethodName: "UpdateAppSetting",
+			Handler:    _DefaultCURD_UpdateAppSetting_Handler,
+		},
+		{
+			MethodName: "DelAppSettingByKeyList",
+			Handler:    _DefaultCURD_DelAppSettingByKeyList_Handler,
+		},
 		{
 			MethodName: "AddPhotoGroup",
 			Handler:    _DefaultCURD_AddPhotoGroup_Handler,

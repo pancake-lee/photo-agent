@@ -31,6 +31,105 @@ class DefaultCURDApi(object):
             api_client = ApiClient()
         self.api_client = api_client
 
+    def default_curd_add_app_setting(self, body, **kwargs):  # noqa: E501
+        """default_curd_add_app_setting  # noqa: E501
+
+        --------------------------------------------------  tbl : app_settings  # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_add_app_setting(body, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param ApiAddAppSettingRequest body: (required)
+        :return: ApiAddAppSettingResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.default_curd_add_app_setting_with_http_info(body, **kwargs)  # noqa: E501
+        else:
+            (data) = self.default_curd_add_app_setting_with_http_info(body, **kwargs)  # noqa: E501
+            return data
+
+    def default_curd_add_app_setting_with_http_info(self, body, **kwargs):  # noqa: E501
+        """default_curd_add_app_setting  # noqa: E501
+
+        --------------------------------------------------  tbl : app_settings  # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_add_app_setting_with_http_info(body, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param ApiAddAppSettingRequest body: (required)
+        :return: ApiAddAppSettingResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['body']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method default_curd_add_app_setting" % key
+                )
+            params[key] = val
+        del params['kwargs']
+        # verify the required parameter 'body' is set
+        if ('body' not in params or
+                params['body'] is None):
+            raise ValueError("Missing the required parameter `body` when calling `default_curd_add_app_setting`")  # noqa: E501
+
+        collection_formats = {}
+
+        path_params = {}
+
+        query_params = []
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        if 'body' in params:
+            body_params = params['body']
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # HTTP header `Content-Type`
+        header_params['Content-Type'] = self.api_client.select_header_content_type(  # noqa: E501
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/app-settings', 'POST',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='ApiAddAppSettingResponse',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
     def default_curd_add_photo(self, body, **kwargs):  # noqa: E501
         """default_curd_add_photo  # noqa: E501
 
@@ -229,6 +328,96 @@ class DefaultCURDApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
+    def default_curd_del_app_setting_by_key_list(self, **kwargs):  # noqa: E501
+        """default_curd_del_app_setting_by_key_list  # noqa: E501
+
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_del_app_setting_by_key_list(async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param list[str] key_list:
+        :return: ApiEmpty
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.default_curd_del_app_setting_by_key_list_with_http_info(**kwargs)  # noqa: E501
+        else:
+            (data) = self.default_curd_del_app_setting_by_key_list_with_http_info(**kwargs)  # noqa: E501
+            return data
+
+    def default_curd_del_app_setting_by_key_list_with_http_info(self, **kwargs):  # noqa: E501
+        """default_curd_del_app_setting_by_key_list  # noqa: E501
+
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_del_app_setting_by_key_list_with_http_info(async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param list[str] key_list:
+        :return: ApiEmpty
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['key_list']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method default_curd_del_app_setting_by_key_list" % key
+                )
+            params[key] = val
+        del params['kwargs']
+
+        collection_formats = {}
+
+        path_params = {}
+
+        query_params = []
+        if 'key_list' in params:
+            query_params.append(('keyList', params['key_list']))  # noqa: E501
+            collection_formats['keyList'] = 'multi'  # noqa: E501
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/app-settings', 'DELETE',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='ApiEmpty',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
     def default_curd_del_photo_by_id_list(self, **kwargs):  # noqa: E501
         """default_curd_del_photo_by_id_list  # noqa: E501
 
@@ -409,6 +598,96 @@ class DefaultCURDApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
+    def default_curd_get_app_setting_list(self, **kwargs):  # noqa: E501
+        """default_curd_get_app_setting_list  # noqa: E501
+
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_get_app_setting_list(async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param list[str] key_list:
+        :return: ApiGetAppSettingListResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.default_curd_get_app_setting_list_with_http_info(**kwargs)  # noqa: E501
+        else:
+            (data) = self.default_curd_get_app_setting_list_with_http_info(**kwargs)  # noqa: E501
+            return data
+
+    def default_curd_get_app_setting_list_with_http_info(self, **kwargs):  # noqa: E501
+        """default_curd_get_app_setting_list  # noqa: E501
+
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_get_app_setting_list_with_http_info(async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param list[str] key_list:
+        :return: ApiGetAppSettingListResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['key_list']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method default_curd_get_app_setting_list" % key
+                )
+            params[key] = val
+        del params['kwargs']
+
+        collection_formats = {}
+
+        path_params = {}
+
+        query_params = []
+        if 'key_list' in params:
+            query_params.append(('keyList', params['key_list']))  # noqa: E501
+            collection_formats['keyList'] = 'multi'  # noqa: E501
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/app-settings', 'GET',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='ApiGetAppSettingListResponse',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
     def default_curd_get_photo_group_list(self, **kwargs):  # noqa: E501
         """default_curd_get_photo_group_list  # noqa: E501
 
@@ -582,6 +861,103 @@ class DefaultCURDApi(object):
             post_params=form_params,
             files=local_var_files,
             response_type='ApiGetPhotoListResponse',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
+    def default_curd_update_app_setting(self, body, **kwargs):  # noqa: E501
+        """default_curd_update_app_setting  # noqa: E501
+
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_update_app_setting(body, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param ApiUpdateAppSettingRequest body: (required)
+        :return: ApiUpdateAppSettingResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.default_curd_update_app_setting_with_http_info(body, **kwargs)  # noqa: E501
+        else:
+            (data) = self.default_curd_update_app_setting_with_http_info(body, **kwargs)  # noqa: E501
+            return data
+
+    def default_curd_update_app_setting_with_http_info(self, body, **kwargs):  # noqa: E501
+        """default_curd_update_app_setting  # noqa: E501
+
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.default_curd_update_app_setting_with_http_info(body, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param ApiUpdateAppSettingRequest body: (required)
+        :return: ApiUpdateAppSettingResponse
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['body']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method default_curd_update_app_setting" % key
+                )
+            params[key] = val
+        del params['kwargs']
+        # verify the required parameter 'body' is set
+        if ('body' not in params or
+                params['body'] is None):
+            raise ValueError("Missing the required parameter `body` when calling `default_curd_update_app_setting`")  # noqa: E501
+
+        collection_formats = {}
+
+        path_params = {}
+
+        query_params = []
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        if 'body' in params:
+            body_params = params['body']
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # HTTP header `Content-Type`
+        header_params['Content-Type'] = self.api_client.select_header_content_type(  # noqa: E501
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/app-settings', 'PATCH',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='ApiUpdateAppSettingResponse',  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),

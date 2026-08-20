@@ -20,6 +20,7 @@ func DO2DTO_PhotoGroup(do *data.PhotoGroupDO) *api.PhotoGroupInfo {
 	return &api.PhotoGroupInfo{
         ID: do.ID,
         CoverPhotoID: do.CoverPhotoID,
+        Profile: do.Profile,
         PhotoCount: do.PhotoCount,
         TimeStart: do.TimeStart.Unix(),
         TimeEnd: do.TimeEnd.Unix(),
@@ -34,6 +35,7 @@ func DTO2DO_PhotoGroup(dto *api.PhotoGroupInfo) *data.PhotoGroupDO {
 	return &data.PhotoGroupDO{
         ID: dto.ID,
         CoverPhotoID: dto.CoverPhotoID,
+        Profile: dto.Profile,
         PhotoCount: dto.PhotoCount,
         TimeStart: time.Unix(dto.TimeStart, 0),
         TimeEnd: time.Unix(dto.TimeEnd, 0),

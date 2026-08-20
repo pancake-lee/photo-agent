@@ -29,6 +29,7 @@ class ApiPhotoGroupInfo(object):
     swagger_types = {
         'id': 'str',
         'cover_photo_id': 'str',
+        'profile': 'str',
         'photo_count': 'int',
         'time_start': 'str',
         'time_end': 'str',
@@ -39,6 +40,7 @@ class ApiPhotoGroupInfo(object):
     attribute_map = {
         'id': 'ID',
         'cover_photo_id': 'coverPhotoID',
+        'profile': 'profile',
         'photo_count': 'photoCount',
         'time_start': 'timeStart',
         'time_end': 'timeEnd',
@@ -46,10 +48,11 @@ class ApiPhotoGroupInfo(object):
         'created_at': 'createdAt'
     }
 
-    def __init__(self, id=None, cover_photo_id=None, photo_count=None, time_start=None, time_end=None, hash_max=None, created_at=None):  # noqa: E501
+    def __init__(self, id=None, cover_photo_id=None, profile=None, photo_count=None, time_start=None, time_end=None, hash_max=None, created_at=None):  # noqa: E501
         """ApiPhotoGroupInfo - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._cover_photo_id = None
+        self._profile = None
         self._photo_count = None
         self._time_start = None
         self._time_end = None
@@ -60,6 +63,8 @@ class ApiPhotoGroupInfo(object):
             self.id = id
         if cover_photo_id is not None:
             self.cover_photo_id = cover_photo_id
+        if profile is not None:
+            self.profile = profile
         if photo_count is not None:
             self.photo_count = photo_count
         if time_start is not None:
@@ -112,6 +117,27 @@ class ApiPhotoGroupInfo(object):
         """
 
         self._cover_photo_id = cover_photo_id
+
+    @property
+    def profile(self):
+        """Gets the profile of this ApiPhotoGroupInfo.  # noqa: E501
+
+
+        :return: The profile of this ApiPhotoGroupInfo.  # noqa: E501
+        :rtype: str
+        """
+        return self._profile
+
+    @profile.setter
+    def profile(self, profile):
+        """Sets the profile of this ApiPhotoGroupInfo.
+
+
+        :param profile: The profile of this ApiPhotoGroupInfo.  # noqa: E501
+        :type: str
+        """
+
+        self._profile = profile
 
     @property
     def photo_count(self):

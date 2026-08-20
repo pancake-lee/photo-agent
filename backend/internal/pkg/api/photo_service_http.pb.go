@@ -20,16 +20,21 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationPhotoServiceDeletePhoto = "/api.PhotoService/DeletePhoto"
+const OperationPhotoServiceGetBurstGroupsConfig = "/api.PhotoService/GetBurstGroupsConfig"
 const OperationPhotoServiceGetBurstGroupsStatus = "/api.PhotoService/GetBurstGroupsStatus"
 const OperationPhotoServiceGetPhotoDetail = "/api.PhotoService/GetPhotoDetail"
 const OperationPhotoServiceGetPhotoStats = "/api.PhotoService/GetPhotoStats"
 const OperationPhotoServiceRebuildBurstGroups = "/api.PhotoService/RebuildBurstGroups"
 const OperationPhotoServiceSearchPhotos = "/api.PhotoService/SearchPhotos"
+const OperationPhotoServiceSetBurstGroupCover = "/api.PhotoService/SetBurstGroupCover"
+const OperationPhotoServiceUpdateBurstGroupsConfig = "/api.PhotoService/UpdateBurstGroupsConfig"
 const OperationPhotoServiceUpdatePhotoTags = "/api.PhotoService/UpdatePhotoTags"
 
 type PhotoServiceHTTPServer interface {
 	// DeletePhoto 删除照片（含文件清理）
 	DeletePhoto(context.Context, *DeletePhotoRequest) (*DeletePhotoResponse, error)
+	// GetBurstGroupsConfig 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+	GetBurstGroupsConfig(context.Context, *Empty) (*GetBurstGroupsConfigResponse, error)
 	// GetBurstGroupsStatus 查询连拍分组重算进度
 	GetBurstGroupsStatus(context.Context, *Empty) (*GetBurstGroupsStatusResponse, error)
 	// GetPhotoDetail 单张详情
@@ -40,6 +45,10 @@ type PhotoServiceHTTPServer interface {
 	RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error)
 	// SearchPhotos 复杂条件分页查询
 	SearchPhotos(context.Context, *SearchPhotosRequest) (*SearchPhotosResponse, error)
+	// SetBurstGroupCover 设置连拍组封面
+	SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error)
+	// UpdateBurstGroupsConfig 保存连拍分组两档位阈值（写入 app_settings）
+	UpdateBurstGroupsConfig(context.Context, *UpdateBurstGroupsConfigRequest) (*Empty, error)
 	// UpdatePhotoTags 更新标签
 	UpdatePhotoTags(context.Context, *UpdatePhotoTagsRequest) (*Empty, error)
 }
@@ -53,6 +62,9 @@ func RegisterPhotoServiceHTTPServer(s *http.Server, srv PhotoServiceHTTPServer) 
 	r.DELETE("/api/v1/photos/{id}", _PhotoService_DeletePhoto0_HTTP_Handler(srv))
 	r.POST("/api/v1/burst-groups/rebuild", _PhotoService_RebuildBurstGroups0_HTTP_Handler(srv))
 	r.GET("/api/v1/burst-groups/status", _PhotoService_GetBurstGroupsStatus0_HTTP_Handler(srv))
+	r.GET("/api/v1/burst-groups/config", _PhotoService_GetBurstGroupsConfig0_HTTP_Handler(srv))
+	r.PUT("/api/v1/burst-groups/config", _PhotoService_UpdateBurstGroupsConfig0_HTTP_Handler(srv))
+	r.PUT("/api/v1/burst-groups/{group_id}/cover", _PhotoService_SetBurstGroupCover0_HTTP_Handler(srv))
 }
 
 func _PhotoService_SearchPhotos0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
@@ -203,9 +215,77 @@ func _PhotoService_GetBurstGroupsStatus0_HTTP_Handler(srv PhotoServiceHTTPServer
 	}
 }
 
+func _PhotoService_GetBurstGroupsConfig0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceGetBurstGroupsConfig)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetBurstGroupsConfig(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetBurstGroupsConfigResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _PhotoService_UpdateBurstGroupsConfig0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UpdateBurstGroupsConfigRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceUpdateBurstGroupsConfig)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UpdateBurstGroupsConfig(ctx, req.(*UpdateBurstGroupsConfigRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _PhotoService_SetBurstGroupCover0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SetBurstGroupCoverRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceSetBurstGroupCover)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SetBurstGroupCover(ctx, req.(*SetBurstGroupCoverRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
+}
+
 type PhotoServiceHTTPClient interface {
 	// DeletePhoto 删除照片（含文件清理）
 	DeletePhoto(ctx context.Context, req *DeletePhotoRequest, opts ...http.CallOption) (rsp *DeletePhotoResponse, err error)
+	// GetBurstGroupsConfig 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+	GetBurstGroupsConfig(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetBurstGroupsConfigResponse, err error)
 	// GetBurstGroupsStatus 查询连拍分组重算进度
 	GetBurstGroupsStatus(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetBurstGroupsStatusResponse, err error)
 	// GetPhotoDetail 单张详情
@@ -216,6 +296,10 @@ type PhotoServiceHTTPClient interface {
 	RebuildBurstGroups(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *RebuildBurstGroupsResponse, err error)
 	// SearchPhotos 复杂条件分页查询
 	SearchPhotos(ctx context.Context, req *SearchPhotosRequest, opts ...http.CallOption) (rsp *SearchPhotosResponse, err error)
+	// SetBurstGroupCover 设置连拍组封面
+	SetBurstGroupCover(ctx context.Context, req *SetBurstGroupCoverRequest, opts ...http.CallOption) (rsp *Empty, err error)
+	// UpdateBurstGroupsConfig 保存连拍分组两档位阈值（写入 app_settings）
+	UpdateBurstGroupsConfig(ctx context.Context, req *UpdateBurstGroupsConfigRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	// UpdatePhotoTags 更新标签
 	UpdatePhotoTags(ctx context.Context, req *UpdatePhotoTagsRequest, opts ...http.CallOption) (rsp *Empty, err error)
 }
@@ -236,6 +320,20 @@ func (c *PhotoServiceHTTPClientImpl) DeletePhoto(ctx context.Context, in *Delete
 	opts = append(opts, http.Operation(OperationPhotoServiceDeletePhoto))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetBurstGroupsConfig 读取连拍分组两档位阈值（DB 无记录时返回配置文件默认值）
+func (c *PhotoServiceHTTPClientImpl) GetBurstGroupsConfig(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetBurstGroupsConfigResponse, error) {
+	var out GetBurstGroupsConfigResponse
+	pattern := "/api/v1/burst-groups/config"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationPhotoServiceGetBurstGroupsConfig))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -306,6 +404,34 @@ func (c *PhotoServiceHTTPClientImpl) SearchPhotos(ctx context.Context, in *Searc
 	opts = append(opts, http.Operation(OperationPhotoServiceSearchPhotos))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetBurstGroupCover 设置连拍组封面
+func (c *PhotoServiceHTTPClientImpl) SetBurstGroupCover(ctx context.Context, in *SetBurstGroupCoverRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/api/v1/burst-groups/{group_id}/cover"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationPhotoServiceSetBurstGroupCover))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PUT", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateBurstGroupsConfig 保存连拍分组两档位阈值（写入 app_settings）
+func (c *PhotoServiceHTTPClientImpl) UpdateBurstGroupsConfig(ctx context.Context, in *UpdateBurstGroupsConfigRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/api/v1/burst-groups/config"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationPhotoServiceUpdateBurstGroupsConfig))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PUT", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

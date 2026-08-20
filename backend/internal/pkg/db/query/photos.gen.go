@@ -54,6 +54,7 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 	_photo.Longitude = field.NewFloat64(tableName, "longitude")
 	_photo.Altitude = field.NewFloat64(tableName, "altitude")
 	_photo.BurstGroupID = field.NewString(tableName, "burst_group_id")
+	_photo.BurstGroupCoarseID = field.NewString(tableName, "burst_group_coarse_id")
 	_photo.ImportedAt = field.NewTime(tableName, "imported_at")
 
 	_photo.fillFieldMap()
@@ -64,35 +65,36 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 type photo struct {
 	photoDo photoDo
 
-	ALL          field.Asterisk
-	ID           field.String
-	Filename     field.String
-	FilePath     field.String
-	FileType     field.String
-	Timeline     field.String
-	Tags         field.String
-	Description  field.String
-	Objects      field.String
-	Colors       field.String
-	Scene        field.String
-	Lighting     field.String
-	Mood         field.String
-	Composition  field.String
-	ShotAt       field.Time
-	Width        field.Int32
-	Height       field.Int32
-	Brand        field.String
-	Model        field.String
-	Lens         field.String
-	FocalLength  field.String
-	Aperture     field.String
-	Iso          field.Int32
-	ExposureTime field.String
-	Latitude     field.Float64
-	Longitude    field.Float64
-	Altitude     field.Float64
-	BurstGroupID field.String
-	ImportedAt   field.Time
+	ALL                field.Asterisk
+	ID                 field.String
+	Filename           field.String
+	FilePath           field.String
+	FileType           field.String
+	Timeline           field.String
+	Tags               field.String
+	Description        field.String
+	Objects            field.String
+	Colors             field.String
+	Scene              field.String
+	Lighting           field.String
+	Mood               field.String
+	Composition        field.String
+	ShotAt             field.Time
+	Width              field.Int32
+	Height             field.Int32
+	Brand              field.String
+	Model              field.String
+	Lens               field.String
+	FocalLength        field.String
+	Aperture           field.String
+	Iso                field.Int32
+	ExposureTime       field.String
+	Latitude           field.Float64
+	Longitude          field.Float64
+	Altitude           field.Float64
+	BurstGroupID       field.String
+	BurstGroupCoarseID field.String
+	ImportedAt         field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -136,6 +138,7 @@ func (p *photo) updateTableName(table string) *photo {
 	p.Longitude = field.NewFloat64(table, "longitude")
 	p.Altitude = field.NewFloat64(table, "altitude")
 	p.BurstGroupID = field.NewString(table, "burst_group_id")
+	p.BurstGroupCoarseID = field.NewString(table, "burst_group_coarse_id")
 	p.ImportedAt = field.NewTime(table, "imported_at")
 
 	p.fillFieldMap()
@@ -161,7 +164,7 @@ func (p *photo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *photo) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 28)
+	p.fieldMap = make(map[string]field.Expr, 29)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["filename"] = p.Filename
 	p.fieldMap["file_path"] = p.FilePath
@@ -189,6 +192,7 @@ func (p *photo) fillFieldMap() {
 	p.fieldMap["longitude"] = p.Longitude
 	p.fieldMap["altitude"] = p.Altitude
 	p.fieldMap["burst_group_id"] = p.BurstGroupID
+	p.fieldMap["burst_group_coarse_id"] = p.BurstGroupCoarseID
 	p.fieldMap["imported_at"] = p.ImportedAt
 }
 

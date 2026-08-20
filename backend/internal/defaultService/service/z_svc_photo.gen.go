@@ -45,6 +45,7 @@ func DO2DTO_Photo(do *data.PhotoDO) *api.PhotoInfo {
         Longitude: do.Longitude,
         Altitude: do.Altitude,
         BurstGroupID: do.BurstGroupID,
+        BurstGroupCoarseID: do.BurstGroupCoarseID,
         ImportedAt: do.ImportedAt.Unix(),
 	}
 }
@@ -80,6 +81,7 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *data.PhotoDO {
         Longitude: dto.Longitude,
         Altitude: dto.Altitude,
         BurstGroupID: dto.BurstGroupID,
+        BurstGroupCoarseID: dto.BurstGroupCoarseID,
         ImportedAt: time.Unix(dto.ImportedAt, 0),
 	}
 }

@@ -14,6 +14,7 @@ const TableNamePhotoGroup = "photo_groups"
 type PhotoGroup struct {
 	ID           string    `gorm:"column:id;primaryKey" json:"id"`
 	CoverPhotoID string    `gorm:"column:cover_photo_id;type:TEXT" json:"cover_photo_id"`
+	Profile      string    `gorm:"column:profile;type:TEXT" json:"profile"`
 	PhotoCount   int32     `gorm:"column:photo_count;type:INTEGER" json:"photo_count"`
 	TimeStart    time.Time `gorm:"column:time_start" json:"time_start"`
 	TimeEnd      time.Time `gorm:"column:time_end" json:"time_end"`

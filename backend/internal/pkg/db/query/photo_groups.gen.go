@@ -29,6 +29,7 @@ func newPhotoGroup(db *gorm.DB, opts ...gen.DOOption) photoGroup {
 	_photoGroup.ALL = field.NewAsterisk(tableName)
 	_photoGroup.ID = field.NewString(tableName, "id")
 	_photoGroup.CoverPhotoID = field.NewString(tableName, "cover_photo_id")
+	_photoGroup.Profile = field.NewString(tableName, "profile")
 	_photoGroup.PhotoCount = field.NewInt32(tableName, "photo_count")
 	_photoGroup.TimeStart = field.NewTime(tableName, "time_start")
 	_photoGroup.TimeEnd = field.NewTime(tableName, "time_end")
@@ -46,6 +47,7 @@ type photoGroup struct {
 	ALL          field.Asterisk
 	ID           field.String
 	CoverPhotoID field.String
+	Profile      field.String
 	PhotoCount   field.Int32
 	TimeStart    field.Time
 	TimeEnd      field.Time
@@ -69,6 +71,7 @@ func (p *photoGroup) updateTableName(table string) *photoGroup {
 	p.ALL = field.NewAsterisk(table)
 	p.ID = field.NewString(table, "id")
 	p.CoverPhotoID = field.NewString(table, "cover_photo_id")
+	p.Profile = field.NewString(table, "profile")
 	p.PhotoCount = field.NewInt32(table, "photo_count")
 	p.TimeStart = field.NewTime(table, "time_start")
 	p.TimeEnd = field.NewTime(table, "time_end")
@@ -100,9 +103,10 @@ func (p *photoGroup) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *photoGroup) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 7)
+	p.fieldMap = make(map[string]field.Expr, 8)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["cover_photo_id"] = p.CoverPhotoID
+	p.fieldMap["profile"] = p.Profile
 	p.fieldMap["photo_count"] = p.PhotoCount
 	p.fieldMap["time_start"] = p.TimeStart
 	p.fieldMap["time_end"] = p.TimeEnd
