@@ -52,6 +52,8 @@ const {
   sortBy,
   sortOrder,
   searchFilename,
+  expandedBurstGroup,
+  burstMembers,
   fetchPhotos,
   fetchStats,
   fetchTimelines,
@@ -61,6 +63,7 @@ const {
   applyFilters,
   resetFilters,
   deletePhoto,
+  toggleBurstGroup,
 } = usePhotos()
 
 // ── 上传 ──
@@ -227,6 +230,11 @@ async function handleDeletePhoto(photoId: string) {
   } catch (e) {
     message.error(e instanceof Error ? e.message : '删除失败')
   }
+}
+
+// 展开/收起连拍组
+function handleToggleBurstGroup(groupId: string) {
+  toggleBurstGroup(groupId)
 }
 
 async function handleUploadStart() {
@@ -499,10 +507,13 @@ onMounted(async () => {
             :error="error"
             :processing-ids="processingIds"
             :embedded-ids="embeddedIds"
+            :expanded-burst-group="expandedBurstGroup"
+            :burst-members="burstMembers"
             @view-detail="fetchPhotoDetail"
             @trigger-describe="handleTriggerDescribe"
             @trigger-embed="handleTriggerEmbed"
             @delete-photo="handleDeletePhoto"
+            @toggle-burst-group="handleToggleBurstGroup"
             @retry="fetchPhotos"
           />
 

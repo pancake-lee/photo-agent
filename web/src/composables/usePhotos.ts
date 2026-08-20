@@ -42,6 +42,9 @@ function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
     has_description: item.hasDescription ?? false,
     thumbnail_url: item.id ? `${getApiBase()}/photos/${item.id}/image` : '',
     has_nef: item.hasNef ?? false,
+    burst_group_id: item.burstGroupId ?? '',
+    burst_cover: item.burstCover ?? false,
+    burst_count: item.burstCount ?? 0,
   }
 }
 
@@ -103,6 +106,11 @@ const page = ref(1)
 const pageSize = ref(DEFAULT_PAGE_SIZE)
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+// 连拍分组展示状态：当前展开的分组 id（空串 = 全部收起）
+const expandedBurstGroup = ref('')
+// 展开组的成员照片（按 burst_group_id 拉取）
+const burstMembers = ref<PhotoListItem[]>([])
 
 // 筛选/排序/搜索状态
 const filterTimeline = ref('')
@@ -262,6 +270,32 @@ export function usePhotos() {
     }
   }
 
+  // 展开/收起连拍组：展开时按 burst_group_id 拉取组内成员
+  async function toggleBurstGroup(groupId: string) {
+    if (!groupId) return
+    if (expandedBurstGroup.value === groupId) {
+      expandedBurstGroup.value = ''
+      burstMembers.value = []
+      return
+    }
+    expandedBurstGroup.value = groupId
+    try {
+      const resp: ApiSearchPhotosResponse =
+        await photoApi.photoServiceSearchPhotos(
+          1,
+          100, // 组内照片上限（连拍组通常 < 20 张）
+          undefined, undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined,
+          groupId,
+        )
+      burstMembers.value = (resp.items ?? []).map(adaptPhotoItem)
+    } catch (e) {
+      console.warn('获取连拍组成员失败', e)
+      burstMembers.value = []
+    }
+  }
+
   return {
     photos,
     total,
@@ -281,6 +315,8 @@ export function usePhotos() {
     sortBy,
     sortOrder,
     searchFilename,
+    expandedBurstGroup,
+    burstMembers,
     fetchPhotos,
     fetchStats,
     fetchTimelines,
@@ -292,5 +328,6 @@ export function usePhotos() {
     markPhotoQueued,
     refreshPhoto,
     deletePhoto,
+    toggleBurstGroup,
   }
 }

@@ -31,21 +31,22 @@ func (r rawCondition) CondError() error { return nil }
 
 // GetPhotoListParams 照片列表查询参数
 type GetPhotoListParams struct {
-	Page        int
-	PageSize    int
-	Timeline    string
-	Tag         string
-	Keyword     string
-	Brand       string
-	Lens        string
-	FocalMin    string
-	FocalMax    string
-	ISOMin      int32
-	ISOMax      int32
-	ShotAtStart string
-	ShotAtEnd   string
-	SortBy      string
-	SortOrder   string
+	Page         int
+	PageSize     int
+	Timeline     string
+	Tag          string
+	Keyword      string
+	Brand        string
+	Lens         string
+	FocalMin     string
+	FocalMax     string
+	ISOMin       int32
+	ISOMax       int32
+	ShotAtStart  string
+	ShotAtEnd    string
+	SortBy       string
+	SortOrder    string
+	BurstGroupID string
 }
 
 // GetPhotoList 查询照片列表（分页、过滤、排序）
@@ -113,6 +114,9 @@ func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*m
 		if err == nil {
 			do = do.Where(q.ShotAt.Lte(t))
 		}
+	}
+	if params.BurstGroupID != "" {
+		do = do.Where(q.BurstGroupID.Eq(params.BurstGroupID))
 	}
 
 	// 排序

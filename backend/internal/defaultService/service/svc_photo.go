@@ -55,21 +55,22 @@ func (s *PhotoServer) SearchPhotos(
 	ctx := papp.NewAppCtx(_ctx)
 
 	params := data.GetPhotoListParams{
-		Page:        int(req.Page),
-		PageSize:    int(req.PageSize),
-		Timeline:    req.Timeline,
-		Tag:         req.Tag,
-		Keyword:     req.Keyword,
-		Brand:       req.Brand,
-		Lens:        req.Lens,
-		FocalMin:    req.FocalMin,
-		FocalMax:    req.FocalMax,
-		ISOMin:      req.IsoMin,
-		ISOMax:      req.IsoMax,
-		ShotAtStart: req.ShotAtStart,
-		ShotAtEnd:   req.ShotAtEnd,
-		SortBy:      req.SortBy,
-		SortOrder:   req.SortOrder,
+		Page:         int(req.Page),
+		PageSize:     int(req.PageSize),
+		Timeline:     req.Timeline,
+		Tag:          req.Tag,
+		Keyword:      req.Keyword,
+		Brand:        req.Brand,
+		Lens:         req.Lens,
+		FocalMin:     req.FocalMin,
+		FocalMax:     req.FocalMax,
+		ISOMin:       req.IsoMin,
+		ISOMax:       req.IsoMax,
+		ShotAtStart:  req.ShotAtStart,
+		ShotAtEnd:    req.ShotAtEnd,
+		SortBy:       req.SortBy,
+		SortOrder:    req.SortOrder,
+		BurstGroupID: req.BurstGroupId,
 	}
 
 	photos, total, err := data.PhotoDAO.GetPhotoList(ctx, params)
@@ -88,10 +89,18 @@ func (s *PhotoServer) SearchPhotos(
 	// NEF 基础名集合，用于在 JPG 上标记「有对应原始文件」。查询失败时集合为空，仅不显示标识。
 	nefSet, _ := data.PhotoDAO.GetNefBaseNames(ctx)
 
+	// 连拍组信息，用于拼装 burst_cover/burst_count。查询失败时映射为空，仅不显示角标。
+	groupMap, _ := data.PhotoGroupDAO.GetByIDList(ctx, burstGroupIDsOf(photos))
+
 	items := make([]*api.PhotoItem, len(photos))
 	for i, p := range photos {
 		items[i] = photoDO2Item(p)
 		items[i].HasNef = nefSet[data.BaseNameOf(p.Filename)]
+		if g := groupMap[p.BurstGroupID]; g != nil {
+			items[i].BurstGroupId = p.BurstGroupID
+			items[i].BurstCover = g.CoverPhotoID == p.ID
+			items[i].BurstCount = g.PhotoCount
+		}
 	}
 
 	totalPages := int32(0)
@@ -421,8 +430,20 @@ func (s *PhotoServer) doNefUpload(
 // 辅助函数
 // ================================================================
 
-func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
-	if do == nil {
+// burstGroupIDsOf 收集照片列表中出现的非空连拍组 id（去重）。
+func burstGroupIDsOf(photos []*data.PhotoDO) []string {
+	seen := make(map[string]bool)
+	idList := make([]string, 0, len(photos))
+	for _, p := range photos {
+		if p.BurstGroupID != "" && !seen[p.BurstGroupID] {
+			seen[p.BurstGroupID] = true
+			idList = append(idList, p.BurstGroupID)
+		}
+	}
+	return idList
+}
+
+func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {	if do == nil {
 		return nil
 	}
 	item := &api.PhotoItem{

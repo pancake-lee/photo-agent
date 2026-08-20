@@ -1,6 +1,6 @@
 # 连拍分组功能设计文档
 
-> 状态：已规划（backlog BG1，2026-08-20 确认实施拆解）
+> 状态：P1-P4 已实现，P5 实测调优待进行（backlog BG1）
 > 日期：2026-08-19（初稿修订）/ 2026-08-20（规划定稿）
 > 本文档由外部 AI 对话产出的初稿修订而来，已结合 photo-agent 当前代码库（Go 后端 Kratos+GORM 架构、SQLite photos 表、ImageMagick 图片处理）校准落地方案。
 
@@ -179,7 +179,7 @@ burst:
 - [ ] 全量 1436 张照片 rebuild 总耗时 < 60 秒（含 ImageMagick 进程开销）
 - [ ] 误归组率（不同连拍被合并）< 5%
 - [ ] 漏归组率（同一连拍被拆散）< 8%
-- [ ] 单测覆盖：时间窗分割、哈希切分、灰区 SSIM 判定、单张不成组、零值 shot_at 过滤
+- [x] 单测覆盖：时间窗分割、哈希切分、灰区 SSIM 判定、单张不成组（零值 shot_at 过滤在 DAO 层 `ShotAt > 2000-01-01` 实现，非纯函数单测）
 - [ ] rebuild 异步执行不阻塞其他 API；重复触发返回 already_running 不产生并发写
 
 ## 9. 实施拆解（已按规划确认）
@@ -191,11 +191,3 @@ burst:
 3. **P3 算法主体**：`svc_burst_group.go` — 时间窗分割/哈希切分/SSIM 灰区判定为纯函数 + 单测；ImageMagick dHash 生成 + compare SSIM 封装（真实缩略图验证）；异步 rebuild goroutine + 进度状态
 4. **P4 前端**：设置页"连拍分组"卡片（rebuild 按钮 + 轮询进度条 + 当前组数）；PhotoGrid 折叠（封面角标 ×N、展开组内横条按 burst_group_id 拉取成员）；types/composable 扩展
 5. **P5 实测调优**：真实库全量 rebuild，按第 8 节验收标准人工抽检，必要时调阈值
-
-## 9. 实施拆解（建议顺序）
-
-1. proto + 数据模型（photo_groups 新表 + photos 加逻辑关联列 + PhotoItem 扩展 + rebuild 接口定义）
-2. `svc_burst_group.go`：算法主体 + 单测（时间窗/哈希切分/SSIM 灰区为纯函数，用构造数据测，不依赖真实图片）
-3. ImageMagick 集成：dHash 生成 + compare SSIM 封装（用 `data/photos` 下真实缩略图验证）
-4. 前端 PhotoGrid 折叠交互 + 角标
-5. 真实库全量跑一遍，按验收标准人工抽检，调阈值

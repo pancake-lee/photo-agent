@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   NLayoutContent,
   NLayoutHeader,
@@ -10,11 +10,13 @@ import {
   NSpace,
   NIcon,
   NCard,
+  NProgress,
   useMessage,
 } from 'naive-ui'
-import { RefreshOutline } from '@vicons/ionicons5'
+import { RefreshOutline, GridOutline } from '@vicons/ionicons5'
 import { settings, resetSettings } from '../stores/settings'
 import { isWails } from '../utils/env'
+import { useBurstGroups } from '../composables/useBurstGroups'
 
 const message = useMessage()
 
@@ -22,9 +24,37 @@ const message = useMessage()
 const localBackendUrl = ref(settings.backendUrl)
 const localAgentUrl = ref(settings.agentUrl)
 
+// ── 连拍分组 ──
+const { status: burstStatus, rebuild: rebuildBurst, fetchStatus: fetchBurstStatus, stopPolling } = useBurstGroups()
+
+const burstProgress = computed(() => {
+  if (burstStatus.value.total <= 0) return 0
+  return Math.round((burstStatus.value.processed / burstStatus.value.total) * 100)
+})
+
+async function handleRebuildBurst() {
+  try {
+    const st = await rebuildBurst(() => {
+      message.success(`连拍分组完成，共 ${burstStatus.value.group_count} 组`)
+    })
+    if (st === 'already_running') {
+      message.info('连拍分组已在进行中')
+    } else {
+      message.success('连拍分组重算已启动')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '启动失败')
+  }
+}
+
 onMounted(() => {
   localBackendUrl.value = settings.backendUrl
   localAgentUrl.value = settings.agentUrl
+  fetchBurstStatus()
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 
 function saveBackend() {
@@ -102,6 +132,43 @@ function handleReset() {
           </NForm>
         </NCard>
 
+        <NCard title="连拍分组" size="small" class="burst-card">
+          <div class="burst-row">
+            <div class="burst-info">
+              <div class="burst-stat">
+                当前连拍组：<strong>{{ burstStatus.group_count }}</strong> 组
+              </div>
+              <div v-if="burstStatus.running" class="burst-progress">
+                <NProgress
+                  type="line"
+                  :percentage="burstProgress"
+                  :height="8"
+                  :show-indicator="false"
+                  processing
+                />
+                <span class="burst-progress-text">
+                  {{ burstStatus.processed }}/{{ burstStatus.total }}
+                </span>
+              </div>
+              <p v-else class="burst-hint">
+                识别时间上连续、内容高度相似的照片并归组，图片管理页以封面折叠展示。
+              </p>
+            </div>
+            <NButton
+              type="primary"
+              size="small"
+              :loading="burstStatus.running"
+              :disabled="burstStatus.running"
+              @click="handleRebuildBurst"
+            >
+              <template #icon>
+                <NIcon size="14"><GridOutline /></NIcon>
+              </template>
+              {{ burstStatus.running ? '重算中' : '重新分组' }}
+            </NButton>
+          </div>
+        </NCard>
+
         <NCard title="当前配置摘要" size="small" class="summary-card">
           <div class="summary-row">
             <span class="summary-label">Backend：</span>
@@ -164,5 +231,35 @@ code {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
+}
+.burst-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.burst-info {
+  flex: 1;
+  min-width: 0;
+}
+.burst-stat {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.burst-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.burst-progress-text {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  white-space: nowrap;
+}
+.burst-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  line-height: 1.6;
 }
 </style>

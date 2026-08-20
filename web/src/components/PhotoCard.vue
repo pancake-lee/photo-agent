@@ -20,6 +20,7 @@ const emit = defineEmits<{
   triggerDescribe: [photoId: string]
   triggerEmbed: [photoId: string]
   deletePhoto: [photoId: string]
+  toggleBurstGroup: [groupId: string]
 }>()
 
 function handleStatusClick() {
@@ -71,6 +72,12 @@ function formatExifTooltip(): string {
               loading="lazy"
             />
             <div v-if="photo.has_nef" class="photo-nef-badge" title="有对应 NEF 原始文件">NEF</div>
+            <div
+              v-if="photo.burst_cover && photo.burst_count > 1"
+              class="photo-burst-badge"
+              title="连拍组封面，点击展开组内照片"
+              @click.stop="emit('toggleBurstGroup', photo.burst_group_id)"
+            >×{{ photo.burst_count }}</div>
             <div class="photo-status">
               <NSpin v-if="processing" size="small" />
               <NButton
@@ -194,6 +201,22 @@ function formatExifTooltip(): string {
   font-weight: 600;
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
+}
+.photo-burst-badge {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(24, 108, 248, 0.78);
+  cursor: pointer;
+}
+.photo-burst-badge:hover {
+  background: rgba(24, 108, 248, 0.95);
 }
 .photo-embed-status {
   position: absolute;

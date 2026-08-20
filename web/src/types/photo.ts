@@ -28,6 +28,9 @@ export interface PhotoListItem extends Photo {
   has_description: boolean
   thumbnail_url: string
   has_nef: boolean
+  burst_group_id: string
+  burst_cover: boolean
+  burst_count: number
 }
 
 // 照片详情响应
@@ -98,4 +101,12 @@ export interface EmbedQueueStatus {
   completed: number
   failed: number
   current_file?: string
+}
+
+// 连拍分组重算状态
+export interface BurstGroupsStatus {
+  running: boolean
+  processed: number
+  total: number
+  group_count: number
 }
