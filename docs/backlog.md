@@ -10,6 +10,7 @@
 
 | 状态   | 阶段       | 序号 | 任务                           | 评估 |
 | ------ | ---------- | ---- | ------------------------------ | ---- |
+| 已规划 | 连拍分组   | BG1  | 连拍分组（识别 + 折叠展示）    |      |
 | 待规划 | Phase 1    | 1.4  | 黄金用例评估体系扩展           |      |
 | 待规划 | Phase 3    | 3.2  | 多轮对话上下文感知             |      |
 | 待规划 | Phase 3    | 3.3  | 摄影报告生成                   |      |
@@ -54,6 +55,29 @@
 ---
 
 ## 任务详情
+
+### 连拍分组
+
+### BG1 连拍分组（识别 + 折叠展示）
+
+- **用户原始描述**：自动识别照片库中的连拍组，浏览时同一场景的连拍照片以"组"为单位折叠展示，保留查看单张的能力。
+- **状态**：已规划
+- **背景**：库内 1436 张照片按 shot_at 排序，相邻间隔 ≤2s 有 190 对、2~5s 有 55 对，连拍数据量级可观。当前 PhotoGrid 平铺展示，连拍占据大量视觉空间，干扰浏览节奏。识别方案：时间窗（≤5s）划分候选组 + dHash 汉明距离验证 + SSIM 灰区二次确认，全程传统算法零 token。详细设计见 [docs/design/2026-08-19-1-burst-grouping-design.md](../design/2026-08-19-1-burst-grouping-design.md)。
+- **方案**（五个子阶段，详见设计文档第 9 节）：
+  - **P1 数据层**：`sql/photo_groups.sql` 建组表 + photos.sql 加 burst_group_id 列（逻辑关联，无外键约束）→ `make initDB/gorm/curd` 重新生成 → `db/migrate.go` 扩展幂等迁移 → conf.go + config.yaml 加 burst 阈值段
+  - **P2 proto 与 DAO**：photo_service.proto 加 RebuildBurstGroups/GetBurstGroupsStatus rpc、PhotoItem 加 burst_group_id/burst_cover/burst_count 字段、SearchPhotosRequest 加 burst_group_id 过滤参数 → `make api` → DAO 层：列表查询支持组过滤 + 响应拼装 burst 字段
+  - **P3 算法主体**：`svc_burst_group.go`，时间窗分割/哈希切分/SSIM 灰区为纯函数（构造数据单测）；ImageMagick 生成 dHash + compare SSIM 封装；rebuild 异步 goroutine + 进度状态（与 VLM/Embed 队列同模式）
+  - **P4 前端**：设置页"连拍分组"卡片（rebuild 按钮 + 轮询进度 + 当前组数）；PhotoGrid 封面折叠展示（角标 ×N，展开按 burst_group_id 拉取组内成员）
+  - **P5 实测调优**：真实库全量 rebuild，人工抽检按验收标准评估，调阈值
+- **分析**：算法选型（时间窗+内容相似度）、哈希实现（复用 ImageMagick）、存储模型（photo_groups 独立表 + 逻辑关联列）、rebuild 异步化、代码生成链路（make curd 全套）均已在规划阶段与用户确认。缩略图已压缩至 ~0.2MB（MaxImageSizeMB=0.2），dHash 缩放至 9x8 后每张 spawn convert 约 15ms，全量 1436 张预估 20~60s，异步模式下可接受。NEF 与 shot_at 零值记录不参与分组。
+- **验收**：
+  - [ ] 人工标注 50~100 组，识别准确率 ≥ 90%
+  - [ ] 全量 rebuild 耗时 < 60s；异步执行不阻塞其他 API，重复触发返回 already_running
+  - [ ] 误归组率 < 5%，漏归组率 < 8%
+  - [ ] 单测覆盖：时间窗分割、哈希切分、灰区 SSIM 判定、单张不成组、零值 shot_at 过滤
+  - [ ] 前端折叠/展开正常，筛选视图下分组生效
+
+---
 
 ### Phase 1
 
