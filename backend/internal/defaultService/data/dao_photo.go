@@ -50,6 +50,10 @@ type GetPhotoListParams struct {
 	BurstProfile string // fine / coarse（缺省 fine），决定组过滤与展示字段所用列
 }
 
+// TimelineNoneSentinel timeline 筛选的 sentinel 值，表示「无活动标签」照片。
+// 空串在筛选参数中含义是「不过滤」，散图筛选需要独立取值。
+const TimelineNoneSentinel = "none"
+
 // GetPhotoList 查询照片列表（分页、过滤、排序）
 func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*model.Photo, int64, error) {
 	if params.Page < 1 {
@@ -69,7 +73,12 @@ func (*photoDAO) GetPhotoList(ctx *papp.AppCtx, params GetPhotoListParams) ([]*m
 	do = do.Where(q.FileType.Neq("nef"))
 
 	if params.Timeline != "" {
-		do = do.Where(q.Timeline.Eq(params.Timeline))
+		if params.Timeline == TimelineNoneSentinel {
+			// 前端 sentinel 值：筛出无活动标签的散图（timeline 为空串）
+			do = do.Where(q.Timeline.Eq(""))
+		} else {
+			do = do.Where(q.Timeline.Eq(params.Timeline))
+		}
 	}
 	if params.Tag != "" {
 		do = do.Where(q.Tags.Like("%" + params.Tag + "%"))

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import {
   NLayout,
   NLayoutContent,
@@ -7,7 +7,6 @@ import {
   NButton,
   NSpace,
   NTag,
-  NPagination,
   NTooltip,
   NIcon,
   NDatePicker,
@@ -23,6 +22,7 @@ import DescriptionModal from '../components/DescriptionModal.vue'
 import UploadModal from '../components/UploadModal.vue'
 import ConflictModal from '../components/ConflictModal.vue'
 import BurstGroupModal from '../components/BurstGroupModal.vue'
+import PhotoSegmentNav, { type NavItem } from '../components/PhotoSegmentNav.vue'
 
 import { usePhotos } from '../composables/usePhotos'
 import { useUpload } from '../composables/useUpload'
@@ -32,6 +32,8 @@ import { useEmbedStatus } from '../composables/useEmbedStatus'
 import { useBurstGroups } from '../composables/useBurstGroups'
 import { settings } from '../stores/settings'
 import type { PhotoDetail as PhotoDetailType, BurstViewLevel } from '../types/photo'
+import type { SegmentMode } from '../utils/segment'
+import { computeDividers, navKeyOfDivider } from '../utils/segment'
 import type { ConflictResolution } from '../types/upload'
 
 const message = useMessage()
@@ -40,10 +42,10 @@ const message = useMessage()
 const {
   photos,
   total,
-  page,
   loading,
+  loadingMore,
+  noMore,
   error,
-  totalPages,
   selectedPhoto,
   showDetail,
   detailLoading,
@@ -52,7 +54,6 @@ const {
   filterTimeline,
   filterShotAtStart,
   filterShotAtEnd,
-  sortBy,
   sortOrder,
   searchFilename,
   burstModalGroup,
@@ -60,11 +61,13 @@ const {
   burstModalCoverId,
   burstModalLoading,
   fetchPhotos,
+  loadMorePhotos,
+  jumpToMonth,
+  jumpToTimeline,
   fetchStats,
   fetchTimelines,
   fetchPhotoDetail,
   closeDetail,
-  setPage,
   applyFilters,
   resetFilters,
   deletePhoto,
@@ -149,17 +152,170 @@ const pendingEmbedCount = computed(() => {
   return Math.max(0, withDesc - withEmb)
 })
 
-// 排序选项
-const sortOptions = [
-  { label: '拍摄时间', value: 'shot_at' },
-  { label: '文件名', value: 'filename' },
-  { label: '导入时间', value: 'imported_at' },
+// 时间线选项（含「未分类」散图项，sentinel 值由后端翻译）
+const timelineOptions = computed(() => [
+  ...timelines.value.map((t) => ({ label: t, value: t })),
+  { label: '未分类', value: 'none' },
+])
+
+// ── 分段浏览 ──
+
+// 分段方式选项
+const segmentModeOptions = [
+  { label: '按天', value: 'day' },
+  { label: '按月', value: 'month' },
+  { label: '按活动', value: 'activity' },
 ]
 
-// 时间线选项
-const timelineOptions = computed(() =>
-  timelines.value.map((t) => ({ label: t, value: t }))
-)
+// 已加载照片流的分割线（导航高亮与跳转依据）
+const dividers = computed(() => computeDividers(photos.value, settings.segmentMode))
+
+// 分段键（降序去重） → 导航高亮键（按天/月都以月份为粒度）
+const loadedNavKeys = computed<Set<string>>(() => {
+  const keys = new Set<string>()
+  for (const d of dividers.value) {
+    keys.add(navKeyOfDivider(d, settings.segmentMode))
+  }
+  return keys
+})
+
+// 右侧导航列表：月份导航复用 stats.monthly，活动导航复用 timelines + 已加载照片推导顺序
+const navItems = computed<NavItem[]>(() => {
+  if (settings.segmentMode === 'activity') {
+    // 活动按其已加载照片的最早 shot_at 排序（时间倒序），未分类排最后
+    const minShotAt = new Map<string, number>()
+    for (const p of photos.value) {
+      const key = p.timeline || ''
+      if (!p.shot_at) continue
+      const t = new Date(p.shot_at).getTime()
+      const prev = minShotAt.get(key)
+      if (prev === undefined || t < prev) minShotAt.set(key, t)
+    }
+    const items: NavItem[] = timelines.value
+      .filter((t) => minShotAt.has(t))
+      .map((t) => ({ key: t, label: t, loaded: true }))
+    items.sort((a, b) => (minShotAt.get(b.key) ?? 0) - (minShotAt.get(a.key) ?? 0))
+    // 未分类散图项排在活动之后（有散图已加载时才显示）
+    if (minShotAt.has('') || loadedNavKeys.value.has('')) {
+      items.push({ key: '', label: '未分类', loaded: loadedNavKeys.value.has('') })
+    }
+    return items
+  }
+
+  // 月份导航（按天/按月共用）：最新在上
+  const monthly = stats.value?.monthly ?? []
+  return monthly
+    .slice()
+    .sort((a, b) => (a.month < b.month ? 1 : -1))
+    .map((m) => ({ key: m.month, label: m.month, loaded: loadedNavKeys.value.has(m.month) }))
+})
+
+// 当前滚动位置所处段落的导航键（取视口内最后一条已越过顶部的分割线）
+const activeNavKey = ref('')
+
+// 各分割线的 DOM 引用（key = 分段键，交错时同一键覆盖）
+const dividerEls = new Map<string, HTMLElement>()
+
+function setDividerEl(key: string, el: unknown) {
+  if (el instanceof HTMLElement) dividerEls.set(key, el)
+  else dividerEls.delete(key)
+}
+
+// 页面滚动容器：NLayoutContent 的 .n-layout-scroll-container（非 window）
+const scrollContainer = ref<HTMLElement | null>(null)
+const contentView = ref<HTMLElement | null>(null)
+
+function findScrollContainer(): HTMLElement | null {
+  if (scrollContainer.value) return scrollContainer.value
+  // 从分割线向上找最近的可滚动祖先（NLayoutContent 的 scroll-container）
+  const firstEl = dividerEls.values().next().value
+  let node: HTMLElement | null = firstEl ?? contentView.value
+  while (node) {
+    if (node.classList?.contains('n-layout-scroll-container')) {
+      scrollContainer.value = node
+      return node
+    }
+    node = node.parentElement
+  }
+  return null
+}
+
+// 滚动高亮跟随：分割线越过视口顶部时更新当前段落。
+// 取流中最后一条已越过视口顶部（top ≤ 80px）的分割线；都在顶部之前时取首段。
+function updateActiveNav() {
+  if (dividerEls.size === 0) return
+  let current = ''
+  let currentTop = -Infinity
+  for (const [key, el] of dividerEls) {
+    const top = el.getBoundingClientRect().top
+    if (top <= 80 && top >= currentTop) {
+      current = key
+      currentTop = top
+    }
+  }
+  if (current === '') {
+    // 还在第一段分割线之前：取流中 top 最小的分割线
+    let firstKey = ''
+    let firstTop = Infinity
+    for (const [key, el] of dividerEls) {
+      const top = el.getBoundingClientRect().top
+      if (top < firstTop) {
+        firstKey = key
+        firstTop = top
+      }
+    }
+    current = firstKey
+  }
+  // 按天/按月的分割线键是天/月粒度，导航高亮降到月份粒度
+  activeNavKey.value =
+    settings.segmentMode === 'activity' ? current : current.slice(0, 7)
+}
+
+onMounted(() => {
+  findScrollContainer()
+  scrollContainer.value?.addEventListener('scroll', updateActiveNav, { passive: true })
+})
+onUnmounted(() => {
+  scrollContainer.value?.removeEventListener('scroll', updateActiveNav)
+})
+
+// ── 导航点击跳转 ──
+async function handleNavJump(key: string, loaded: boolean) {
+  if (loaded) {
+    // 已加载段落：锚点滚动到该分割线
+    const el = dividerEls.get(key)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      updateActiveNav()
+      return
+    }
+    // 月份粒度导航但分割线是天粒度：滚到该月第一条分割线
+    const target = [...dividerEls.entries()].find(([k]) => k.startsWith(key))
+    if (target) {
+      target[1].scrollIntoView({ behavior: 'smooth', block: 'start' })
+      updateActiveNav()
+    }
+    return
+  }
+
+  // 未加载段落：筛选重置式跳转
+  if (settings.segmentMode === 'activity') {
+    jumpToTimeline(key || 'none')
+  } else {
+    jumpToMonth(key)
+  }
+  // 等列表重置渲染后回到顶部
+  await nextTick()
+  const sc = scrollContainer.value
+  if (sc) sc.scrollTop = 0
+  else window.scrollTo({ top: 0 })
+  updateActiveNav()
+}
+
+// 回到最新：清空跳转筛选恢复默认视图
+function handleBackToLatest() {
+  resetFilters()
+}
 
 // ── 方法 ──
 
@@ -356,6 +512,13 @@ function toggleSortOrder() {
   applyFilters()
 }
 
+// 切换分段方式（导航与分割线响应式重算，照片不重拉）
+function handleSegmentModeChange(mode: SegmentMode) {
+  settings.segmentMode = mode
+  dividerEls.clear()
+  activeNavKey.value = ''
+}
+
 // ── VLM 完成回调：自动刷新列表和统计 ──
 onComplete(() => {
   fetchPhotos()
@@ -491,7 +654,7 @@ onUnmounted(() => {
 
       <!-- 主内容区 -->
       <NLayoutContent>
-        <div class="content-wrapper">
+        <div ref="contentView" class="content-wrapper">
           <!-- 统计摘要 + 排序搜索 -->
           <div class="stats-bar">
             <div class="stats-summary">
@@ -531,14 +694,16 @@ onUnmounted(() => {
                   点击切换连拍展示级别（全部展开 / 精细折叠 / 模糊折叠）
                 </NTooltip>
 
-                <!-- 排序 -->
-                <span class="filter-label">排序</span>
+                <!-- 分段方式 -->
                 <NSelect
-                  v-model:value="sortBy"
-                  :options="sortOptions"
+                  :value="settings.segmentMode"
+                  :options="segmentModeOptions"
                   size="small"
-                  style="width: 100px"
+                  style="width: 90px"
+                  @update:value="handleSegmentModeChange"
                 />
+
+                <!-- 排序（仅拍摄时间升/降序） -->
                 <NButton size="small" @click="toggleSortOrder">
                   {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
                 </NButton>
@@ -601,28 +766,34 @@ onUnmounted(() => {
             </NSpace>
           </div>
 
-          <!-- 照片网格 -->
-          <PhotoGrid
-            :photos="photos"
-            :loading="loading"
-            :error="error"
-            :processing-ids="processingIds"
-            :embedded-ids="embeddedIds"
-            :view-level="settings.burstViewLevel"
-            @view-detail="fetchPhotoDetail"
-            @trigger-describe="handleTriggerDescribe"
-            @trigger-embed="handleTriggerEmbed"
-            @delete-photo="handleDeletePhoto"
-            @open-burst-group="handleOpenBurstGroup"
-            @retry="fetchPhotos"
-          />
-
-          <!-- 分页 -->
-          <div v-if="totalPages > 1" class="pagination-wrapper">
-            <NPagination
-              :page="page"
-              :page-count="totalPages"
-              @update:page="setPage"
+          <!-- 照片流 + 右侧分段导航 -->
+          <div class="grid-with-nav">
+            <div class="grid-main">
+              <PhotoGrid
+                :photos="photos"
+                :loading="loading"
+                :loading-more="loadingMore"
+                :no-more="noMore"
+                :error="error"
+                :processing-ids="processingIds"
+                :embedded-ids="embeddedIds"
+                :view-level="settings.burstViewLevel"
+                :segment-mode="settings.segmentMode"
+                @view-detail="fetchPhotoDetail"
+                @trigger-describe="handleTriggerDescribe"
+                @trigger-embed="handleTriggerEmbed"
+                @delete-photo="handleDeletePhoto"
+                @open-burst-group="handleOpenBurstGroup"
+                @divider-el="setDividerEl"
+                @load-more="loadMorePhotos"
+                @retry="fetchPhotos"
+              />
+            </div>
+            <PhotoSegmentNav
+              :items="navItems"
+              :active-key="activeNavKey"
+              @jump="handleNavJump"
+              @back-to-latest="handleBackToLatest"
             />
           </div>
         </div>
@@ -737,5 +908,14 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   padding: 24px 0;
+}
+.grid-with-nav {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.grid-main {
+  flex: 1;
+  min-width: 0; /* 允许网格收缩 */
 }
 </style>

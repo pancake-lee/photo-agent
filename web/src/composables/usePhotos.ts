@@ -1,10 +1,16 @@
 import { ref, computed } from 'vue'
-import { DEFAULT_PAGE_SIZE, getApiBase } from '../config'
+import { getApiBase } from '../config'
 import { photoApi, timelineApi } from '../backend-sdk-client'
 import { settings } from '../stores/settings'
 import { useBurstGroups } from './useBurstGroups'
 import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse, ApiGetPhotoStatsResponse, ApiListTimelinesResponse } from '../../backend-sdk/api'
 import type { PhotoListItem, PhotoDetail, PhotoStats, BurstProfile } from '../types/photo'
+
+// 滚动加载单页条数（后端单页上限 100）
+const SCROLL_PAGE_SIZE = 100
+
+// timeline 筛选 sentinel：筛出无活动标签的散图（后端翻译为空串过滤）
+export const TIMELINE_NONE = 'none'
 
 // ------------------------------------------------------------------ #
 // 适配器：SDK camelCase → 现有 snake_case 类型
@@ -105,8 +111,9 @@ function adaptStats(s: ApiGetPhotoStatsResponse): PhotoStats {
 const photos = ref<PhotoListItem[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = ref(DEFAULT_PAGE_SIZE)
+const pageSize = ref(SCROLL_PAGE_SIZE)
 const loading = ref(false)
+const loadingMore = ref(false)
 const error = ref<string | null>(null)
 
 // 连拍组弹窗状态（空串 = 未打开）
@@ -177,6 +184,72 @@ export function usePhotos() {
     }
   }
 
+  // 滚动加载：追加下一页（已到末页或加载中时忽略）
+  async function loadMorePhotos() {
+    if (loading.value || loadingMore.value) return
+    if (photos.value.length >= total.value) return
+    loadingMore.value = true
+    try {
+      const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
+        page.value + 1,
+        pageSize.value,
+        filterTimeline.value || undefined,
+        undefined, // tag
+        searchFilename.value || undefined, // keyword
+        undefined, // brand
+        undefined, // lens
+        undefined, // focalMin
+        undefined, // focalMax
+        undefined, // isoMin
+        undefined, // isoMax
+        filterShotAtStart.value || undefined,
+        filterShotAtEnd.value || undefined,
+        sortBy.value,
+        sortOrder.value,
+        undefined, // burstGroupId
+        currentBurstProfile(),
+      )
+      const items = (resp.items ?? []).map(adaptPhotoItem)
+      if (items.length > 0) {
+        page.value += 1
+        photos.value = [...photos.value, ...items]
+        total.value = parseInt(resp.total ?? '0', 10)
+      } else {
+        // 后端再无可追加数据，用 total 收口避免反复触发
+        total.value = photos.value.length
+      }
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '加载失败'
+    } finally {
+      loadingMore.value = false
+    }
+  }
+
+  // 是否已全部加载（无更多数据）
+  const noMore = computed(() => photos.value.length >= total.value)
+
+  // 跳转到指定月份：设置 shotAt 起止为该月起止并重置拉取（筛选重置式）
+  function jumpToMonth(month: string) {
+    const [y, m] = month.split('-').map(Number)
+    if (!y || !m) return
+    const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0))
+    const end = new Date(Date.UTC(y, m, 0, 23, 59, 59))
+    filterShotAtStart.value = start.toISOString()
+    filterShotAtEnd.value = end.toISOString()
+    filterTimeline.value = ''
+    page.value = 1
+    fetchPhotos()
+  }
+
+  // 跳转到指定活动：设置 timeline 筛选并重置拉取
+  function jumpToTimeline(timeline: string) {
+    filterTimeline.value = timeline
+    filterShotAtStart.value = ''
+    filterShotAtEnd.value = ''
+    page.value = 1
+    fetchPhotos()
+  }
+
   async function fetchStats() {
     try {
       const resp = await photoApi.photoServiceGetPhotoStats()
@@ -224,7 +297,7 @@ export function usePhotos() {
     fetchPhotos()
   }
 
-  // 重置所有筛选
+  // 重置所有筛选（含跳转筛选，恢复默认视图）
   function resetFilters() {
     filterTimeline.value = ''
     filterShotAtStart.value = ''
@@ -337,6 +410,8 @@ export function usePhotos() {
     page,
     pageSize,
     loading,
+    loadingMore,
+    noMore,
     error,
     totalPages,
     selectedPhoto,
@@ -355,6 +430,9 @@ export function usePhotos() {
     burstModalCoverId,
     burstModalLoading,
     fetchPhotos,
+    loadMorePhotos,
+    jumpToMonth,
+    jumpToTimeline,
     fetchStats,
     fetchTimelines,
     fetchPhotoDetail,
