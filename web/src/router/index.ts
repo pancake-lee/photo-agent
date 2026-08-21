@@ -8,6 +8,11 @@ const routes = [
     component: () => import('../views/PhotoManagement.vue'),
   },
   {
+    path: '/timelines',
+    name: 'timelines',
+    component: () => import('../views/TimelineManagement.vue'),
+  },
+  {
     path: '/golden-queries',
     name: 'golden-queries',
     component: () => import('../views/GoldenQueryManagement.vue'),

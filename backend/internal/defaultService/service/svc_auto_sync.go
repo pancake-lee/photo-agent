@@ -43,14 +43,13 @@ func AutoSync() error {
 	}
 
 	// 清除缓存，确保读取最新文件
-	clearTimelineCache()
 	ClearDescCache()
 
 	// 加载 descriptions.json
 	descMap, _ := loadDescriptions(conf.C.Storage.DescriptionsPath)
 
-	// 加载时间线
-	timelineEntries, _ := loadTimeline(conf.C.Storage.TimelinePath)
+	// 加载时间线（timeline_events 表，首跑自动从 JSON 迁移）
+	timelineEntries, _ := loadTimeline(newAppCtxForBackground())
 
 	// 加载 MD5 去重注册表
 	dedupPath := filepath.Join(filepath.Dir(conf.C.Storage.DescriptionsPath), "dedup_hashes.json")

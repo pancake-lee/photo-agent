@@ -11,6 +11,7 @@ import {
   SettingsOutline,
   ChatbubblesOutline,
   CloudUploadOutline,
+  CalendarOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
@@ -60,6 +61,11 @@ const topMenuOptions = computed<MenuOption[]>(() => {
       icon: renderIcon(ImageOutline),
     },
     {
+      label: '时间线',
+      key: '/timelines',
+      icon: renderIcon(CalendarOutline),
+    },
+    {
       label: '黄金用例',
       key: '/golden-queries',
       icon: renderIcon(BookmarkOutline),
@@ -99,6 +105,7 @@ const selectedKey = computed(() => {
   const path = route.path
   if (path.startsWith('/chat/')) return path
   if (path === '/photos') return '/photos'
+  if (path === '/timelines') return '/timelines'
   if (path === '/golden-queries') return '/golden-queries'
   if (path === '/cluster') return '/cluster'
   if (path === '/suggest') return '/suggest'

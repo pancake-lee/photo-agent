@@ -587,7 +587,7 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 
 	timeline := ""
 	if ei.ShotAt != nil {
-		entries, _ := loadTimeline(conf.C.Storage.TimelinePath)
+		entries, _ := loadTimeline(ctx)
 		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
@@ -653,7 +653,7 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 
 	timeline := ""
 	if ei.ShotAt != nil {
-		entries, _ := loadTimeline(conf.C.Storage.TimelinePath)
+		entries, _ := loadTimeline(ctx)
 		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 

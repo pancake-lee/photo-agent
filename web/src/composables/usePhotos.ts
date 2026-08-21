@@ -8,7 +8,6 @@ import type {
   ApiGetPhotoDetailResponse,
   ApiSearchPhotosResponse,
   ApiGetPhotoStatsResponse,
-  ApiListTimelinesResponse,
   ApiListPhotoSegmentsResponse,
 } from '../../backend-sdk/api'
 import type { PhotoListItem, PhotoDetail, PhotoStats, BurstProfile } from '../types/photo'
@@ -373,8 +372,13 @@ export function usePhotos() {
 
   async function fetchTimelines() {
     try {
-      const resp: ApiListTimelinesResponse = await timelineApi.timelineServiceListTimelines()
-      timelines.value = resp.timelines ?? []
+      // 数据源用 ListEvents：活动事件 + 散片组（散片重算后填充，成为可筛选项）
+      const resp = await timelineApi.timelineServiceListEvents()
+      const names: string[] = [
+        ...(resp.events ?? []).map((e) => e.event ?? ''),
+        ...(resp.scattered ?? []).map((e) => e.event ?? ''),
+      ].filter((n) => n !== '')
+      timelines.value = names
     } catch (e) {
       console.warn('获取时间线列表失败', e)
     }

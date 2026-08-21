@@ -19,6 +19,38 @@ service TimelineService {
             get: "/api/v1/timelines/{name}/photos"
         };
     }
+    // 时间线事件列表（含散片组只读展示）
+    rpc ListEvents (Empty) returns (ListTimelineEventsResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/timeline-events"
+        };
+    }
+    // 保存时间线事件（新建与更新合一，id 为空则新建）
+    rpc SaveEvent (SaveTimelineEventRequest) returns (SaveTimelineEventResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/timeline-events"
+            body: "*"
+        };
+    }
+    // 删除时间线事件
+    rpc DeleteEvent (DeleteTimelineEventRequest) returns (Empty) {
+        option (google.api.http) = {
+            delete: "/api/v1/timeline-events/{id}"
+        };
+    }
+    // 触发全量重算照片 timeline（异步，人工值保留）
+    rpc RecomputeTimelines (Empty) returns (RecomputeTimelinesResponse) {
+        option (google.api.http) = {
+            post: "/api/v1/timeline-events/recompute"
+            body: "*"
+        };
+    }
+    // 查询重算进度
+    rpc GetRecomputeTimelinesStatus (Empty) returns (GetRecomputeTimelinesStatusResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/timeline-events/recompute/status"
+        };
+    }
 }
 
 // --------------------------------------------------
@@ -39,4 +71,52 @@ message GetPhotosByTimelineResponse {
     string timeline = 1;
     repeated PhotoItem items = 2;
     int32 total = 3;
+}
+
+// --------------------------------------------------
+// ListEvents / SaveEvent / DeleteEvent
+
+// TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+message TimelineEventDetail {
+    string id = 1;
+    string date = 2;      // YYYY-MM-DD；散片组为该组首张照片所在月（YYYY-MM）
+    string event = 3;     // 活动名；散片组为散片名（YYYY-MM-散片N）
+    string note = 4;
+    int32 photo_count = 5; // 该事件/散片组下照片数
+    bool is_scattered = 6; // 是否散片组（自动生成，不可编辑）
+}
+
+message ListTimelineEventsResponse {
+    repeated TimelineEventDetail events = 1;       // 人工维护的活动事件（按日期排序）
+    repeated TimelineEventDetail scattered = 2;    // 散片组（按时间排序）
+}
+
+message SaveTimelineEventRequest {
+    string id = 1;    // 为空则新建
+    string date = 2;  // YYYY-MM-DD
+    string event = 3;
+    string note = 4;
+}
+
+message SaveTimelineEventResponse {
+    string id = 1;
+}
+
+message DeleteTimelineEventRequest {
+    string id = 1;
+}
+
+// --------------------------------------------------
+// RecomputeTimelines / GetRecomputeTimelinesStatus
+
+message RecomputeTimelinesResponse {
+    string status = 1; // running | already_running
+}
+
+message GetRecomputeTimelinesStatusResponse {
+    bool running = 1;
+    int32 processed = 2;
+    int32 total = 3;
+    int32 event_count = 4;       // 事件匹配照片数
+    int32 scattered_count = 5;   // 散片填充照片数（跑完时为最终值）
 }

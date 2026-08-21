@@ -33,3 +33,49 @@ func (*photoDAO) GetDistinctTimelineList(ctx *papp.AppCtx) ([]string, error) {
 	}
 	return timelines, nil
 }
+
+// GetAllPhotosOrderByShotAt 全量照片按拍摄时间升序（timeline 重算用）。
+// shot_at 零值记录（0001 年）排最前，重算时单独跳过。
+func (*photoDAO) GetAllPhotosOrderByShotAt(ctx *papp.AppCtx) ([]*model.Photo, error) {
+	q := db.GetQuery().Photo
+	photos, err := q.WithContext(ctx).
+		Order(q.ShotAt.Asc(), q.ImportedAt.Asc()).
+		Find()
+	if err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+	return photos, nil
+}
+
+// UpdatePhotoTimeline 更新单张照片的 timeline（manual 标记人工指定）。
+func (*photoDAO) UpdatePhotoTimeline(ctx *papp.AppCtx, photoID, timeline string, manual bool) error {
+	q := db.GetQuery().Photo
+	_, err := q.WithContext(ctx).
+		Where(q.ID.Eq(photoID)).
+		Updates(map[string]any{
+			"timeline":        timeline,
+			"timeline_manual": manual,
+		})
+	if err != nil {
+		return ctx.Log.LogErr(err)
+	}
+	return nil
+}
+
+// UpdatePhotosTimelineBatch 批量更新照片 timeline 并清 manual 标记（重算写回用）。
+func (*photoDAO) UpdatePhotosTimelineBatch(ctx *papp.AppCtx, photoIDList []string, timeline string) error {
+	if len(photoIDList) == 0 {
+		return nil
+	}
+	q := db.GetQuery().Photo
+	_, err := q.WithContext(ctx).
+		Where(q.ID.In(photoIDList...)).
+		Updates(map[string]any{
+			"timeline":        timeline,
+			"timeline_manual": 0,
+		})
+	if err != nil {
+		return ctx.Log.LogErr(err)
+	}
+	return nil
+}

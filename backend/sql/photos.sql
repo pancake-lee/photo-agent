@@ -5,6 +5,7 @@ CREATE TABLE photos (
   file_path TEXT NOT NULL DEFAULT '',
   file_type TEXT NOT NULL DEFAULT 'jpg',
   timeline TEXT NOT NULL DEFAULT '',
+  timeline_manual INTEGER NOT NULL DEFAULT 0,  -- 人工指定 timeline（重算时保留）
   tags TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   objects TEXT NOT NULL DEFAULT '',

@@ -12,9 +12,18 @@ import {
   NDatePicker,
   NSelect,
   NInput,
+  NPopover,
+  NBadge,
   useMessage,
 } from 'naive-ui'
-import { PlayOutline, CloudUploadOutline, SearchOutline, LayersOutline, GridOutline, AlbumsOutline } from '@vicons/ionicons5'
+import {
+  PlayOutline,
+  CloudUploadOutline,
+  SearchOutline,
+  LayersOutline,
+  GridOutline,
+  InformationCircleOutline,
+} from '@vicons/ionicons5'
 
 import PhotoGrid from '../components/PhotoGrid.vue'
 import PhotoDetail from '../components/PhotoDetail.vue'
@@ -161,6 +170,15 @@ const timelineOptions = computed(() => [
   { label: '未分类', value: 'none' },
 ])
 
+// 「更多」触发器角标：已设非默认值的筛选项计数（搜索 / 日期 / 活动均在「更多」内）
+const activeFilterCount = computed(() => {
+  let n = 0
+  if (searchFilename.value) n++
+  if (filterTimeline.value) n++
+  if (filterShotAtStart.value || filterShotAtEnd.value) n++
+  return n
+})
+
 // ── 分段浏览 ──
 
 // 分段方式选项
@@ -191,32 +209,32 @@ function setDividerEl(key: string, el: unknown) {
 const gridScrollRef = ref<HTMLElement | null>(null)
 provide('photoGridScrollRoot', gridScrollRef)
 
-// 滚动高亮跟随：分割线越过视口顶部时更新当前段落。
-// 取流中最后一条已越过视口顶部（top ≤ 80px）的分割线；都在顶部之前时取首段。
+// 滚动高亮跟随：分割线越过滚动容器顶部时更新当前段落。
+// 坐标必须相对滚动容器顶端换算：getBoundingClientRect 是浏览器视口坐标，
+// 而照片列表顶端在视口下方（工具栏 + 统计 + 筛选），直接用视口坐标阈值永不成立。
+// 取流中最后一条已越过容器顶部（相对 top ≤ 80px）的分割线；都在顶部之前时取首段。
+const NAV_TOP_THRESHOLD_PX = 80
+
 function updateActiveNav() {
   if (dividerEls.size === 0) return
+  const rootTop = gridScrollRef.value?.getBoundingClientRect().top ?? 0
   let current = ''
   let currentTop = -Infinity
+  let firstKey = ''
+  let firstTop = Infinity
   for (const [key, el] of dividerEls) {
-    const top = el.getBoundingClientRect().top
-    if (top <= 80 && top >= currentTop) {
+    const top = el.getBoundingClientRect().top - rootTop
+    if (top <= NAV_TOP_THRESHOLD_PX && top > currentTop) {
       current = key
       currentTop = top
     }
-  }
-  if (current === '') {
-    // 还在第一段分割线之前：取流中 top 最小的分割线
-    let firstKey = ''
-    let firstTop = Infinity
-    for (const [key, el] of dividerEls) {
-      const top = el.getBoundingClientRect().top
-      if (top < firstTop) {
-        firstKey = key
-        firstTop = top
-      }
+    // 兜底候选：流中相对 top 最小的分割线（尚在第一段分割线之前时用）
+    if (top < firstTop) {
+      firstKey = key
+      firstTop = top
     }
-    current = firstKey
   }
+  if (current === '') current = firstKey
   // 按天/按月的分割线键是天/月粒度，导航高亮降到月份粒度
   activeNavKey.value =
     settings.segmentMode === 'activity' ? current : current.slice(0, 7)
@@ -235,19 +253,48 @@ async function handleNavJump(key: string) {
   if (!seg) return
   await relocateTo(seg.offset)
   await nextTick()
-  // 定位到该分段分割线：精确匹配；月粒度导航但分割线为天粒度时前缀匹配
-  let el = dividerEls.get(key)
-  if (!el && settings.segmentMode !== 'activity') {
-    const target = [...dividerEls.entries()].find(([k]) => k.startsWith(key))
-    el = target?.[1]
-  }
+  // 等流渲染完成再定位：relocateTo 后照片数组刚更新，本轮 nextTick 可能只渲染了部分
+  await nextTick()
+  // 以分段首张渲染照片卡为锚点（而非分割线）：分割线位置受连拍折叠渲染
+  // 与 DOM 渲染时机影响有偏差，照片卡是用户感知的落位主体。
+  // 全量 offset 落在窗口内后，分段首张照片 = 窗口起点之后该分段的首张渲染照片。
   const sc = gridScrollRef.value
-  if (el) {
-    el.scrollIntoView({ behavior: 'auto', block: 'start' })
+  const anchor = findSegmentFirstPhotoEl(key)
+  if (sc && anchor) {
+    sc.scrollTop = anchor.offsetTop - NAV_TOP_THRESHOLD_PX
   } else if (sc) {
     sc.scrollTop = 0
   }
   updateActiveNav()
+}
+
+// 目标分段首张渲染照片的 DOM 元素。
+// 月粒度导航 + 天粒度分割线时按键前缀匹配；遍历渲染流找到分段键（或前缀）匹配的首张照片。
+function findSegmentFirstPhotoEl(key: string): HTMLElement | null {
+  const sc = gridScrollRef.value
+  if (!sc) return null
+  const els = sc.querySelectorAll<HTMLElement>('[data-photo-id]')
+  const photosById = new Map(photos.value.map((p) => [p.id, p]))
+  for (const el of els) {
+    const photo = photosById.get(el.dataset.photoId ?? '')
+    if (!photo) continue
+    if (segmentKeyOfPhoto(photo) === key) return el
+    if (settings.segmentMode !== 'activity' && segmentKeyOfPhoto(photo).startsWith(key)) {
+      return el
+    }
+  }
+  return null
+}
+
+// 照片的分段键（与 utils/segment.ts 的 segKeyOf 对齐）
+function segmentKeyOfPhoto(photo: { shot_at: string | null; timeline: string }): string {
+  if (settings.segmentMode === 'activity') return photo.timeline || ''
+  if (!photo.shot_at) return ''
+  const d = new Date(photo.shot_at)
+  if (Number.isNaN(d.getTime())) return ''
+  return settings.segmentMode === 'day'
+    ? d.toISOString().slice(0, 10)
+    : d.toISOString().slice(0, 7)
 }
 
 // 回到最新：清空跳转筛选恢复默认视图
@@ -536,12 +583,132 @@ onUnmounted(() => {
 
 <template>
   <NLayout class="page-layout">
-    <!-- 顶部工具栏 -->
+    <!-- 顶部工具栏（单行：标题 + 总数 + 视图控制 + 更多 | 右侧动作） -->
     <NLayoutHeader bordered>
         <div class="toolbar">
-          <h3 class="toolbar-title">图片管理</h3>
+          <div class="toolbar-left">
+            <h3 class="toolbar-title">图片管理</h3>
 
-          <NSpace>
+            <!-- 总数（其余统计在「更多」内查看） -->
+            <span class="total-count">共 {{ stats?.total ?? total }} 张</span>
+
+            <!-- 视图控制 -->
+            <NTooltip trigger="hover" placement="top">
+              <template #trigger>
+                <NButton size="small" @click="handleCycleViewLevel">
+                  展示：{{ viewLevelLabels[settings.burstViewLevel] }}
+                </NButton>
+              </template>
+              点击切换连拍展示级别（全部展开 / 精细折叠 / 模糊折叠）
+            </NTooltip>
+
+            <NSelect
+              :value="settings.segmentMode"
+              :options="segmentModeOptions"
+              size="small"
+              style="width: 96px"
+              @update:value="handleSegmentModeChange"
+            />
+
+            <NButton size="small" @click="toggleSortOrder">
+              {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
+            </NButton>
+
+            <!-- 更多：搜索 + 筛选（日期 / 活动）+ 其余统计 -->
+            <NPopover
+              trigger="click"
+              placement="bottom-start"
+              :to="false"
+              style="width: 360px"
+            >
+              <template #trigger>
+                <NButton size="small" class="filter-trigger">
+                  <template #icon>
+                    <NBadge :value="activeFilterCount" :offset="[-2, 2]" :show="activeFilterCount > 0">
+                      <NIcon><InformationCircleOutline /></NIcon>
+                    </NBadge>
+                  </template>
+                  更多
+                </NButton>
+              </template>
+
+              <div class="filter-panel">
+                <!-- 搜索组 -->
+                <div class="filter-group">
+                  <div class="filter-group-title">搜索</div>
+                  <NInput
+                    v-model:value="searchFilename"
+                    placeholder="搜索文件名"
+                    size="small"
+                    clearable
+                    @keyup.enter="applyFilters"
+                  >
+                    <template #prefix>
+                      <NIcon><SearchOutline /></NIcon>
+                    </template>
+                  </NInput>
+                </div>
+
+                <!-- 筛选组 -->
+                <div class="filter-group">
+                  <div class="filter-group-title">筛选</div>
+                  <div class="filter-group-row">
+                    <span class="filter-label">拍摄日期</span>
+                    <NDatePicker
+                      type="date"
+                      clearable
+                      placeholder="起始日期"
+                      size="small"
+                      style="width: 132px"
+                      @update:value="handleDateStart"
+                    />
+                    <span class="filter-label">至</span>
+                    <NDatePicker
+                      type="date"
+                      clearable
+                      placeholder="结束日期"
+                      size="small"
+                      style="width: 132px"
+                      @update:value="handleDateEnd"
+                    />
+                  </div>
+                  <div class="filter-group-row">
+                    <span class="filter-label">活动</span>
+                    <NSelect
+                      v-model:value="filterTimeline"
+                      :options="timelineOptions"
+                      placeholder="全部活动"
+                      clearable
+                      size="small"
+                      style="flex: 1"
+                      @update:value="applyFilters"
+                    />
+                  </div>
+                </div>
+
+                <!-- 统计组（只读，其余数据） -->
+                <div class="filter-group">
+                  <div class="filter-group-title">统计</div>
+                  <div class="stats-summary">
+                    <span>数据完整 {{ embedStats?.with_embedding ?? '...' }} 张</span>
+                    <span class="stats-sep">|</span>
+                    <span>VLM待处理 {{ stats?.without_description ?? '...' }} 张</span>
+                    <span class="stats-sep">|</span>
+                    <span>Embed待处理 {{ pendingEmbedCount }} 张</span>
+                  </div>
+                </div>
+
+                <!-- 重置 -->
+                <div class="filter-panel-footer">
+                  <NButton size="tiny" quaternary @click="resetFilters">
+                    重置筛选
+                  </NButton>
+                </div>
+              </div>
+            </NPopover>
+          </div>
+
+          <NSpace :wrap="false">
             <!-- VLM 全局控制 -->
             <template v-if="vlmRunning">
               <NTooltip trigger="hover">
@@ -568,7 +735,7 @@ onUnmounted(() => {
               <template #icon>
                 <NIcon><PlayOutline /></NIcon>
               </template>
-              开始自动VLM预处理
+              VLM
             </NButton>
 
             <!-- Embed 全局控制 -->
@@ -597,7 +764,7 @@ onUnmounted(() => {
               <template #icon>
                 <NIcon><LayersOutline /></NIcon>
               </template>
-              开始批量Embed
+              Embed
             </NButton>
 
             <!-- 连拍分组重算 -->
@@ -637,117 +804,6 @@ onUnmounted(() => {
       <!-- 主内容区 -->
       <NLayoutContent>
         <div class="content-wrapper">
-          <!-- 统计摘要 + 排序搜索 -->
-          <div class="stats-bar">
-            <div class="stats-summary">
-              <span>共 {{ stats?.total ?? total }} 张</span>
-              <span class="stats-sep">|</span>
-              <span>
-                数据完整
-                {{ embedStats?.with_embedding ?? '...' }} 张
-              </span>
-              <span class="stats-sep">|</span>
-              <span>
-                VLM待处理
-                {{ stats?.without_description ?? '...' }} 张
-              </span>
-              <span class="stats-sep">|</span>
-              <span>
-                Embed待处理
-                {{ pendingEmbedCount }} 张
-              </span>
-            </div>
-
-            <div class="stats-actions">
-              <NSpace align="center">
-                <!-- 连拍展示级别循环切换 -->
-                <NTooltip trigger="hover">
-                  <template #trigger>
-                    <NButton
-                      size="small"
-                      @click="handleCycleViewLevel"
-                    >
-                      <template #icon>
-                        <NIcon><AlbumsOutline /></NIcon>
-                      </template>
-                      展示：{{ viewLevelLabels[settings.burstViewLevel] }}
-                    </NButton>
-                  </template>
-                  点击切换连拍展示级别（全部展开 / 精细折叠 / 模糊折叠）
-                </NTooltip>
-
-                <!-- 分段方式 -->
-                <NSelect
-                  :value="settings.segmentMode"
-                  :options="segmentModeOptions"
-                  size="small"
-                  style="width: 90px"
-                  @update:value="handleSegmentModeChange"
-                />
-
-                <!-- 排序（仅拍摄时间升/降序） -->
-                <NButton size="small" @click="toggleSortOrder">
-                  {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
-                </NButton>
-
-                <!-- 文件名搜索 -->
-                <NInput
-                  v-model:value="searchFilename"
-                  placeholder="搜索文件名"
-                  size="small"
-                  clearable
-                  style="width: 180px"
-                  @keyup.enter="applyFilters"
-                >
-                  <template #prefix>
-                    <NIcon><SearchOutline /></NIcon>
-                  </template>
-                </NInput>
-              </NSpace>
-            </div>
-          </div>
-
-          <!-- 筛选栏 -->
-          <div class="filter-bar">
-            <NSpace align="center" :wrap="true">
-              <!-- 拍摄日期范围 -->
-              <span class="filter-label">拍摄日期</span>
-              <NDatePicker
-                type="date"
-                clearable
-                placeholder="起始日期"
-                style="width: 140px"
-                @update:value="handleDateStart"
-              />
-              <span>至</span>
-              <NDatePicker
-                type="date"
-                clearable
-                placeholder="结束日期"
-                style="width: 140px"
-                @update:value="handleDateEnd"
-              />
-
-              <!-- 活动筛选 -->
-              <span class="filter-label">活动</span>
-              <NSelect
-                v-model:value="filterTimeline"
-                :options="timelineOptions"
-                placeholder="全部活动"
-                clearable
-                style="width: 160px"
-              />
-
-              <!-- 操作按钮 -->
-              <NButton type="primary" size="small" @click="applyFilters">
-                筛选
-              </NButton>
-              <NButton size="small" @click="resetFilters">
-                重置
-              </NButton>
-            </NSpace>
-          </div>
-
           <!-- 照片流 + 右侧分段导航 -->
           <div class="grid-with-nav">
             <div ref="gridScrollRef" class="grid-main">
@@ -865,9 +921,52 @@ onUnmounted(() => {
   padding: 0 24px;
   height: 56px;
 }
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0; /* 宽度不足时优先压缩标题 */
+}
+.total-count {
+  font-size: 13px;
+  color: var(--n-text-color-3);
+  white-space: nowrap;
+}
 .toolbar-title {
   margin: 0;
   font-size: 16px;
+  white-space: nowrap;
+}
+.filter-trigger {
+  flex-shrink: 0;
+}
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filter-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--n-text-color-3);
+}
+.filter-group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--n-border-color);
+  padding-top: 8px;
 }
 .progress-tag {
   font-size: 14px;
@@ -881,29 +980,17 @@ onUnmounted(() => {
   padding: 20px 24px;
   overflow: hidden;
 }
-.stats-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--n-text-color-3);
-  margin-bottom: 12px;
-}
 .stats-summary {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  font-size: 13px;
+  color: var(--n-text-color-3);
 }
 .stats-sep {
   margin: 0 8px;
   color: var(--n-divider-color);
-}
-.filter-bar {
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  background: var(--n-color-embedded);
-  border-radius: 8px;
-  border: 1px solid var(--n-border-color);
 }
 .filter-label {
   font-size: 13px;

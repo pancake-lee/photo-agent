@@ -58,5 +58,21 @@ func Migrate() error {
 		plogger.Info("DB migrate: created app_settings table")
 	}
 
+	// photos 表补 timeline_manual 列（人工指定 timeline，重算时保留）
+	if !g.Migrator().HasColumn(&model.Photo{}, "timeline_manual") {
+		if err := g.Exec("ALTER TABLE photos ADD COLUMN timeline_manual INTEGER NOT NULL DEFAULT 0").Error; err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: added timeline_manual column to photos")
+	}
+
+	// timeline_events 表按需补建（时间线事件，从 timeline.json 迁移）
+	if !g.Migrator().HasTable(&model.TimelineEvent{}) {
+		if err := g.Migrator().CreateTable(&model.TimelineEvent{}); err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: created timeline_events table")
+	}
+
 	return nil
 }

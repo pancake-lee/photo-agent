@@ -97,7 +97,9 @@ const flowItems = computed<FlowItem[]>(() => {
 // ── 双向滚动加载 ──
 // 直接根据有界滚动容器的位置判断，避免 IntersectionObserver 在加载期间
 // 丢失相交事件，或在哨兵持续可见时重复触发。
-const LOAD_THRESHOLD_PX = 600
+// 阈值放宽到 1200px（约 1.5 屏）：预留更大缓冲，让下一页在用户接近边界前
+// 就完成加载，避免看到空缺后再补载引起的位移跳动。
+const LOAD_THRESHOLD_PX = 1200
 let observedScrollRoot: HTMLElement | null = null
 
 function maybeLoad() {
