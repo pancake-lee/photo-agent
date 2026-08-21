@@ -28,12 +28,15 @@ export interface SegmentDivider {
 const UNKNOWN_LABEL = '未知时间'
 
 /** 单张照片的分段键 */
-function segKeyOf(photo: PhotoListItem, mode: SegmentMode): string {
+export function localSegmentKeyOf(photo: PhotoListItem, mode: SegmentMode): string {
   if (!photo.shot_at) return ''
   const d = new Date(photo.shot_at)
   if (Number.isNaN(d.getTime())) return ''
-  if (mode === 'day') return d.toISOString().slice(0, 10)
-  return d.toISOString().slice(0, 7)
+  if (mode === 'activity') return photo.timeline || ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  if (mode === 'month') return `${year}-${month}`
+  return `${year}-${month}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /** 分段键转分割线标题 */
@@ -78,7 +81,7 @@ export function computeDividers(
   let prevKey: string | null = null
   for (let i = 0; i < photos.length; i++) {
     const key =
-      mode === 'activity' ? photos[i].timeline || '' : segKeyOf(photos[i], mode)
+      localSegmentKeyOf(photos[i], mode)
     if (key !== prevKey) {
       dividers.push({
         key,

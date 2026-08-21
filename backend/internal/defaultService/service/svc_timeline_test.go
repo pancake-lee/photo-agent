@@ -95,6 +95,31 @@ func TestSplitScatteredPhotosEmpty(t *testing.T) {
 	}
 }
 
+func TestSplitScatteredPhotosCrossYearAndMonthlySequence(t *testing.T) {
+	entries := []TimelineEntry{
+		mkEntry("2026-12-15"),
+		mkEntry("2027-01-15"),
+		mkEntry("2027-01-25"),
+	}
+	photos := []scatteredPhoto{
+		mkScatteredPhoto("dec", "2026-12-28 10:00"),
+		mkScatteredPhoto("jan1", "2027-01-05 10:00"),
+		mkScatteredPhoto("hit", "2027-01-15 10:00"),
+		mkScatteredPhoto("jan2", "2027-01-20 10:00"),
+	}
+
+	groups := splitScatteredPhotos(photos, entries, 3)
+	wantNames := []string{"2026-12-散片1", "2027-01-散片1", "2027-01-散片2"}
+	if len(groups) != len(wantNames) {
+		t.Fatalf("groups = %d, want %d: %+v", len(groups), len(wantNames), groups)
+	}
+	for i, want := range wantNames {
+		if groups[i].Name != want {
+			t.Errorf("group[%d].Name = %q, want %q", i, groups[i].Name, want)
+		}
+	}
+}
+
 func TestFindEventByTimeWindow(t *testing.T) {
 	windowDays := 7
 	entries := []TimelineEntry{

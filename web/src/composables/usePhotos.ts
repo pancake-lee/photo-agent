@@ -136,6 +136,9 @@ const loading = ref(false) // 初始 / 重定位加载
 const loadingDown = ref(false)
 const loadingUp = ref(false)
 const error = ref<string | null>(null)
+// 非关键辅助数据加载失败不会中断照片流，但必须交给页面显示给用户。
+const auxiliaryError = ref<string | null>(null)
+const pendingPageRequestMap = new Map<string, Promise<{ items: PhotoListItem[]; total: number }>>()
 
 // 分段导航
 const segments = ref<PhotoSegmentNavItem[]>([])
@@ -177,29 +180,31 @@ export function usePhotos() {
 
   // 拉取某页（1 基）照片，返回 items 与全量 total
   async function fetchPage(page: number): Promise<{ items: PhotoListItem[]; total: number }> {
-    const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
+    const requestKey = JSON.stringify({
       page,
-      SCROLL_PAGE_SIZE,
-      filterTimeline.value || undefined,
-      undefined, // tag
-      searchFilename.value || undefined, // keyword
-      undefined, // brand
-      undefined, // lens
-      undefined, // focalMin
-      undefined, // focalMax
-      undefined, // isoMin
-      undefined, // isoMax
-      filterShotAtStart.value || undefined,
-      filterShotAtEnd.value || undefined,
-      sortBy.value,
-      sortOrder.value,
-      undefined, // burstGroupId
-      currentBurstProfile(),
-    )
-    return {
+      timeline: filterTimeline.value,
+      keyword: searchFilename.value,
+      shotAtStart: filterShotAtStart.value,
+      shotAtEnd: filterShotAtEnd.value,
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
+      burstProfile: currentBurstProfile(),
+    })
+    const pending = pendingPageRequestMap.get(requestKey)
+    if (pending) return pending
+    const request = photoApi.photoServiceSearchPhotos(
+      page, SCROLL_PAGE_SIZE, filterTimeline.value || undefined, undefined,
+      searchFilename.value || undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, filterShotAtStart.value || undefined, filterShotAtEnd.value || undefined,
+      sortBy.value, sortOrder.value, undefined, currentBurstProfile(),
+    ).then((resp: ApiSearchPhotosResponse) => ({
       items: (resp.items ?? []).map(adaptPhotoItem),
       total: parseInt(resp.total ?? '0', 10),
-    }
+    })).finally(() => {
+      pendingPageRequestMap.delete(requestKey)
+    })
+    pendingPageRequestMap.set(requestKey, request)
+    return request
   }
 
   // 窗口重定位：以 offset 为中心加载「目标页 + 上下各一页」，
@@ -357,7 +362,7 @@ export function usePhotos() {
         offset: parseInt(s.offset ?? '0', 10),
       }))
     } catch (e) {
-      console.warn('获取分段导航失败', e)
+      auxiliaryError.value = '分段导航加载失败，请重试'
     }
   }
 
@@ -366,7 +371,7 @@ export function usePhotos() {
       const resp = await photoApi.photoServiceGetPhotoStats()
       stats.value = adaptStats(resp)
     } catch (e) {
-      console.warn('获取统计信息失败', e)
+      auxiliaryError.value = '照片统计加载失败，请稍后重试'
     }
   }
 
@@ -380,7 +385,7 @@ export function usePhotos() {
       ].filter((n) => n !== '')
       timelines.value = names
     } catch (e) {
-      console.warn('获取时间线列表失败', e)
+      auxiliaryError.value = '时间线筛选项加载失败，请稍后重试'
     }
   }
 
@@ -528,6 +533,7 @@ export function usePhotos() {
     noMoreDown,
     noMoreUp,
     error,
+    auxiliaryError,
     segments,
     selectedPhoto,
     showDetail,
