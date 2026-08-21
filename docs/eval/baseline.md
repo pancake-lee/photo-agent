@@ -41,7 +41,7 @@
 > 指标来源：AI 评估模式下的 `sqlite3` 直接查询 + suggest API 调用。
 >
 > 📋 3.4 专题中枢：[design/2026-07-27-topic-discovery-hub.md](../design/2026-07-27-topic-discovery-hub.md)
-
+>
 > 中枢文档：[2026-08-11-import-workflow-hub.md](../design/2026-08-11-import-workflow-hub.md) — 导入工作流专题全部关联产物的汇总入口
 
 ### 2026-08-21 — LB 系列 照片列表浏览（LB1-LB6，专题整体评估）
@@ -54,7 +54,7 @@
 - **用户价值**：（交互体验 8）— 窗口重定位跳转对比筛选重置式是质变
 - **剩余问题**：LB5 重算未执行（用户步骤）、LB7 PhotoManagement.vue 拆分、LB8 四项低危小项
 - **误报澄清**：子代理报「offset 不随排序方向/排序 UI 残留/气泡无延迟」三项高严重问题，经运行时复测全部排除（首项因 curl 误传 camelCase 参数走进 default 分支）
-- **评估报告**：`data/eval_reports/eval-lb-series-2026-08-21.json`
+- **评估报告**：`data/eval_reports/2026-08-21-photo-list-lb-series.json`
 - **专题中枢**：[design/2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### 2026-08-18 — 导入工作流 W1-W11（Windows 客户端，第三轮整体评估）
@@ -66,7 +66,7 @@
 - **功能效果**：（准确性 9 / 完整性 9 / 一致性 9）— 设计三步 UI 承诺全部兑现，收尾建议恪守「仅复制不删除」
 - **用户价值**：（可用性 8 / 交互体验 9）— 失败后有明确行动指引；同步后 storage/info 自动刷新
 - **剩余问题**：Windows 实机验证 5 项未做、ImportWorkflow.vue 拆分、服务器地址记忆/验证时效（轻量）
-- **评估报告**：`data/eval_reports/eval-import-workflow-v3-2026-08-18.json`
+- **评估报告**：`data/eval_reports/2026-08-18-import-workflow-v3.json`
 
 ### 2026-08-18 — 导入工作流 W5-W9（Windows 客户端，第二轮评估）
 
@@ -77,7 +77,7 @@
 - **功能效果**：（准确性 8 / 完整性 8 / 一致性 9）— W8 补全 warning 渲染；无清空中转收尾
 - **用户价值**：（可用性 8 / 交互体验 9）— W9 进度反馈落地；服务器地址无记忆
 - **剩余问题**：W10（上传无重试）、W11（清空中转收尾）
-- **评估报告**：`data/eval_reports/eval-import-workflow-v2-2026-08-18.json`
+- **评估报告**：`data/eval_reports/2026-08-18-import-workflow-v2.json`
 
 ### 2026-08-18 — 导入工作流 W1-W4（Windows 客户端，首轮评估）
 
@@ -88,7 +88,7 @@
 - **功能效果**：（准确性 8 / 完整性 7 / 一致性 8）— 四阶段全落地，命名/风格一致；warning 字段前端丢弃、无清空中转收尾
 - **用户价值**：（可用性 8 / 交互体验 7）— 三步引导降低误操作、仅复制保安全；长上传无进度反馈
 - **新发现问题**：W5（配置模板 StorageRoot 分叉）、W6（overwrite 不回写 shot_at）、W7（NEF EXIF 读取策略不一致）、W8（storage/info warning 未展示）、W9（上传无进度反馈）
-- **评估报告**：`data/eval_reports/eval-import-workflow-2026-08-18.json`
+- **评估报告**：`data/eval_reports/2026-08-18-import-workflow.json`
 
 ### 2026-07-31 — 3.8 主题发现交互式管线（首轮评估）
 
@@ -98,7 +98,7 @@
 - **功能效果**：（完整性 7 / 一致性 9）— 6 个 Phase 全部实现，API 端点与前端组件完整覆盖，风格一致；步骤卡片缺照片缩略图
 - **用户价值**：（惊喜度 6 / 可用性 7 / 交互体验 7）— 管线可视化是黑盒到白盒的质变，但编辑偏技术化，JSON 编辑器对普通用户门槛高
 - **新发现问题**：B12（手动选题直觉模式下照片被忽略）、B13（双存储写入冗余）、3.9（步骤可视化增强）、3.10（版本对比功能）
-- **评估报告**：`data/eval_reports/eval-3.8-2026-07-31.json`
+- **评估报告**：`data/eval_reports/2026-07-31-topic-discovery-3.8.json`
 
 ### 2026-07-31 — 3.8 衍生优化设计方案文档评估
 
@@ -106,7 +106,7 @@
 - **评估对象**：`docs/archive/topic-discovery/2026-07-31-2-suggest-pipeline-optimizations.md`（五个优化任务的设计方案，已归档）
 - **文档质量**：（结构清晰度 8 / 决策合理性 8 / 验收可执行性 7 / 代码一致性 5 / 方案完整性 7）— 结构统一、决策有据，但 §7 代码质量清单中至少 3/5 条描述与实际代码不符
 - **新发现问题**：§7 三处代码描述不准确（prompt_idx 非重复赋值、_migrate_to_v2 非裸 except、_save_suggest_history 已捕获 OSError），backlog 与设计文档验收勾选状态不一致
-- **评估报告**：`data/eval_reports/eval-design-3.8-optimizations-2026-07-31.json`
+- **评估报告**：`data/eval_reports/2026-07-31-suggest-pipeline-optimizations-design.json`
 
 ### 2026-07-28 — B10 修复后全面评估（shot_at 时间戳→日期转换）
 
@@ -116,7 +116,7 @@
 - **B8 验证**：3/9 提案触发幻觉检测（12 次数字索引被替换），最终 48/48 photo_id 有效
 - **B9 验证**：9/9 提案天然满足 ≥7 天，后处理替换逻辑未触发（边界未验证）
 - **已知问题**：1 张照片 shot_at=0（1970, EXIF 缺失），1/9 提案仍有颜色属性归类倾向
-- **评估报告**：`data/eval_reports/eval-B10-2026-07-28.json`
+- **评估报告**：`data/eval_reports/2026-07-27-b10-2026-07-28.json`
 
 ### 2026-07-28 — 3.5 设计方案 + 实现第二轮评估（评估对象：design 文档质量 + 数据兼容性）
 
@@ -128,7 +128,7 @@
   - 服务未重启 + 前端未重编：staged 代码尚未部署生效
 - **修正前次误判**：SuggestHistoryItem 并非 dead code，已正确用做 GET /api/suggest/history 的 response_model；并发写锁（threading.Lock）已实现
 - **遗留问题**：星级 hover 预览、数字分值标签、loadHistory 静默失败三项体验问题仍未修复
-- **评估报告**：`data/eval_reports/eval-3.5-design-2026-07-28.json`
+- **评估报告**：`data/eval_reports/2026-07-28-suggest-persistence-3.5-design.json`
 
 ### 2026-07-28 — 3.5 持久化存储 + 五星打分 + 删除（第一轮评估）
 
@@ -137,7 +137,7 @@
 - **API 验证**：POST run（含自动保存）/ GET history（时间倒序）/ GET detail / DELETE / PATCH rating（含边界校验）全部通过
 - **代码质量**：遵循项目 JSON 存储模式，前端 NaiveUI 组件风格一致。并发写锁已实现（threading.Lock），SuggestHistoryItem 已用做 response_model（非 dead code，首轮评估此条为误判）
 - **交互**：五星打分（乐观更新+回滚）、NPopconfirm 删除确认、自动展开最新记录
-- **评估报告**：`data/eval_reports/eval-3.5-2026-07-28.json`
+- **评估报告**：`data/eval_reports/2026-07-28-suggest-persistence-3.5.json`
 
 ### 2026-07-27 — B10 修复后验证（shot_at Unix 时间戳 → 日期转换）
 
@@ -157,7 +157,7 @@
 - **B8 成效**：photo_id 校验正确捕获 6 个幻觉 ID（5 个数字索引 + 1 个有效 UUID 误报），最终 16/16 photo_id 全部有效
 - **B9 成效**：prompt 层有效（2/3 提案时间跨度 295 天和 230 天），后处理不工作——根因是 shot_at 为 Unix 时间戳字符串而非 ISO 日期
 - **新发现问题**：B10 — shot_at 是 Unix 时间戳，全链路日期处理（Stage 1 分组 / Stage 2 跨度 / Stage 3 prompt 日期 / B9 后处理）全部失效
-- **评估报告**：`data/eval_reports/eval-B8-B9-R6-2026-07-27.json`
+- **评估报告**：`data/eval_reports/2026-07-27-b8-b9-r6.json`
 
 ### 2026-07-27 — 3.4 config 补齐后评估（三阶段主路径首次激活）
 
@@ -165,7 +165,7 @@
 - **config 补齐**：`.local/pancake.yaml` Go 段添加完整 Embedding 配置（APIKey/Model/BaseURL），三阶段主路径端到端跑通
 - **选题质量提升**：从旧版「按情绪属性归类」升级为「编辑视角提案」。'人鸥之间'连接企鹅玩偶与真实海鸥（跨半年），'水岸的生命剧场'跨越 173 天
 - **遗留问题**：LLM 幻觉 1 个 photo_id（UUID 截断），1/3 选题时间跨度仅约 1 天（不满足 > 7 天标准），Stage 3 无 photo_id 校验
-- **评估报告**：`data/eval_reports/eval-3.4-v3-2026-07-27.json`
+- **评估报告**：`data/eval_reports/2026-07-27-topic-discovery-3.4-v3.json`
 
 ### 2026-07-27 — 3.4 修复后重新评估（config 缺失，三阶段未激活）
 
@@ -173,7 +173,7 @@
 - **提升点**：B6 PageSize 修复（300→1177 张照片），B5 健康检查（避免 LLM token 浪费），R5 代码简化（-50 行）
 - **阻塞问题**：`.local/pancake.yaml` Go 段缺少 `Embedding.APIKey`，三阶段主路径无法运行，选题建议仍来自旧版三维度
 - **用户体验**：与前次评估（4.2/10）无改善——5 条建议均为「高频未成组」类型，按单一情绪属性归类
-- **评估报告**：`data/eval_reports/eval-3.4-v2-2026-07-27.json`
+- **评估报告**：`data/eval_reports/2026-07-27-topic-discovery-3.4-v2.json`
 
 ### 2026-07-27 — B1 修复后评估
 
@@ -183,4 +183,4 @@
   - lighting 99.8%，mood 99.7%，composition 99.7%
 - **选题建议**：5 条（高频未成组 4 + 稀缺优质 1），时间线规律维度为空（B2）
 - **遗留问题**：parseVlmAttrs 静默失败（B3）、needAttrBackfill 条件不够精细
-- **评估报告**：`data/eval_reports/eval-B1-2026-07-27.json`
+- **评估报告**：`data/eval_reports/2026-07-27-b1.json`

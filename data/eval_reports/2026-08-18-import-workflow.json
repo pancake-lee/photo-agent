@@ -1,0 +1,25 @@
+{
+  "report_id": "eval-a3f8c2d91e4b",
+  "backlog_id": "导入工作流 W1-W4",
+  "created_at": "2026-08-18T10:30:00",
+  "target": "导入工作流（Windows 客户端）：W1 Wails 工程搭建 + W2 服务端 NEF 存储与 storage/info + W3 客户端文件操作 + W4 前端导入三步流程页面",
+  "overall": 7.7,
+  "dimension_scores": {
+    "正确性": 8,
+    "健壮性": 7,
+    "可维护性": 8,
+    "简洁性": 8,
+    "准确性": 8,
+    "完整性": 7,
+    "一致性": 8,
+    "可用性": 8,
+    "交互体验": 7
+  },
+  "findings_for_backlog": [
+    "configs/config.yaml 模板中 PhotoSrc 与 StorageRoot 指向不同目录，按模板部署时 storage/info 扫描目录与上传落盘目录不一致",
+    "storage/info 返回的 warning 字段前端未消费，存储根不可访问时用户无提示",
+    "上传阶段（大量文件含大体积 NEF）无进度反馈，仅按钮 loading",
+    "overwritePhoto 未回写 shot_at/GPS 字段，覆盖同名文件时新拍摄时间不更新",
+    "客户端与服务端对 NEF 的 goexif EXIF 读取策略不一致（客户端跳过、服务端仍读）"
+  ]
+}

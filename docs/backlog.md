@@ -113,7 +113,7 @@
   - [x] 排序 UI 收敛为升降序切换（实测顶栏仅「↓ 降序」切换按钮，无文件名/导入时间入口）
   - [ ] 2000+ 张滚动流畅（当前库 1323 张实测流畅，未达 2000+ 口径）
   - [x] `pnpm build` 通过；后端 sentinel 单测 PASS
-- **评估**：8.3（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [eval-lb-series-2026-08-21.json](../data/eval_reports/eval-lb-series-2026-08-21.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **评估**：8.3（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### LB2 照片列表滑动窗口预加载 + 四项 bug 修复
 
@@ -136,7 +136,7 @@
   - [x] 气泡有触发延迟，气泡上滚动的是照片列表（PhotoCard.vue `:delay="300" :to="false"`）
   - [x] 连拍折叠/筛选/排序/分段切换下定位与 offset 同步正确
   - [x] 2000+ 张滚动流畅，窗口内存有上界（MAX_WINDOW_PAGES=10 即 1000 张上界；1323 张库实测流畅，2000+ 口径未测）
-- **评估**：7.9（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [eval-lb-series-2026-08-21.json](../data/eval_reports/eval-lb-series-2026-08-21.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **评估**：7.9（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### LB3 滚动到边缘不再加载（高度链断裂）
 
@@ -155,7 +155,7 @@
   - [x] 工具栏/统计栏/筛选栏固定不动，只有照片列表区域滚动（LB6 顶栏单行后实测整页滚动已消除）
   - [x] 右侧分段导航固定可见，高亮随滚动跟随（实测点击「2026 年 2 月」后 active 高亮与目标一致）
   - [x] `pnpm build` 通过
-- **评估**：7.7（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [eval-lb-series-2026-08-21.json](../data/eval_reports/eval-lb-series-2026-08-21.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **评估**：7.7（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### LB4 导航跳转不准确（坐标 + 锚点）
 
@@ -170,7 +170,7 @@
   - [x] 滚动时高亮实时跟随当前段，无滞后一段的现象（updateActiveNav 已改为相对滚动容器换算，PhotoManagement.vue:220；实测跳转后高亮正确）
   - [ ] 连拍折叠（精细/模糊）下同样准确（未做运行时专项验证）
   - [x] `pnpm build` 通过
-- **评估**：8.5（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [eval-lb-series-2026-08-21.json](../data/eval_reports/eval-lb-series-2026-08-21.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **评估**：8.5（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### LB5 散片自动时间线 + 时间线管理页
 
@@ -191,7 +191,7 @@
   - [x] JSON 一次性导入成功，旧 timeline.json 退役（评估实测：timeline_events 表 29 条事件、created_at 同批次 2026-08-21 14:45:08，ListEvents 正常返回）
   - [x] 图片管理活动筛选下拉含散片组，未重算存量照片仍可筛「未分类」（「未分类」项在筛选下拉中，sentinel API total=190 与 DB 一致）
   - [x] `go test` + `pnpm build` 通过（评估复跑 go test PASS 0.133s）
-- **评估**：7.9（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [eval-lb-series-2026-08-21.json](../data/eval_reports/eval-lb-series-2026-08-21.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **评估**：7.9（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### LB6 图片管理顶栏重排（单行 + 弹出收纳）
 
@@ -205,7 +205,7 @@
   - [x] 筛选激活时触发器有角标提示，重置可清空（NBadge activeFilterCount 角标在码）
   - [x] 布局符合 docs/ui-rules.md（8px 网格、邻近性、左信息右操作；实测布局无堆叠错乱）
   - [x] `pnpm build` 通过
-- **评估**：8.4（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [eval-lb-series-2026-08-21.json](../data/eval_reports/eval-lb-series-2026-08-21.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **评估**：8.4（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
 
 ### LB7 PhotoManagement.vue 拆分
 

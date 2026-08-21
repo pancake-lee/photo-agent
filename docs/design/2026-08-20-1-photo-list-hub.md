@@ -20,7 +20,7 @@
 
 ### 评估报告
 
-- `data/eval_reports/eval-lb-series-2026-08-21.json` — LB 系列整体评估（8.1 通过），2026-08-21
+- `data/eval_reports/2026-08-21-photo-list-lb-series.json` — LB 系列整体评估（8.1 通过），2026-08-21
 
 ### Backlog 条目
 

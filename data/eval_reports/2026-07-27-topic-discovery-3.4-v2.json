@@ -1,0 +1,24 @@
+{
+  "report_id": "eval-3d4e2v2-20260727",
+  "backlog_id": "3.4",
+  "created_at": "2026-07-27T22:30:00",
+  "target": "3.4 主题发现选题相似度过高 — 衍生问题修复后重新评估（B4/B5/B6/R5 修复后）",
+  "overall": 5.8,
+  "dimension_scores": {
+    "正确性": 7,
+    "健壮性": 7,
+    "可维护性": 8,
+    "简洁性": 8,
+    "准确性": 5,
+    "完整性": 6,
+    "惊喜度": 3,
+    "可用性": 5,
+    "AI 增量": 4
+  },
+  "findings_for_backlog": [
+    ".local/pancake.yaml Go 配置段缺少 Embedding.APIKey：当前 Go 段仅声明了 VLM.MaxImageSizeMB，缺少 Embedding.APIKey（且 VLM 段的 APIKey/Model/BaseURL 也未声明），导致 getEmbeddingConfig() 两次回退后 BaseURL 为空，三阶段主路径不可用。需用户手动在 .local/pancake.yaml 的 Go 段添加 Embedding 配置",
+    "_check_embedding_health 的 except httpx.HTTPStatusError 分支是死代码：httpx.get() 不会主动 raise_for_status()，HTTP 错误码会走到 resp.json() 然后由 except Exception 兜底，建议移除或修正",
+    "legacy 回退路径产出「稀缺优质」维度选题仅 2 张照片（庄重寺院印象），不满足设计方案「至少 5 张照片」的验收标准",
+    "legacy 回退路径产出的 5 条建议中 2 条围绕「静谧」情绪（静谧时光集、蓝调静谧时），选题角度重叠——回退路径本身也存在选题相似度问题，只是严重程度低于修复前的三阶段主路径"
+  ]
+}

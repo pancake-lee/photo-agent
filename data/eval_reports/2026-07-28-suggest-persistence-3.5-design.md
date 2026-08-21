@@ -1,0 +1,171 @@
+# 3.5 评估报告
+
+- **报告 ID**：eval-3.5-design-2026-07-28
+- **日期**：2026-07-28T02:10:00
+- **对象**：评估 docs/design/2026-07-28-1-suggest-persistence.md 设计方案与实现
+
+## 摘要
+
+**总分 7.5/10 ✅ 通过**（阈值 6.0）。
+
+整体评分 7.5/10，通过（阈值 6.0）。设计文档本身质量高（9 分）：结构清晰、决策有依据、范围边界明确、验收标准可执行。代码实现与设计文档对齐良好，5 个 API 端点完整覆盖 CRUD + 评分。
+
+关键改进（相对前次 7.9/10 评估）：
+1. SuggestHistoryItem 并非 dead code，已正确用作 history 端点的 response_model
+2. 并发写锁（threading.Lock）已实现，修正前次「无锁保护」的发现
+
+关键问题（新发现）：
+1. **旧数据不兼容**：当前 suggest_history.json 中为旧格式（嵌套 suggestions 数组），新前端期望扁平 records。部署新代码后旧数据在新前端渲染为空白卡片，需手动清理旧数据或添加格式迁移逻辑
+2. **服务/前端未部署**：staged 代码尚未重启 agent 服务 + 重编 web 前端生效，当前运行实例仍为旧代码
+3. 星级 hover 预览、数字分值标签、loadHistory 静默失败三项体验问题仍未修复
+
+## 分维度评分
+
+### 代码质量
+
+#### 设计清晰度 9
+
+得分点：
+
+- 问题背景（第 1 节）用数据流图清晰展示了当前缺陷，一句话说清三个痛点
+- 需求概述（第 2 节）四点需求每一项可独立验收，无歧义
+- 存储方案（第 3 节）给出了完整的数据结构定义、字段说明，且主动解释了「为什么不选 SQLite」——决策有依据
+- API 设计（第 4 节）用表格列出全部 5 个端点，方法/路径/说明完整
+- 前端改动（第 5 节）有 ASCII 布局 mockup，交互细节描述具体（第 N 颗星点亮逻辑、取消逻辑）
+- 第 6 节「生成数量说明」主动解释了为什么不做固定数量——明确拒绝了一个合理的追问
+- 第 8 节「不做的事」划清了范围边界，防止范围蔓延
+
+失分点：
+
+- 设计文档未提及旧数据迁移：文档假定从零开始，但实际 suggest_history.json 中已有旧格式数据（单条记录含 suggestions 数组）。部署新代码后旧数据在新前端渲染为空白卡片（缺少 title/angle/photo_ids 等字段），文档未说明迁移策略或兼容方案
+- POST /api/suggest/run 返回值描述为「增加 id 字段」，但实际变更远不止此：从返回单条 SuggestResponse 变为返回 {items, count, error} 的批量响应，文档对返回格式的变化描述不够准确
+
+#### 正确性 7
+
+得分点：
+
+- 新代码（staged）的数据模型与设计文档 3.2 节完全对齐：SuggestHistoryItem 包含所有 12 个字段且默认值合理
+- POST /api/suggest/run 的返回格式 {items, count, error} 与设计文档 4.1 节一致
+- run_suggest() 返回的 TopicSuggestion 对象（suggest.py:77-84）字段与 SuggestHistoryItem 兼容映射正确
+- 评分边界校验（0-5）在服务端 enforce，前端乐观更新 + 回滚逻辑正确
+
+失分点：
+
+- 旧格式数据不兼容：当前 suggest_history.json 中数据使用嵌套格式（suggestions 数组 + candidates_found 字段），新前端 HistoryItem 接口期望 title/angle/photo_ids 等顶层字段。旧数据卡片会渲染为空白标题、空角度、空理由
+- GET /api/suggest/history/{id} 返回原始 dict 而非通过 SuggestHistoryItem 校验（无 response_model），与列表端点不一致
+
+#### 健壮性 8
+
+得分点：
+
+- JSON 文件不存在/解析失败的降级处理正确（_load_suggest_history 返回空列表）
+- 并发写保护已实现（threading.Lock），修正了前次评估中「无锁保护」的发现
+- 评分越界校验在服务端，前端无法绕过
+- 删除 404 的正确处理（不存在 ID 返回 404 而非 500）
+
+失分点：
+
+- loadHistory 静默失败：网络错误时用户看到空状态，与真实无历史记录无法区分——与上次评估发现一致，仍未修复
+- 无数据格式版本标识：suggest_history.json 无 schema version 字段，未来如果再次变更格式，无法做兼容读取
+
+#### 可维护性 8
+
+得分点：
+
+- _load / _save / _path 三函数模式与 golden_queries.json 完全一致，降低认知负担
+- SuggestHistoryItem 模型定义后确实在使用（response_model=list[SuggestHistoryItem] 第 931 行），修正了前次评估中「dead code」的误判
+- 前端新增 editorial_proposal 分类标签和 PIPELINE_LABELS 映射，补齐了三阶段路径的缺失 UI 元素
+- CSS 使用项目已有变量体系（--n-text-color 等）
+
+失分点：
+
+- star-rating 渲染逻辑内嵌在 SuggestView.vue 中（renderStars 函数），后续如果其他页面需要打分组件需复制代码
+- GET /api/suggest/history/{id} 的手写遍历查找（for it in items: if it['id'] == item_id）在数据量大时效率低，虽然当前场景可接受
+
+#### 简洁性 8
+
+得分点：
+
+- 未引入新依赖，纯 stdlib json + pathlib + threading 实现存储和并发
+- 存储函数签名与 golden_queries 实现模式完全一致，无重复设计
+- 一次性保存全部列表（而非每个 topic 独立写文件），避免了散落的碎片文件
+
+失分点：
+
+- GET /api/suggest/history/{id} 全量加载后遍历查找，功能正确但非最优（可接受，数据量小）
+
+
+### 功能效果
+
+#### 准确性 8
+
+得分点：
+
+- 5 个 API 端点设计完整覆盖 CRUD + 评分：POST run、GET history、GET detail、DELETE、PATCH rating
+- POST run 自动保存 + 返回 items 列表，前端可直接插入头部
+- time 倒序通过 insert(0) 保证，逻辑简单可靠
+
+失分点：
+
+- 旧数据格式导致当前 history 端点返回的记录在前端无法正确渲染（title/angle 为空字符串），刷新后 history 列表实际不可用，需先手动删除旧数据或清空文件
+- 设计文档验收标准 6 项全部 ✅ 标注已实现，但其中「刷新页面后历史结果仍在」在当前部署状态（服务未重启、前端未重编）下实际不可验证
+
+#### 完整性 7
+
+得分点：
+
+- 设计文档 4 项需求全部有对应的代码实现
+- POST run 自动保存消除了「手动保存」的步骤，体验好
+
+失分点：
+
+- **数据迁移缺失**：设计文档和代码实现均未处理已有旧格式数据的兼容，新代码部署后旧数据在新前端渲染为空白卡片。这是设计与实现之间的一个结构性 gap
+- 前端展示的照片始终 showAll=true（第 385 行），旧版「展开查看/收起」功能被移除但设计文档未提及此变更
+
+#### 一致性 9
+
+得分点：
+
+- API JSON 结构与 golden_queries / cluster results 风格一致
+- 前端复用 NaiveUI 组件（NTag/NButton/NPopconfirm/NModal），与项目全局一致
+- CSS 变量体系无硬编码色值
+- 分类标签颜色/图标体系扩展自然
+
+
+### 用户价值
+
+#### 可用性 8
+
+得分点：
+
+- 刷新不丢失：核心痛点已解决（新数据）
+- 评分让用户标记优质选题
+- 删除确认弹窗防误操作
+- 新生成自动展开减少操作步骤
+
+失分点：
+
+- 星级无配套数字标签（如 '3/5'），用户无法一眼确认当前分值——与上次评估发现一致
+- loadHistory 静默失败导致用户看到的空状态与真实无历史无法区分——与上次评估发现一致
+
+#### 交互体验 7
+
+得分点：
+
+- 摘要栏信息一目了然（时间/路径/建议数/星级/删除）
+- 星星 hover 有 scale 动画反馈
+- 删除有 loading 状态，防重复点击
+- 生成中有 loading 状态
+
+失分点：
+
+- 星级 hover 时无预览（hover 星 3 时第 1-3 颗星不会临时高亮），仅靠 title 属性提示——与上次评估发现一致
+- 摘要栏内部的星星和删除按钮与卡片点击区域重叠，依赖 stopPropagation 隔离
+- 展开后嵌套滚动（max-height: 60vh + overflow-y: auto）体验不够流畅——与上次评估发现一致
+
+## 下一步建议
+
+- 3.5 数据格式迁移：suggest_history.json 旧格式（嵌套 suggestions 数组）与新前端扁平 record 格式不兼容，需在首次加载时自动检测并迁移，或在部署说明中要求手动清理旧数据
+- 3.5 星级评分 hover 预览：hover 星 N 时临时亮起 1~N 颗星，移出恢复实际分值
+- 3.5 星级评分数字标签：星星旁显示如 '3/5' 的分值文本
+- 3.5 loadHistory 错误提示：网络失败时区分「无历史记录」和「加载失败」，避免用户困惑

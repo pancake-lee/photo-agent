@@ -1,0 +1,23 @@
+{
+  "report_id": "eval-b8b9r6-20260727",
+  "backlog_id": "B8/B9/R6",
+  "created_at": "2026-07-27T23:45:00",
+  "target": "B8 photo_id 校验 + B9 时间跨度强制 + R6 import cleanup",
+  "overall": 6.5,
+  "dimension_scores": {
+    "正确性": 6,
+    "健壮性": 5,
+    "可维护性": 8,
+    "简洁性": 8,
+    "准确性": 6,
+    "完整性": 7,
+    "一致性": 8,
+    "惊喜度": 7,
+    "可用性": 8,
+    "AI 增量": 8
+  },
+  "findings_for_backlog": [
+    "shot_at 字段为 Unix 时间戳字符串（如 '1780733203'），但 suggest.py 中所有日期处理代码均按 ISO 日期字符串（如 '2025-05-02'）操作：Stage 1 随机采样按日期分组失效（实际按时间戳前缀分组）、Stage 2 日期跨度始终为 0、Stage 3 prompt 日期信息对 LLM 无意义、B9 后处理 date_map 始终为空导致时间跨度强制约束静默跳过",
+    "B8 valid_ids 对有效 UUID 'aff0bed7-6685-4158-b796-332405faf77f' 误报为'不存在'（但被 expanded_ids 中的同 ID 替换，功能无害），需排查 valid_ids set 构建逻辑"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "report_id": "eval-3d3e1b7a8f2c",
+  "backlog_id": "3.4",
+  "created_at": "2026-07-27T18:30:00",
+  "target": "3.4 主题发现选题相似度过高 — 三阶段编辑视角提案",
+  "overall": 4.2,
+  "dimension_scores": {
+    "正确性": 4,
+    "健壮性": 6,
+    "可维护性": 7,
+    "简洁性": 6,
+    "准确性": 3,
+    "完整性": 4,
+    "惊喜度": 2,
+    "可用性": 5,
+    "AI 增量": 5
+  },
+  "findings_for_backlog": [
+    "Stage 2 RAG 检索失败：Go 后端 /v1/embeddings 代理接口因缺少 Embedding 配置段（Embedding.APIKey/BaseURL 为空且 VLM 回退也为空）恒定 500，导致三阶段主路径永远回退到旧版三维度",
+    "Stage 1 LLM 调用浪费：在 embedding 不可用时，3 个主题直觉的生成消耗了 LLM token 但全部因 Stage 2 失败而丢弃，应前置 embedding 可用性检查",
+    "_fetch_all_photos 仅返回 300 张照片（数据库实际 1,177 张），Go 后端 SearchPhotos 或 SDK 分页需排查",
+    "_parse_intuitions_response 与 _parse_legacy_response 约 80% 逻辑重复，可提取公共 JSON 解析函数",
+    "设计方案未覆盖 Stage 2 基础设施故障的降级策略：当前只有 Stage 1 无输出或 Stage 3 无提案时才回退，Stage 2 全部失败不在回退条件中"
+  ]
+}

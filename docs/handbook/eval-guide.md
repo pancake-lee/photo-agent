@@ -101,41 +101,34 @@ git show <commit>
 
 ### 第四步：输出评估报告
 
-将检查结果写入 `data/eval_reports/eval-{backlog_id}-{date}.json`，格式：
+按读者拆分双格式（规范详见 [2026-07-26-1-harness-design.md](../design/2026-07-26-1-harness-design.md)「2026-08-21 评估报告双格式规范」节），两个文件同目录同名：
+
+**命名**：`{date}-{topic}.json` + `{date}-{topic}.md`，如 `2026-08-21-photo-list-lb-series`。topic 优先取对应 design 文档的主题名（design 与 report 尽量对应），无对应 design 时以 backlog 序号兜底（如 `2026-07-28-b10`）
+
+**JSON**（面向程序：通过判定、基线更新、趋势追踪）只保留结构化字段：
 
 ```json
 {
-  "report_id": "eval-{uuid12}",
-  "backlog_id": "B1",
-  "created_at": "2026-07-27T...",
-  "target": "B1 主题发现返回空结果修复",
-  "scorecard": {
-    "overall": 7.5,
-    "dimensions": [
-      {
-        "name": "正确性",
-        "category": "代码质量",
-        "score": 9,
-        "max": 10,
-        "strengths": ["回填逻辑正确触发了 1177 张照片的属性解析"],
-        "weaknesses": ["syncUpdatePhoto 条件分支增加了一层复杂度"]
-      },
-      {
-        "name": "惊喜度",
-        "category": "用户价值",
-        "score": 3,
-        "max": 10,
-        "strengths": [],
-        "weaknesses": ["5 条建议全部是同一场景下的相似照片组合，无跨场景/跨时间的非显性关联，用户不会觉得意外"]
-      }
-    ]
-  },
-  "summary": "整体评价...",
-  "findings_for_backlog": [
-    "时间线规律维度始终为 0 候选，需分析是数据问题还是算法阈值问题"
-  ]
+  "report_id": "2026-08-21-photo-list-lb-series",
+  "backlog_id": "LB1-LB6",
+  "created_at": "2026-08-21T23:30:00+08:00",
+  "target": "LB 系列整体评估",
+  "overall": 8.1,
+  "per_task": { "LB1": 8.3, "LB2": 7.9 },
+  "dimension_scores": { "正确性": 8.5, "健壮性": 7.5 },
+  "findings_for_backlog": ["问题描述，可直接导入 backlog"],
+  "verification_runtime": ["go test PASS", "Playwright 导航跳转实测"],
+  "verification_commits": { "LB1": "f19b2e4" }
 }
 ```
+
+**Markdown**（面向人工：复盘、代码审查参考）完整承载描述性内容：
+
+- 摘要：总分 + 通过结论 + 一句话总结
+- 分维度评分：每个维度得分 + 得分点/失分点（JSON 中移除的 strengths/weaknesses 全部在此）
+- per_task 评分与简评（多任务报告）
+- 执行证据：运行时验证、commits 完整证据链
+- 下一步建议：由 findings_for_backlog 提炼方向
 
 ### 第五步：更新文档
 

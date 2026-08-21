@@ -1,0 +1,22 @@
+{
+  "report_id": "eval-7b1d9c3e2f8a",
+  "backlog_id": "导入工作流 W5-W9",
+  "created_at": "2026-08-18T11:10:00",
+  "target": "导入工作流（Windows 客户端）第二轮评估：W5 配置模板 StorageRoot 分叉 + W6 overwrite 不回写 shot_at + W7 NEF EXIF 读取策略不一致 + W8 storage/info warning 未展示 + W9 上传进度反馈",
+  "overall": 8.3,
+  "dimension_scores": {
+    "正确性": 9,
+    "健壮性": 8,
+    "可维护性": 8,
+    "简洁性": 8,
+    "准确性": 8,
+    "完整性": 8,
+    "一致性": 9,
+    "可用性": 8,
+    "交互体验": 9
+  },
+  "findings_for_backlog": [
+    "uploadOneFile 无重试机制，网络抖动导致单文件失败后需用户手动重新同步（skip 模式可部分缓解）",
+    "上传完成后无「清空中转目录」收尾步骤，设计原文有清空意图但 UI 未落地"
+  ]
+}

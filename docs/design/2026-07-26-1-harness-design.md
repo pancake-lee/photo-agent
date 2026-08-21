@@ -496,7 +496,7 @@ Agent 自主循环：
   - 提交 `6299cf9b1dc6a044257e77439a9af99474f19e73`
 - /clear
 - 提示词：评估`主题发现选题相似度过高”
-  - 评估并不通过，4.2/10分，报告已保存至 data/eval_reports/eval-3.4-2026-07-27.json
+  - 评估并不通过，4.2/10分，报告已保存至 data/eval_reports/2026-07-27-topic-discovery-3.4.json
   - 主要问题已经在backlog.md追加了任务
   - 提交 `b7c8ac883aac86ac6b88cf5a95c999efe6d8ad3c`
   - 规划 `c2b198886f4d860bb2bb11240e4da74f98b0fafe`
@@ -562,3 +562,54 @@ Agent 自主循环：
 - `docs/handbook/eval-guide.md`：第五步新增回写评估分数到 backlog 规则；原验收列表回写规则扩展为支持 backlog 内验收
 - `docs/backlog.md`：任务总览表新增评估列；头部结构化字段说明加入评估；B11 条目填入评估得分
 - `docs/design/2026-07-26-1-harness-design.md`：字段模板加入评估
+
+## 2026-08-21 评估报告双格式规范
+
+### 问题
+
+评估报告此前只有 JSON 单一载体，同一份内容要同时满足机器解析与人工阅读：strengths/weaknesses 等大段自然语言占据 JSON 主要篇幅，程序解析用不上；人工复盘读 JSON 的成本又很高。
+
+### 规范：按读者拆分双格式
+
+- **JSON**：面向程序化处理（通过判定、基线更新、趋势追踪），只保留结构化可计算字段
+- **Markdown**：面向人工阅读（复盘、代码审查参考），完整保留描述性内容
+- 两个文件同目录（`data/eval_reports/`）同名：`eval-xxx.json` + `eval-xxx.md`
+
+**JSON 保留**：
+
+- `report_id` / `backlog_id` / `created_at` / `target`：元数据，索引与追溯
+- `overall` + `dimension_scores`（维度名 → 分数）：核心结构化数据，用于趋势线与基线刷新
+- `per_task`：多任务报告的每任务评分
+- `findings_for_backlog`：可直接导入 backlog 的结构化问题条目
+- `verification_runtime` / `verification_commits`：关键验证标识（短字符串，不展开证据链）
+
+**JSON 去掉（移入 Markdown）**：各维度 `strengths` / `weaknesses`、`summary`、完整证据链描述
+
+精简后 JSON 示例：
+
+```json
+{
+  "report_id": "2026-08-21-photo-list-lb-series",
+  "backlog_id": "LB1-LB6",
+  "created_at": "2026-08-21T23:30:00+08:00",
+  "target": "LB 系列整体评估",
+  "overall": 8.1,
+  "per_task": { "LB1": 8.3, "LB2": 7.9 },
+  "dimension_scores": { "正确性": 8.5, "健壮性": 7.5 },
+  "findings_for_backlog": ["问题描述，可直接导入 backlog"],
+  "verification_runtime": ["go test PASS", "Playwright 导航跳转实测"],
+  "verification_commits": { "LB1": "f19b2e4" }
+}
+```
+
+**Markdown 结构**：摘要（总分 + 通过结论 + 一句话总结）→ 分维度评分（得分 + 得分点/失分点，完整保留 strengths/weaknesses）→ per_task 评分与简评 → 执行证据（运行时验证、commits 完整证据链）→ 下一步建议（由 findings 提炼方向）
+
+### 工作流
+
+1. 评估器一次产出两个文件（同目录同名，仅扩展名不同）
+2. JSON 供程序判断是否通过、自动更新基线、生成趋势
+3. Markdown 供人工审阅与复盘；回顾旧报告时阅读成本远低于 JSON
+
+### 存量迁移
+
+规范确立后，`data/eval_reports/` 下已有的单 JSON 报告需补齐精简 JSON + 拆出 Markdown。分两批执行：先迁移 2 份供用户确认格式，再迁移全部。
