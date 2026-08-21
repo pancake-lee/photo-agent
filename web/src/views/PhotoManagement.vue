@@ -535,7 +535,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <NLayout>
+  <NLayout class="page-layout">
     <!-- 顶部工具栏 -->
     <NLayoutHeader bordered>
         <div class="toolbar">
@@ -842,6 +842,22 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* 补齐高度链：naive-ui 的 NLayout 内层 scroll-container 是 block 布局，
+   NLayoutContent 自带的 flex:auto 因此失效、高度塌成 auto，导致下游
+   .content-wrapper / .grid-main 的 height:100% 全部解析为 auto，
+   .grid-main 拿不到有界高度就不会滚动（scroll 事件不触发 → 滚动加载失效）。
+   把 scroll-container 改为纵向 flex，让 content 区拿到确定高度。 */
+.page-layout > :deep(.n-layout-scroll-container) {
+  display: flex;
+  flex-direction: column;
+}
+.page-layout :deep(.n-layout-header) {
+  flex-shrink: 0;
+}
+.page-layout :deep(.n-layout-content) {
+  flex: 1;
+  min-height: 0;
+}
 .toolbar {
   display: flex;
   align-items: center;

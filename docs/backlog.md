@@ -13,6 +13,7 @@
 | WIP   | 连拍分组   | BG1  | 连拍分组（识别 + 折叠展示）    |      |
 | Done   | 列表浏览   | LB1  | 照片列表分段浏览               |      |
 | Done   | 列表浏览   | LB2  | 照片列表滑动窗口预加载 + 四项 bug 修复 |      |
+| Done   | 列表浏览   | LB3  | 滚动到边缘不再加载（高度链断裂） |      |
 | 待规划 | Phase 1    | 1.4  | 黄金用例评估体系扩展           |      |
 | 待规划 | Phase 3    | 3.2  | 多轮对话上下文感知             |      |
 | 待规划 | Phase 3    | 3.3  | 摄影报告生成                   |      |
@@ -125,10 +126,28 @@
   - [x] 预加载生效，滚动无明显等待
   - [x] 后端导航接口 offset + count 正确，前端定位正确
   - [x] 分割线按天/月/活动可见并正确跨行
-  - [x] 只有照片列表滚动，整页不滚、无空白露出
+  - [x] 只有照片列表滚动，整页不滚、无空白露出（当时误判为通过，实际未生效，见 LB3）
   - [x] 气泡有触发延迟，气泡上滚动的是照片列表
   - [x] 连拍折叠/筛选/排序/分段切换下定位与 offset 同步正确
   - [x] 2000+ 张滚动流畅，窗口内存有上界
+
+### LB3 滚动到边缘不再加载（高度链断裂）
+
+- **用户原始描述**：图片管理，滚动到当前数据边缘后，没有自动继续加载。
+- **状态**：Done（2026-08-21 生成完成，`pnpm build` 通过）
+- **背景**：LB2 把列表区设计成「有界滚动容器」，但 `.grid-main` 实际从未成为滚动容器，`scroll` 事件一次都没触发，向下加载因此永不触发。设计文档：[docs/design/2026-08-21-1-photo-list-window-preload-design.md](../design/2026-08-21-1-photo-list-window-preload-design.md) 第 4.2 节
+- **方案**：
+  - 根因：naive-ui `NLayout` 内层 `.n-layout-scroll-container` 是 block 布局，`NLayoutContent` 自带的 `flex:auto` 失效、高度塌成 auto，下游 `.content-wrapper` / `.grid-main` 的 `height:100%` 全部解析为 auto，`.grid-main` 高度等于内容高度，`overflow-y:auto` 永不生效
+  - 修复：给根 `NLayout` 加 `.page-layout` 类，`:deep()` 把内层 scroll-container 改为纵向 flex，header `flex-shrink:0`、content `flex:1;min-height:0`，补齐高度链
+  - 附带修 `PhotoGrid.handleScroll` 两处：顶部分支 early return 会吞掉底部判定；加载结束后无主动复检（连拍折叠下一页 100 张可能只渲染十几张封面，视口填不满就再无滚动事件）
+- **分析**：同一根因还连带 LB2 的「整页滚动」实际未修复、右侧分段导航跟随整页滚走、`updateActiveNav` 从不触发导致高亮不跟随。上一版的 IntersectionObserver 写法失败也是同因：root 不是滚动容器时哨兵恒定相交，回调只在 observe 那一刻触发一次。方案在「修回原设计 / 改动风险面 / 长期维护成本」三项上取补齐高度链，代价是依赖 naive-ui 内部类名 `.n-layout-content`、`.n-layout-scroll-container`
+- **验收**：
+  - [ ] 滚动到窗口下沿自动追加下一页，持续滚动不中断
+  - [ ] 滚动到窗口上沿自动前插上一页，视口内容不跳变
+  - [ ] 连拍折叠（精细/模糊）下首屏填不满时自动继续加载至填满
+  - [ ] 工具栏/统计栏/筛选栏固定不动，只有照片列表区域滚动
+  - [ ] 右侧分段导航固定可见，高亮随滚动跟随
+  - [x] `pnpm build` 通过
 
 ---
 

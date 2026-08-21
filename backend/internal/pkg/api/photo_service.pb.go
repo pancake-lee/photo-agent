@@ -2002,7 +2002,8 @@ const file_photo_service_proto_rawDesc = "" +
 	"\fPhotoService\x12[\n" +
 	"\fSearchPhotos\x12\x18.api.SearchPhotosRequest\x1a\x19.api.SearchPhotosResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/v1/photos\x12U\n" +
 	"\rGetPhotoStats\x12\n" +
-	".api.Empty\x1a\x1a.api.GetPhotoStatsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/photos/stats\x12f\n" +
+	".api.Empty\x1a\x1a.api.GetPhotoStatsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/photos/stats\x12s\n" +
+	"\x11ListPhotoSegments\x12\x1d.api.ListPhotoSegmentsRequest\x1a\x1e.api.ListPhotoSegmentsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/photos/segments\x12f\n" +
 	"\x0eGetPhotoDetail\x12\x1a.api.GetPhotoDetailRequest\x1a\x1b.api.GetPhotoDetailResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/v1/photos/{id}\x12_\n" +
 	"\x0fUpdatePhotoTags\x12\x1b.api.UpdatePhotoTagsRequest\x1a\n" +
 	".api.Empty\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/api/v1/photos/{id}/tags\x12]\n" +
@@ -2016,8 +2017,7 @@ const file_photo_service_proto_rawDesc = "" +
 	"\x17UpdateBurstGroupsConfig\x12#.api.UpdateBurstGroupsConfigRequest\x1a\n" +
 	".api.Empty\"&\x82\xd3\xe4\x93\x02 :\x01*\x1a\x1b/api/v1/burst-groups/config\x12r\n" +
 	"\x12SetBurstGroupCover\x12\x1e.api.SetBurstGroupCoverRequest\x1a\n" +
-	".api.Empty\"0\x82\xd3\xe4\x93\x02*:\x01*\x1a%/api/v1/burst-groups/{group_id}/cover\x12s\n" +
-	"\x11ListPhotoSegments\x12\x1d.api.ListPhotoSegmentsRequest\x1a\x1e.api.ListPhotoSegmentsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/photos/segmentsB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
+	".api.Empty\"0\x82\xd3\xe4\x93\x02*:\x01*\x1a%/api/v1/burst-groups/{group_id}/coverB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_photo_service_proto_rawDescOnce sync.Once
@@ -2074,26 +2074,26 @@ var file_photo_service_proto_depIdxs = []int32{
 	19, // 12: api.UpdateBurstGroupsConfigRequest.coarse:type_name -> api.BurstProfileConfig
 	0,  // 13: api.PhotoService.SearchPhotos:input_type -> api.SearchPhotosRequest
 	23, // 14: api.PhotoService.GetPhotoStats:input_type -> api.Empty
-	12, // 15: api.PhotoService.GetPhotoDetail:input_type -> api.GetPhotoDetailRequest
-	14, // 16: api.PhotoService.UpdatePhotoTags:input_type -> api.UpdatePhotoTagsRequest
-	15, // 17: api.PhotoService.DeletePhoto:input_type -> api.DeletePhotoRequest
-	23, // 18: api.PhotoService.RebuildBurstGroups:input_type -> api.Empty
-	23, // 19: api.PhotoService.GetBurstGroupsStatus:input_type -> api.Empty
-	23, // 20: api.PhotoService.GetBurstGroupsConfig:input_type -> api.Empty
-	21, // 21: api.PhotoService.UpdateBurstGroupsConfig:input_type -> api.UpdateBurstGroupsConfigRequest
-	22, // 22: api.PhotoService.SetBurstGroupCover:input_type -> api.SetBurstGroupCoverRequest
-	3,  // 23: api.PhotoService.ListPhotoSegments:input_type -> api.ListPhotoSegmentsRequest
+	3,  // 15: api.PhotoService.ListPhotoSegments:input_type -> api.ListPhotoSegmentsRequest
+	12, // 16: api.PhotoService.GetPhotoDetail:input_type -> api.GetPhotoDetailRequest
+	14, // 17: api.PhotoService.UpdatePhotoTags:input_type -> api.UpdatePhotoTagsRequest
+	15, // 18: api.PhotoService.DeletePhoto:input_type -> api.DeletePhotoRequest
+	23, // 19: api.PhotoService.RebuildBurstGroups:input_type -> api.Empty
+	23, // 20: api.PhotoService.GetBurstGroupsStatus:input_type -> api.Empty
+	23, // 21: api.PhotoService.GetBurstGroupsConfig:input_type -> api.Empty
+	21, // 22: api.PhotoService.UpdateBurstGroupsConfig:input_type -> api.UpdateBurstGroupsConfigRequest
+	22, // 23: api.PhotoService.SetBurstGroupCover:input_type -> api.SetBurstGroupCoverRequest
 	2,  // 24: api.PhotoService.SearchPhotos:output_type -> api.SearchPhotosResponse
 	11, // 25: api.PhotoService.GetPhotoStats:output_type -> api.GetPhotoStatsResponse
-	13, // 26: api.PhotoService.GetPhotoDetail:output_type -> api.GetPhotoDetailResponse
-	23, // 27: api.PhotoService.UpdatePhotoTags:output_type -> api.Empty
-	16, // 28: api.PhotoService.DeletePhoto:output_type -> api.DeletePhotoResponse
-	17, // 29: api.PhotoService.RebuildBurstGroups:output_type -> api.RebuildBurstGroupsResponse
-	18, // 30: api.PhotoService.GetBurstGroupsStatus:output_type -> api.GetBurstGroupsStatusResponse
-	20, // 31: api.PhotoService.GetBurstGroupsConfig:output_type -> api.GetBurstGroupsConfigResponse
-	23, // 32: api.PhotoService.UpdateBurstGroupsConfig:output_type -> api.Empty
-	23, // 33: api.PhotoService.SetBurstGroupCover:output_type -> api.Empty
-	5,  // 34: api.PhotoService.ListPhotoSegments:output_type -> api.ListPhotoSegmentsResponse
+	5,  // 26: api.PhotoService.ListPhotoSegments:output_type -> api.ListPhotoSegmentsResponse
+	13, // 27: api.PhotoService.GetPhotoDetail:output_type -> api.GetPhotoDetailResponse
+	23, // 28: api.PhotoService.UpdatePhotoTags:output_type -> api.Empty
+	16, // 29: api.PhotoService.DeletePhoto:output_type -> api.DeletePhotoResponse
+	17, // 30: api.PhotoService.RebuildBurstGroups:output_type -> api.RebuildBurstGroupsResponse
+	18, // 31: api.PhotoService.GetBurstGroupsStatus:output_type -> api.GetBurstGroupsStatusResponse
+	20, // 32: api.PhotoService.GetBurstGroupsConfig:output_type -> api.GetBurstGroupsConfigResponse
+	23, // 33: api.PhotoService.UpdateBurstGroupsConfig:output_type -> api.Empty
+	23, // 34: api.PhotoService.SetBurstGroupCover:output_type -> api.Empty
 	24, // [24:35] is the sub-list for method output_type
 	13, // [13:24] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name

@@ -18,6 +18,13 @@ service PhotoService {
             get: "/api/v1/photos/stats"
         };
     }
+    // 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+    // 必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
+    rpc ListPhotoSegments (ListPhotoSegmentsRequest) returns (ListPhotoSegmentsResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/photos/segments"
+        };
+    }
     // 单张详情
     rpc GetPhotoDetail (GetPhotoDetailRequest) returns (GetPhotoDetailResponse) {
         option (google.api.http) = {
@@ -68,12 +75,6 @@ service PhotoService {
         option (google.api.http) = {
             put: "/api/v1/burst-groups/{group_id}/cover"
             body: "*"
-        };
-    }
-    // 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
-    rpc ListPhotoSegments (ListPhotoSegmentsRequest) returns (ListPhotoSegmentsResponse) {
-        option (google.api.http) = {
-            get: "/api/v1/photos/segments"
         };
     }
 }

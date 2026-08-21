@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	PhotoService_SearchPhotos_FullMethodName            = "/api.PhotoService/SearchPhotos"
 	PhotoService_GetPhotoStats_FullMethodName           = "/api.PhotoService/GetPhotoStats"
+	PhotoService_ListPhotoSegments_FullMethodName       = "/api.PhotoService/ListPhotoSegments"
 	PhotoService_GetPhotoDetail_FullMethodName          = "/api.PhotoService/GetPhotoDetail"
 	PhotoService_UpdatePhotoTags_FullMethodName         = "/api.PhotoService/UpdatePhotoTags"
 	PhotoService_DeletePhoto_FullMethodName             = "/api.PhotoService/DeletePhoto"
@@ -29,7 +30,6 @@ const (
 	PhotoService_GetBurstGroupsConfig_FullMethodName    = "/api.PhotoService/GetBurstGroupsConfig"
 	PhotoService_UpdateBurstGroupsConfig_FullMethodName = "/api.PhotoService/UpdateBurstGroupsConfig"
 	PhotoService_SetBurstGroupCover_FullMethodName      = "/api.PhotoService/SetBurstGroupCover"
-	PhotoService_ListPhotoSegments_FullMethodName       = "/api.PhotoService/ListPhotoSegments"
 )
 
 // PhotoServiceClient is the client API for PhotoService service.
@@ -42,6 +42,9 @@ type PhotoServiceClient interface {
 	SearchPhotos(ctx context.Context, in *SearchPhotosRequest, opts ...grpc.CallOption) (*SearchPhotosResponse, error)
 	// 综合统计
 	GetPhotoStats(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetPhotoStatsResponse, error)
+	// 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+	// 必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
+	ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...grpc.CallOption) (*ListPhotoSegmentsResponse, error)
 	// 单张详情
 	GetPhotoDetail(ctx context.Context, in *GetPhotoDetailRequest, opts ...grpc.CallOption) (*GetPhotoDetailResponse, error)
 	// 更新标签
@@ -58,8 +61,6 @@ type PhotoServiceClient interface {
 	UpdateBurstGroupsConfig(ctx context.Context, in *UpdateBurstGroupsConfigRequest, opts ...grpc.CallOption) (*Empty, error)
 	// 设置连拍组封面
 	SetBurstGroupCover(ctx context.Context, in *SetBurstGroupCoverRequest, opts ...grpc.CallOption) (*Empty, error)
-	// 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
-	ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...grpc.CallOption) (*ListPhotoSegmentsResponse, error)
 }
 
 type photoServiceClient struct {
@@ -84,6 +85,16 @@ func (c *photoServiceClient) GetPhotoStats(ctx context.Context, in *Empty, opts 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPhotoStatsResponse)
 	err := c.cc.Invoke(ctx, PhotoService_GetPhotoStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *photoServiceClient) ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...grpc.CallOption) (*ListPhotoSegmentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPhotoSegmentsResponse)
+	err := c.cc.Invoke(ctx, PhotoService_ListPhotoSegments_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,16 +181,6 @@ func (c *photoServiceClient) SetBurstGroupCover(ctx context.Context, in *SetBurs
 	return out, nil
 }
 
-func (c *photoServiceClient) ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...grpc.CallOption) (*ListPhotoSegmentsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPhotoSegmentsResponse)
-	err := c.cc.Invoke(ctx, PhotoService_ListPhotoSegments_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // PhotoServiceServer is the server API for PhotoService service.
 // All implementations must embed UnimplementedPhotoServiceServer
 // for forward compatibility.
@@ -190,6 +191,9 @@ type PhotoServiceServer interface {
 	SearchPhotos(context.Context, *SearchPhotosRequest) (*SearchPhotosResponse, error)
 	// 综合统计
 	GetPhotoStats(context.Context, *Empty) (*GetPhotoStatsResponse, error)
+	// 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+	// 必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
+	ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error)
 	// 单张详情
 	GetPhotoDetail(context.Context, *GetPhotoDetailRequest) (*GetPhotoDetailResponse, error)
 	// 更新标签
@@ -206,8 +210,6 @@ type PhotoServiceServer interface {
 	UpdateBurstGroupsConfig(context.Context, *UpdateBurstGroupsConfigRequest) (*Empty, error)
 	// 设置连拍组封面
 	SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error)
-	// 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
-	ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error)
 	mustEmbedUnimplementedPhotoServiceServer()
 }
 
@@ -223,6 +225,9 @@ func (UnimplementedPhotoServiceServer) SearchPhotos(context.Context, *SearchPhot
 }
 func (UnimplementedPhotoServiceServer) GetPhotoStats(context.Context, *Empty) (*GetPhotoStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPhotoStats not implemented")
+}
+func (UnimplementedPhotoServiceServer) ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPhotoSegments not implemented")
 }
 func (UnimplementedPhotoServiceServer) GetPhotoDetail(context.Context, *GetPhotoDetailRequest) (*GetPhotoDetailResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPhotoDetail not implemented")
@@ -247,9 +252,6 @@ func (UnimplementedPhotoServiceServer) UpdateBurstGroupsConfig(context.Context, 
 }
 func (UnimplementedPhotoServiceServer) SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetBurstGroupCover not implemented")
-}
-func (UnimplementedPhotoServiceServer) ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListPhotoSegments not implemented")
 }
 func (UnimplementedPhotoServiceServer) mustEmbedUnimplementedPhotoServiceServer() {}
 func (UnimplementedPhotoServiceServer) testEmbeddedByValue()                      {}
@@ -304,6 +306,24 @@ func _PhotoService_GetPhotoStats_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PhotoServiceServer).GetPhotoStats(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PhotoService_ListPhotoSegments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPhotoSegmentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).ListPhotoSegments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_ListPhotoSegments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).ListPhotoSegments(ctx, req.(*ListPhotoSegmentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -452,24 +472,6 @@ func _PhotoService_SetBurstGroupCover_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PhotoService_ListPhotoSegments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPhotoSegmentsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PhotoServiceServer).ListPhotoSegments(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PhotoService_ListPhotoSegments_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PhotoServiceServer).ListPhotoSegments(ctx, req.(*ListPhotoSegmentsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // PhotoService_ServiceDesc is the grpc.ServiceDesc for PhotoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -484,6 +486,10 @@ var PhotoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPhotoStats",
 			Handler:    _PhotoService_GetPhotoStats_Handler,
+		},
+		{
+			MethodName: "ListPhotoSegments",
+			Handler:    _PhotoService_ListPhotoSegments_Handler,
 		},
 		{
 			MethodName: "GetPhotoDetail",
@@ -516,10 +522,6 @@ var PhotoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetBurstGroupCover",
 			Handler:    _PhotoService_SetBurstGroupCover_Handler,
-		},
-		{
-			MethodName: "ListPhotoSegments",
-			Handler:    _PhotoService_ListPhotoSegments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

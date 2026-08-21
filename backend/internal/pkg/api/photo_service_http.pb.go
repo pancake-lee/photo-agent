@@ -42,7 +42,8 @@ type PhotoServiceHTTPServer interface {
 	GetPhotoDetail(context.Context, *GetPhotoDetailRequest) (*GetPhotoDetailResponse, error)
 	// GetPhotoStats 综合统计
 	GetPhotoStats(context.Context, *Empty) (*GetPhotoStatsResponse, error)
-	// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+	// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+	// 必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
 	ListPhotoSegments(context.Context, *ListPhotoSegmentsRequest) (*ListPhotoSegmentsResponse, error)
 	// RebuildBurstGroups 触发连拍分组全量重算（异步）
 	RebuildBurstGroups(context.Context, *Empty) (*RebuildBurstGroupsResponse, error)
@@ -60,6 +61,7 @@ func RegisterPhotoServiceHTTPServer(s *http.Server, srv PhotoServiceHTTPServer) 
 	r := s.Route("/")
 	r.GET("/api/v1/photos", _PhotoService_SearchPhotos0_HTTP_Handler(srv))
 	r.GET("/api/v1/photos/stats", _PhotoService_GetPhotoStats0_HTTP_Handler(srv))
+	r.GET("/api/v1/photos/segments", _PhotoService_ListPhotoSegments0_HTTP_Handler(srv))
 	r.GET("/api/v1/photos/{id}", _PhotoService_GetPhotoDetail0_HTTP_Handler(srv))
 	r.PUT("/api/v1/photos/{id}/tags", _PhotoService_UpdatePhotoTags0_HTTP_Handler(srv))
 	r.DELETE("/api/v1/photos/{id}", _PhotoService_DeletePhoto0_HTTP_Handler(srv))
@@ -68,7 +70,6 @@ func RegisterPhotoServiceHTTPServer(s *http.Server, srv PhotoServiceHTTPServer) 
 	r.GET("/api/v1/burst-groups/config", _PhotoService_GetBurstGroupsConfig0_HTTP_Handler(srv))
 	r.PUT("/api/v1/burst-groups/config", _PhotoService_UpdateBurstGroupsConfig0_HTTP_Handler(srv))
 	r.PUT("/api/v1/burst-groups/{group_id}/cover", _PhotoService_SetBurstGroupCover0_HTTP_Handler(srv))
-	r.GET("/api/v1/photos/segments", _PhotoService_ListPhotoSegments0_HTTP_Handler(srv))
 }
 
 func _PhotoService_SearchPhotos0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
@@ -105,6 +106,25 @@ func _PhotoService_GetPhotoStats0_HTTP_Handler(srv PhotoServiceHTTPServer) func(
 			return err
 		}
 		reply := out.(*GetPhotoStatsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _PhotoService_ListPhotoSegments0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListPhotoSegmentsRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceListPhotoSegments)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListPhotoSegments(ctx, req.(*ListPhotoSegmentsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListPhotoSegmentsResponse)
 		return ctx.Result(200, reply)
 	}
 }
@@ -285,25 +305,6 @@ func _PhotoService_SetBurstGroupCover0_HTTP_Handler(srv PhotoServiceHTTPServer) 
 	}
 }
 
-func _PhotoService_ListPhotoSegments0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
-	return func(ctx http.Context) error {
-		var in ListPhotoSegmentsRequest
-		if err := ctx.BindQuery(&in); err != nil {
-			return err
-		}
-		http.SetOperation(ctx, OperationPhotoServiceListPhotoSegments)
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.ListPhotoSegments(ctx, req.(*ListPhotoSegmentsRequest))
-		})
-		out, err := h(ctx, &in)
-		if err != nil {
-			return err
-		}
-		reply := out.(*ListPhotoSegmentsResponse)
-		return ctx.Result(200, reply)
-	}
-}
-
 type PhotoServiceHTTPClient interface {
 	// DeletePhoto 删除照片（含文件清理）
 	DeletePhoto(ctx context.Context, req *DeletePhotoRequest, opts ...http.CallOption) (rsp *DeletePhotoResponse, err error)
@@ -315,7 +316,8 @@ type PhotoServiceHTTPClient interface {
 	GetPhotoDetail(ctx context.Context, req *GetPhotoDetailRequest, opts ...http.CallOption) (rsp *GetPhotoDetailResponse, err error)
 	// GetPhotoStats 综合统计
 	GetPhotoStats(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetPhotoStatsResponse, err error)
-	// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+	// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+	// 必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
 	ListPhotoSegments(ctx context.Context, req *ListPhotoSegmentsRequest, opts ...http.CallOption) (rsp *ListPhotoSegmentsResponse, err error)
 	// RebuildBurstGroups 触发连拍分组全量重算（异步）
 	RebuildBurstGroups(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *RebuildBurstGroupsResponse, err error)
@@ -407,7 +409,8 @@ func (c *PhotoServiceHTTPClientImpl) GetPhotoStats(ctx context.Context, in *Empt
 	return &out, nil
 }
 
-// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+// ListPhotoSegments 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。
+// 必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
 func (c *PhotoServiceHTTPClientImpl) ListPhotoSegments(ctx context.Context, in *ListPhotoSegmentsRequest, opts ...http.CallOption) (*ListPhotoSegmentsResponse, error) {
 	var out ListPhotoSegmentsResponse
 	pattern := "/api/v1/photos/segments"

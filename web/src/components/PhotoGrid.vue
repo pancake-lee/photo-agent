@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { NSpin, NEmpty, NAlert, NButton } from 'naive-ui'
 import PhotoCard from './PhotoCard.vue'
 import PhotoSegmentDivider from './PhotoSegmentDivider.vue'
@@ -95,57 +95,49 @@ const flowItems = computed<FlowItem[]>(() => {
 })
 
 // ── 双向滚动加载 ──
-// 顶部哨兵 + 底部哨兵各自一个 IntersectionObserver，root = 有界滚动容器。
-// rootMargin 各向扩展 600px，滚动接近窗口上沿/下沿时提前触发前插/追加一页。
-const topSentinel = ref<HTMLElement | null>(null)
-const bottomSentinel = ref<HTMLElement | null>(null)
-let topObserver: IntersectionObserver | null = null
-let bottomObserver: IntersectionObserver | null = null
+// 直接根据有界滚动容器的位置判断，避免 IntersectionObserver 在加载期间
+// 丢失相交事件，或在哨兵持续可见时重复触发。
+const LOAD_THRESHOLD_PX = 600
+let observedScrollRoot: HTMLElement | null = null
 
-function teardownObservers() {
-  topObserver?.disconnect()
-  bottomObserver?.disconnect()
-  topObserver = null
-  bottomObserver = null
-}
-
-function setupObservers() {
-  teardownObservers()
+function maybeLoad() {
   const root = scrollRoot.value
-  if (!root) return
+  if (!root || props.loading || props.loadingUp || props.loadingDown || props.error) return
 
-  topObserver = new IntersectionObserver(
-    (entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        if (!props.loading && !props.loadingUp && !props.loadingDown && !props.noMoreUp && !props.error) {
-          emit('loadUp')
-        }
-      }
-    },
-    { root, rootMargin: '600px 0px 0px 0px' },
-  )
-  bottomObserver = new IntersectionObserver(
-    (entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        if (!props.loading && !props.loadingDown && !props.loadingUp && !props.noMoreDown && !props.error) {
-          emit('loadDown')
-        }
-      }
-    },
-    { root, rootMargin: '0px 0px 600px 0px' },
-  )
+  // 上下两端独立判定：窗口已到列表开头（noMoreUp）时不能提前 return，
+  // 否则内容较短、scrollTop 始终小于阈值的情况下向下加载永远不会触发
+  if (!props.noMoreUp && root.scrollTop <= LOAD_THRESHOLD_PX) {
+    emit('loadUp')
+    return
+  }
 
-  if (topSentinel.value) topObserver.observe(topSentinel.value)
-  if (bottomSentinel.value) bottomObserver.observe(bottomSentinel.value)
+  const distanceToBottom = root.scrollHeight - root.scrollTop - root.clientHeight
+  if (!props.noMoreDown && distanceToBottom <= LOAD_THRESHOLD_PX) emit('loadDown')
 }
 
-// 滚动容器注入时机晚于子组件挂载，且哨兵随 loading/空态切换而挂载/卸载，
-// 统一监听三者变化重建观察器。
-watch([() => scrollRoot.value, topSentinel, bottomSentinel], () => {
-  setupObservers()
-}, { flush: 'post' })
+function bindScrollRoot() {
+  if (observedScrollRoot === scrollRoot.value) return
+  observedScrollRoot?.removeEventListener('scroll', maybeLoad)
+  observedScrollRoot = scrollRoot.value
+  observedScrollRoot?.addEventListener('scroll', maybeLoad, { passive: true })
+  maybeLoad()
+}
 
-onBeforeUnmount(() => teardownObservers())
+watch(() => scrollRoot.value, bindScrollRoot, { flush: 'post' })
+
+// 一页 100 张在连拍折叠下可能只渲染出十几张封面，视口填不满就再也不会产生
+// 滚动事件。每次加载结束后主动复检一次，直到视口被填满或触达列表两端。
+watch(
+  () => [props.photos, props.loading, props.loadingDown, props.loadingUp],
+  () => {
+    if (props.loading || props.loadingDown || props.loadingUp) return
+    nextTick(maybeLoad)
+  },
+  { flush: 'post' },
+)
+
+onMounted(bindScrollRoot)
+onBeforeUnmount(() => observedScrollRoot?.removeEventListener('scroll', maybeLoad))
 </script>
 
 <template>
@@ -167,8 +159,8 @@ onBeforeUnmount(() => teardownObservers())
 
   <!-- 照片流 -->
   <div v-else class="photo-list">
-    <!-- 顶部哨兵：滚动接近窗口上沿时触发向上加载 -->
-    <div ref="topSentinel" class="load-sentinel-top">
+    <!-- 顶部加载状态 -->
+    <div class="load-sentinel-top">
       <NSpin v-if="loadingUp" size="small" />
     </div>
 
@@ -199,8 +191,8 @@ onBeforeUnmount(() => teardownObservers())
       </template>
     </div>
 
-    <!-- 底部哨兵 + 状态提示 -->
-    <div v-show="!noMoreDown || loadingDown" ref="bottomSentinel" class="load-more">
+    <!-- 底部加载状态 + 提示 -->
+    <div v-show="!noMoreDown || loadingDown" class="load-more">
       <NSpin v-if="loadingDown" size="small" />
       <span v-else class="load-more-hint">滚动加载更多…</span>
     </div>
