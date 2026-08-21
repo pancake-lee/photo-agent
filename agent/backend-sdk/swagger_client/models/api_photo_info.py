@@ -32,6 +32,7 @@ class ApiPhotoInfo(object):
         'file_path': 'str',
         'file_type': 'str',
         'timeline': 'str',
+        'timeline_manual': 'int',
         'tags': 'str',
         'description': 'str',
         'objects': 'str',
@@ -64,6 +65,7 @@ class ApiPhotoInfo(object):
         'file_path': 'filePath',
         'file_type': 'fileType',
         'timeline': 'timeline',
+        'timeline_manual': 'timelineManual',
         'tags': 'tags',
         'description': 'description',
         'objects': 'objects',
@@ -90,13 +92,14 @@ class ApiPhotoInfo(object):
         'imported_at': 'importedAt'
     }
 
-    def __init__(self, id=None, filename=None, file_path=None, file_type=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, burst_group_id=None, burst_group_coarse_id=None, imported_at=None):  # noqa: E501
+    def __init__(self, id=None, filename=None, file_path=None, file_type=None, timeline=None, timeline_manual=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, burst_group_id=None, burst_group_coarse_id=None, imported_at=None):  # noqa: E501
         """ApiPhotoInfo - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._filename = None
         self._file_path = None
         self._file_type = None
         self._timeline = None
+        self._timeline_manual = None
         self._tags = None
         self._description = None
         self._objects = None
@@ -132,6 +135,8 @@ class ApiPhotoInfo(object):
             self.file_type = file_type
         if timeline is not None:
             self.timeline = timeline
+        if timeline_manual is not None:
+            self.timeline_manual = timeline_manual
         if tags is not None:
             self.tags = tags
         if description is not None:
@@ -285,6 +290,27 @@ class ApiPhotoInfo(object):
         """
 
         self._timeline = timeline
+
+    @property
+    def timeline_manual(self):
+        """Gets the timeline_manual of this ApiPhotoInfo.  # noqa: E501
+
+
+        :return: The timeline_manual of this ApiPhotoInfo.  # noqa: E501
+        :rtype: int
+        """
+        return self._timeline_manual
+
+    @timeline_manual.setter
+    def timeline_manual(self, timeline_manual):
+        """Sets the timeline_manual of this ApiPhotoInfo.
+
+
+        :param timeline_manual: The timeline_manual of this ApiPhotoInfo.  # noqa: E501
+        :type: int
+        """
+
+        self._timeline_manual = timeline_manual
 
     @property
     def tags(self):

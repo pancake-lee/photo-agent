@@ -244,7 +244,7 @@ No authorization required
 
 
 
-分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
 
 ### Example
 ```python

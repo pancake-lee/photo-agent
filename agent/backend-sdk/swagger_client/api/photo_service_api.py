@@ -485,7 +485,7 @@ class PhotoServiceApi(object):
     def photo_service_list_photo_segments(self, **kwargs):  # noqa: E501
         """photo_service_list_photo_segments  # noqa: E501
 
-        分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset  # noqa: E501
+        分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.photo_service_list_photo_segments(async_req=True)
@@ -522,7 +522,7 @@ class PhotoServiceApi(object):
     def photo_service_list_photo_segments_with_http_info(self, **kwargs):  # noqa: E501
         """photo_service_list_photo_segments  # noqa: E501
 
-        分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset  # noqa: E501
+        分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.photo_service_list_photo_segments_with_http_info(async_req=True)

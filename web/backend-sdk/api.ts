@@ -202,6 +202,32 @@ export interface ApiAddPhotoResponse {
     photo?: ApiPhotoInfo;
 }
 /**
+ * 
+ * @export
+ * @interface ApiAddTimelineEventRequest
+ */
+export interface ApiAddTimelineEventRequest {
+    /**
+     * 
+     * @type {ApiTimelineEventInfo}
+     * @memberof ApiAddTimelineEventRequest
+     */
+    timelineEvent?: ApiTimelineEventInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiAddTimelineEventResponse
+ */
+export interface ApiAddTimelineEventResponse {
+    /**
+     * 
+     * @type {ApiTimelineEventInfo}
+     * @memberof ApiAddTimelineEventResponse
+     */
+    timelineEvent?: ApiTimelineEventInfo;
+}
+/**
  * --------------------------------------------------  tbl : app_settings
  * @export
  * @interface ApiAppSettingInfo
@@ -769,6 +795,56 @@ export interface ApiGetPhotosByTimelineResponse {
 /**
  * 
  * @export
+ * @interface ApiGetRecomputeTimelinesStatusResponse
+ */
+export interface ApiGetRecomputeTimelinesStatusResponse {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof ApiGetRecomputeTimelinesStatusResponse
+     */
+    running?: boolean;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetRecomputeTimelinesStatusResponse
+     */
+    processed?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetRecomputeTimelinesStatusResponse
+     */
+    total?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetRecomputeTimelinesStatusResponse
+     */
+    eventCount?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiGetRecomputeTimelinesStatusResponse
+     */
+    scatteredCount?: number;
+}
+/**
+ * 
+ * @export
+ * @interface ApiGetTimelineEventListResponse
+ */
+export interface ApiGetTimelineEventListResponse {
+    /**
+     * 
+     * @type {Array<ApiTimelineEventInfo>}
+     * @memberof ApiGetTimelineEventListResponse
+     */
+    timelineEventList?: Array<ApiTimelineEventInfo>;
+}
+/**
+ * 
+ * @export
  * @interface ApiGetVlmQueueStatusResponse
  */
 export interface ApiGetVlmQueueStatusResponse {
@@ -829,6 +905,25 @@ export interface ApiListTagsResponse {
      * @memberof ApiListTagsResponse
      */
     tags?: Array<string>;
+}
+/**
+ * 
+ * @export
+ * @interface ApiListTimelineEventsResponse
+ */
+export interface ApiListTimelineEventsResponse {
+    /**
+     * 
+     * @type {Array<ApiTimelineEventDetail>}
+     * @memberof ApiListTimelineEventsResponse
+     */
+    events?: Array<ApiTimelineEventDetail>;
+    /**
+     * 
+     * @type {Array<ApiTimelineEventDetail>}
+     * @memberof ApiListTimelineEventsResponse
+     */
+    scattered?: Array<ApiTimelineEventDetail>;
 }
 /**
  * 
@@ -953,6 +1048,12 @@ export interface ApiPhotoInfo {
      * @memberof ApiPhotoInfo
      */
     timeline?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiPhotoInfo
+     */
+    timelineManual?: number;
     /**
      * 
      * @type {string}
@@ -1344,6 +1445,63 @@ export interface ApiRebuildBurstGroupsResponse {
 /**
  * 
  * @export
+ * @interface ApiRecomputeTimelinesResponse
+ */
+export interface ApiRecomputeTimelinesResponse {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiRecomputeTimelinesResponse
+     */
+    status?: string;
+}
+/**
+ * 
+ * @export
+ * @interface ApiSaveTimelineEventRequest
+ */
+export interface ApiSaveTimelineEventRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSaveTimelineEventRequest
+     */
+    id?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSaveTimelineEventRequest
+     */
+    date?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSaveTimelineEventRequest
+     */
+    event?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSaveTimelineEventRequest
+     */
+    note?: string;
+}
+/**
+ * 
+ * @export
+ * @interface ApiSaveTimelineEventResponse
+ */
+export interface ApiSaveTimelineEventResponse {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiSaveTimelineEventResponse
+     */
+    id?: string;
+}
+/**
+ * 
+ * @export
  * @interface ApiSchemaField
  */
 export interface ApiSchemaField {
@@ -1509,6 +1667,92 @@ export interface ApiStopVlmQueueResponse {
      * @memberof ApiStopVlmQueueResponse
      */
     stopped?: boolean;
+}
+/**
+ * TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+ * @export
+ * @interface ApiTimelineEventDetail
+ */
+export interface ApiTimelineEventDetail {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventDetail
+     */
+    id?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventDetail
+     */
+    date?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventDetail
+     */
+    event?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventDetail
+     */
+    note?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof ApiTimelineEventDetail
+     */
+    photoCount?: number;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof ApiTimelineEventDetail
+     */
+    isScattered?: boolean;
+}
+/**
+ * --------------------------------------------------  tbl : timeline_events
+ * @export
+ * @interface ApiTimelineEventInfo
+ */
+export interface ApiTimelineEventInfo {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventInfo
+     */
+    ID?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventInfo
+     */
+    eventDate?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventInfo
+     */
+    event?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventInfo
+     */
+    note?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventInfo
+     */
+    createdAt?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiTimelineEventInfo
+     */
+    updatedAt?: string;
 }
 /**
  * 
@@ -1689,6 +1933,32 @@ export interface ApiUpdatePhotoTagsRequest {
      * @memberof ApiUpdatePhotoTagsRequest
      */
     tags?: string;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdateTimelineEventRequest
+ */
+export interface ApiUpdateTimelineEventRequest {
+    /**
+     * 
+     * @type {ApiTimelineEventInfo}
+     * @memberof ApiUpdateTimelineEventRequest
+     */
+    timelineEvent?: ApiTimelineEventInfo;
+}
+/**
+ * 
+ * @export
+ * @interface ApiUpdateTimelineEventResponse
+ */
+export interface ApiUpdateTimelineEventResponse {
+    /**
+     * 
+     * @type {ApiTimelineEventInfo}
+     * @memberof ApiUpdateTimelineEventResponse
+     */
+    timelineEvent?: ApiTimelineEventInfo;
 }
 /**
  * 
@@ -2146,6 +2416,37 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
             };
         },
         /**
+         * --------------------------------------------------  tbl : timeline_events
+         * @param {ApiAddTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddTimelineEvent(body: ApiAddTimelineEventRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling defaultCURDAddTimelineEvent.');
+            }
+            const localVarPath = `/timeline-events`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'POST' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiAddTimelineEventRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 
          * @param {Array<string>} [keyList] 
          * @param {*} [options] Override http request option.
@@ -2228,6 +2529,33 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
         },
         /**
          * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelTimelineEventByIDList(iDList?: Array<string>, options: any = {}): FetchArgs {
+            const localVarPath = `/timeline-events`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (iDList) {
+                localVarQueryParameter['IDList'] = iDList;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @param {Array<string>} [keyList] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2288,6 +2616,33 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
          */
         defaultCURDGetPhotoList(iDList?: Array<string>, options: any = {}): FetchArgs {
             const localVarPath = `/photos`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (iDList) {
+                localVarQueryParameter['IDList'] = iDList;
+            }
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetTimelineEventList(iDList?: Array<string>, options: any = {}): FetchArgs {
+            const localVarPath = `/timeline-events`;
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
             const localVarHeaderParameter = {} as any;
@@ -2400,6 +2755,37 @@ export const DefaultCURDApiFetchParamCreator = function (configuration?: Configu
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * 
+         * @param {ApiUpdateTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdateTimelineEvent(body: ApiUpdateTimelineEventRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling defaultCURDUpdateTimelineEvent.');
+            }
+            const localVarPath = `/timeline-events`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'PATCH' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiUpdateTimelineEventRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -2453,6 +2839,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
          */
         defaultCURDAddPhotoGroup(body: ApiAddPhotoGroupRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiAddPhotoGroupResponse> {
             const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDAddPhotoGroup(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * --------------------------------------------------  tbl : timeline_events
+         * @param {ApiAddTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddTimelineEvent(body: ApiAddTimelineEventRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiAddTimelineEventResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDAddTimelineEvent(body, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2519,6 +2923,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelTimelineEventByIDList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDDelTimelineEventByIDList(iDList, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
          * @param {Array<string>} [keyList] 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2561,6 +2983,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
          */
         defaultCURDGetPhotoList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetPhotoListResponse> {
             const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDGetPhotoList(iDList, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetTimelineEventList(iDList?: Array<string>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetTimelineEventListResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDGetTimelineEventList(iDList, options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -2625,6 +3065,24 @@ export const DefaultCURDApiFp = function(configuration?: Configuration) {
                 });
             };
         },
+        /**
+         * 
+         * @param {ApiUpdateTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdateTimelineEvent(body: ApiUpdateTimelineEventRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiUpdateTimelineEventResponse> {
+            const localVarFetchArgs = DefaultCURDApiFetchParamCreator(configuration).defaultCURDUpdateTimelineEvent(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
     }
 };
 
@@ -2662,6 +3120,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
             return DefaultCURDApiFp(configuration).defaultCURDAddPhotoGroup(body, options)(fetch, basePath);
         },
         /**
+         * --------------------------------------------------  tbl : timeline_events
+         * @param {ApiAddTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDAddTimelineEvent(body: ApiAddTimelineEventRequest, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDAddTimelineEvent(body, options)(fetch, basePath);
+        },
+        /**
          * 
          * @param {Array<string>} [keyList] 
          * @param {*} [options] Override http request option.
@@ -2687,6 +3154,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
          */
         defaultCURDDelPhotoGroupByIDList(iDList?: Array<string>, options?: any) {
             return DefaultCURDApiFp(configuration).defaultCURDDelPhotoGroupByIDList(iDList, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDDelTimelineEventByIDList(iDList?: Array<string>, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDDelTimelineEventByIDList(iDList, options)(fetch, basePath);
         },
         /**
          * 
@@ -2717,6 +3193,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
         },
         /**
          * 
+         * @param {Array<string>} [iDList] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDGetTimelineEventList(iDList?: Array<string>, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDGetTimelineEventList(iDList, options)(fetch, basePath);
+        },
+        /**
+         * 
          * @param {ApiUpdateAppSettingRequest} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2741,6 +3226,15 @@ export const DefaultCURDApiFactory = function (configuration?: Configuration, fe
          */
         defaultCURDUpdatePhotoGroup(body: ApiUpdatePhotoGroupRequest, options?: any) {
             return DefaultCURDApiFp(configuration).defaultCURDUpdatePhotoGroup(body, options)(fetch, basePath);
+        },
+        /**
+         * 
+         * @param {ApiUpdateTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        defaultCURDUpdateTimelineEvent(body: ApiUpdateTimelineEventRequest, options?: any) {
+            return DefaultCURDApiFp(configuration).defaultCURDUpdateTimelineEvent(body, options)(fetch, basePath);
         },
     };
 };
@@ -2786,6 +3280,17 @@ export class DefaultCURDApi extends BaseAPI {
     }
 
     /**
+     * --------------------------------------------------  tbl : timeline_events
+     * @param {ApiAddTimelineEventRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDAddTimelineEvent(body: ApiAddTimelineEventRequest, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDAddTimelineEvent(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
      * 
      * @param {Array<string>} [keyList] 
      * @param {*} [options] Override http request option.
@@ -2816,6 +3321,17 @@ export class DefaultCURDApi extends BaseAPI {
      */
     public defaultCURDDelPhotoGroupByIDList(iDList?: Array<string>, options?: any) {
         return DefaultCURDApiFp(this.configuration).defaultCURDDelPhotoGroupByIDList(iDList, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
+     * @param {Array<string>} [iDList] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDDelTimelineEventByIDList(iDList?: Array<string>, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDDelTimelineEventByIDList(iDList, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -2853,6 +3369,17 @@ export class DefaultCURDApi extends BaseAPI {
 
     /**
      * 
+     * @param {Array<string>} [iDList] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDGetTimelineEventList(iDList?: Array<string>, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDGetTimelineEventList(iDList, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
      * @param {ApiUpdateAppSettingRequest} body 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -2882,6 +3409,17 @@ export class DefaultCURDApi extends BaseAPI {
      */
     public defaultCURDUpdatePhotoGroup(body: ApiUpdatePhotoGroupRequest, options?: any) {
         return DefaultCURDApiFp(this.configuration).defaultCURDUpdatePhotoGroup(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 
+     * @param {ApiUpdateTimelineEventRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DefaultCURDApi
+     */
+    public defaultCURDUpdateTimelineEvent(body: ApiUpdateTimelineEventRequest, options?: any) {
+        return DefaultCURDApiFp(this.configuration).defaultCURDUpdateTimelineEvent(body, options)(this.fetch, this.basePath);
     }
 
 }
@@ -3014,7 +3552,7 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
             };
         },
         /**
-         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
          * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
          * @param {string} [tag] 
          * @param {string} [keyword] 
@@ -3455,7 +3993,7 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
-         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
          * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
          * @param {string} [tag] 
          * @param {string} [keyword] 
@@ -3647,7 +4185,7 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
             return PhotoServiceApiFp(configuration).photoServiceGetPhotoStats(options)(fetch, basePath);
         },
         /**
-         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+         * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
          * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
          * @param {string} [tag] 
          * @param {string} [keyword] 
@@ -3796,7 +4334,7 @@ export class PhotoServiceApi extends BaseAPI {
     }
 
     /**
-     * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset
+     * 分段导航：返回当前筛选 + 排序下每个分段的 key/label/count/offset。  必须声明在 /api/v1/photos/{id} 前，保证静态 segments 路径优先匹配。
      * @param {string} [timeline] 复用 SearchPhotos 的筛选/排序参数（不含分页）
      * @param {string} [tag] 
      * @param {string} [keyword] 
@@ -4416,6 +4954,34 @@ export class TagServiceApi extends BaseAPI {
 export const TimelineServiceApiFetchParamCreator = function (configuration?: Configuration) {
     return {
         /**
+         * 删除时间线事件
+         * @param {string} id 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceDeleteEvent(id: string, options: any = {}): FetchArgs {
+            // verify required parameter 'id' is not null or undefined
+            if (id === null || id === undefined) {
+                throw new RequiredError('id','Required parameter id was null or undefined when calling timelineServiceDeleteEvent.');
+            }
+            const localVarPath = `/api/v1/timeline-events/{id}`
+                .replace(`{${"id"}}`, encodeURIComponent(String(id)));
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'DELETE' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 某时间线下的照片
          * @param {string} name 
          * @param {*} [options] Override http request option.
@@ -4428,6 +4994,50 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
             }
             const localVarPath = `/api/v1/timelines/{name}/photos`
                 .replace(`{${"name"}}`, encodeURIComponent(String(name)));
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 查询重算进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceGetRecomputeTimelinesStatus(options: any = {}): FetchArgs {
+            const localVarPath = `/api/v1/timeline-events/recompute/status`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 时间线事件列表（含散片组只读展示）
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceListEvents(options: any = {}): FetchArgs {
+            const localVarPath = `/api/v1/timeline-events`;
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
             const localVarHeaderParameter = {} as any;
@@ -4465,6 +5075,68 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * 触发全量重算照片 timeline（异步，人工值保留）
+         * @param {ApiEmpty} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceRecomputeTimelines(body: ApiEmpty, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling timelineServiceRecomputeTimelines.');
+            }
+            const localVarPath = `/api/v1/timeline-events/recompute`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'POST' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiEmpty" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 保存时间线事件（新建与更新合一，id 为空则新建）
+         * @param {ApiSaveTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceSaveEvent(body: ApiSaveTimelineEventRequest, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling timelineServiceSaveEvent.');
+            }
+            const localVarPath = `/api/v1/timeline-events`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'POST' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiSaveTimelineEventRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -4475,6 +5147,24 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
 export const TimelineServiceApiFp = function(configuration?: Configuration) {
     return {
         /**
+         * 删除时间线事件
+         * @param {string} id 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceDeleteEvent(id: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = TimelineServiceApiFetchParamCreator(configuration).timelineServiceDeleteEvent(id, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 某时间线下的照片
          * @param {string} name 
          * @param {*} [options] Override http request option.
@@ -4482,6 +5172,40 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
          */
         timelineServiceGetPhotosByTimeline(name: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetPhotosByTimelineResponse> {
             const localVarFetchArgs = TimelineServiceApiFetchParamCreator(configuration).timelineServiceGetPhotosByTimeline(name, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 查询重算进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceGetRecomputeTimelinesStatus(options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetRecomputeTimelinesStatusResponse> {
+            const localVarFetchArgs = TimelineServiceApiFetchParamCreator(configuration).timelineServiceGetRecomputeTimelinesStatus(options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 时间线事件列表（含散片组只读展示）
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceListEvents(options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiListTimelineEventsResponse> {
+            const localVarFetchArgs = TimelineServiceApiFetchParamCreator(configuration).timelineServiceListEvents(options);
             return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -4509,6 +5233,42 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
                 });
             };
         },
+        /**
+         * 触发全量重算照片 timeline（异步，人工值保留）
+         * @param {ApiEmpty} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceRecomputeTimelines(body: ApiEmpty, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiRecomputeTimelinesResponse> {
+            const localVarFetchArgs = TimelineServiceApiFetchParamCreator(configuration).timelineServiceRecomputeTimelines(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
+         * 保存时间线事件（新建与更新合一，id 为空则新建）
+         * @param {ApiSaveTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceSaveEvent(body: ApiSaveTimelineEventRequest, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiSaveTimelineEventResponse> {
+            const localVarFetchArgs = TimelineServiceApiFetchParamCreator(configuration).timelineServiceSaveEvent(body, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
     }
 };
 
@@ -4519,6 +5279,15 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
 export const TimelineServiceApiFactory = function (configuration?: Configuration, fetch?: FetchAPI, basePath?: string) {
     return {
         /**
+         * 删除时间线事件
+         * @param {string} id 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceDeleteEvent(id: string, options?: any) {
+            return TimelineServiceApiFp(configuration).timelineServiceDeleteEvent(id, options)(fetch, basePath);
+        },
+        /**
          * 某时间线下的照片
          * @param {string} name 
          * @param {*} [options] Override http request option.
@@ -4528,12 +5297,46 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
             return TimelineServiceApiFp(configuration).timelineServiceGetPhotosByTimeline(name, options)(fetch, basePath);
         },
         /**
+         * 查询重算进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceGetRecomputeTimelinesStatus(options?: any) {
+            return TimelineServiceApiFp(configuration).timelineServiceGetRecomputeTimelinesStatus(options)(fetch, basePath);
+        },
+        /**
+         * 时间线事件列表（含散片组只读展示）
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceListEvents(options?: any) {
+            return TimelineServiceApiFp(configuration).timelineServiceListEvents(options)(fetch, basePath);
+        },
+        /**
          * 所有时间线列表
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
         timelineServiceListTimelines(options?: any) {
             return TimelineServiceApiFp(configuration).timelineServiceListTimelines(options)(fetch, basePath);
+        },
+        /**
+         * 触发全量重算照片 timeline（异步，人工值保留）
+         * @param {ApiEmpty} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceRecomputeTimelines(body: ApiEmpty, options?: any) {
+            return TimelineServiceApiFp(configuration).timelineServiceRecomputeTimelines(body, options)(fetch, basePath);
+        },
+        /**
+         * 保存时间线事件（新建与更新合一，id 为空则新建）
+         * @param {ApiSaveTimelineEventRequest} body 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timelineServiceSaveEvent(body: ApiSaveTimelineEventRequest, options?: any) {
+            return TimelineServiceApiFp(configuration).timelineServiceSaveEvent(body, options)(fetch, basePath);
         },
     };
 };
@@ -4546,6 +5349,17 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
  */
 export class TimelineServiceApi extends BaseAPI {
     /**
+     * 删除时间线事件
+     * @param {string} id 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TimelineServiceApi
+     */
+    public timelineServiceDeleteEvent(id: string, options?: any) {
+        return TimelineServiceApiFp(this.configuration).timelineServiceDeleteEvent(id, options)(this.fetch, this.basePath);
+    }
+
+    /**
      * 某时间线下的照片
      * @param {string} name 
      * @param {*} [options] Override http request option.
@@ -4557,6 +5371,26 @@ export class TimelineServiceApi extends BaseAPI {
     }
 
     /**
+     * 查询重算进度
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TimelineServiceApi
+     */
+    public timelineServiceGetRecomputeTimelinesStatus(options?: any) {
+        return TimelineServiceApiFp(this.configuration).timelineServiceGetRecomputeTimelinesStatus(options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 时间线事件列表（含散片组只读展示）
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TimelineServiceApi
+     */
+    public timelineServiceListEvents(options?: any) {
+        return TimelineServiceApiFp(this.configuration).timelineServiceListEvents(options)(this.fetch, this.basePath);
+    }
+
+    /**
      * 所有时间线列表
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -4564,6 +5398,28 @@ export class TimelineServiceApi extends BaseAPI {
      */
     public timelineServiceListTimelines(options?: any) {
         return TimelineServiceApiFp(this.configuration).timelineServiceListTimelines(options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 触发全量重算照片 timeline（异步，人工值保留）
+     * @param {ApiEmpty} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TimelineServiceApi
+     */
+    public timelineServiceRecomputeTimelines(body: ApiEmpty, options?: any) {
+        return TimelineServiceApiFp(this.configuration).timelineServiceRecomputeTimelines(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 保存时间线事件（新建与更新合一，id 为空则新建）
+     * @param {ApiSaveTimelineEventRequest} body 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TimelineServiceApi
+     */
+    public timelineServiceSaveEvent(body: ApiSaveTimelineEventRequest, options?: any) {
+        return TimelineServiceApiFp(this.configuration).timelineServiceSaveEvent(body, options)(this.fetch, this.basePath);
     }
 
 }

@@ -107,15 +107,19 @@ Class | Method | HTTP request | Description
 *DefaultCURDApi* | [**default_curd_add_app_setting**](docs/DefaultCURDApi.md#default_curd_add_app_setting) | **POST** /app-settings | 
 *DefaultCURDApi* | [**default_curd_add_photo**](docs/DefaultCURDApi.md#default_curd_add_photo) | **POST** /photos | 
 *DefaultCURDApi* | [**default_curd_add_photo_group**](docs/DefaultCURDApi.md#default_curd_add_photo_group) | **POST** /photo-groups | 
+*DefaultCURDApi* | [**default_curd_add_timeline_event**](docs/DefaultCURDApi.md#default_curd_add_timeline_event) | **POST** /timeline-events | 
 *DefaultCURDApi* | [**default_curd_del_app_setting_by_key_list**](docs/DefaultCURDApi.md#default_curd_del_app_setting_by_key_list) | **DELETE** /app-settings | 
 *DefaultCURDApi* | [**default_curd_del_photo_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_photo_by_id_list) | **DELETE** /photos | 
 *DefaultCURDApi* | [**default_curd_del_photo_group_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_photo_group_by_id_list) | **DELETE** /photo-groups | 
+*DefaultCURDApi* | [**default_curd_del_timeline_event_by_id_list**](docs/DefaultCURDApi.md#default_curd_del_timeline_event_by_id_list) | **DELETE** /timeline-events | 
 *DefaultCURDApi* | [**default_curd_get_app_setting_list**](docs/DefaultCURDApi.md#default_curd_get_app_setting_list) | **GET** /app-settings | 
 *DefaultCURDApi* | [**default_curd_get_photo_group_list**](docs/DefaultCURDApi.md#default_curd_get_photo_group_list) | **GET** /photo-groups | 
 *DefaultCURDApi* | [**default_curd_get_photo_list**](docs/DefaultCURDApi.md#default_curd_get_photo_list) | **GET** /photos | 
+*DefaultCURDApi* | [**default_curd_get_timeline_event_list**](docs/DefaultCURDApi.md#default_curd_get_timeline_event_list) | **GET** /timeline-events | 
 *DefaultCURDApi* | [**default_curd_update_app_setting**](docs/DefaultCURDApi.md#default_curd_update_app_setting) | **PATCH** /app-settings | 
 *DefaultCURDApi* | [**default_curd_update_photo**](docs/DefaultCURDApi.md#default_curd_update_photo) | **PATCH** /photos | 
 *DefaultCURDApi* | [**default_curd_update_photo_group**](docs/DefaultCURDApi.md#default_curd_update_photo_group) | **PATCH** /photo-groups | 
+*DefaultCURDApi* | [**default_curd_update_timeline_event**](docs/DefaultCURDApi.md#default_curd_update_timeline_event) | **PATCH** /timeline-events | 
 *PhotoServiceApi* | [**photo_service_delete_photo**](docs/PhotoServiceApi.md#photo_service_delete_photo) | **DELETE** /api/v1/photos/{id} | 
 *PhotoServiceApi* | [**photo_service_get_burst_groups_config**](docs/PhotoServiceApi.md#photo_service_get_burst_groups_config) | **GET** /api/v1/burst-groups/config | 
 *PhotoServiceApi* | [**photo_service_get_burst_groups_status**](docs/PhotoServiceApi.md#photo_service_get_burst_groups_status) | **GET** /api/v1/burst-groups/status | 
@@ -134,8 +138,13 @@ Class | Method | HTTP request | Description
 *TagServiceApi* | [**tag_service_get_photos_by_tag**](docs/TagServiceApi.md#tag_service_get_photos_by_tag) | **GET** /api/v1/tags/{name}/photos | 
 *TagServiceApi* | [**tag_service_list_tags**](docs/TagServiceApi.md#tag_service_list_tags) | **GET** /api/v1/tags | 
 *TagServiceApi* | [**tag_service_unbind_tags**](docs/TagServiceApi.md#tag_service_unbind_tags) | **POST** /api/v1/tags/unbind | 
+*TimelineServiceApi* | [**timeline_service_delete_event**](docs/TimelineServiceApi.md#timeline_service_delete_event) | **DELETE** /api/v1/timeline-events/{id} | 
 *TimelineServiceApi* | [**timeline_service_get_photos_by_timeline**](docs/TimelineServiceApi.md#timeline_service_get_photos_by_timeline) | **GET** /api/v1/timelines/{name}/photos | 
+*TimelineServiceApi* | [**timeline_service_get_recompute_timelines_status**](docs/TimelineServiceApi.md#timeline_service_get_recompute_timelines_status) | **GET** /api/v1/timeline-events/recompute/status | 
+*TimelineServiceApi* | [**timeline_service_list_events**](docs/TimelineServiceApi.md#timeline_service_list_events) | **GET** /api/v1/timeline-events | 
 *TimelineServiceApi* | [**timeline_service_list_timelines**](docs/TimelineServiceApi.md#timeline_service_list_timelines) | **GET** /api/v1/timelines | 
+*TimelineServiceApi* | [**timeline_service_recompute_timelines**](docs/TimelineServiceApi.md#timeline_service_recompute_timelines) | **POST** /api/v1/timeline-events/recompute | 
+*TimelineServiceApi* | [**timeline_service_save_event**](docs/TimelineServiceApi.md#timeline_service_save_event) | **POST** /api/v1/timeline-events | 
 *VlmServiceApi* | [**vlm_service_describe_photo**](docs/VlmServiceApi.md#vlm_service_describe_photo) | **POST** /api/v1/photos/{id}/describe | 
 *VlmServiceApi* | [**vlm_service_get_vlm_queue_status**](docs/VlmServiceApi.md#vlm_service_get_vlm_queue_status) | **GET** /api/v1/vlm/queue/status | 
 *VlmServiceApi* | [**vlm_service_start_vlm_queue**](docs/VlmServiceApi.md#vlm_service_start_vlm_queue) | **POST** /api/v1/vlm/queue/start | 
@@ -152,6 +161,8 @@ Class | Method | HTTP request | Description
  - [ApiAddPhotoGroupResponse](docs/ApiAddPhotoGroupResponse.md)
  - [ApiAddPhotoRequest](docs/ApiAddPhotoRequest.md)
  - [ApiAddPhotoResponse](docs/ApiAddPhotoResponse.md)
+ - [ApiAddTimelineEventRequest](docs/ApiAddTimelineEventRequest.md)
+ - [ApiAddTimelineEventResponse](docs/ApiAddTimelineEventResponse.md)
  - [ApiAppSettingInfo](docs/ApiAppSettingInfo.md)
  - [ApiAttributeValues](docs/ApiAttributeValues.md)
  - [ApiBindTagsRequest](docs/ApiBindTagsRequest.md)
@@ -177,10 +188,13 @@ Class | Method | HTTP request | Description
  - [ApiGetPhotoStatsResponse](docs/ApiGetPhotoStatsResponse.md)
  - [ApiGetPhotosByTagResponse](docs/ApiGetPhotosByTagResponse.md)
  - [ApiGetPhotosByTimelineResponse](docs/ApiGetPhotosByTimelineResponse.md)
+ - [ApiGetRecomputeTimelinesStatusResponse](docs/ApiGetRecomputeTimelinesStatusResponse.md)
+ - [ApiGetTimelineEventListResponse](docs/ApiGetTimelineEventListResponse.md)
  - [ApiGetVlmQueueStatusResponse](docs/ApiGetVlmQueueStatusResponse.md)
  - [ApiHourlyStat](docs/ApiHourlyStat.md)
  - [ApiListPhotoSegmentsResponse](docs/ApiListPhotoSegmentsResponse.md)
  - [ApiListTagsResponse](docs/ApiListTagsResponse.md)
+ - [ApiListTimelineEventsResponse](docs/ApiListTimelineEventsResponse.md)
  - [ApiListTimelinesResponse](docs/ApiListTimelinesResponse.md)
  - [ApiMonthlyStat](docs/ApiMonthlyStat.md)
  - [ApiPhotoGroupInfo](docs/ApiPhotoGroupInfo.md)
@@ -188,6 +202,9 @@ Class | Method | HTTP request | Description
  - [ApiPhotoItem](docs/ApiPhotoItem.md)
  - [ApiPhotoSegment](docs/ApiPhotoSegment.md)
  - [ApiRebuildBurstGroupsResponse](docs/ApiRebuildBurstGroupsResponse.md)
+ - [ApiRecomputeTimelinesResponse](docs/ApiRecomputeTimelinesResponse.md)
+ - [ApiSaveTimelineEventRequest](docs/ApiSaveTimelineEventRequest.md)
+ - [ApiSaveTimelineEventResponse](docs/ApiSaveTimelineEventResponse.md)
  - [ApiSchemaField](docs/ApiSchemaField.md)
  - [ApiSearchPhotosResponse](docs/ApiSearchPhotosResponse.md)
  - [ApiSetBurstGroupCoverRequest](docs/ApiSetBurstGroupCoverRequest.md)
@@ -195,6 +212,8 @@ Class | Method | HTTP request | Description
  - [ApiStartVlmQueueResponse](docs/ApiStartVlmQueueResponse.md)
  - [ApiStatItem](docs/ApiStatItem.md)
  - [ApiStopVlmQueueResponse](docs/ApiStopVlmQueueResponse.md)
+ - [ApiTimelineEventDetail](docs/ApiTimelineEventDetail.md)
+ - [ApiTimelineEventInfo](docs/ApiTimelineEventInfo.md)
  - [ApiUnbindTagsRequest](docs/ApiUnbindTagsRequest.md)
  - [ApiUnbindTagsResponse](docs/ApiUnbindTagsResponse.md)
  - [ApiUpdateAbandonCodeRequest](docs/ApiUpdateAbandonCodeRequest.md)
@@ -207,6 +226,8 @@ Class | Method | HTTP request | Description
  - [ApiUpdatePhotoRequest](docs/ApiUpdatePhotoRequest.md)
  - [ApiUpdatePhotoResponse](docs/ApiUpdatePhotoResponse.md)
  - [ApiUpdatePhotoTagsRequest](docs/ApiUpdatePhotoTagsRequest.md)
+ - [ApiUpdateTimelineEventRequest](docs/ApiUpdateTimelineEventRequest.md)
+ - [ApiUpdateTimelineEventResponse](docs/ApiUpdateTimelineEventResponse.md)
  - [ApiVlmQueueStatus](docs/ApiVlmQueueStatus.md)
 
 ## Documentation For Authorization

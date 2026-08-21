@@ -7,15 +7,19 @@ Method | HTTP request | Description
 [**default_curd_add_app_setting**](DefaultCURDApi.md#default_curd_add_app_setting) | **POST** /app-settings | 
 [**default_curd_add_photo**](DefaultCURDApi.md#default_curd_add_photo) | **POST** /photos | 
 [**default_curd_add_photo_group**](DefaultCURDApi.md#default_curd_add_photo_group) | **POST** /photo-groups | 
+[**default_curd_add_timeline_event**](DefaultCURDApi.md#default_curd_add_timeline_event) | **POST** /timeline-events | 
 [**default_curd_del_app_setting_by_key_list**](DefaultCURDApi.md#default_curd_del_app_setting_by_key_list) | **DELETE** /app-settings | 
 [**default_curd_del_photo_by_id_list**](DefaultCURDApi.md#default_curd_del_photo_by_id_list) | **DELETE** /photos | 
 [**default_curd_del_photo_group_by_id_list**](DefaultCURDApi.md#default_curd_del_photo_group_by_id_list) | **DELETE** /photo-groups | 
+[**default_curd_del_timeline_event_by_id_list**](DefaultCURDApi.md#default_curd_del_timeline_event_by_id_list) | **DELETE** /timeline-events | 
 [**default_curd_get_app_setting_list**](DefaultCURDApi.md#default_curd_get_app_setting_list) | **GET** /app-settings | 
 [**default_curd_get_photo_group_list**](DefaultCURDApi.md#default_curd_get_photo_group_list) | **GET** /photo-groups | 
 [**default_curd_get_photo_list**](DefaultCURDApi.md#default_curd_get_photo_list) | **GET** /photos | 
+[**default_curd_get_timeline_event_list**](DefaultCURDApi.md#default_curd_get_timeline_event_list) | **GET** /timeline-events | 
 [**default_curd_update_app_setting**](DefaultCURDApi.md#default_curd_update_app_setting) | **PATCH** /app-settings | 
 [**default_curd_update_photo**](DefaultCURDApi.md#default_curd_update_photo) | **PATCH** /photos | 
 [**default_curd_update_photo_group**](DefaultCURDApi.md#default_curd_update_photo_group) | **PATCH** /photo-groups | 
+[**default_curd_update_timeline_event**](DefaultCURDApi.md#default_curd_update_timeline_event) | **PATCH** /timeline-events | 
 
 # **default_curd_add_app_setting**
 > ApiAddAppSettingResponse default_curd_add_app_setting(body)
@@ -158,6 +162,53 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **default_curd_add_timeline_event**
+> ApiAddTimelineEventResponse default_curd_add_timeline_event(body)
+
+
+
+--------------------------------------------------  tbl : timeline_events
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.DefaultCURDApi()
+body = swagger_client.ApiAddTimelineEventRequest() # ApiAddTimelineEventRequest | 
+
+try:
+    api_response = api_instance.default_curd_add_timeline_event(body)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling DefaultCURDApi->default_curd_add_timeline_event: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **body** | [**ApiAddTimelineEventRequest**](ApiAddTimelineEventRequest.md)|  | 
+
+### Return type
+
+[**ApiAddTimelineEventResponse**](ApiAddTimelineEventResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **default_curd_del_app_setting_by_key_list**
 > ApiEmpty default_curd_del_app_setting_by_key_list(key_list=key_list)
 
@@ -270,6 +321,51 @@ try:
     pprint(api_response)
 except ApiException as e:
     print("Exception when calling DefaultCURDApi->default_curd_del_photo_group_by_id_list: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id_list** | [**list[str]**](str.md)|  | [optional] 
+
+### Return type
+
+[**ApiEmpty**](ApiEmpty.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **default_curd_del_timeline_event_by_id_list**
+> ApiEmpty default_curd_del_timeline_event_by_id_list(id_list=id_list)
+
+
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.DefaultCURDApi()
+id_list = ['id_list_example'] # list[str] |  (optional)
+
+try:
+    api_response = api_instance.default_curd_del_timeline_event_by_id_list(id_list=id_list)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling DefaultCURDApi->default_curd_del_timeline_event_by_id_list: %s\n" % e)
 ```
 
 ### Parameters
@@ -428,6 +524,51 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **default_curd_get_timeline_event_list**
+> ApiGetTimelineEventListResponse default_curd_get_timeline_event_list(id_list=id_list)
+
+
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.DefaultCURDApi()
+id_list = ['id_list_example'] # list[str] |  (optional)
+
+try:
+    api_response = api_instance.default_curd_get_timeline_event_list(id_list=id_list)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling DefaultCURDApi->default_curd_get_timeline_event_list: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id_list** | [**list[str]**](str.md)|  | [optional] 
+
+### Return type
+
+[**ApiGetTimelineEventListResponse**](ApiGetTimelineEventListResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **default_curd_update_app_setting**
 > ApiUpdateAppSettingResponse default_curd_update_app_setting(body)
 
@@ -551,6 +692,51 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**ApiUpdatePhotoGroupResponse**](ApiUpdatePhotoGroupResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **default_curd_update_timeline_event**
+> ApiUpdateTimelineEventResponse default_curd_update_timeline_event(body)
+
+
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.DefaultCURDApi()
+body = swagger_client.ApiUpdateTimelineEventRequest() # ApiUpdateTimelineEventRequest | 
+
+try:
+    api_response = api_instance.default_curd_update_timeline_event(body)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling DefaultCURDApi->default_curd_update_timeline_event: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **body** | [**ApiUpdateTimelineEventRequest**](ApiUpdateTimelineEventRequest.md)|  | 
+
+### Return type
+
+[**ApiUpdateTimelineEventResponse**](ApiUpdateTimelineEventResponse.md)
 
 ### Authorization
 

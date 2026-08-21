@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **file_path** | **str** |  | [optional] 
 **file_type** | **str** |  | [optional] 
 **timeline** | **str** |  | [optional] 
+**timeline_manual** | **int** |  | [optional] 
 **tags** | **str** |  | [optional] 
 **description** | **str** |  | [optional] 
 **objects** | **str** |  | [optional] 

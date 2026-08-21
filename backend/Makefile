@@ -134,6 +134,8 @@ precommit:
 	git add "*.gen.proto"
 	git add "./internal/pkg/db/model/"
 	git add "./internal/pkg/db/query/"
+	git add "./agent/backend-sdk/"
+	git add "./web/backend-sdk/"
 	git commit -m "gen: update generated code"
 
 # --------------------------------------------------

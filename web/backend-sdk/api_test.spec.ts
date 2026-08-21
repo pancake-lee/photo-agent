@@ -59,6 +59,10 @@ describe("DefaultCURDApi", () => {
     const body: api.ApiAddPhotoGroupRequest = undefined
     return expect(instance.defaultCURDAddPhotoGroup(body, {})).resolves.toBe(null)
   })
+  test("defaultCURDAddTimelineEvent", () => {
+    const body: api.ApiAddTimelineEventRequest = undefined
+    return expect(instance.defaultCURDAddTimelineEvent(body, {})).resolves.toBe(null)
+  })
   test("defaultCURDDelAppSettingByKeyList", () => {
     const keyList: Array<string> = undefined
     return expect(instance.defaultCURDDelAppSettingByKeyList(keyList, {})).resolves.toBe(null)
@@ -70,6 +74,10 @@ describe("DefaultCURDApi", () => {
   test("defaultCURDDelPhotoGroupByIDList", () => {
     const iDList: Array<string> = undefined
     return expect(instance.defaultCURDDelPhotoGroupByIDList(iDList, {})).resolves.toBe(null)
+  })
+  test("defaultCURDDelTimelineEventByIDList", () => {
+    const iDList: Array<string> = undefined
+    return expect(instance.defaultCURDDelTimelineEventByIDList(iDList, {})).resolves.toBe(null)
   })
   test("defaultCURDGetAppSettingList", () => {
     const keyList: Array<string> = undefined
@@ -83,6 +91,10 @@ describe("DefaultCURDApi", () => {
     const iDList: Array<string> = undefined
     return expect(instance.defaultCURDGetPhotoList(iDList, {})).resolves.toBe(null)
   })
+  test("defaultCURDGetTimelineEventList", () => {
+    const iDList: Array<string> = undefined
+    return expect(instance.defaultCURDGetTimelineEventList(iDList, {})).resolves.toBe(null)
+  })
   test("defaultCURDUpdateAppSetting", () => {
     const body: api.ApiUpdateAppSettingRequest = undefined
     return expect(instance.defaultCURDUpdateAppSetting(body, {})).resolves.toBe(null)
@@ -94,6 +106,10 @@ describe("DefaultCURDApi", () => {
   test("defaultCURDUpdatePhotoGroup", () => {
     const body: api.ApiUpdatePhotoGroupRequest = undefined
     return expect(instance.defaultCURDUpdatePhotoGroup(body, {})).resolves.toBe(null)
+  })
+  test("defaultCURDUpdateTimelineEvent", () => {
+    const body: api.ApiUpdateTimelineEventRequest = undefined
+    return expect(instance.defaultCURDUpdateTimelineEvent(body, {})).resolves.toBe(null)
   })
 })
 
@@ -226,12 +242,30 @@ describe("TimelineServiceApi", () => {
     instance = new api.TimelineServiceApi(config)
   });
 
+  test("timelineServiceDeleteEvent", () => {
+    const id: string = "id_example"
+    return expect(instance.timelineServiceDeleteEvent(id, {})).resolves.toBe(null)
+  })
   test("timelineServiceGetPhotosByTimeline", () => {
     const name: string = "name_example"
     return expect(instance.timelineServiceGetPhotosByTimeline(name, {})).resolves.toBe(null)
   })
+  test("timelineServiceGetRecomputeTimelinesStatus", () => {
+    return expect(instance.timelineServiceGetRecomputeTimelinesStatus({})).resolves.toBe(null)
+  })
+  test("timelineServiceListEvents", () => {
+    return expect(instance.timelineServiceListEvents({})).resolves.toBe(null)
+  })
   test("timelineServiceListTimelines", () => {
     return expect(instance.timelineServiceListTimelines({})).resolves.toBe(null)
+  })
+  test("timelineServiceRecomputeTimelines", () => {
+    const body: api.ApiEmpty = undefined
+    return expect(instance.timelineServiceRecomputeTimelines(body, {})).resolves.toBe(null)
+  })
+  test("timelineServiceSaveEvent", () => {
+    const body: api.ApiSaveTimelineEventRequest = undefined
+    return expect(instance.timelineServiceSaveEvent(body, {})).resolves.toBe(null)
   })
 })
 
