@@ -437,6 +437,7 @@ export function usePhotos() {
           ...photos.value[idx],
           description: detail.description,
           has_description: detail.has_description,
+          shot_at: detail.shot_at,
         }
       }
       if (selectedPhoto.value?.id === photoId) {
@@ -445,6 +446,13 @@ export function usePhotos() {
     } catch (e) {
       console.warn('刷新照片状态失败', e)
     }
+  }
+
+  // 修改拍摄时间：写 DB + 写 EXIF（后端处理），成功后刷新详情与列表
+  async function updatePhotoShotAt(photoId: string, shotAt: Date): Promise<void> {
+    const unixSec = Math.floor(shotAt.getTime() / 1000)
+    await photoApi.photoServiceUpdatePhotoShotAt({ shotAt: String(unixSec) }, photoId)
+    await refreshPhoto(photoId)
   }
 
   // 删除照片
@@ -549,6 +557,7 @@ export function usePhotos() {
     closeDetail,
     markPhotoQueued,
     refreshPhoto,
+    updatePhotoShotAt,
     deletePhoto,
     openBurstGroup,
     closeBurstGroup,

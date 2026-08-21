@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/defaultService/conf"
+
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -141,4 +143,26 @@ func addSuffix(filename string) string {
 	ext := filepath.Ext(filename)
 	base := strings.TrimSuffix(filename, ext)
 	return fmt.Sprintf("%s-2%s", base, ext)
+}
+
+// writeShotAtToExif 用 exiftool 把拍摄时间写回图片文件 EXIF。
+// 优先写源文件（PhotoSrc），不存在时写展示文件（PhotoPath）。
+func writeShotAtToExif(relPath string, shotAt time.Time) error {
+	srcPath := filepath.Join(conf.C.Storage.PhotoSrc, relPath)
+	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+		srcPath = filepath.Join(conf.C.Storage.PhotoPath, relPath)
+	}
+
+	// exiftool 期望 "YYYY:MM:DD HH:MM:SS" 格式
+	value := shotAt.Format("2006:01:02 15:04:05")
+	cmd := exec.Command("exiftool",
+		"-overwrite_original",
+		"-DateTimeOriginal="+value,
+		"-CreateDate="+value,
+		srcPath,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("exiftool failed: %w, output: %s", err, string(out))
+	}
+	return nil
 }

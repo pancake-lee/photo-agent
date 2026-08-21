@@ -318,30 +318,41 @@ function lastRenderedPhotoEl(): HTMLElement | null {
   return els.length ? els[els.length - 1] : null
 }
 
+// 锚点在滚动内容中的坐标（与 scrollTop 无关）：
+// rect.top 是浏览器视口坐标，减去滚动容器视口 top 得到相对容器顶的偏移，
+// 再加 scrollTop 抵消滚动位移，只剩内容前插/淘汰造成的真实偏移。
+// 用视口坐标 getBoundingClientRect().top 直接做差，在「导航跳转 set scrollTop
+// 与预加载补偿并发」时会把跳转本身的滚动量也算进补偿，导致跳转后位置被顶走。
+function contentOffsetOf(el: HTMLElement, sc: HTMLElement): number {
+  return el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop
+}
+
 // 向上前插补偿：锚点 = 原窗口最上照片，前插后它应保持原视口位置
 async function handleLoadUp() {
   if (loading.value || loadingUp.value || loadingDown.value) return
-  const anchor = firstRenderedPhotoEl()
-  const before = anchor?.getBoundingClientRect().top
-  const added = await loadUp()
-  if (!added || anchor == null || before === undefined) return
-  await nextTick()
-  const after = anchor.getBoundingClientRect().top
   const sc = gridScrollRef.value
-  if (sc) sc.scrollTop += after - before
+  const anchor = firstRenderedPhotoEl()
+  if (!sc || !anchor) return
+  const before = contentOffsetOf(anchor, sc)
+  const added = await loadUp()
+  if (!added) return
+  await nextTick()
+  const after = contentOffsetOf(anchor, sc)
+  sc.scrollTop += after - before
 }
 
 // 向下追加补偿：锚点 = 原窗口最下照片，整页淘汰顶部后它应保持原视口位置
 async function handleLoadDown() {
   if (loading.value || loadingUp.value || loadingDown.value) return
-  const anchor = lastRenderedPhotoEl()
-  const before = anchor?.getBoundingClientRect().top
-  const added = await loadDown()
-  if (!added || anchor == null || before === undefined) return
-  await nextTick()
-  const after = anchor.getBoundingClientRect().top
   const sc = gridScrollRef.value
-  if (sc) sc.scrollTop += after - before
+  const anchor = lastRenderedPhotoEl()
+  if (!sc || !anchor) return
+  const before = contentOffsetOf(anchor, sc)
+  const added = await loadDown()
+  if (!added) return
+  await nextTick()
+  const after = contentOffsetOf(anchor, sc)
+  sc.scrollTop += after - before
 }
 
 // ── 方法 ──

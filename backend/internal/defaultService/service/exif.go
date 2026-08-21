@@ -126,6 +126,18 @@ func getExifShotAt(path string) *time.Time {
 	return info.ShotAt
 }
 
+// resolveShotAt 解析照片拍摄时间：优先 EXIF，缺失时回退到文件修改时间。
+func resolveShotAt(ei *exifInfo, path string) *time.Time {
+	if ei != nil && ei.ShotAt != nil {
+		return ei.ShotAt
+	}
+	if info, err := os.Stat(path); err == nil {
+		mt := info.ModTime()
+		return &mt
+	}
+	return nil
+}
+
 // getImageSize 获取图片尺寸
 func getImageSize(path string) (int, int) {
 	f, err := os.Open(path)

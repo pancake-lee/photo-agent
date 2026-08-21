@@ -161,7 +161,9 @@ func (s *TimelineServer) ListEvents(_ctx context.Context, _ *api.Empty) (*api.Li
 		Events:    make([]*api.TimelineEventDetail, 0, len(events)),
 		Scattered: make([]*api.TimelineEventDetail, 0),
 	}
-	for _, e := range events {
+	// 展示层倒序：DAO 按日期升序返回（供重算匹配用），此处新的排前面
+	for i := len(events) - 1; i >= 0; i-- {
+		e := events[i]
 		resp.Events = append(resp.Events, &api.TimelineEventDetail{
 			Id:         e.ID,
 			Date:       e.EventDate.Local().Format("2006-01-02"),
@@ -182,7 +184,7 @@ func (s *TimelineServer) ListEvents(_ctx context.Context, _ *api.Empty) (*api.Li
 	for name := range scatterSet {
 		scatterNames = append(scatterNames, name)
 	}
-	sort.Strings(scatterNames) // YYYY-MM-散片N 字典序即时间序
+	sort.Sort(sort.Reverse(sort.StringSlice(scatterNames))) // YYYY-MM-散片N 字典序即时间序，倒序=新的在前
 	for _, name := range scatterNames {
 		resp.Scattered = append(resp.Scattered, &api.TimelineEventDetail{
 			Date:       name[:7],

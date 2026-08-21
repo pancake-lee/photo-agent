@@ -14,6 +14,7 @@ import (
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
 	"backend/internal/pkg/db"
+	"backend/internal/pkg/perr"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/plogger"
@@ -240,6 +241,37 @@ func (s *PhotoServer) UpdatePhotoTags(
 	ctx := papp.NewAppCtx(_ctx)
 
 	if err := data.PhotoDAO.UpdateTags(ctx, req.Id, req.Tags); err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+
+	return &api.Empty{}, nil
+}
+
+// UpdatePhotoShotAt 修改照片拍摄时间：写 DB + 写 EXIF（源文件）。
+func (s *PhotoServer) UpdatePhotoShotAt(
+	_ctx context.Context, req *api.UpdatePhotoShotAtRequest,
+) (*api.Empty, error) {
+	ctx := papp.NewAppCtx(_ctx)
+
+	if req.Id == "" || req.ShotAt <= 0 {
+		return nil, ctx.Log.LogErr(perr.ErrParamInvalid)
+	}
+
+	shotAt := time.Unix(req.ShotAt, 0)
+
+	photo, err := data.PhotoDAO.GetByID(ctx, req.Id)
+	if err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+
+	// 非 NEF 才写回文件 EXIF（NEF 不写回，仅更新 DB）
+	if photo.FileType != "nef" {
+		if err := writeShotAtToExif(photo.FilePath, shotAt); err != nil {
+			plogger.Warnf("UpdatePhotoShotAt: write exif failed %s: %v", photo.FilePath, err)
+		}
+	}
+
+	if err := data.PhotoDAO.UpdateShotAt(ctx, req.Id, shotAt); err != nil {
 		return nil, ctx.Log.LogErr(err)
 	}
 
@@ -585,10 +617,13 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 		ei.ShotAt = shotAt
 	}
 
+	// 拍摄时间：EXIF 缺失时按文件修改日期兜底
+	resolvedShotAt := resolveShotAt(ei, srcPath)
+
 	timeline := ""
-	if ei.ShotAt != nil {
+	if resolvedShotAt != nil {
 		entries, _ := loadTimeline(ctx)
-		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
+		timeline = findEventByTime(*resolvedShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
 	width, height := 0, 0
@@ -613,8 +648,8 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 		ExposureTime: ei.ExposureTime,
 		ImportedAt:   time.Now(),
 	}
-	if ei.ShotAt != nil {
-		photoDO.ShotAt = *ei.ShotAt
+	if resolvedShotAt != nil {
+		photoDO.ShotAt = *resolvedShotAt
 	}
 	if ei.Latitude != nil {
 		photoDO.Latitude = *ei.Latitude
@@ -651,10 +686,13 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 		ei.ShotAt = shotAt
 	}
 
+	// 拍摄时间：EXIF 缺失时按文件修改日期兜底
+	resolvedShotAt := resolveShotAt(ei, srcPath)
+
 	timeline := ""
-	if ei.ShotAt != nil {
+	if resolvedShotAt != nil {
 		entries, _ := loadTimeline(ctx)
-		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
+		timeline = findEventByTime(*resolvedShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
 	width, height := 0, 0
@@ -688,8 +726,8 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 		updates["exposure_time"] = ei.ExposureTime
 	}
 	// 覆盖同名文件时按新文件回写拍摄时间与 GPS 字段，与 createPhotoRecord 的字段口径对齐。
-	if ei.ShotAt != nil {
-		updates["shot_at"] = *ei.ShotAt
+	if resolvedShotAt != nil {
+		updates["shot_at"] = *resolvedShotAt
 	}
 	if ei.Latitude != nil {
 		updates["latitude"] = *ei.Latitude

@@ -189,10 +189,13 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		ei = &exifInfo{}
 	}
 
+	// 拍摄时间：EXIF 缺失时按文件修改日期兜底
+	shotAt := resolveShotAt(ei, img.absPath)
+
 	// 匹配时间线
 	timeline := ""
-	if ei.ShotAt != nil {
-		timeline = findEventByTime(*ei.ShotAt, entries, conf.C.Storage.TimelineWindowDays)
+	if shotAt != nil {
+		timeline = findEventByTime(*shotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
 	width, height := getImageSize(img.absPath)
@@ -229,8 +232,8 @@ func syncImportPhoto(ctx *papp.AppCtx, img imageEntry, descMap descriptionMap, e
 		Iso:          int32(ei.ISO),
 		ExposureTime: ei.ExposureTime,
 	}
-	if ei.ShotAt != nil {
-		photoDO.ShotAt = *ei.ShotAt
+	if shotAt != nil {
+		photoDO.ShotAt = *shotAt
 	}
 	if ei.Latitude != nil {
 		photoDO.Latitude = *ei.Latitude

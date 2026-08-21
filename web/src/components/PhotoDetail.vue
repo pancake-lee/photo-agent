@@ -11,12 +11,17 @@ import {
   NDivider,
   NEmpty,
   NTag,
+  NDatePicker,
+  useMessage,
 } from 'naive-ui'
 import type { PhotoDetail, EmbedInfo } from '../types/photo'
 import { formatDate } from '../utils/format'
 import { useEmbedStatus } from '../composables/useEmbedStatus'
+import { usePhotos } from '../composables/usePhotos'
 
 const { fetchEmbedInfo } = useEmbedStatus()
+const { updatePhotoShotAt } = usePhotos()
+const message = useMessage()
 
 const props = defineProps<{
   show: boolean
@@ -35,10 +40,16 @@ const emit = defineEmits<{
 const embedInfo = ref<EmbedInfo | null>(null)
 const embedLoading = ref(false)
 
+// 拍摄时间编辑状态
+const shotAtEditing = ref(false)
+const shotAtSaving = ref(false)
+const shotAtValue = ref<number | null>(null)
+
 watch(
   () => props.photo?.id,
   async (photoId) => {
     embedInfo.value = null
+    shotAtEditing.value = false
     if (!photoId) return
     // 无描述的照片不可能有 embedding，直接跳过
     if (!props.photo?.has_description) return
@@ -51,6 +62,33 @@ watch(
 function formatDateLocal(d: string | null): string {
   if (!d) return '未知'
   return formatDate(d)
+}
+
+function startEditShotAt() {
+  shotAtValue.value = props.photo?.shot_at
+    ? new Date(props.photo.shot_at).getTime()
+    : Date.now()
+  shotAtEditing.value = true
+}
+
+function cancelEditShotAt() {
+  shotAtEditing.value = false
+  shotAtValue.value = null
+}
+
+async function saveShotAt() {
+  if (!props.photo || shotAtValue.value == null) return
+  shotAtSaving.value = true
+  try {
+    await updatePhotoShotAt(props.photo.id, new Date(shotAtValue.value))
+    message.success('拍摄时间已更新')
+    shotAtEditing.value = false
+    shotAtValue.value = null
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '更新失败')
+  } finally {
+    shotAtSaving.value = false
+  }
 }
 </script>
 
@@ -76,7 +114,29 @@ function formatDateLocal(d: string | null): string {
         <NDescriptions label-placement="left" :column="1" size="small" bordered>
           <NDescriptionsItem label="文件名">{{ photo.filename }}</NDescriptionsItem>
           <NDescriptionsItem label="拍摄时间">
-            {{ formatDateLocal(photo.shot_at) }}
+            <NSpace v-if="!shotAtEditing" align="center" :size="8">
+              <span>{{ formatDateLocal(photo.shot_at) }}</span>
+              <NButton size="tiny" quaternary @click="startEditShotAt">编辑</NButton>
+            </NSpace>
+            <NSpace v-else vertical :size="8" style="width: 100%">
+              <NDatePicker
+                v-model:value="shotAtValue"
+                type="datetime"
+                size="small"
+                style="width: 100%"
+              />
+              <NSpace :size="8">
+                <NButton
+                  size="tiny"
+                  type="primary"
+                  :loading="shotAtSaving"
+                  @click="saveShotAt"
+                >
+                  保存
+                </NButton>
+                <NButton size="tiny" @click="cancelEditShotAt">取消</NButton>
+              </NSpace>
+            </NSpace>
           </NDescriptionsItem>
           <NDescriptionsItem v-if="photo.brand" label="相机品牌">
             {{ photo.brand }}

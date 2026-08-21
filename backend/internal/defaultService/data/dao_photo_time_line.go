@@ -1,6 +1,8 @@
 package data
 
 import (
+	"time"
+
 	"backend/internal/pkg/db"
 	"backend/internal/pkg/db/model"
 
@@ -45,6 +47,18 @@ func (*photoDAO) GetAllPhotosOrderByShotAt(ctx *papp.AppCtx) ([]*model.Photo, er
 		return nil, ctx.Log.LogErr(err)
 	}
 	return photos, nil
+}
+
+// UpdateShotAt 更新单张照片的拍摄时间（仅 shot_at，不动 timeline）。
+func (*photoDAO) UpdateShotAt(ctx *papp.AppCtx, photoID string, shotAt time.Time) error {
+	q := db.GetQuery().Photo
+	_, err := q.WithContext(ctx).
+		Where(q.ID.Eq(photoID)).
+		Updates(map[string]any{"shot_at": shotAt})
+	if err != nil {
+		return ctx.Log.LogErr(err)
+	}
+	return nil
 }
 
 // UpdatePhotoTimeline 更新单张照片的 timeline（manual 标记人工指定）。

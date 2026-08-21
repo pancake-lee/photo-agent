@@ -38,6 +38,13 @@ service PhotoService {
             body: "*"
         };
     }
+    // 修改拍摄时间（写 DB + 写 EXIF）
+    rpc UpdatePhotoShotAt (UpdatePhotoShotAtRequest) returns (Empty) {
+        option (google.api.http) = {
+            put: "/api/v1/photos/{id}/shot_at"
+            body: "*"
+        };
+    }
     // 删除照片（含文件清理）
     rpc DeletePhoto (DeletePhotoRequest) returns (DeletePhotoResponse) {
         option (google.api.http) = {
@@ -241,6 +248,14 @@ message GetPhotoDetailResponse {
 message UpdatePhotoTagsRequest {
     string id = 1;
     string tags = 2;
+}
+
+// --------------------------------------------------
+// UpdatePhotoShotAt
+
+message UpdatePhotoShotAtRequest {
+    string id = 1;
+    int64 shot_at = 2; // Unix 秒
 }
 
 // --------------------------------------------------
