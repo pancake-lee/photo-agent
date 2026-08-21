@@ -56,3 +56,4 @@ client/frontend/dist/*
 !client/frontend/dist/.gitkeep
 client/go.sum
 client/photo-agent-client
+data/eval_reports/*.png

@@ -19,12 +19,12 @@
 **目标**：仅通过文档间交叉比对，找出 5 类问题：
 
 1. **职责越界**：文档包含超出其职责范围的内容
-2. **内容冗余**：非 README/CLAUDE 文档重复描述其他文档已详述的内容
+2. **内容冗余**：非 README/CLAUDE/AGENTS 文档重复描述其他文档已详述的内容
 3. **引用失效**：文档间引用指向不存在的文件或锚点
 4. **信息冲突**：同一事实在不同文档中描述矛盾
 5. **过时残留**：已变更的决策或架构仍在文档中作为当前状态描述
 
-**审阅顺序**：CLAUDE.md → README.md → PRD → TECH → TASK → note → backlog → USAGE
+**审阅顺序**：CLAUDE.md/AGENTS.md → README.md → PRD → TECH → TASK → note → backlog → USAGE
 （先审高层，低层服从高层约束）
 
 **审阅后输出**：

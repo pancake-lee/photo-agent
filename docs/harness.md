@@ -10,7 +10,7 @@
 ```mermaid
 flowchart TD
     A["工作模式（Work Modes）<br>规划 → 生成 → 评估"]
-    A -->|触发| B["CLAUDE.md 触发词路由"]
+    A -->|触发| B["CLAUDE.md/AGENTS.md 触发词路由"]
     B --> C["规划模式<br>（Plan）"]
     B --> D["全流程模式<br>（Plan→Gen→Eval）"]
     C --> E["生成模式<br>（Generate）"]
@@ -56,6 +56,7 @@ Go（plogger）和 Python（自建）统一输出结构化 JSON 日志，`trace_
 - [docs/handbook/coding-conventions.md](handbook/coding-conventions.md) — 各语言编码规范
 - [docs/handbook/doc-review.md](handbook/doc-review.md) — 文档审阅规范
 - [CLAUDE.md](../CLAUDE.md) — 全局协作规则 + 触发词路由
+- [AGENTS.md](../AGENTS.md) — 全局协作规则 + 触发词路由
 
 ### 设计与方案
 

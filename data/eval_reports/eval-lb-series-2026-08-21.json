@@ -1,0 +1,170 @@
+{
+  "report_id": "eval-lb-series-20260821",
+  "backlog_id": "LB1-LB6",
+  "created_at": "2026-08-21T23:30:00+08:00",
+  "target": "LB 系列（照片列表浏览专题）整体评估：LB1 分段浏览 / LB2 滑动窗口预加载 / LB3 高度链修复 / LB4 导航精度 / LB5 散片时间线+管理页 / LB6 顶栏重排",
+  "scorecard": {
+    "overall": 8.1,
+    "dimensions": [
+      {
+        "name": "正确性",
+        "category": "代码质量",
+        "score": 8.5,
+        "max": 10,
+        "strengths": [
+          "ListPhotoSegments offset 实测跟随排序方向：desc 首段 2026-08 offset=0 / 末段 2025-03 offset=1280，asc 正确反转（此前子代理误报 offset 不随排序方向，经 curl 传正确参数 sortBy=shot_at 复测排除）",
+          "导航 count 与 SQL 实测完全一致：月分段 145/51/136/18/265 与 DB 聚合逐项吻合",
+          "offset 与窗口拉取对齐：SearchPhotos desc 首页首张 2026-08-08，与 segments[0].offset=0 同口径；asc 下 2025-03 offset=2 正确跳过 2 张零值照片（dao_photo.go:228 IsZero 排除）",
+          "timeline=none sentinel 运行时验证：API total=190 与 DB 空标签数完全一致",
+          "LB4 导航跳转运行时验证：点击「2026 年 2 月」导航项后窗口重定位到 2026-05/03/02 分割线区域，active 高亮=「2026 年 2 月」与目标一致",
+          "LB5 JSON 一次性迁移已实际发生：timeline_events 表 29 条事件、created_at 同批次 2026-08-21 14:45:08，ListEvents 返回 photoCount/isScattered 字段完整（山西 258 张）",
+          "LB6 顶栏单行实测：『图片管理 共1323张 | 展示:精细连拍 按月 ↓降序 更多 | VLM Embed 连拍分组 上传图片』，与设计定稿完全一致",
+          "photoListScope（dao_photo.go:87-180）作为 GetPhotoList 与 ListPhotoSegments 的共享筛选排序入口，消除口径漂移，是设计 3.2 节关键承诺的落实",
+          "气泡修复验证：PhotoCard.vue:79 `trigger=hover :delay=300 :to=false`，延迟+就地渲染齐备"
+        ],
+        "weaknesses": [
+          "分段日期/月份键全链路用 UTC（dao_photo.go:235 UTC().Format 与 segment.ts:35 toISOString），东八区凌晨 0-8 点拍摄的照片在按天模式下会归入前一天分割线；实测当前库月首日凌晨影响 0 张，属理论瑕疵（当前数据无损，未来导入需留意）",
+          "散片生成与 RecomputeTimelines 的运行时效果未验证：DB 中散片组 0 条、timeline_manual 全 0，用户尚未执行重算（属设计文档 9.5 节（用户）步骤 5，非代码缺陷，但 LB5 核心验收项悬置）"
+        ]
+      },
+      {
+        "name": "健壮性",
+        "category": "代码质量",
+        "score": 7.5,
+        "max": 10,
+        "strengths": [
+          "DAO 层全参数绑定（rawCond + ? 占位），无 SQL 注入面；错误处理无吞错（16 处 err 检查点复核）",
+          "窗口 offset 越界收敛（usePhotos.ts:222 Math.max(0, Math.min(offset, total-1))）、noMoreUp/noMoreDown 边界标志完整",
+          "RecomputeTimelines 复用 burstGroupManager 成熟模式，already_running 双重检查语义正确（svc_timeline.go:319-344）",
+          "管理页重算轮询 1500ms 间隔、!running 停止、onUnmounted 清理（TimelineManagement.vue:145-147）",
+          "表单校验：日期/活动名空值 message.warning 拦截（TimelineManagement.vue:78-80）"
+        ],
+        "weaknesses": [
+          "fetchPage 无请求去重：loading 标志只防重入，快速滚动场景同一页可能重复请求（usePhotos.ts:180-203，缺 pendingPage 缓存）",
+          "窗口淘汰未检测锚点元素是否在被淘汰页内，极端滚动模式下视口可能跳变（usePhotos.ts:306-324）",
+          "fetchSegments/统计获取失败仅 console.warn，用户无感知（静默失败影响排查体验）"
+        ]
+      },
+      {
+        "name": "可维护性",
+        "category": "代码质量",
+        "score": 7,
+        "max": 10,
+        "strengths": [
+          "组件职责分离清晰：PhotoSegmentDivider（CSS grid 跨行渲染）/ PhotoSegmentNav / segment.ts 纯函数分组计算，后端 segmentLabel 与前端 segLabelOf 文案口径对齐",
+          "散片分组 splitScatteredPhotos 为 64 行纯函数，可单测；timeline_events 表遵循项目无外键约定",
+          "svc/dao 分层与既有代码一致，LB1 旧「筛选重置式跳转」dead code 清理干净（无 jumpToMonth/jumpToTimeline 残留）"
+        ],
+        "weaknesses": [
+          "PhotoManagement.vue 已达 1030 行（模板+脚本+样式混排），LB1-LB6 六个条目全部叠加于此，任何后续调整都要在千行文件定位，与 ImportWorkflow.vue 1010 行（已立 W12）同级的技术债",
+          "LB3 高度链修复依赖 naive-ui 内部类名 .n-layout-scroll-container / .n-layout-content（PhotoManagement.vue:917-927），组件库升级时可能静默失效（已知取舍，backlog 已记录）",
+          "evictTop/evictBottom 对称重复（usePhotos.ts:306-324）"
+        ]
+      },
+      {
+        "name": "简洁性",
+        "category": "代码质量",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "LB1 分页组件与 page+追加模型移除彻底，usePhotos.ts 无残留分页状态",
+          "类型安全良好：无 any 滥用，Api 类型导入完整",
+          "散片判定/分组/JSON 解析均为短纯函数，命名达意"
+        ],
+        "weaknesses": [
+          ".pagination-wrapper 空样式残留（PhotoManagement.vue:1011-1013）",
+          "TIMELINE_NONE 常量已导出但 PhotoManagement.vue:170 硬编码 'none' 字面量"
+        ]
+      },
+      {
+        "name": "准确性",
+        "category": "功能效果",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "导航 count 16 个月份项与 SQL 聚合逐项一致（145/51/136/18/265/42/38/80/110/14/231/9/41/78/22/41）",
+          "导航跳转落点与高亮实测一致（LB4 修复有效）",
+          "ListEvents photoCount 与 DB 匹配（山西 258 张）",
+          "sentinel 过滤 190=190 精确"
+        ],
+        "weaknesses": [
+          "散片命名 YYYY-MM-散片N 与重算保留人工值语义仅有单测证据，无运行时证据（依赖用户重算）"
+        ]
+      },
+      {
+        "name": "完整性",
+        "category": "功能效果",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "六条目设计承诺全部落地：三种分段方式、双向滚动+预加载+淘汰、窗口重定位跳转、高度链、导航精度、timeline_events CRUD+重算+管理页、顶栏单行收纳",
+          "LB5『保留 sentinel 兼容未重算存量照片』已实现（筛选下拉含未分类项）",
+          "LB2 对 LB1 4.2 节决策的反转（筛选重置式→窗口重定位）在代码层执行彻底"
+        ],
+        "weaknesses": [
+          "散片分组单测缺跨年边界（2026-12-31 / 2027-01-01 相邻散片应分两组）与单月多段序号递增的显式断言（svc_timeline_test.go）",
+          "『2000+ 张滚动流畅』未验证（当前库 1323 张，实测流畅但未达 2000+ 口径）"
+        ]
+      },
+      {
+        "name": "一致性",
+        "category": "功能效果",
+        "score": 9,
+        "max": 10,
+        "strengths": [
+          "前后端分段文案口径统一（『2026 年 8 月』『未分类』『未知时间』）",
+          "管理页与现有页面 NaiveUI 风格一致，散片组区分样式+空态提示（『暂无散片组，重算时间线后自动生成』）",
+          "顶栏 8px 网格、左信息右操作遵循 ui-rules.md"
+        ],
+        "weaknesses": []
+      },
+      {
+        "name": "交互体验",
+        "category": "用户价值",
+        "score": 8,
+        "max": 10,
+        "strengths": [
+          "导航跳转→窗口重定位→高亮全链路 4 秒内完成，流连续不锁死（对比 LB1 时代的筛选重置式是质变）",
+          "时间线管理页信息密度合理：事件+照片数+散片组一屏可扫读，重算入口明确",
+          "顶栏从三行收敛为单行，功能全部可达（实测文案与设计一致）"
+        ],
+        "weaknesses": [
+          "图片异步加载时滚动补偿理论上有跳变风险（PhotoCard aspect-ratio:1 固定卡片尺寸，实际风险低，未实测到跳变）"
+        ]
+      }
+    ]
+  },
+  "per_task": {
+    "LB1": 8.3,
+    "LB2": 7.9,
+    "LB3": 7.7,
+    "LB4": 8.5,
+    "LB5": 7.9,
+    "LB6": 8.4
+  },
+  "summary": "LB 系列三轮规划/生成后整体达到 8.1，通过（阈值 6.0）。核心数据链路（分段 offset/count/窗口拉取/导航跳转/高亮）经运行时实测全部精确对齐，photoListScope 共享筛选是设计关键承诺的有效落实；LB4 修复实测有效，LB6 顶栏与设计定稿一致。主要扣分项：PhotoManagement.vue 1030 行的可维护性债（与 W12 同级）、fetchPage 无请求去重、LB5 散片生成仅有单测证据（用户未执行重算，核心验收项悬置）。子代理三项高严重误报（offset 不随排序方向/排序 UI 残留/气泡无 delay）经运行时复测全部排除。",
+  "findings_for_backlog": [
+    "PhotoManagement.vue 达 1030 行，LB1-LB6 六条目功能全部叠加于单文件，后续任何浏览体验调整定位困难，需拆分（与 W12 ImportWorkflow.vue 拆分同级技术债）",
+    "LB5 重算未实际执行：DB 散片组 0 条、timeline_manual 全 0，散片命名/人工值保留语义仅有单测证据，需用户启动重算后运行时验证（backlog 已有（用户）标记，提醒执行）",
+    "散片分组单测缺跨年边界与单月多段序号递增断言",
+    "fetchPage 无请求去重，快速滚动时同一页可能重复请求；fetchSegments 失败静默（console.warn），用户无感知",
+    "分段日期键全链路 UTC 口径，东八区凌晨 0-8 点拍摄照片按天分段归前一天（当前库月边界影响 0 张，理论瑕疵）"
+  ],
+  "verification_evidence": {
+    "runtime": [
+      "make status 三服务健康；go test ./internal/defaultService/service/... PASS (0.133s)",
+      "GET /api/v1/photos/segments?sortBy=shot_at&sortOrder=desc|asc：offset 随方向正确反转",
+      "GET /api/v1/photos?timeline=none：total=190 = DB 空标签数",
+      "GET /api/v1/timeline-events：29 事件含 photoCount/isScattered；recompute/status running=false",
+      "Playwright 实测 /#/photos：顶栏单行文案、分割线『2026 年 8 月 114 张』渲染、导航 16 项 count 与 SQL 一致、点击 2026-02 后 active 高亮与落点正确",
+      "Playwright 实测 /#/timelines：29 事件渲染、散片组空态提示正确",
+      "sqlite3：timeline_events 29 条（JSON 已迁移）、photos timeline_manual 全 0、散片组 0 条（重算未执行）"
+    ],
+    "commits": {
+      "LB1": "f19b2e4",
+      "LB2": "f701981",
+      "LB3": "70aac52",
+      "LB4/LB5/LB6": "c3720ec"
+    }
+  }
+}
