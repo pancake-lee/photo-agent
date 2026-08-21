@@ -32,6 +32,7 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 	_photo.FilePath = field.NewString(tableName, "file_path")
 	_photo.FileType = field.NewString(tableName, "file_type")
 	_photo.Timeline = field.NewString(tableName, "timeline")
+	_photo.TimelineManual = field.NewInt32(tableName, "timeline_manual")
 	_photo.Tags = field.NewString(tableName, "tags")
 	_photo.Description = field.NewString(tableName, "description")
 	_photo.Objects = field.NewString(tableName, "objects")
@@ -71,6 +72,7 @@ type photo struct {
 	FilePath           field.String
 	FileType           field.String
 	Timeline           field.String
+	TimelineManual     field.Int32
 	Tags               field.String
 	Description        field.String
 	Objects            field.String
@@ -116,6 +118,7 @@ func (p *photo) updateTableName(table string) *photo {
 	p.FilePath = field.NewString(table, "file_path")
 	p.FileType = field.NewString(table, "file_type")
 	p.Timeline = field.NewString(table, "timeline")
+	p.TimelineManual = field.NewInt32(table, "timeline_manual")
 	p.Tags = field.NewString(table, "tags")
 	p.Description = field.NewString(table, "description")
 	p.Objects = field.NewString(table, "objects")
@@ -164,12 +167,13 @@ func (p *photo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *photo) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 29)
+	p.fieldMap = make(map[string]field.Expr, 30)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["filename"] = p.Filename
 	p.fieldMap["file_path"] = p.FilePath
 	p.fieldMap["file_type"] = p.FileType
 	p.fieldMap["timeline"] = p.Timeline
+	p.fieldMap["timeline_manual"] = p.TimelineManual
 	p.fieldMap["tags"] = p.Tags
 	p.fieldMap["description"] = p.Description
 	p.fieldMap["objects"] = p.Objects

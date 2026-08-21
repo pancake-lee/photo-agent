@@ -572,6 +572,88 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.GetPhotosByTagResponse'
+    /api/v1/timeline-events:
+        get:
+            tags:
+                - TimelineService
+            description: 时间线事件列表（含散片组只读展示）
+            operationId: TimelineService_ListEvents
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.ListTimelineEventsResponse'
+        post:
+            tags:
+                - TimelineService
+            description: 保存时间线事件（新建与更新合一，id 为空则新建）
+            operationId: TimelineService_SaveEvent
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.SaveTimelineEventRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.SaveTimelineEventResponse'
+    /api/v1/timeline-events/recompute:
+        post:
+            tags:
+                - TimelineService
+            description: 触发全量重算照片 timeline（异步，人工值保留）
+            operationId: TimelineService_RecomputeTimelines
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.Empty'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.RecomputeTimelinesResponse'
+    /api/v1/timeline-events/recompute/status:
+        get:
+            tags:
+                - TimelineService
+            description: 查询重算进度
+            operationId: TimelineService_GetRecomputeTimelinesStatus
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetRecomputeTimelinesStatusResponse'
+    /api/v1/timeline-events/{id}:
+        delete:
+            tags:
+                - TimelineService
+            description: 删除时间线事件
+            operationId: TimelineService_DeleteEvent
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
     /api/v1/timelines:
         get:
             tags:
@@ -877,6 +959,80 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.UpdatePhotoResponse'
+    /timeline-events:
+        get:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_GetTimelineEventList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetTimelineEventListResponse'
+        post:
+            tags:
+                - DefaultCURD
+            description: |-
+                --------------------------------------------------
+                 tbl : timeline_events
+            operationId: DefaultCURD_AddTimelineEvent
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.AddTimelineEventRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.AddTimelineEventResponse'
+        delete:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_DelTimelineEventByIDList
+            parameters:
+                - name: IDList
+                  in: query
+                  schema:
+                    type: array
+                    items:
+                        type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
+        patch:
+            tags:
+                - DefaultCURD
+            operationId: DefaultCURD_UpdateTimelineEvent
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdateTimelineEventRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.UpdateTimelineEventResponse'
 components:
     schemas:
         api.AbandonCodeInfo:
@@ -931,6 +1087,16 @@ components:
             properties:
                 photo:
                     $ref: '#/components/schemas/api.PhotoInfo'
+        api.AddTimelineEventRequest:
+            type: object
+            properties:
+                timelineEvent:
+                    $ref: '#/components/schemas/api.TimelineEventInfo'
+        api.AddTimelineEventResponse:
+            type: object
+            properties:
+                timelineEvent:
+                    $ref: '#/components/schemas/api.TimelineEventInfo'
         api.AppSettingInfo:
             type: object
             properties:
@@ -1196,6 +1362,30 @@ components:
                 total:
                     type: integer
                     format: int32
+        api.GetRecomputeTimelinesStatusResponse:
+            type: object
+            properties:
+                running:
+                    type: boolean
+                processed:
+                    type: integer
+                    format: int32
+                total:
+                    type: integer
+                    format: int32
+                eventCount:
+                    type: integer
+                    format: int32
+                scatteredCount:
+                    type: integer
+                    format: int32
+        api.GetTimelineEventListResponse:
+            type: object
+            properties:
+                timelineEventList:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.TimelineEventInfo'
         api.GetVlmQueueStatusResponse:
             type: object
             properties:
@@ -1225,6 +1415,17 @@ components:
                     type: array
                     items:
                         type: string
+        api.ListTimelineEventsResponse:
+            type: object
+            properties:
+                events:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.TimelineEventDetail'
+                scattered:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.TimelineEventDetail'
         api.ListTimelinesResponse:
             type: object
             properties:
@@ -1276,6 +1477,9 @@ components:
                     type: string
                 timeline:
                     type: string
+                timelineManual:
+                    type: integer
+                    format: int32
                 tags:
                     type: string
                 description:
@@ -1423,6 +1627,27 @@ components:
             properties:
                 status:
                     type: string
+        api.RecomputeTimelinesResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+        api.SaveTimelineEventRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                date:
+                    type: string
+                event:
+                    type: string
+                note:
+                    type: string
+        api.SaveTimelineEventResponse:
+            type: object
+            properties:
+                id:
+                    type: string
         api.SchemaField:
             type: object
             properties:
@@ -1490,6 +1715,41 @@ components:
             properties:
                 stopped:
                     type: boolean
+        api.TimelineEventDetail:
+            type: object
+            properties:
+                id:
+                    type: string
+                date:
+                    type: string
+                event:
+                    type: string
+                note:
+                    type: string
+                photoCount:
+                    type: integer
+                    format: int32
+                isScattered:
+                    type: boolean
+            description: TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+        api.TimelineEventInfo:
+            type: object
+            properties:
+                ID:
+                    type: string
+                eventDate:
+                    type: string
+                event:
+                    type: string
+                note:
+                    type: string
+                createdAt:
+                    type: string
+                updatedAt:
+                    type: string
+            description: |-
+                --------------------------------------------------
+                 tbl : timeline_events
         api.UnbindTagsRequest:
             type: object
             properties:
@@ -1562,6 +1822,16 @@ components:
                     type: string
                 tags:
                     type: string
+        api.UpdateTimelineEventRequest:
+            type: object
+            properties:
+                timelineEvent:
+                    $ref: '#/components/schemas/api.TimelineEventInfo'
+        api.UpdateTimelineEventResponse:
+            type: object
+            properties:
+                timelineEvent:
+                    $ref: '#/components/schemas/api.TimelineEventInfo'
         api.VlmQueueStatus:
             type: object
             properties:

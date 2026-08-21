@@ -22,15 +22,19 @@ const _ = http.SupportPackageIsVersion1
 const OperationDefaultCURDAddAppSetting = "/api.defaultCURD/AddAppSetting"
 const OperationDefaultCURDAddPhoto = "/api.defaultCURD/AddPhoto"
 const OperationDefaultCURDAddPhotoGroup = "/api.defaultCURD/AddPhotoGroup"
+const OperationDefaultCURDAddTimelineEvent = "/api.defaultCURD/AddTimelineEvent"
 const OperationDefaultCURDDelAppSettingByKeyList = "/api.defaultCURD/DelAppSettingByKeyList"
 const OperationDefaultCURDDelPhotoByIDList = "/api.defaultCURD/DelPhotoByIDList"
 const OperationDefaultCURDDelPhotoGroupByIDList = "/api.defaultCURD/DelPhotoGroupByIDList"
+const OperationDefaultCURDDelTimelineEventByIDList = "/api.defaultCURD/DelTimelineEventByIDList"
 const OperationDefaultCURDGetAppSettingList = "/api.defaultCURD/GetAppSettingList"
 const OperationDefaultCURDGetPhotoGroupList = "/api.defaultCURD/GetPhotoGroupList"
 const OperationDefaultCURDGetPhotoList = "/api.defaultCURD/GetPhotoList"
+const OperationDefaultCURDGetTimelineEventList = "/api.defaultCURD/GetTimelineEventList"
 const OperationDefaultCURDUpdateAppSetting = "/api.defaultCURD/UpdateAppSetting"
 const OperationDefaultCURDUpdatePhoto = "/api.defaultCURD/UpdatePhoto"
 const OperationDefaultCURDUpdatePhotoGroup = "/api.defaultCURD/UpdatePhotoGroup"
+const OperationDefaultCURDUpdateTimelineEvent = "/api.defaultCURD/UpdateTimelineEvent"
 
 type DefaultCURDHTTPServer interface {
 	// AddAppSetting --------------------------------------------------
@@ -42,15 +46,21 @@ type DefaultCURDHTTPServer interface {
 	// AddPhotoGroup --------------------------------------------------
 	// tbl : photo_groups
 	AddPhotoGroup(context.Context, *AddPhotoGroupRequest) (*AddPhotoGroupResponse, error)
+	// AddTimelineEvent --------------------------------------------------
+	// tbl : timeline_events
+	AddTimelineEvent(context.Context, *AddTimelineEventRequest) (*AddTimelineEventResponse, error)
 	DelAppSettingByKeyList(context.Context, *DelAppSettingByKeyListRequest) (*Empty, error)
 	DelPhotoByIDList(context.Context, *DelPhotoByIDListRequest) (*Empty, error)
 	DelPhotoGroupByIDList(context.Context, *DelPhotoGroupByIDListRequest) (*Empty, error)
+	DelTimelineEventByIDList(context.Context, *DelTimelineEventByIDListRequest) (*Empty, error)
 	GetAppSettingList(context.Context, *GetAppSettingListRequest) (*GetAppSettingListResponse, error)
 	GetPhotoGroupList(context.Context, *GetPhotoGroupListRequest) (*GetPhotoGroupListResponse, error)
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
+	GetTimelineEventList(context.Context, *GetTimelineEventListRequest) (*GetTimelineEventListResponse, error)
 	UpdateAppSetting(context.Context, *UpdateAppSettingRequest) (*UpdateAppSettingResponse, error)
 	UpdatePhoto(context.Context, *UpdatePhotoRequest) (*UpdatePhotoResponse, error)
 	UpdatePhotoGroup(context.Context, *UpdatePhotoGroupRequest) (*UpdatePhotoGroupResponse, error)
+	UpdateTimelineEvent(context.Context, *UpdateTimelineEventRequest) (*UpdateTimelineEventResponse, error)
 }
 
 func RegisterDefaultCURDHTTPServer(s *http.Server, srv DefaultCURDHTTPServer) {
@@ -67,6 +77,10 @@ func RegisterDefaultCURDHTTPServer(s *http.Server, srv DefaultCURDHTTPServer) {
 	r.GET("/photos", _DefaultCURD_GetPhotoList0_HTTP_Handler(srv))
 	r.PATCH("/photos", _DefaultCURD_UpdatePhoto0_HTTP_Handler(srv))
 	r.DELETE("/photos", _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv))
+	r.POST("/timeline-events", _DefaultCURD_AddTimelineEvent0_HTTP_Handler(srv))
+	r.GET("/timeline-events", _DefaultCURD_GetTimelineEventList0_HTTP_Handler(srv))
+	r.PATCH("/timeline-events", _DefaultCURD_UpdateTimelineEvent0_HTTP_Handler(srv))
+	r.DELETE("/timeline-events", _DefaultCURD_DelTimelineEventByIDList0_HTTP_Handler(srv))
 }
 
 func _DefaultCURD_AddAppSetting0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
@@ -315,6 +329,88 @@ func _DefaultCURD_DelPhotoByIDList0_HTTP_Handler(srv DefaultCURDHTTPServer) func
 	}
 }
 
+func _DefaultCURD_AddTimelineEvent0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in AddTimelineEventRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDAddTimelineEvent)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.AddTimelineEvent(ctx, req.(*AddTimelineEventRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*AddTimelineEventResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_GetTimelineEventList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetTimelineEventListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDGetTimelineEventList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetTimelineEventList(ctx, req.(*GetTimelineEventListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetTimelineEventListResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_UpdateTimelineEvent0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UpdateTimelineEventRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDUpdateTimelineEvent)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UpdateTimelineEvent(ctx, req.(*UpdateTimelineEventRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UpdateTimelineEventResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _DefaultCURD_DelTimelineEventByIDList0_HTTP_Handler(srv DefaultCURDHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DelTimelineEventByIDListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationDefaultCURDDelTimelineEventByIDList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DelTimelineEventByIDList(ctx, req.(*DelTimelineEventByIDListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
+}
+
 type DefaultCURDHTTPClient interface {
 	// AddAppSetting --------------------------------------------------
 	// tbl : app_settings
@@ -325,15 +421,21 @@ type DefaultCURDHTTPClient interface {
 	// AddPhotoGroup --------------------------------------------------
 	// tbl : photo_groups
 	AddPhotoGroup(ctx context.Context, req *AddPhotoGroupRequest, opts ...http.CallOption) (rsp *AddPhotoGroupResponse, err error)
+	// AddTimelineEvent --------------------------------------------------
+	// tbl : timeline_events
+	AddTimelineEvent(ctx context.Context, req *AddTimelineEventRequest, opts ...http.CallOption) (rsp *AddTimelineEventResponse, err error)
 	DelAppSettingByKeyList(ctx context.Context, req *DelAppSettingByKeyListRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	DelPhotoByIDList(ctx context.Context, req *DelPhotoByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	DelPhotoGroupByIDList(ctx context.Context, req *DelPhotoGroupByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
+	DelTimelineEventByIDList(ctx context.Context, req *DelTimelineEventByIDListRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	GetAppSettingList(ctx context.Context, req *GetAppSettingListRequest, opts ...http.CallOption) (rsp *GetAppSettingListResponse, err error)
 	GetPhotoGroupList(ctx context.Context, req *GetPhotoGroupListRequest, opts ...http.CallOption) (rsp *GetPhotoGroupListResponse, err error)
 	GetPhotoList(ctx context.Context, req *GetPhotoListRequest, opts ...http.CallOption) (rsp *GetPhotoListResponse, err error)
+	GetTimelineEventList(ctx context.Context, req *GetTimelineEventListRequest, opts ...http.CallOption) (rsp *GetTimelineEventListResponse, err error)
 	UpdateAppSetting(ctx context.Context, req *UpdateAppSettingRequest, opts ...http.CallOption) (rsp *UpdateAppSettingResponse, err error)
 	UpdatePhoto(ctx context.Context, req *UpdatePhotoRequest, opts ...http.CallOption) (rsp *UpdatePhotoResponse, err error)
 	UpdatePhotoGroup(ctx context.Context, req *UpdatePhotoGroupRequest, opts ...http.CallOption) (rsp *UpdatePhotoGroupResponse, err error)
+	UpdateTimelineEvent(ctx context.Context, req *UpdateTimelineEventRequest, opts ...http.CallOption) (rsp *UpdateTimelineEventResponse, err error)
 }
 
 type DefaultCURDHTTPClientImpl struct {
@@ -389,6 +491,21 @@ func (c *DefaultCURDHTTPClientImpl) AddPhotoGroup(ctx context.Context, in *AddPh
 	return &out, nil
 }
 
+// AddTimelineEvent --------------------------------------------------
+// tbl : timeline_events
+func (c *DefaultCURDHTTPClientImpl) AddTimelineEvent(ctx context.Context, in *AddTimelineEventRequest, opts ...http.CallOption) (*AddTimelineEventResponse, error) {
+	var out AddTimelineEventResponse
+	pattern := "/timeline-events"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationDefaultCURDAddTimelineEvent))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *DefaultCURDHTTPClientImpl) DelAppSettingByKeyList(ctx context.Context, in *DelAppSettingByKeyListRequest, opts ...http.CallOption) (*Empty, error) {
 	var out Empty
 	pattern := "/app-settings"
@@ -420,6 +537,19 @@ func (c *DefaultCURDHTTPClientImpl) DelPhotoGroupByIDList(ctx context.Context, i
 	pattern := "/photo-groups"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationDefaultCURDDelPhotoGroupByIDList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *DefaultCURDHTTPClientImpl) DelTimelineEventByIDList(ctx context.Context, in *DelTimelineEventByIDListRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/timeline-events"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationDefaultCURDDelTimelineEventByIDList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
 	if err != nil {
@@ -467,6 +597,19 @@ func (c *DefaultCURDHTTPClientImpl) GetPhotoList(ctx context.Context, in *GetPho
 	return &out, nil
 }
 
+func (c *DefaultCURDHTTPClientImpl) GetTimelineEventList(ctx context.Context, in *GetTimelineEventListRequest, opts ...http.CallOption) (*GetTimelineEventListResponse, error) {
+	var out GetTimelineEventListResponse
+	pattern := "/timeline-events"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationDefaultCURDGetTimelineEventList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *DefaultCURDHTTPClientImpl) UpdateAppSetting(ctx context.Context, in *UpdateAppSettingRequest, opts ...http.CallOption) (*UpdateAppSettingResponse, error) {
 	var out UpdateAppSettingResponse
 	pattern := "/app-settings"
@@ -498,6 +641,19 @@ func (c *DefaultCURDHTTPClientImpl) UpdatePhotoGroup(ctx context.Context, in *Up
 	pattern := "/photo-groups"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationDefaultCURDUpdatePhotoGroup))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PATCH", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *DefaultCURDHTTPClientImpl) UpdateTimelineEvent(ctx context.Context, in *UpdateTimelineEventRequest, opts ...http.CallOption) (*UpdateTimelineEventResponse, error) {
+	var out UpdateTimelineEventResponse
+	pattern := "/timeline-events"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationDefaultCURDUpdateTimelineEvent))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "PATCH", path, in, &out, opts...)
 	if err != nil {

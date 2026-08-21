@@ -17,32 +17,35 @@ import (
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:          db,
-		AbandonCode: newAbandonCode(db, opts...),
-		AppSetting:  newAppSetting(db, opts...),
-		Photo:       newPhoto(db, opts...),
-		PhotoGroup:  newPhotoGroup(db, opts...),
+		db:            db,
+		AbandonCode:   newAbandonCode(db, opts...),
+		AppSetting:    newAppSetting(db, opts...),
+		Photo:         newPhoto(db, opts...),
+		PhotoGroup:    newPhotoGroup(db, opts...),
+		TimelineEvent: newTimelineEvent(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	AbandonCode abandonCode
-	AppSetting  appSetting
-	Photo       photo
-	PhotoGroup  photoGroup
+	AbandonCode   abandonCode
+	AppSetting    appSetting
+	Photo         photo
+	PhotoGroup    photoGroup
+	TimelineEvent timelineEvent
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:          db,
-		AbandonCode: q.AbandonCode.clone(db),
-		AppSetting:  q.AppSetting.clone(db),
-		Photo:       q.Photo.clone(db),
-		PhotoGroup:  q.PhotoGroup.clone(db),
+		db:            db,
+		AbandonCode:   q.AbandonCode.clone(db),
+		AppSetting:    q.AppSetting.clone(db),
+		Photo:         q.Photo.clone(db),
+		PhotoGroup:    q.PhotoGroup.clone(db),
+		TimelineEvent: q.TimelineEvent.clone(db),
 	}
 }
 
@@ -56,27 +59,30 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:          db,
-		AbandonCode: q.AbandonCode.replaceDB(db),
-		AppSetting:  q.AppSetting.replaceDB(db),
-		Photo:       q.Photo.replaceDB(db),
-		PhotoGroup:  q.PhotoGroup.replaceDB(db),
+		db:            db,
+		AbandonCode:   q.AbandonCode.replaceDB(db),
+		AppSetting:    q.AppSetting.replaceDB(db),
+		Photo:         q.Photo.replaceDB(db),
+		PhotoGroup:    q.PhotoGroup.replaceDB(db),
+		TimelineEvent: q.TimelineEvent.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	AbandonCode *abandonCodeDo
-	AppSetting  *appSettingDo
-	Photo       *photoDo
-	PhotoGroup  *photoGroupDo
+	AbandonCode   *abandonCodeDo
+	AppSetting    *appSettingDo
+	Photo         *photoDo
+	PhotoGroup    *photoGroupDo
+	TimelineEvent *timelineEventDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		AbandonCode: q.AbandonCode.WithContext(ctx),
-		AppSetting:  q.AppSetting.WithContext(ctx),
-		Photo:       q.Photo.WithContext(ctx),
-		PhotoGroup:  q.PhotoGroup.WithContext(ctx),
+		AbandonCode:   q.AbandonCode.WithContext(ctx),
+		AppSetting:    q.AppSetting.WithContext(ctx),
+		Photo:         q.Photo.WithContext(ctx),
+		PhotoGroup:    q.PhotoGroup.WithContext(ctx),
+		TimelineEvent: q.TimelineEvent.WithContext(ctx),
 	}
 }
 

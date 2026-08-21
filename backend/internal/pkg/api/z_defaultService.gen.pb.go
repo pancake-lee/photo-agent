@@ -813,30 +813,31 @@ type PhotoInfo struct {
 	FilePath           string                 `protobuf:"bytes,3,opt,name=filePath,proto3" json:"filePath,omitempty"`
 	FileType           string                 `protobuf:"bytes,4,opt,name=fileType,proto3" json:"fileType,omitempty"`
 	Timeline           string                 `protobuf:"bytes,5,opt,name=timeline,proto3" json:"timeline,omitempty"`
-	Tags               string                 `protobuf:"bytes,6,opt,name=tags,proto3" json:"tags,omitempty"`
-	Description        string                 `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
-	Objects            string                 `protobuf:"bytes,8,opt,name=objects,proto3" json:"objects,omitempty"`
-	Colors             string                 `protobuf:"bytes,9,opt,name=colors,proto3" json:"colors,omitempty"`
-	Scene              string                 `protobuf:"bytes,10,opt,name=scene,proto3" json:"scene,omitempty"`
-	Lighting           string                 `protobuf:"bytes,11,opt,name=lighting,proto3" json:"lighting,omitempty"`
-	Mood               string                 `protobuf:"bytes,12,opt,name=mood,proto3" json:"mood,omitempty"`
-	Composition        string                 `protobuf:"bytes,13,opt,name=composition,proto3" json:"composition,omitempty"`
-	ShotAt             int64                  `protobuf:"varint,14,opt,name=shotAt,proto3" json:"shotAt,omitempty"`
-	Width              int32                  `protobuf:"varint,15,opt,name=width,proto3" json:"width,omitempty"`
-	Height             int32                  `protobuf:"varint,16,opt,name=height,proto3" json:"height,omitempty"`
-	Brand              string                 `protobuf:"bytes,17,opt,name=brand,proto3" json:"brand,omitempty"`
-	Model              string                 `protobuf:"bytes,18,opt,name=model,proto3" json:"model,omitempty"`
-	Lens               string                 `protobuf:"bytes,19,opt,name=lens,proto3" json:"lens,omitempty"`
-	FocalLength        string                 `protobuf:"bytes,20,opt,name=focalLength,proto3" json:"focalLength,omitempty"`
-	Aperture           string                 `protobuf:"bytes,21,opt,name=aperture,proto3" json:"aperture,omitempty"`
-	Iso                int32                  `protobuf:"varint,22,opt,name=iso,proto3" json:"iso,omitempty"`
-	ExposureTime       string                 `protobuf:"bytes,23,opt,name=exposureTime,proto3" json:"exposureTime,omitempty"`
-	Latitude           float64                `protobuf:"fixed64,24,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	Longitude          float64                `protobuf:"fixed64,25,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	Altitude           float64                `protobuf:"fixed64,26,opt,name=altitude,proto3" json:"altitude,omitempty"`
-	BurstGroupID       string                 `protobuf:"bytes,27,opt,name=burstGroupID,proto3" json:"burstGroupID,omitempty"`
-	BurstGroupCoarseID string                 `protobuf:"bytes,28,opt,name=burstGroupCoarseID,proto3" json:"burstGroupCoarseID,omitempty"`
-	ImportedAt         int64                  `protobuf:"varint,29,opt,name=importedAt,proto3" json:"importedAt,omitempty"`
+	TimelineManual     int32                  `protobuf:"varint,6,opt,name=timelineManual,proto3" json:"timelineManual,omitempty"`
+	Tags               string                 `protobuf:"bytes,7,opt,name=tags,proto3" json:"tags,omitempty"`
+	Description        string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`
+	Objects            string                 `protobuf:"bytes,9,opt,name=objects,proto3" json:"objects,omitempty"`
+	Colors             string                 `protobuf:"bytes,10,opt,name=colors,proto3" json:"colors,omitempty"`
+	Scene              string                 `protobuf:"bytes,11,opt,name=scene,proto3" json:"scene,omitempty"`
+	Lighting           string                 `protobuf:"bytes,12,opt,name=lighting,proto3" json:"lighting,omitempty"`
+	Mood               string                 `protobuf:"bytes,13,opt,name=mood,proto3" json:"mood,omitempty"`
+	Composition        string                 `protobuf:"bytes,14,opt,name=composition,proto3" json:"composition,omitempty"`
+	ShotAt             int64                  `protobuf:"varint,15,opt,name=shotAt,proto3" json:"shotAt,omitempty"`
+	Width              int32                  `protobuf:"varint,16,opt,name=width,proto3" json:"width,omitempty"`
+	Height             int32                  `protobuf:"varint,17,opt,name=height,proto3" json:"height,omitempty"`
+	Brand              string                 `protobuf:"bytes,18,opt,name=brand,proto3" json:"brand,omitempty"`
+	Model              string                 `protobuf:"bytes,19,opt,name=model,proto3" json:"model,omitempty"`
+	Lens               string                 `protobuf:"bytes,20,opt,name=lens,proto3" json:"lens,omitempty"`
+	FocalLength        string                 `protobuf:"bytes,21,opt,name=focalLength,proto3" json:"focalLength,omitempty"`
+	Aperture           string                 `protobuf:"bytes,22,opt,name=aperture,proto3" json:"aperture,omitempty"`
+	Iso                int32                  `protobuf:"varint,23,opt,name=iso,proto3" json:"iso,omitempty"`
+	ExposureTime       string                 `protobuf:"bytes,24,opt,name=exposureTime,proto3" json:"exposureTime,omitempty"`
+	Latitude           float64                `protobuf:"fixed64,25,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	Longitude          float64                `protobuf:"fixed64,26,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Altitude           float64                `protobuf:"fixed64,27,opt,name=altitude,proto3" json:"altitude,omitempty"`
+	BurstGroupID       string                 `protobuf:"bytes,28,opt,name=burstGroupID,proto3" json:"burstGroupID,omitempty"`
+	BurstGroupCoarseID string                 `protobuf:"bytes,29,opt,name=burstGroupCoarseID,proto3" json:"burstGroupCoarseID,omitempty"`
+	ImportedAt         int64                  `protobuf:"varint,30,opt,name=importedAt,proto3" json:"importedAt,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -904,6 +905,13 @@ func (x *PhotoInfo) GetTimeline() string {
 		return x.Timeline
 	}
 	return ""
+}
+
+func (x *PhotoInfo) GetTimelineManual() int32 {
+	if x != nil {
+		return x.TimelineManual
+	}
+	return 0
 }
 
 func (x *PhotoInfo) GetTags() string {
@@ -1382,6 +1390,400 @@ func (x *DelPhotoByIDListRequest) GetIDList() []string {
 	return nil
 }
 
+// --------------------------------------------------
+// tbl : timeline_events
+type TimelineEventInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ID            string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	EventDate     int64                  `protobuf:"varint,2,opt,name=eventDate,proto3" json:"eventDate,omitempty"`
+	Event         string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"`
+	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,5,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,6,opt,name=updatedAt,proto3" json:"updatedAt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TimelineEventInfo) Reset() {
+	*x = TimelineEventInfo{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TimelineEventInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TimelineEventInfo) ProtoMessage() {}
+
+func (x *TimelineEventInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TimelineEventInfo.ProtoReflect.Descriptor instead.
+func (*TimelineEventInfo) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *TimelineEventInfo) GetID() string {
+	if x != nil {
+		return x.ID
+	}
+	return ""
+}
+
+func (x *TimelineEventInfo) GetEventDate() int64 {
+	if x != nil {
+		return x.EventDate
+	}
+	return 0
+}
+
+func (x *TimelineEventInfo) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *TimelineEventInfo) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *TimelineEventInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *TimelineEventInfo) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type AddTimelineEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimelineEvent *TimelineEventInfo     `protobuf:"bytes,1,opt,name=timeline_event,json=timelineEvent,proto3" json:"timeline_event,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddTimelineEventRequest) Reset() {
+	*x = AddTimelineEventRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddTimelineEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddTimelineEventRequest) ProtoMessage() {}
+
+func (x *AddTimelineEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddTimelineEventRequest.ProtoReflect.Descriptor instead.
+func (*AddTimelineEventRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AddTimelineEventRequest) GetTimelineEvent() *TimelineEventInfo {
+	if x != nil {
+		return x.TimelineEvent
+	}
+	return nil
+}
+
+type AddTimelineEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimelineEvent *TimelineEventInfo     `protobuf:"bytes,1,opt,name=timeline_event,json=timelineEvent,proto3" json:"timeline_event,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddTimelineEventResponse) Reset() {
+	*x = AddTimelineEventResponse{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddTimelineEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddTimelineEventResponse) ProtoMessage() {}
+
+func (x *AddTimelineEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddTimelineEventResponse.ProtoReflect.Descriptor instead.
+func (*AddTimelineEventResponse) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *AddTimelineEventResponse) GetTimelineEvent() *TimelineEventInfo {
+	if x != nil {
+		return x.TimelineEvent
+	}
+	return nil
+}
+
+type GetTimelineEventListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IDList        []string               `protobuf:"bytes,1,rep,name=IDList,proto3" json:"IDList,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTimelineEventListRequest) Reset() {
+	*x = GetTimelineEventListRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTimelineEventListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTimelineEventListRequest) ProtoMessage() {}
+
+func (x *GetTimelineEventListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTimelineEventListRequest.ProtoReflect.Descriptor instead.
+func (*GetTimelineEventListRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *GetTimelineEventListRequest) GetIDList() []string {
+	if x != nil {
+		return x.IDList
+	}
+	return nil
+}
+
+type GetTimelineEventListResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	TimelineEventList []*TimelineEventInfo   `protobuf:"bytes,1,rep,name=timelineEventList,proto3" json:"timelineEventList,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GetTimelineEventListResponse) Reset() {
+	*x = GetTimelineEventListResponse{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTimelineEventListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTimelineEventListResponse) ProtoMessage() {}
+
+func (x *GetTimelineEventListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTimelineEventListResponse.ProtoReflect.Descriptor instead.
+func (*GetTimelineEventListResponse) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GetTimelineEventListResponse) GetTimelineEventList() []*TimelineEventInfo {
+	if x != nil {
+		return x.TimelineEventList
+	}
+	return nil
+}
+
+type UpdateTimelineEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimelineEvent *TimelineEventInfo     `protobuf:"bytes,1,opt,name=timelineEvent,proto3" json:"timelineEvent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateTimelineEventRequest) Reset() {
+	*x = UpdateTimelineEventRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateTimelineEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateTimelineEventRequest) ProtoMessage() {}
+
+func (x *UpdateTimelineEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateTimelineEventRequest.ProtoReflect.Descriptor instead.
+func (*UpdateTimelineEventRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *UpdateTimelineEventRequest) GetTimelineEvent() *TimelineEventInfo {
+	if x != nil {
+		return x.TimelineEvent
+	}
+	return nil
+}
+
+type UpdateTimelineEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimelineEvent *TimelineEventInfo     `protobuf:"bytes,1,opt,name=timelineEvent,proto3" json:"timelineEvent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateTimelineEventResponse) Reset() {
+	*x = UpdateTimelineEventResponse{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateTimelineEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateTimelineEventResponse) ProtoMessage() {}
+
+func (x *UpdateTimelineEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateTimelineEventResponse.ProtoReflect.Descriptor instead.
+func (*UpdateTimelineEventResponse) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *UpdateTimelineEventResponse) GetTimelineEvent() *TimelineEventInfo {
+	if x != nil {
+		return x.TimelineEvent
+	}
+	return nil
+}
+
+type DelTimelineEventByIDListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IDList        []string               `protobuf:"bytes,1,rep,name=IDList,proto3" json:"IDList,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DelTimelineEventByIDListRequest) Reset() {
+	*x = DelTimelineEventByIDListRequest{}
+	mi := &file_z_defaultService_gen_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DelTimelineEventByIDListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DelTimelineEventByIDListRequest) ProtoMessage() {}
+
+func (x *DelTimelineEventByIDListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_z_defaultService_gen_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DelTimelineEventByIDListRequest.ProtoReflect.Descriptor instead.
+func (*DelTimelineEventByIDListRequest) Descriptor() ([]byte, []int) {
+	return file_z_defaultService_gen_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DelTimelineEventByIDListRequest) GetIDList() []string {
+	if x != nil {
+		return x.IDList
+	}
+	return nil
+}
+
 var File_z_defaultService_gen_proto protoreflect.FileDescriptor
 
 const file_z_defaultService_gen_proto_rawDesc = "" +
@@ -1441,39 +1843,40 @@ const file_z_defaultService_gen_proto_rawDesc = "" +
 	"photoGroup\x18\x01 \x01(\v2\x13.api.PhotoGroupInfoR\n" +
 	"photoGroup\"6\n" +
 	"\x1cDelPhotoGroupByIDListRequest\x12\x16\n" +
-	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"\x9f\x06\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"\xc7\x06\n" +
 	"\tPhotoInfo\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1a\n" +
 	"\bfilePath\x18\x03 \x01(\tR\bfilePath\x12\x1a\n" +
 	"\bfileType\x18\x04 \x01(\tR\bfileType\x12\x1a\n" +
-	"\btimeline\x18\x05 \x01(\tR\btimeline\x12\x12\n" +
-	"\x04tags\x18\x06 \x01(\tR\x04tags\x12 \n" +
-	"\vdescription\x18\a \x01(\tR\vdescription\x12\x18\n" +
-	"\aobjects\x18\b \x01(\tR\aobjects\x12\x16\n" +
-	"\x06colors\x18\t \x01(\tR\x06colors\x12\x14\n" +
-	"\x05scene\x18\n" +
-	" \x01(\tR\x05scene\x12\x1a\n" +
-	"\blighting\x18\v \x01(\tR\blighting\x12\x12\n" +
-	"\x04mood\x18\f \x01(\tR\x04mood\x12 \n" +
-	"\vcomposition\x18\r \x01(\tR\vcomposition\x12\x16\n" +
-	"\x06shotAt\x18\x0e \x01(\x03R\x06shotAt\x12\x14\n" +
-	"\x05width\x18\x0f \x01(\x05R\x05width\x12\x16\n" +
-	"\x06height\x18\x10 \x01(\x05R\x06height\x12\x14\n" +
-	"\x05brand\x18\x11 \x01(\tR\x05brand\x12\x14\n" +
-	"\x05model\x18\x12 \x01(\tR\x05model\x12\x12\n" +
-	"\x04lens\x18\x13 \x01(\tR\x04lens\x12 \n" +
-	"\vfocalLength\x18\x14 \x01(\tR\vfocalLength\x12\x1a\n" +
-	"\baperture\x18\x15 \x01(\tR\baperture\x12\x10\n" +
-	"\x03iso\x18\x16 \x01(\x05R\x03iso\x12\"\n" +
-	"\fexposureTime\x18\x17 \x01(\tR\fexposureTime\x12\x1a\n" +
-	"\blatitude\x18\x18 \x01(\x01R\blatitude\x12\x1c\n" +
-	"\tlongitude\x18\x19 \x01(\x01R\tlongitude\x12\x1a\n" +
-	"\baltitude\x18\x1a \x01(\x01R\baltitude\x12\"\n" +
-	"\fburstGroupID\x18\x1b \x01(\tR\fburstGroupID\x12.\n" +
-	"\x12burstGroupCoarseID\x18\x1c \x01(\tR\x12burstGroupCoarseID\x12\x1e\n" +
+	"\btimeline\x18\x05 \x01(\tR\btimeline\x12&\n" +
+	"\x0etimelineManual\x18\x06 \x01(\x05R\x0etimelineManual\x12\x12\n" +
+	"\x04tags\x18\a \x01(\tR\x04tags\x12 \n" +
+	"\vdescription\x18\b \x01(\tR\vdescription\x12\x18\n" +
+	"\aobjects\x18\t \x01(\tR\aobjects\x12\x16\n" +
+	"\x06colors\x18\n" +
+	" \x01(\tR\x06colors\x12\x14\n" +
+	"\x05scene\x18\v \x01(\tR\x05scene\x12\x1a\n" +
+	"\blighting\x18\f \x01(\tR\blighting\x12\x12\n" +
+	"\x04mood\x18\r \x01(\tR\x04mood\x12 \n" +
+	"\vcomposition\x18\x0e \x01(\tR\vcomposition\x12\x16\n" +
+	"\x06shotAt\x18\x0f \x01(\x03R\x06shotAt\x12\x14\n" +
+	"\x05width\x18\x10 \x01(\x05R\x05width\x12\x16\n" +
+	"\x06height\x18\x11 \x01(\x05R\x06height\x12\x14\n" +
+	"\x05brand\x18\x12 \x01(\tR\x05brand\x12\x14\n" +
+	"\x05model\x18\x13 \x01(\tR\x05model\x12\x12\n" +
+	"\x04lens\x18\x14 \x01(\tR\x04lens\x12 \n" +
+	"\vfocalLength\x18\x15 \x01(\tR\vfocalLength\x12\x1a\n" +
+	"\baperture\x18\x16 \x01(\tR\baperture\x12\x10\n" +
+	"\x03iso\x18\x17 \x01(\x05R\x03iso\x12\"\n" +
+	"\fexposureTime\x18\x18 \x01(\tR\fexposureTime\x12\x1a\n" +
+	"\blatitude\x18\x19 \x01(\x01R\blatitude\x12\x1c\n" +
+	"\tlongitude\x18\x1a \x01(\x01R\tlongitude\x12\x1a\n" +
+	"\baltitude\x18\x1b \x01(\x01R\baltitude\x12\"\n" +
+	"\fburstGroupID\x18\x1c \x01(\tR\fburstGroupID\x12.\n" +
+	"\x12burstGroupCoarseID\x18\x1d \x01(\tR\x12burstGroupCoarseID\x12\x1e\n" +
 	"\n" +
-	"importedAt\x18\x1d \x01(\x03R\n" +
+	"importedAt\x18\x1e \x01(\x03R\n" +
 	"importedAt\"7\n" +
 	"\x0fAddPhotoRequest\x12$\n" +
 	"\x05photo\x18\x01 \x01(\v2\x0e.api.PhotoInfoR\x05photo\"8\n" +
@@ -1488,7 +1891,28 @@ const file_z_defaultService_gen_proto_rawDesc = "" +
 	"\x13UpdatePhotoResponse\x12$\n" +
 	"\x05photo\x18\x01 \x01(\v2\x0e.api.PhotoInfoR\x05photo\"1\n" +
 	"\x17DelPhotoByIDListRequest\x12\x16\n" +
-	"\x06IDList\x18\x01 \x03(\tR\x06IDList2\x85\t\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"\xa7\x01\n" +
+	"\x11TimelineEventInfo\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x1c\n" +
+	"\teventDate\x18\x02 \x01(\x03R\teventDate\x12\x14\n" +
+	"\x05event\x18\x03 \x01(\tR\x05event\x12\x12\n" +
+	"\x04note\x18\x04 \x01(\tR\x04note\x12\x1c\n" +
+	"\tcreatedAt\x18\x05 \x01(\x03R\tcreatedAt\x12\x1c\n" +
+	"\tupdatedAt\x18\x06 \x01(\x03R\tupdatedAt\"X\n" +
+	"\x17AddTimelineEventRequest\x12=\n" +
+	"\x0etimeline_event\x18\x01 \x01(\v2\x16.api.TimelineEventInfoR\rtimelineEvent\"Y\n" +
+	"\x18AddTimelineEventResponse\x12=\n" +
+	"\x0etimeline_event\x18\x01 \x01(\v2\x16.api.TimelineEventInfoR\rtimelineEvent\"5\n" +
+	"\x1bGetTimelineEventListRequest\x12\x16\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList\"d\n" +
+	"\x1cGetTimelineEventListResponse\x12D\n" +
+	"\x11timelineEventList\x18\x01 \x03(\v2\x16.api.TimelineEventInfoR\x11timelineEventList\"Z\n" +
+	"\x1aUpdateTimelineEventRequest\x12<\n" +
+	"\rtimelineEvent\x18\x01 \x01(\v2\x16.api.TimelineEventInfoR\rtimelineEvent\"[\n" +
+	"\x1bUpdateTimelineEventResponse\x12<\n" +
+	"\rtimelineEvent\x18\x01 \x01(\v2\x16.api.TimelineEventInfoR\rtimelineEvent\"9\n" +
+	"\x1fDelTimelineEventByIDListRequest\x12\x16\n" +
+	"\x06IDList\x18\x01 \x03(\tR\x06IDList2\xc9\f\n" +
 	"\vdefaultCURD\x12`\n" +
 	"\rAddAppSetting\x12\x19.api.AddAppSettingRequest\x1a\x1a.api.AddAppSettingResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/app-settings\x12i\n" +
 	"\x11GetAppSettingList\x12\x1d.api.GetAppSettingListRequest\x1a\x1e.api.GetAppSettingListResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/app-settings\x12i\n" +
@@ -1504,7 +1928,12 @@ const file_z_defaultService_gen_proto_rawDesc = "" +
 	"\fGetPhotoList\x12\x18.api.GetPhotoListRequest\x1a\x19.api.GetPhotoListResponse\"\x0f\x82\xd3\xe4\x93\x02\t\x12\a/photos\x12T\n" +
 	"\vUpdatePhoto\x12\x17.api.UpdatePhotoRequest\x1a\x18.api.UpdatePhotoResponse\"\x12\x82\xd3\xe4\x93\x02\f:\x01*2\a/photos\x12M\n" +
 	"\x10DelPhotoByIDList\x12\x1c.api.DelPhotoByIDListRequest\x1a\n" +
-	".api.Empty\"\x0f\x82\xd3\xe4\x93\x02\t*\a/photosB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
+	".api.Empty\"\x0f\x82\xd3\xe4\x93\x02\t*\a/photos\x12l\n" +
+	"\x10AddTimelineEvent\x12\x1c.api.AddTimelineEventRequest\x1a\x1d.api.AddTimelineEventResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/timeline-events\x12u\n" +
+	"\x14GetTimelineEventList\x12 .api.GetTimelineEventListRequest\x1a!.api.GetTimelineEventListResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/timeline-events\x12u\n" +
+	"\x13UpdateTimelineEvent\x12\x1f.api.UpdateTimelineEventRequest\x1a .api.UpdateTimelineEventResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*2\x10/timeline-events\x12f\n" +
+	"\x18DelTimelineEventByIDList\x12$.api.DelTimelineEventByIDListRequest\x1a\n" +
+	".api.Empty\"\x18\x82\xd3\xe4\x93\x02\x12*\x10/timeline-eventsB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_z_defaultService_gen_proto_rawDescOnce sync.Once
@@ -1518,33 +1947,41 @@ func file_z_defaultService_gen_proto_rawDescGZIP() []byte {
 	return file_z_defaultService_gen_proto_rawDescData
 }
 
-var file_z_defaultService_gen_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_z_defaultService_gen_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_z_defaultService_gen_proto_goTypes = []any{
-	(*AppSettingInfo)(nil),                // 0: api.AppSettingInfo
-	(*AddAppSettingRequest)(nil),          // 1: api.AddAppSettingRequest
-	(*AddAppSettingResponse)(nil),         // 2: api.AddAppSettingResponse
-	(*GetAppSettingListRequest)(nil),      // 3: api.GetAppSettingListRequest
-	(*GetAppSettingListResponse)(nil),     // 4: api.GetAppSettingListResponse
-	(*UpdateAppSettingRequest)(nil),       // 5: api.UpdateAppSettingRequest
-	(*UpdateAppSettingResponse)(nil),      // 6: api.UpdateAppSettingResponse
-	(*DelAppSettingByKeyListRequest)(nil), // 7: api.DelAppSettingByKeyListRequest
-	(*PhotoGroupInfo)(nil),                // 8: api.PhotoGroupInfo
-	(*AddPhotoGroupRequest)(nil),          // 9: api.AddPhotoGroupRequest
-	(*AddPhotoGroupResponse)(nil),         // 10: api.AddPhotoGroupResponse
-	(*GetPhotoGroupListRequest)(nil),      // 11: api.GetPhotoGroupListRequest
-	(*GetPhotoGroupListResponse)(nil),     // 12: api.GetPhotoGroupListResponse
-	(*UpdatePhotoGroupRequest)(nil),       // 13: api.UpdatePhotoGroupRequest
-	(*UpdatePhotoGroupResponse)(nil),      // 14: api.UpdatePhotoGroupResponse
-	(*DelPhotoGroupByIDListRequest)(nil),  // 15: api.DelPhotoGroupByIDListRequest
-	(*PhotoInfo)(nil),                     // 16: api.PhotoInfo
-	(*AddPhotoRequest)(nil),               // 17: api.AddPhotoRequest
-	(*AddPhotoResponse)(nil),              // 18: api.AddPhotoResponse
-	(*GetPhotoListRequest)(nil),           // 19: api.GetPhotoListRequest
-	(*GetPhotoListResponse)(nil),          // 20: api.GetPhotoListResponse
-	(*UpdatePhotoRequest)(nil),            // 21: api.UpdatePhotoRequest
-	(*UpdatePhotoResponse)(nil),           // 22: api.UpdatePhotoResponse
-	(*DelPhotoByIDListRequest)(nil),       // 23: api.DelPhotoByIDListRequest
-	(*Empty)(nil),                         // 24: api.Empty
+	(*AppSettingInfo)(nil),                  // 0: api.AppSettingInfo
+	(*AddAppSettingRequest)(nil),            // 1: api.AddAppSettingRequest
+	(*AddAppSettingResponse)(nil),           // 2: api.AddAppSettingResponse
+	(*GetAppSettingListRequest)(nil),        // 3: api.GetAppSettingListRequest
+	(*GetAppSettingListResponse)(nil),       // 4: api.GetAppSettingListResponse
+	(*UpdateAppSettingRequest)(nil),         // 5: api.UpdateAppSettingRequest
+	(*UpdateAppSettingResponse)(nil),        // 6: api.UpdateAppSettingResponse
+	(*DelAppSettingByKeyListRequest)(nil),   // 7: api.DelAppSettingByKeyListRequest
+	(*PhotoGroupInfo)(nil),                  // 8: api.PhotoGroupInfo
+	(*AddPhotoGroupRequest)(nil),            // 9: api.AddPhotoGroupRequest
+	(*AddPhotoGroupResponse)(nil),           // 10: api.AddPhotoGroupResponse
+	(*GetPhotoGroupListRequest)(nil),        // 11: api.GetPhotoGroupListRequest
+	(*GetPhotoGroupListResponse)(nil),       // 12: api.GetPhotoGroupListResponse
+	(*UpdatePhotoGroupRequest)(nil),         // 13: api.UpdatePhotoGroupRequest
+	(*UpdatePhotoGroupResponse)(nil),        // 14: api.UpdatePhotoGroupResponse
+	(*DelPhotoGroupByIDListRequest)(nil),    // 15: api.DelPhotoGroupByIDListRequest
+	(*PhotoInfo)(nil),                       // 16: api.PhotoInfo
+	(*AddPhotoRequest)(nil),                 // 17: api.AddPhotoRequest
+	(*AddPhotoResponse)(nil),                // 18: api.AddPhotoResponse
+	(*GetPhotoListRequest)(nil),             // 19: api.GetPhotoListRequest
+	(*GetPhotoListResponse)(nil),            // 20: api.GetPhotoListResponse
+	(*UpdatePhotoRequest)(nil),              // 21: api.UpdatePhotoRequest
+	(*UpdatePhotoResponse)(nil),             // 22: api.UpdatePhotoResponse
+	(*DelPhotoByIDListRequest)(nil),         // 23: api.DelPhotoByIDListRequest
+	(*TimelineEventInfo)(nil),               // 24: api.TimelineEventInfo
+	(*AddTimelineEventRequest)(nil),         // 25: api.AddTimelineEventRequest
+	(*AddTimelineEventResponse)(nil),        // 26: api.AddTimelineEventResponse
+	(*GetTimelineEventListRequest)(nil),     // 27: api.GetTimelineEventListRequest
+	(*GetTimelineEventListResponse)(nil),    // 28: api.GetTimelineEventListResponse
+	(*UpdateTimelineEventRequest)(nil),      // 29: api.UpdateTimelineEventRequest
+	(*UpdateTimelineEventResponse)(nil),     // 30: api.UpdateTimelineEventResponse
+	(*DelTimelineEventByIDListRequest)(nil), // 31: api.DelTimelineEventByIDListRequest
+	(*Empty)(nil),                           // 32: api.Empty
 }
 var file_z_defaultService_gen_proto_depIdxs = []int32{
 	0,  // 0: api.AddAppSettingRequest.app_setting:type_name -> api.AppSettingInfo
@@ -1562,35 +1999,48 @@ var file_z_defaultService_gen_proto_depIdxs = []int32{
 	16, // 12: api.GetPhotoListResponse.photoList:type_name -> api.PhotoInfo
 	16, // 13: api.UpdatePhotoRequest.photo:type_name -> api.PhotoInfo
 	16, // 14: api.UpdatePhotoResponse.photo:type_name -> api.PhotoInfo
-	1,  // 15: api.defaultCURD.AddAppSetting:input_type -> api.AddAppSettingRequest
-	3,  // 16: api.defaultCURD.GetAppSettingList:input_type -> api.GetAppSettingListRequest
-	5,  // 17: api.defaultCURD.UpdateAppSetting:input_type -> api.UpdateAppSettingRequest
-	7,  // 18: api.defaultCURD.DelAppSettingByKeyList:input_type -> api.DelAppSettingByKeyListRequest
-	9,  // 19: api.defaultCURD.AddPhotoGroup:input_type -> api.AddPhotoGroupRequest
-	11, // 20: api.defaultCURD.GetPhotoGroupList:input_type -> api.GetPhotoGroupListRequest
-	13, // 21: api.defaultCURD.UpdatePhotoGroup:input_type -> api.UpdatePhotoGroupRequest
-	15, // 22: api.defaultCURD.DelPhotoGroupByIDList:input_type -> api.DelPhotoGroupByIDListRequest
-	17, // 23: api.defaultCURD.AddPhoto:input_type -> api.AddPhotoRequest
-	19, // 24: api.defaultCURD.GetPhotoList:input_type -> api.GetPhotoListRequest
-	21, // 25: api.defaultCURD.UpdatePhoto:input_type -> api.UpdatePhotoRequest
-	23, // 26: api.defaultCURD.DelPhotoByIDList:input_type -> api.DelPhotoByIDListRequest
-	2,  // 27: api.defaultCURD.AddAppSetting:output_type -> api.AddAppSettingResponse
-	4,  // 28: api.defaultCURD.GetAppSettingList:output_type -> api.GetAppSettingListResponse
-	6,  // 29: api.defaultCURD.UpdateAppSetting:output_type -> api.UpdateAppSettingResponse
-	24, // 30: api.defaultCURD.DelAppSettingByKeyList:output_type -> api.Empty
-	10, // 31: api.defaultCURD.AddPhotoGroup:output_type -> api.AddPhotoGroupResponse
-	12, // 32: api.defaultCURD.GetPhotoGroupList:output_type -> api.GetPhotoGroupListResponse
-	14, // 33: api.defaultCURD.UpdatePhotoGroup:output_type -> api.UpdatePhotoGroupResponse
-	24, // 34: api.defaultCURD.DelPhotoGroupByIDList:output_type -> api.Empty
-	18, // 35: api.defaultCURD.AddPhoto:output_type -> api.AddPhotoResponse
-	20, // 36: api.defaultCURD.GetPhotoList:output_type -> api.GetPhotoListResponse
-	22, // 37: api.defaultCURD.UpdatePhoto:output_type -> api.UpdatePhotoResponse
-	24, // 38: api.defaultCURD.DelPhotoByIDList:output_type -> api.Empty
-	27, // [27:39] is the sub-list for method output_type
-	15, // [15:27] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	24, // 15: api.AddTimelineEventRequest.timeline_event:type_name -> api.TimelineEventInfo
+	24, // 16: api.AddTimelineEventResponse.timeline_event:type_name -> api.TimelineEventInfo
+	24, // 17: api.GetTimelineEventListResponse.timelineEventList:type_name -> api.TimelineEventInfo
+	24, // 18: api.UpdateTimelineEventRequest.timelineEvent:type_name -> api.TimelineEventInfo
+	24, // 19: api.UpdateTimelineEventResponse.timelineEvent:type_name -> api.TimelineEventInfo
+	1,  // 20: api.defaultCURD.AddAppSetting:input_type -> api.AddAppSettingRequest
+	3,  // 21: api.defaultCURD.GetAppSettingList:input_type -> api.GetAppSettingListRequest
+	5,  // 22: api.defaultCURD.UpdateAppSetting:input_type -> api.UpdateAppSettingRequest
+	7,  // 23: api.defaultCURD.DelAppSettingByKeyList:input_type -> api.DelAppSettingByKeyListRequest
+	9,  // 24: api.defaultCURD.AddPhotoGroup:input_type -> api.AddPhotoGroupRequest
+	11, // 25: api.defaultCURD.GetPhotoGroupList:input_type -> api.GetPhotoGroupListRequest
+	13, // 26: api.defaultCURD.UpdatePhotoGroup:input_type -> api.UpdatePhotoGroupRequest
+	15, // 27: api.defaultCURD.DelPhotoGroupByIDList:input_type -> api.DelPhotoGroupByIDListRequest
+	17, // 28: api.defaultCURD.AddPhoto:input_type -> api.AddPhotoRequest
+	19, // 29: api.defaultCURD.GetPhotoList:input_type -> api.GetPhotoListRequest
+	21, // 30: api.defaultCURD.UpdatePhoto:input_type -> api.UpdatePhotoRequest
+	23, // 31: api.defaultCURD.DelPhotoByIDList:input_type -> api.DelPhotoByIDListRequest
+	25, // 32: api.defaultCURD.AddTimelineEvent:input_type -> api.AddTimelineEventRequest
+	27, // 33: api.defaultCURD.GetTimelineEventList:input_type -> api.GetTimelineEventListRequest
+	29, // 34: api.defaultCURD.UpdateTimelineEvent:input_type -> api.UpdateTimelineEventRequest
+	31, // 35: api.defaultCURD.DelTimelineEventByIDList:input_type -> api.DelTimelineEventByIDListRequest
+	2,  // 36: api.defaultCURD.AddAppSetting:output_type -> api.AddAppSettingResponse
+	4,  // 37: api.defaultCURD.GetAppSettingList:output_type -> api.GetAppSettingListResponse
+	6,  // 38: api.defaultCURD.UpdateAppSetting:output_type -> api.UpdateAppSettingResponse
+	32, // 39: api.defaultCURD.DelAppSettingByKeyList:output_type -> api.Empty
+	10, // 40: api.defaultCURD.AddPhotoGroup:output_type -> api.AddPhotoGroupResponse
+	12, // 41: api.defaultCURD.GetPhotoGroupList:output_type -> api.GetPhotoGroupListResponse
+	14, // 42: api.defaultCURD.UpdatePhotoGroup:output_type -> api.UpdatePhotoGroupResponse
+	32, // 43: api.defaultCURD.DelPhotoGroupByIDList:output_type -> api.Empty
+	18, // 44: api.defaultCURD.AddPhoto:output_type -> api.AddPhotoResponse
+	20, // 45: api.defaultCURD.GetPhotoList:output_type -> api.GetPhotoListResponse
+	22, // 46: api.defaultCURD.UpdatePhoto:output_type -> api.UpdatePhotoResponse
+	32, // 47: api.defaultCURD.DelPhotoByIDList:output_type -> api.Empty
+	26, // 48: api.defaultCURD.AddTimelineEvent:output_type -> api.AddTimelineEventResponse
+	28, // 49: api.defaultCURD.GetTimelineEventList:output_type -> api.GetTimelineEventListResponse
+	30, // 50: api.defaultCURD.UpdateTimelineEvent:output_type -> api.UpdateTimelineEventResponse
+	32, // 51: api.defaultCURD.DelTimelineEventByIDList:output_type -> api.Empty
+	36, // [36:52] is the sub-list for method output_type
+	20, // [20:36] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_z_defaultService_gen_proto_init() }
@@ -1605,7 +2055,7 @@ func file_z_defaultService_gen_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_z_defaultService_gen_proto_rawDesc), len(file_z_defaultService_gen_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

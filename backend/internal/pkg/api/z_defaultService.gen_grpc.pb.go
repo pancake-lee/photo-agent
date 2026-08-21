@@ -21,18 +21,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DefaultCURD_AddAppSetting_FullMethodName          = "/api.defaultCURD/AddAppSetting"
-	DefaultCURD_GetAppSettingList_FullMethodName      = "/api.defaultCURD/GetAppSettingList"
-	DefaultCURD_UpdateAppSetting_FullMethodName       = "/api.defaultCURD/UpdateAppSetting"
-	DefaultCURD_DelAppSettingByKeyList_FullMethodName = "/api.defaultCURD/DelAppSettingByKeyList"
-	DefaultCURD_AddPhotoGroup_FullMethodName          = "/api.defaultCURD/AddPhotoGroup"
-	DefaultCURD_GetPhotoGroupList_FullMethodName      = "/api.defaultCURD/GetPhotoGroupList"
-	DefaultCURD_UpdatePhotoGroup_FullMethodName       = "/api.defaultCURD/UpdatePhotoGroup"
-	DefaultCURD_DelPhotoGroupByIDList_FullMethodName  = "/api.defaultCURD/DelPhotoGroupByIDList"
-	DefaultCURD_AddPhoto_FullMethodName               = "/api.defaultCURD/AddPhoto"
-	DefaultCURD_GetPhotoList_FullMethodName           = "/api.defaultCURD/GetPhotoList"
-	DefaultCURD_UpdatePhoto_FullMethodName            = "/api.defaultCURD/UpdatePhoto"
-	DefaultCURD_DelPhotoByIDList_FullMethodName       = "/api.defaultCURD/DelPhotoByIDList"
+	DefaultCURD_AddAppSetting_FullMethodName            = "/api.defaultCURD/AddAppSetting"
+	DefaultCURD_GetAppSettingList_FullMethodName        = "/api.defaultCURD/GetAppSettingList"
+	DefaultCURD_UpdateAppSetting_FullMethodName         = "/api.defaultCURD/UpdateAppSetting"
+	DefaultCURD_DelAppSettingByKeyList_FullMethodName   = "/api.defaultCURD/DelAppSettingByKeyList"
+	DefaultCURD_AddPhotoGroup_FullMethodName            = "/api.defaultCURD/AddPhotoGroup"
+	DefaultCURD_GetPhotoGroupList_FullMethodName        = "/api.defaultCURD/GetPhotoGroupList"
+	DefaultCURD_UpdatePhotoGroup_FullMethodName         = "/api.defaultCURD/UpdatePhotoGroup"
+	DefaultCURD_DelPhotoGroupByIDList_FullMethodName    = "/api.defaultCURD/DelPhotoGroupByIDList"
+	DefaultCURD_AddPhoto_FullMethodName                 = "/api.defaultCURD/AddPhoto"
+	DefaultCURD_GetPhotoList_FullMethodName             = "/api.defaultCURD/GetPhotoList"
+	DefaultCURD_UpdatePhoto_FullMethodName              = "/api.defaultCURD/UpdatePhoto"
+	DefaultCURD_DelPhotoByIDList_FullMethodName         = "/api.defaultCURD/DelPhotoByIDList"
+	DefaultCURD_AddTimelineEvent_FullMethodName         = "/api.defaultCURD/AddTimelineEvent"
+	DefaultCURD_GetTimelineEventList_FullMethodName     = "/api.defaultCURD/GetTimelineEventList"
+	DefaultCURD_UpdateTimelineEvent_FullMethodName      = "/api.defaultCURD/UpdateTimelineEvent"
+	DefaultCURD_DelTimelineEventByIDList_FullMethodName = "/api.defaultCURD/DelTimelineEventByIDList"
 )
 
 // DefaultCURDClient is the client API for DefaultCURD service.
@@ -59,6 +63,12 @@ type DefaultCURDClient interface {
 	GetPhotoList(ctx context.Context, in *GetPhotoListRequest, opts ...grpc.CallOption) (*GetPhotoListResponse, error)
 	UpdatePhoto(ctx context.Context, in *UpdatePhotoRequest, opts ...grpc.CallOption) (*UpdatePhotoResponse, error)
 	DelPhotoByIDList(ctx context.Context, in *DelPhotoByIDListRequest, opts ...grpc.CallOption) (*Empty, error)
+	// --------------------------------------------------
+	// tbl : timeline_events
+	AddTimelineEvent(ctx context.Context, in *AddTimelineEventRequest, opts ...grpc.CallOption) (*AddTimelineEventResponse, error)
+	GetTimelineEventList(ctx context.Context, in *GetTimelineEventListRequest, opts ...grpc.CallOption) (*GetTimelineEventListResponse, error)
+	UpdateTimelineEvent(ctx context.Context, in *UpdateTimelineEventRequest, opts ...grpc.CallOption) (*UpdateTimelineEventResponse, error)
+	DelTimelineEventByIDList(ctx context.Context, in *DelTimelineEventByIDListRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type defaultCURDClient struct {
@@ -189,6 +199,46 @@ func (c *defaultCURDClient) DelPhotoByIDList(ctx context.Context, in *DelPhotoBy
 	return out, nil
 }
 
+func (c *defaultCURDClient) AddTimelineEvent(ctx context.Context, in *AddTimelineEventRequest, opts ...grpc.CallOption) (*AddTimelineEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddTimelineEventResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_AddTimelineEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) GetTimelineEventList(ctx context.Context, in *GetTimelineEventListRequest, opts ...grpc.CallOption) (*GetTimelineEventListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTimelineEventListResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_GetTimelineEventList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) UpdateTimelineEvent(ctx context.Context, in *UpdateTimelineEventRequest, opts ...grpc.CallOption) (*UpdateTimelineEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateTimelineEventResponse)
+	err := c.cc.Invoke(ctx, DefaultCURD_UpdateTimelineEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *defaultCURDClient) DelTimelineEventByIDList(ctx context.Context, in *DelTimelineEventByIDListRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, DefaultCURD_DelTimelineEventByIDList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DefaultCURDServer is the server API for DefaultCURD service.
 // All implementations must embed UnimplementedDefaultCURDServer
 // for forward compatibility.
@@ -213,6 +263,12 @@ type DefaultCURDServer interface {
 	GetPhotoList(context.Context, *GetPhotoListRequest) (*GetPhotoListResponse, error)
 	UpdatePhoto(context.Context, *UpdatePhotoRequest) (*UpdatePhotoResponse, error)
 	DelPhotoByIDList(context.Context, *DelPhotoByIDListRequest) (*Empty, error)
+	// --------------------------------------------------
+	// tbl : timeline_events
+	AddTimelineEvent(context.Context, *AddTimelineEventRequest) (*AddTimelineEventResponse, error)
+	GetTimelineEventList(context.Context, *GetTimelineEventListRequest) (*GetTimelineEventListResponse, error)
+	UpdateTimelineEvent(context.Context, *UpdateTimelineEventRequest) (*UpdateTimelineEventResponse, error)
+	DelTimelineEventByIDList(context.Context, *DelTimelineEventByIDListRequest) (*Empty, error)
 	mustEmbedUnimplementedDefaultCURDServer()
 }
 
@@ -258,6 +314,18 @@ func (UnimplementedDefaultCURDServer) UpdatePhoto(context.Context, *UpdatePhotoR
 }
 func (UnimplementedDefaultCURDServer) DelPhotoByIDList(context.Context, *DelPhotoByIDListRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DelPhotoByIDList not implemented")
+}
+func (UnimplementedDefaultCURDServer) AddTimelineEvent(context.Context, *AddTimelineEventRequest) (*AddTimelineEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddTimelineEvent not implemented")
+}
+func (UnimplementedDefaultCURDServer) GetTimelineEventList(context.Context, *GetTimelineEventListRequest) (*GetTimelineEventListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTimelineEventList not implemented")
+}
+func (UnimplementedDefaultCURDServer) UpdateTimelineEvent(context.Context, *UpdateTimelineEventRequest) (*UpdateTimelineEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateTimelineEvent not implemented")
+}
+func (UnimplementedDefaultCURDServer) DelTimelineEventByIDList(context.Context, *DelTimelineEventByIDListRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DelTimelineEventByIDList not implemented")
 }
 func (UnimplementedDefaultCURDServer) mustEmbedUnimplementedDefaultCURDServer() {}
 func (UnimplementedDefaultCURDServer) testEmbeddedByValue()                     {}
@@ -496,6 +564,78 @@ func _DefaultCURD_DelPhotoByIDList_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DefaultCURD_AddTimelineEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTimelineEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).AddTimelineEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_AddTimelineEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).AddTimelineEvent(ctx, req.(*AddTimelineEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_GetTimelineEventList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTimelineEventListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).GetTimelineEventList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_GetTimelineEventList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).GetTimelineEventList(ctx, req.(*GetTimelineEventListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_UpdateTimelineEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTimelineEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).UpdateTimelineEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_UpdateTimelineEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).UpdateTimelineEvent(ctx, req.(*UpdateTimelineEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DefaultCURD_DelTimelineEventByIDList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelTimelineEventByIDListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DefaultCURDServer).DelTimelineEventByIDList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DefaultCURD_DelTimelineEventByIDList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DefaultCURDServer).DelTimelineEventByIDList(ctx, req.(*DelTimelineEventByIDListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DefaultCURD_ServiceDesc is the grpc.ServiceDesc for DefaultCURD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -550,6 +690,22 @@ var DefaultCURD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DelPhotoByIDList",
 			Handler:    _DefaultCURD_DelPhotoByIDList_Handler,
+		},
+		{
+			MethodName: "AddTimelineEvent",
+			Handler:    _DefaultCURD_AddTimelineEvent_Handler,
+		},
+		{
+			MethodName: "GetTimelineEventList",
+			Handler:    _DefaultCURD_GetTimelineEventList_Handler,
+		},
+		{
+			MethodName: "UpdateTimelineEvent",
+			Handler:    _DefaultCURD_UpdateTimelineEvent_Handler,
+		},
+		{
+			MethodName: "DelTimelineEventByIDList",
+			Handler:    _DefaultCURD_DelTimelineEventByIDList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

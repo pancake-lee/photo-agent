@@ -170,6 +170,419 @@ func (x *GetPhotosByTimelineResponse) GetTotal() int32 {
 	return 0
 }
 
+// TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+type TimelineEventDetail struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Date          string                 `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"`   // YYYY-MM-DD；散片组为该组首张照片所在月（YYYY-MM）
+	Event         string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"` // 活动名；散片组为散片名（YYYY-MM-散片N）
+	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
+	PhotoCount    int32                  `protobuf:"varint,5,opt,name=photo_count,json=photoCount,proto3" json:"photo_count,omitempty"`    // 该事件/散片组下照片数
+	IsScattered   bool                   `protobuf:"varint,6,opt,name=is_scattered,json=isScattered,proto3" json:"is_scattered,omitempty"` // 是否散片组（自动生成，不可编辑）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TimelineEventDetail) Reset() {
+	*x = TimelineEventDetail{}
+	mi := &file_timeline_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TimelineEventDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TimelineEventDetail) ProtoMessage() {}
+
+func (x *TimelineEventDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TimelineEventDetail.ProtoReflect.Descriptor instead.
+func (*TimelineEventDetail) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TimelineEventDetail) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TimelineEventDetail) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+func (x *TimelineEventDetail) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *TimelineEventDetail) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *TimelineEventDetail) GetPhotoCount() int32 {
+	if x != nil {
+		return x.PhotoCount
+	}
+	return 0
+}
+
+func (x *TimelineEventDetail) GetIsScattered() bool {
+	if x != nil {
+		return x.IsScattered
+	}
+	return false
+}
+
+type ListTimelineEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*TimelineEventDetail `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`       // 人工维护的活动事件（按日期排序）
+	Scattered     []*TimelineEventDetail `protobuf:"bytes,2,rep,name=scattered,proto3" json:"scattered,omitempty"` // 散片组（按时间排序）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTimelineEventsResponse) Reset() {
+	*x = ListTimelineEventsResponse{}
+	mi := &file_timeline_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTimelineEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTimelineEventsResponse) ProtoMessage() {}
+
+func (x *ListTimelineEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTimelineEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListTimelineEventsResponse) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListTimelineEventsResponse) GetEvents() []*TimelineEventDetail {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *ListTimelineEventsResponse) GetScattered() []*TimelineEventDetail {
+	if x != nil {
+		return x.Scattered
+	}
+	return nil
+}
+
+type SaveTimelineEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`     // 为空则新建
+	Date          string                 `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"` // YYYY-MM-DD
+	Event         string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"`
+	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveTimelineEventRequest) Reset() {
+	*x = SaveTimelineEventRequest{}
+	mi := &file_timeline_service_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveTimelineEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveTimelineEventRequest) ProtoMessage() {}
+
+func (x *SaveTimelineEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveTimelineEventRequest.ProtoReflect.Descriptor instead.
+func (*SaveTimelineEventRequest) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SaveTimelineEventRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SaveTimelineEventRequest) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+func (x *SaveTimelineEventRequest) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *SaveTimelineEventRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type SaveTimelineEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveTimelineEventResponse) Reset() {
+	*x = SaveTimelineEventResponse{}
+	mi := &file_timeline_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveTimelineEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveTimelineEventResponse) ProtoMessage() {}
+
+func (x *SaveTimelineEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveTimelineEventResponse.ProtoReflect.Descriptor instead.
+func (*SaveTimelineEventResponse) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SaveTimelineEventResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type DeleteTimelineEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteTimelineEventRequest) Reset() {
+	*x = DeleteTimelineEventRequest{}
+	mi := &file_timeline_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteTimelineEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteTimelineEventRequest) ProtoMessage() {}
+
+func (x *DeleteTimelineEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteTimelineEventRequest.ProtoReflect.Descriptor instead.
+func (*DeleteTimelineEventRequest) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DeleteTimelineEventRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type RecomputeTimelinesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // running | already_running
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecomputeTimelinesResponse) Reset() {
+	*x = RecomputeTimelinesResponse{}
+	mi := &file_timeline_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecomputeTimelinesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecomputeTimelinesResponse) ProtoMessage() {}
+
+func (x *RecomputeTimelinesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecomputeTimelinesResponse.ProtoReflect.Descriptor instead.
+func (*RecomputeTimelinesResponse) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RecomputeTimelinesResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type GetRecomputeTimelinesStatusResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Running        bool                   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
+	Processed      int32                  `protobuf:"varint,2,opt,name=processed,proto3" json:"processed,omitempty"`
+	Total          int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	EventCount     int32                  `protobuf:"varint,4,opt,name=event_count,json=eventCount,proto3" json:"event_count,omitempty"`             // 事件匹配照片数
+	ScatteredCount int32                  `protobuf:"varint,5,opt,name=scattered_count,json=scatteredCount,proto3" json:"scattered_count,omitempty"` // 散片填充照片数（跑完时为最终值）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) Reset() {
+	*x = GetRecomputeTimelinesStatusResponse{}
+	mi := &file_timeline_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRecomputeTimelinesStatusResponse) ProtoMessage() {}
+
+func (x *GetRecomputeTimelinesStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_timeline_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRecomputeTimelinesStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetRecomputeTimelinesStatusResponse) Descriptor() ([]byte, []int) {
+	return file_timeline_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) GetProcessed() int32 {
+	if x != nil {
+		return x.Processed
+	}
+	return 0
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) GetEventCount() int32 {
+	if x != nil {
+		return x.EventCount
+	}
+	return 0
+}
+
+func (x *GetRecomputeTimelinesStatusResponse) GetScatteredCount() int32 {
+	if x != nil {
+		return x.ScatteredCount
+	}
+	return 0
+}
+
 var File_timeline_service_proto protoreflect.FileDescriptor
 
 const file_timeline_service_proto_rawDesc = "" +
@@ -182,11 +595,50 @@ const file_timeline_service_proto_rawDesc = "" +
 	"\x1bGetPhotosByTimelineResponse\x12\x1a\n" +
 	"\btimeline\x18\x01 \x01(\tR\btimeline\x12$\n" +
 	"\x05items\x18\x02 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x05R\x05total2\xe9\x01\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\"\xa7\x01\n" +
+	"\x13TimelineEventDetail\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04date\x18\x02 \x01(\tR\x04date\x12\x14\n" +
+	"\x05event\x18\x03 \x01(\tR\x05event\x12\x12\n" +
+	"\x04note\x18\x04 \x01(\tR\x04note\x12\x1f\n" +
+	"\vphoto_count\x18\x05 \x01(\x05R\n" +
+	"photoCount\x12!\n" +
+	"\fis_scattered\x18\x06 \x01(\bR\visScattered\"\x86\x01\n" +
+	"\x1aListTimelineEventsResponse\x120\n" +
+	"\x06events\x18\x01 \x03(\v2\x18.api.TimelineEventDetailR\x06events\x126\n" +
+	"\tscattered\x18\x02 \x03(\v2\x18.api.TimelineEventDetailR\tscattered\"h\n" +
+	"\x18SaveTimelineEventRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04date\x18\x02 \x01(\tR\x04date\x12\x14\n" +
+	"\x05event\x18\x03 \x01(\tR\x05event\x12\x12\n" +
+	"\x04note\x18\x04 \x01(\tR\x04note\"+\n" +
+	"\x19SaveTimelineEventResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\",\n" +
+	"\x1aDeleteTimelineEventRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
+	"\x1aRecomputeTimelinesResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\"\xbd\x01\n" +
+	"#GetRecomputeTimelinesStatusResponse\x12\x18\n" +
+	"\arunning\x18\x01 \x01(\bR\arunning\x12\x1c\n" +
+	"\tprocessed\x18\x02 \x01(\x05R\tprocessed\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x1f\n" +
+	"\vevent_count\x18\x04 \x01(\x05R\n" +
+	"eventCount\x12'\n" +
+	"\x0fscattered_count\x18\x05 \x01(\x05R\x0escatteredCount2\x90\x06\n" +
 	"\x0fTimelineService\x12R\n" +
 	"\rListTimelines\x12\n" +
 	".api.Empty\x1a\x1a.api.ListTimelinesResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/timelines\x12\x81\x01\n" +
-	"\x13GetPhotosByTimeline\x12\x1f.api.GetPhotosByTimelineRequest\x1a .api.GetPhotosByTimelineResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/timelines/{name}/photosB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
+	"\x13GetPhotosByTimeline\x12\x1f.api.GetPhotosByTimelineRequest\x1a .api.GetPhotosByTimelineResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/timelines/{name}/photos\x12Z\n" +
+	"\n" +
+	"ListEvents\x12\n" +
+	".api.Empty\x1a\x1f.api.ListTimelineEventsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/timeline-events\x12n\n" +
+	"\tSaveEvent\x12\x1d.api.SaveTimelineEventRequest\x1a\x1e.api.SaveTimelineEventResponse\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api/v1/timeline-events\x12`\n" +
+	"\vDeleteEvent\x12\x1f.api.DeleteTimelineEventRequest\x1a\n" +
+	".api.Empty\"$\x82\xd3\xe4\x93\x02\x1e*\x1c/api/v1/timeline-events/{id}\x12o\n" +
+	"\x12RecomputeTimelines\x12\n" +
+	".api.Empty\x1a\x1f.api.RecomputeTimelinesResponse\",\x82\xd3\xe4\x93\x02&:\x01*\"!/api/v1/timeline-events/recompute\x12\x85\x01\n" +
+	"\x1bGetRecomputeTimelinesStatus\x12\n" +
+	".api.Empty\x1a(.api.GetRecomputeTimelinesStatusResponse\"0\x82\xd3\xe4\x93\x02*\x12(/api/v1/timeline-events/recompute/statusB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_timeline_service_proto_rawDescOnce sync.Once
@@ -200,25 +652,44 @@ func file_timeline_service_proto_rawDescGZIP() []byte {
 	return file_timeline_service_proto_rawDescData
 }
 
-var file_timeline_service_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_timeline_service_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_timeline_service_proto_goTypes = []any{
-	(*ListTimelinesResponse)(nil),       // 0: api.ListTimelinesResponse
-	(*GetPhotosByTimelineRequest)(nil),  // 1: api.GetPhotosByTimelineRequest
-	(*GetPhotosByTimelineResponse)(nil), // 2: api.GetPhotosByTimelineResponse
-	(*PhotoItem)(nil),                   // 3: api.PhotoItem
-	(*Empty)(nil),                       // 4: api.Empty
+	(*ListTimelinesResponse)(nil),               // 0: api.ListTimelinesResponse
+	(*GetPhotosByTimelineRequest)(nil),          // 1: api.GetPhotosByTimelineRequest
+	(*GetPhotosByTimelineResponse)(nil),         // 2: api.GetPhotosByTimelineResponse
+	(*TimelineEventDetail)(nil),                 // 3: api.TimelineEventDetail
+	(*ListTimelineEventsResponse)(nil),          // 4: api.ListTimelineEventsResponse
+	(*SaveTimelineEventRequest)(nil),            // 5: api.SaveTimelineEventRequest
+	(*SaveTimelineEventResponse)(nil),           // 6: api.SaveTimelineEventResponse
+	(*DeleteTimelineEventRequest)(nil),          // 7: api.DeleteTimelineEventRequest
+	(*RecomputeTimelinesResponse)(nil),          // 8: api.RecomputeTimelinesResponse
+	(*GetRecomputeTimelinesStatusResponse)(nil), // 9: api.GetRecomputeTimelinesStatusResponse
+	(*PhotoItem)(nil),                           // 10: api.PhotoItem
+	(*Empty)(nil),                               // 11: api.Empty
 }
 var file_timeline_service_proto_depIdxs = []int32{
-	3, // 0: api.GetPhotosByTimelineResponse.items:type_name -> api.PhotoItem
-	4, // 1: api.TimelineService.ListTimelines:input_type -> api.Empty
-	1, // 2: api.TimelineService.GetPhotosByTimeline:input_type -> api.GetPhotosByTimelineRequest
-	0, // 3: api.TimelineService.ListTimelines:output_type -> api.ListTimelinesResponse
-	2, // 4: api.TimelineService.GetPhotosByTimeline:output_type -> api.GetPhotosByTimelineResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	10, // 0: api.GetPhotosByTimelineResponse.items:type_name -> api.PhotoItem
+	3,  // 1: api.ListTimelineEventsResponse.events:type_name -> api.TimelineEventDetail
+	3,  // 2: api.ListTimelineEventsResponse.scattered:type_name -> api.TimelineEventDetail
+	11, // 3: api.TimelineService.ListTimelines:input_type -> api.Empty
+	1,  // 4: api.TimelineService.GetPhotosByTimeline:input_type -> api.GetPhotosByTimelineRequest
+	11, // 5: api.TimelineService.ListEvents:input_type -> api.Empty
+	5,  // 6: api.TimelineService.SaveEvent:input_type -> api.SaveTimelineEventRequest
+	7,  // 7: api.TimelineService.DeleteEvent:input_type -> api.DeleteTimelineEventRequest
+	11, // 8: api.TimelineService.RecomputeTimelines:input_type -> api.Empty
+	11, // 9: api.TimelineService.GetRecomputeTimelinesStatus:input_type -> api.Empty
+	0,  // 10: api.TimelineService.ListTimelines:output_type -> api.ListTimelinesResponse
+	2,  // 11: api.TimelineService.GetPhotosByTimeline:output_type -> api.GetPhotosByTimelineResponse
+	4,  // 12: api.TimelineService.ListEvents:output_type -> api.ListTimelineEventsResponse
+	6,  // 13: api.TimelineService.SaveEvent:output_type -> api.SaveTimelineEventResponse
+	11, // 14: api.TimelineService.DeleteEvent:output_type -> api.Empty
+	8,  // 15: api.TimelineService.RecomputeTimelines:output_type -> api.RecomputeTimelinesResponse
+	9,  // 16: api.TimelineService.GetRecomputeTimelinesStatus:output_type -> api.GetRecomputeTimelinesStatusResponse
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_timeline_service_proto_init() }
@@ -234,7 +705,7 @@ func file_timeline_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_timeline_service_proto_rawDesc), len(file_timeline_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

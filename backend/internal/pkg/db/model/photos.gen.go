@@ -17,7 +17,8 @@ type Photo struct {
 	FilePath           string    `gorm:"column:file_path;not null" json:"file_path"`
 	FileType           string    `gorm:"column:file_type;not null;default:'jpg'" json:"file_type"`
 	Timeline           string    `gorm:"column:timeline;not null" json:"timeline"`
-	Tags               string    `gorm:"column:tags;not null" json:"tags"`
+	TimelineManual     int32     `gorm:"column:timeline_manual;not null" json:"timeline_manual"`
+	Tags               string    `gorm:"column:tags;type:TEXT" json:"tags"`
 	Description        string    `gorm:"column:description;not null" json:"description"`
 	Objects            string    `gorm:"column:objects;not null" json:"objects"`
 	Colors             string    `gorm:"column:colors;not null" json:"colors"`

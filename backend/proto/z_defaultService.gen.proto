@@ -80,6 +80,30 @@ service defaultCURD { // 该命名应该全文唯一
             delete: "/photos"
         };
     }
+    // --------------------------------------------------
+    // tbl : timeline_events
+    rpc AddTimelineEvent (AddTimelineEventRequest) returns (AddTimelineEventResponse) {
+        option (google.api.http) = {
+            post: "/timeline-events"
+            body: "*"
+        };
+    }
+    rpc GetTimelineEventList (GetTimelineEventListRequest) returns (GetTimelineEventListResponse) {
+        option (google.api.http) = {
+            get: "/timeline-events"
+        };
+    }
+    rpc UpdateTimelineEvent(UpdateTimelineEventRequest) returns (UpdateTimelineEventResponse) {
+        option (google.api.http) = {
+            patch: "/timeline-events"
+            body: "*"
+        };
+    }
+    rpc DelTimelineEventByIDList (DelTimelineEventByIDListRequest) returns (Empty) {
+        option (google.api.http) = {
+            delete: "/timeline-events"
+        };
+    }
 }
 
 
@@ -168,30 +192,31 @@ message PhotoInfo {
     string filePath = 3;
     string fileType = 4;
     string timeline = 5;
-    string tags = 6;
-    string description = 7;
-    string objects = 8;
-    string colors = 9;
-    string scene = 10;
-    string lighting = 11;
-    string mood = 12;
-    string composition = 13;
-    int64 shotAt = 14;
-    int32 width = 15;
-    int32 height = 16;
-    string brand = 17;
-    string model = 18;
-    string lens = 19;
-    string focalLength = 20;
-    string aperture = 21;
-    int32 iso = 22;
-    string exposureTime = 23;
-    double latitude = 24;
-    double longitude = 25;
-    double altitude = 26;
-    string burstGroupID = 27;
-    string burstGroupCoarseID = 28;
-    int64 importedAt = 29;
+    int32 timelineManual = 6;
+    string tags = 7;
+    string description = 8;
+    string objects = 9;
+    string colors = 10;
+    string scene = 11;
+    string lighting = 12;
+    string mood = 13;
+    string composition = 14;
+    int64 shotAt = 15;
+    int32 width = 16;
+    int32 height = 17;
+    string brand = 18;
+    string model = 19;
+    string lens = 20;
+    string focalLength = 21;
+    string aperture = 22;
+    int32 iso = 23;
+    string exposureTime = 24;
+    double latitude = 25;
+    double longitude = 26;
+    double altitude = 27;
+    string burstGroupID = 28;
+    string burstGroupCoarseID = 29;
+    int64 importedAt = 30;
 }
 
 message AddPhotoRequest {
@@ -218,6 +243,45 @@ message UpdatePhotoResponse {
 }
 
 message DelPhotoByIDListRequest {
+    repeated string IDList = 1;
+}
+
+
+// --------------------------------------------------
+// tbl : timeline_events
+message TimelineEventInfo {
+    string ID = 1;
+    int64 eventDate = 2;
+    string event = 3;
+    string note = 4;
+    int64 createdAt = 5;
+    int64 updatedAt = 6;
+}
+
+message AddTimelineEventRequest {
+    TimelineEventInfo timeline_event = 1;
+}
+
+message AddTimelineEventResponse {
+    TimelineEventInfo timeline_event = 1;
+}
+
+message GetTimelineEventListRequest {
+    repeated string IDList = 1;
+}
+message GetTimelineEventListResponse {
+    repeated TimelineEventInfo timelineEventList = 1;
+}
+
+message UpdateTimelineEventRequest {
+    TimelineEventInfo timelineEvent = 1;
+}
+
+message UpdateTimelineEventResponse {
+    TimelineEventInfo timelineEvent = 1;
+}
+
+message DelTimelineEventByIDListRequest {
     repeated string IDList = 1;
 }
 

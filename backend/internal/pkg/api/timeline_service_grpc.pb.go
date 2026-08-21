@@ -19,8 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TimelineService_ListTimelines_FullMethodName       = "/api.TimelineService/ListTimelines"
-	TimelineService_GetPhotosByTimeline_FullMethodName = "/api.TimelineService/GetPhotosByTimeline"
+	TimelineService_ListTimelines_FullMethodName               = "/api.TimelineService/ListTimelines"
+	TimelineService_GetPhotosByTimeline_FullMethodName         = "/api.TimelineService/GetPhotosByTimeline"
+	TimelineService_ListEvents_FullMethodName                  = "/api.TimelineService/ListEvents"
+	TimelineService_SaveEvent_FullMethodName                   = "/api.TimelineService/SaveEvent"
+	TimelineService_DeleteEvent_FullMethodName                 = "/api.TimelineService/DeleteEvent"
+	TimelineService_RecomputeTimelines_FullMethodName          = "/api.TimelineService/RecomputeTimelines"
+	TimelineService_GetRecomputeTimelinesStatus_FullMethodName = "/api.TimelineService/GetRecomputeTimelinesStatus"
 )
 
 // TimelineServiceClient is the client API for TimelineService service.
@@ -33,6 +38,16 @@ type TimelineServiceClient interface {
 	ListTimelines(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListTimelinesResponse, error)
 	// 某时间线下的照片
 	GetPhotosByTimeline(ctx context.Context, in *GetPhotosByTimelineRequest, opts ...grpc.CallOption) (*GetPhotosByTimelineResponse, error)
+	// 时间线事件列表（含散片组只读展示）
+	ListEvents(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListTimelineEventsResponse, error)
+	// 保存时间线事件（新建与更新合一，id 为空则新建）
+	SaveEvent(ctx context.Context, in *SaveTimelineEventRequest, opts ...grpc.CallOption) (*SaveTimelineEventResponse, error)
+	// 删除时间线事件
+	DeleteEvent(ctx context.Context, in *DeleteTimelineEventRequest, opts ...grpc.CallOption) (*Empty, error)
+	// 触发全量重算照片 timeline（异步，人工值保留）
+	RecomputeTimelines(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RecomputeTimelinesResponse, error)
+	// 查询重算进度
+	GetRecomputeTimelinesStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetRecomputeTimelinesStatusResponse, error)
 }
 
 type timelineServiceClient struct {
@@ -63,6 +78,56 @@ func (c *timelineServiceClient) GetPhotosByTimeline(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *timelineServiceClient) ListEvents(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListTimelineEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTimelineEventsResponse)
+	err := c.cc.Invoke(ctx, TimelineService_ListEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *timelineServiceClient) SaveEvent(ctx context.Context, in *SaveTimelineEventRequest, opts ...grpc.CallOption) (*SaveTimelineEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveTimelineEventResponse)
+	err := c.cc.Invoke(ctx, TimelineService_SaveEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *timelineServiceClient) DeleteEvent(ctx context.Context, in *DeleteTimelineEventRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, TimelineService_DeleteEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *timelineServiceClient) RecomputeTimelines(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RecomputeTimelinesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecomputeTimelinesResponse)
+	err := c.cc.Invoke(ctx, TimelineService_RecomputeTimelines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *timelineServiceClient) GetRecomputeTimelinesStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetRecomputeTimelinesStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRecomputeTimelinesStatusResponse)
+	err := c.cc.Invoke(ctx, TimelineService_GetRecomputeTimelinesStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TimelineServiceServer is the server API for TimelineService service.
 // All implementations must embed UnimplementedTimelineServiceServer
 // for forward compatibility.
@@ -73,6 +138,16 @@ type TimelineServiceServer interface {
 	ListTimelines(context.Context, *Empty) (*ListTimelinesResponse, error)
 	// 某时间线下的照片
 	GetPhotosByTimeline(context.Context, *GetPhotosByTimelineRequest) (*GetPhotosByTimelineResponse, error)
+	// 时间线事件列表（含散片组只读展示）
+	ListEvents(context.Context, *Empty) (*ListTimelineEventsResponse, error)
+	// 保存时间线事件（新建与更新合一，id 为空则新建）
+	SaveEvent(context.Context, *SaveTimelineEventRequest) (*SaveTimelineEventResponse, error)
+	// 删除时间线事件
+	DeleteEvent(context.Context, *DeleteTimelineEventRequest) (*Empty, error)
+	// 触发全量重算照片 timeline（异步，人工值保留）
+	RecomputeTimelines(context.Context, *Empty) (*RecomputeTimelinesResponse, error)
+	// 查询重算进度
+	GetRecomputeTimelinesStatus(context.Context, *Empty) (*GetRecomputeTimelinesStatusResponse, error)
 	mustEmbedUnimplementedTimelineServiceServer()
 }
 
@@ -88,6 +163,21 @@ func (UnimplementedTimelineServiceServer) ListTimelines(context.Context, *Empty)
 }
 func (UnimplementedTimelineServiceServer) GetPhotosByTimeline(context.Context, *GetPhotosByTimelineRequest) (*GetPhotosByTimelineResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPhotosByTimeline not implemented")
+}
+func (UnimplementedTimelineServiceServer) ListEvents(context.Context, *Empty) (*ListTimelineEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEvents not implemented")
+}
+func (UnimplementedTimelineServiceServer) SaveEvent(context.Context, *SaveTimelineEventRequest) (*SaveTimelineEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveEvent not implemented")
+}
+func (UnimplementedTimelineServiceServer) DeleteEvent(context.Context, *DeleteTimelineEventRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteEvent not implemented")
+}
+func (UnimplementedTimelineServiceServer) RecomputeTimelines(context.Context, *Empty) (*RecomputeTimelinesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecomputeTimelines not implemented")
+}
+func (UnimplementedTimelineServiceServer) GetRecomputeTimelinesStatus(context.Context, *Empty) (*GetRecomputeTimelinesStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRecomputeTimelinesStatus not implemented")
 }
 func (UnimplementedTimelineServiceServer) mustEmbedUnimplementedTimelineServiceServer() {}
 func (UnimplementedTimelineServiceServer) testEmbeddedByValue()                         {}
@@ -146,6 +236,96 @@ func _TimelineService_GetPhotosByTimeline_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TimelineService_ListEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TimelineServiceServer).ListEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TimelineService_ListEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TimelineServiceServer).ListEvents(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TimelineService_SaveEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveTimelineEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TimelineServiceServer).SaveEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TimelineService_SaveEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TimelineServiceServer).SaveEvent(ctx, req.(*SaveTimelineEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TimelineService_DeleteEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTimelineEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TimelineServiceServer).DeleteEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TimelineService_DeleteEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TimelineServiceServer).DeleteEvent(ctx, req.(*DeleteTimelineEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TimelineService_RecomputeTimelines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TimelineServiceServer).RecomputeTimelines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TimelineService_RecomputeTimelines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TimelineServiceServer).RecomputeTimelines(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TimelineService_GetRecomputeTimelinesStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TimelineServiceServer).GetRecomputeTimelinesStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TimelineService_GetRecomputeTimelinesStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TimelineServiceServer).GetRecomputeTimelinesStatus(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TimelineService_ServiceDesc is the grpc.ServiceDesc for TimelineService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -160,6 +340,26 @@ var TimelineService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPhotosByTimeline",
 			Handler:    _TimelineService_GetPhotosByTimeline_Handler,
+		},
+		{
+			MethodName: "ListEvents",
+			Handler:    _TimelineService_ListEvents_Handler,
+		},
+		{
+			MethodName: "SaveEvent",
+			Handler:    _TimelineService_SaveEvent_Handler,
+		},
+		{
+			MethodName: "DeleteEvent",
+			Handler:    _TimelineService_DeleteEvent_Handler,
+		},
+		{
+			MethodName: "RecomputeTimelines",
+			Handler:    _TimelineService_RecomputeTimelines_Handler,
+		},
+		{
+			MethodName: "GetRecomputeTimelinesStatus",
+			Handler:    _TimelineService_GetRecomputeTimelinesStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -19,20 +19,40 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationTimelineServiceDeleteEvent = "/api.TimelineService/DeleteEvent"
 const OperationTimelineServiceGetPhotosByTimeline = "/api.TimelineService/GetPhotosByTimeline"
+const OperationTimelineServiceGetRecomputeTimelinesStatus = "/api.TimelineService/GetRecomputeTimelinesStatus"
+const OperationTimelineServiceListEvents = "/api.TimelineService/ListEvents"
 const OperationTimelineServiceListTimelines = "/api.TimelineService/ListTimelines"
+const OperationTimelineServiceRecomputeTimelines = "/api.TimelineService/RecomputeTimelines"
+const OperationTimelineServiceSaveEvent = "/api.TimelineService/SaveEvent"
 
 type TimelineServiceHTTPServer interface {
+	// DeleteEvent 删除时间线事件
+	DeleteEvent(context.Context, *DeleteTimelineEventRequest) (*Empty, error)
 	// GetPhotosByTimeline 某时间线下的照片
 	GetPhotosByTimeline(context.Context, *GetPhotosByTimelineRequest) (*GetPhotosByTimelineResponse, error)
+	// GetRecomputeTimelinesStatus 查询重算进度
+	GetRecomputeTimelinesStatus(context.Context, *Empty) (*GetRecomputeTimelinesStatusResponse, error)
+	// ListEvents 时间线事件列表（含散片组只读展示）
+	ListEvents(context.Context, *Empty) (*ListTimelineEventsResponse, error)
 	// ListTimelines 所有时间线列表
 	ListTimelines(context.Context, *Empty) (*ListTimelinesResponse, error)
+	// RecomputeTimelines 触发全量重算照片 timeline（异步，人工值保留）
+	RecomputeTimelines(context.Context, *Empty) (*RecomputeTimelinesResponse, error)
+	// SaveEvent 保存时间线事件（新建与更新合一，id 为空则新建）
+	SaveEvent(context.Context, *SaveTimelineEventRequest) (*SaveTimelineEventResponse, error)
 }
 
 func RegisterTimelineServiceHTTPServer(s *http.Server, srv TimelineServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/api/v1/timelines", _TimelineService_ListTimelines0_HTTP_Handler(srv))
 	r.GET("/api/v1/timelines/{name}/photos", _TimelineService_GetPhotosByTimeline0_HTTP_Handler(srv))
+	r.GET("/api/v1/timeline-events", _TimelineService_ListEvents0_HTTP_Handler(srv))
+	r.POST("/api/v1/timeline-events", _TimelineService_SaveEvent0_HTTP_Handler(srv))
+	r.DELETE("/api/v1/timeline-events/{id}", _TimelineService_DeleteEvent0_HTTP_Handler(srv))
+	r.POST("/api/v1/timeline-events/recompute", _TimelineService_RecomputeTimelines0_HTTP_Handler(srv))
+	r.GET("/api/v1/timeline-events/recompute/status", _TimelineService_GetRecomputeTimelinesStatus0_HTTP_Handler(srv))
 }
 
 func _TimelineService_ListTimelines0_HTTP_Handler(srv TimelineServiceHTTPServer) func(ctx http.Context) error {
@@ -76,11 +96,125 @@ func _TimelineService_GetPhotosByTimeline0_HTTP_Handler(srv TimelineServiceHTTPS
 	}
 }
 
+func _TimelineService_ListEvents0_HTTP_Handler(srv TimelineServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTimelineServiceListEvents)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListEvents(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListTimelineEventsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _TimelineService_SaveEvent0_HTTP_Handler(srv TimelineServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SaveTimelineEventRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTimelineServiceSaveEvent)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SaveEvent(ctx, req.(*SaveTimelineEventRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*SaveTimelineEventResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _TimelineService_DeleteEvent0_HTTP_Handler(srv TimelineServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DeleteTimelineEventRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTimelineServiceDeleteEvent)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DeleteEvent(ctx, req.(*DeleteTimelineEventRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _TimelineService_RecomputeTimelines0_HTTP_Handler(srv TimelineServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTimelineServiceRecomputeTimelines)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.RecomputeTimelines(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RecomputeTimelinesResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _TimelineService_GetRecomputeTimelinesStatus0_HTTP_Handler(srv TimelineServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationTimelineServiceGetRecomputeTimelinesStatus)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetRecomputeTimelinesStatus(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetRecomputeTimelinesStatusResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type TimelineServiceHTTPClient interface {
+	// DeleteEvent 删除时间线事件
+	DeleteEvent(ctx context.Context, req *DeleteTimelineEventRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	// GetPhotosByTimeline 某时间线下的照片
 	GetPhotosByTimeline(ctx context.Context, req *GetPhotosByTimelineRequest, opts ...http.CallOption) (rsp *GetPhotosByTimelineResponse, err error)
+	// GetRecomputeTimelinesStatus 查询重算进度
+	GetRecomputeTimelinesStatus(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetRecomputeTimelinesStatusResponse, err error)
+	// ListEvents 时间线事件列表（含散片组只读展示）
+	ListEvents(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *ListTimelineEventsResponse, err error)
 	// ListTimelines 所有时间线列表
 	ListTimelines(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *ListTimelinesResponse, err error)
+	// RecomputeTimelines 触发全量重算照片 timeline（异步，人工值保留）
+	RecomputeTimelines(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *RecomputeTimelinesResponse, err error)
+	// SaveEvent 保存时间线事件（新建与更新合一，id 为空则新建）
+	SaveEvent(ctx context.Context, req *SaveTimelineEventRequest, opts ...http.CallOption) (rsp *SaveTimelineEventResponse, err error)
 }
 
 type TimelineServiceHTTPClientImpl struct {
@@ -89,6 +223,20 @@ type TimelineServiceHTTPClientImpl struct {
 
 func NewTimelineServiceHTTPClient(client *http.Client) TimelineServiceHTTPClient {
 	return &TimelineServiceHTTPClientImpl{client}
+}
+
+// DeleteEvent 删除时间线事件
+func (c *TimelineServiceHTTPClientImpl) DeleteEvent(ctx context.Context, in *DeleteTimelineEventRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/api/v1/timeline-events/{id}"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationTimelineServiceDeleteEvent))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetPhotosByTimeline 某时间线下的照片
@@ -105,6 +253,34 @@ func (c *TimelineServiceHTTPClientImpl) GetPhotosByTimeline(ctx context.Context,
 	return &out, nil
 }
 
+// GetRecomputeTimelinesStatus 查询重算进度
+func (c *TimelineServiceHTTPClientImpl) GetRecomputeTimelinesStatus(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetRecomputeTimelinesStatusResponse, error) {
+	var out GetRecomputeTimelinesStatusResponse
+	pattern := "/api/v1/timeline-events/recompute/status"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationTimelineServiceGetRecomputeTimelinesStatus))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListEvents 时间线事件列表（含散片组只读展示）
+func (c *TimelineServiceHTTPClientImpl) ListEvents(ctx context.Context, in *Empty, opts ...http.CallOption) (*ListTimelineEventsResponse, error) {
+	var out ListTimelineEventsResponse
+	pattern := "/api/v1/timeline-events"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationTimelineServiceListEvents))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ListTimelines 所有时间线列表
 func (c *TimelineServiceHTTPClientImpl) ListTimelines(ctx context.Context, in *Empty, opts ...http.CallOption) (*ListTimelinesResponse, error) {
 	var out ListTimelinesResponse
@@ -113,6 +289,34 @@ func (c *TimelineServiceHTTPClientImpl) ListTimelines(ctx context.Context, in *E
 	opts = append(opts, http.Operation(OperationTimelineServiceListTimelines))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RecomputeTimelines 触发全量重算照片 timeline（异步，人工值保留）
+func (c *TimelineServiceHTTPClientImpl) RecomputeTimelines(ctx context.Context, in *Empty, opts ...http.CallOption) (*RecomputeTimelinesResponse, error) {
+	var out RecomputeTimelinesResponse
+	pattern := "/api/v1/timeline-events/recompute"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationTimelineServiceRecomputeTimelines))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SaveEvent 保存时间线事件（新建与更新合一，id 为空则新建）
+func (c *TimelineServiceHTTPClientImpl) SaveEvent(ctx context.Context, in *SaveTimelineEventRequest, opts ...http.CallOption) (*SaveTimelineEventResponse, error) {
+	var out SaveTimelineEventResponse
+	pattern := "/api/v1/timeline-events"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationTimelineServiceSaveEvent))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
