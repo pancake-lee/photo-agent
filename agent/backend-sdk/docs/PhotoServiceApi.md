@@ -14,6 +14,7 @@ Method | HTTP request | Description
 [**photo_service_search_photos**](PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
 [**photo_service_set_burst_group_cover**](PhotoServiceApi.md#photo_service_set_burst_group_cover) | **PUT** /api/v1/burst-groups/{groupId}/cover | 
 [**photo_service_update_burst_groups_config**](PhotoServiceApi.md#photo_service_update_burst_groups_config) | **PUT** /api/v1/burst-groups/config | 
+[**photo_service_update_photo_shot_at**](PhotoServiceApi.md#photo_service_update_photo_shot_at) | **PUT** /api/v1/photos/{id}/shot_at | 
 [**photo_service_update_photo_tags**](PhotoServiceApi.md#photo_service_update_photo_tags) | **PUT** /api/v1/photos/{id}/tags | 
 
 # **photo_service_delete_photo**
@@ -522,6 +523,55 @@ except ApiException as e:
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **body** | [**ApiUpdateBurstGroupsConfigRequest**](ApiUpdateBurstGroupsConfigRequest.md)|  | 
+
+### Return type
+
+[**ApiEmpty**](ApiEmpty.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **photo_service_update_photo_shot_at**
+> ApiEmpty photo_service_update_photo_shot_at(body, id)
+
+
+
+修改拍摄时间（写 DB + 写 EXIF）
+
+### Example
+```python
+from __future__ import print_function
+import time
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = swagger_client.PhotoServiceApi()
+body = swagger_client.ApiUpdatePhotoShotAtRequest() # ApiUpdatePhotoShotAtRequest | 
+id = 'id_example' # str | 
+
+try:
+    api_response = api_instance.photo_service_update_photo_shot_at(body, id)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling PhotoServiceApi->photo_service_update_photo_shot_at: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **body** | [**ApiUpdatePhotoShotAtRequest**](ApiUpdatePhotoShotAtRequest.md)|  | 
+ **id** | **str**|  | 
 
 ### Return type
 

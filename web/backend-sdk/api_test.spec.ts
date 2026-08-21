@@ -188,6 +188,11 @@ describe("PhotoServiceApi", () => {
     const body: api.ApiUpdateBurstGroupsConfigRequest = undefined
     return expect(instance.photoServiceUpdateBurstGroupsConfig(body, {})).resolves.toBe(null)
   })
+  test("photoServiceUpdatePhotoShotAt", () => {
+    const body: api.ApiUpdatePhotoShotAtRequest = undefined
+    const id: string = "id_example"
+    return expect(instance.photoServiceUpdatePhotoShotAt(body, id, {})).resolves.toBe(null)
+  })
   test("photoServiceUpdatePhotoTags", () => {
     const body: api.ApiUpdatePhotoTagsRequest = undefined
     const id: string = "id_example"

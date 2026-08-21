@@ -432,6 +432,31 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.DescribePhotoResponse'
+    /api/v1/photos/{id}/shot_at:
+        put:
+            tags:
+                - PhotoService
+            description: 修改拍摄时间（写 DB + 写 EXIF）
+            operationId: PhotoService_UpdatePhotoShotAt
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.UpdatePhotoShotAtRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.Empty'
     /api/v1/photos/{id}/tags:
         put:
             tags:
@@ -1815,6 +1840,13 @@ components:
             properties:
                 photo:
                     $ref: '#/components/schemas/api.PhotoInfo'
+        api.UpdatePhotoShotAtRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                shotAt:
+                    type: string
         api.UpdatePhotoTagsRequest:
             type: object
             properties:

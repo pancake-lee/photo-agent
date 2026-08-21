@@ -1387,6 +1387,58 @@ func (x *UpdatePhotoTagsRequest) GetTags() string {
 	return ""
 }
 
+type UpdatePhotoShotAtRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ShotAt        int64                  `protobuf:"varint,2,opt,name=shot_at,json=shotAt,proto3" json:"shot_at,omitempty"` // Unix 秒
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePhotoShotAtRequest) Reset() {
+	*x = UpdatePhotoShotAtRequest{}
+	mi := &file_photo_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePhotoShotAtRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePhotoShotAtRequest) ProtoMessage() {}
+
+func (x *UpdatePhotoShotAtRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_photo_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePhotoShotAtRequest.ProtoReflect.Descriptor instead.
+func (*UpdatePhotoShotAtRequest) Descriptor() ([]byte, []int) {
+	return file_photo_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UpdatePhotoShotAtRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdatePhotoShotAtRequest) GetShotAt() int64 {
+	if x != nil {
+		return x.ShotAt
+	}
+	return 0
+}
+
 type DeletePhotoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1396,7 +1448,7 @@ type DeletePhotoRequest struct {
 
 func (x *DeletePhotoRequest) Reset() {
 	*x = DeletePhotoRequest{}
-	mi := &file_photo_service_proto_msgTypes[15]
+	mi := &file_photo_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1408,7 +1460,7 @@ func (x *DeletePhotoRequest) String() string {
 func (*DeletePhotoRequest) ProtoMessage() {}
 
 func (x *DeletePhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[15]
+	mi := &file_photo_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1421,7 +1473,7 @@ func (x *DeletePhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePhotoRequest.ProtoReflect.Descriptor instead.
 func (*DeletePhotoRequest) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{15}
+	return file_photo_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DeletePhotoRequest) GetId() string {
@@ -1441,7 +1493,7 @@ type DeletePhotoResponse struct {
 
 func (x *DeletePhotoResponse) Reset() {
 	*x = DeletePhotoResponse{}
-	mi := &file_photo_service_proto_msgTypes[16]
+	mi := &file_photo_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1453,7 +1505,7 @@ func (x *DeletePhotoResponse) String() string {
 func (*DeletePhotoResponse) ProtoMessage() {}
 
 func (x *DeletePhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[16]
+	mi := &file_photo_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1466,7 +1518,7 @@ func (x *DeletePhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePhotoResponse.ProtoReflect.Descriptor instead.
 func (*DeletePhotoResponse) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{16}
+	return file_photo_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DeletePhotoResponse) GetStatus() string {
@@ -1492,7 +1544,7 @@ type RebuildBurstGroupsResponse struct {
 
 func (x *RebuildBurstGroupsResponse) Reset() {
 	*x = RebuildBurstGroupsResponse{}
-	mi := &file_photo_service_proto_msgTypes[17]
+	mi := &file_photo_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1504,7 +1556,7 @@ func (x *RebuildBurstGroupsResponse) String() string {
 func (*RebuildBurstGroupsResponse) ProtoMessage() {}
 
 func (x *RebuildBurstGroupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[17]
+	mi := &file_photo_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1517,7 +1569,7 @@ func (x *RebuildBurstGroupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildBurstGroupsResponse.ProtoReflect.Descriptor instead.
 func (*RebuildBurstGroupsResponse) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{17}
+	return file_photo_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RebuildBurstGroupsResponse) GetStatus() string {
@@ -1540,7 +1592,7 @@ type GetBurstGroupsStatusResponse struct {
 
 func (x *GetBurstGroupsStatusResponse) Reset() {
 	*x = GetBurstGroupsStatusResponse{}
-	mi := &file_photo_service_proto_msgTypes[18]
+	mi := &file_photo_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1552,7 +1604,7 @@ func (x *GetBurstGroupsStatusResponse) String() string {
 func (*GetBurstGroupsStatusResponse) ProtoMessage() {}
 
 func (x *GetBurstGroupsStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[18]
+	mi := &file_photo_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1565,7 +1617,7 @@ func (x *GetBurstGroupsStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBurstGroupsStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetBurstGroupsStatusResponse) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{18}
+	return file_photo_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetBurstGroupsStatusResponse) GetRunning() bool {
@@ -1617,7 +1669,7 @@ type BurstProfileConfig struct {
 
 func (x *BurstProfileConfig) Reset() {
 	*x = BurstProfileConfig{}
-	mi := &file_photo_service_proto_msgTypes[19]
+	mi := &file_photo_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1629,7 +1681,7 @@ func (x *BurstProfileConfig) String() string {
 func (*BurstProfileConfig) ProtoMessage() {}
 
 func (x *BurstProfileConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[19]
+	mi := &file_photo_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1642,7 +1694,7 @@ func (x *BurstProfileConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BurstProfileConfig.ProtoReflect.Descriptor instead.
 func (*BurstProfileConfig) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{19}
+	return file_photo_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *BurstProfileConfig) GetTimeWindowSec() int32 {
@@ -1690,7 +1742,7 @@ type GetBurstGroupsConfigResponse struct {
 
 func (x *GetBurstGroupsConfigResponse) Reset() {
 	*x = GetBurstGroupsConfigResponse{}
-	mi := &file_photo_service_proto_msgTypes[20]
+	mi := &file_photo_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1702,7 +1754,7 @@ func (x *GetBurstGroupsConfigResponse) String() string {
 func (*GetBurstGroupsConfigResponse) ProtoMessage() {}
 
 func (x *GetBurstGroupsConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[20]
+	mi := &file_photo_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1715,7 +1767,7 @@ func (x *GetBurstGroupsConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBurstGroupsConfigResponse.ProtoReflect.Descriptor instead.
 func (*GetBurstGroupsConfigResponse) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{20}
+	return file_photo_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetBurstGroupsConfigResponse) GetFine() *BurstProfileConfig {
@@ -1742,7 +1794,7 @@ type UpdateBurstGroupsConfigRequest struct {
 
 func (x *UpdateBurstGroupsConfigRequest) Reset() {
 	*x = UpdateBurstGroupsConfigRequest{}
-	mi := &file_photo_service_proto_msgTypes[21]
+	mi := &file_photo_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1754,7 +1806,7 @@ func (x *UpdateBurstGroupsConfigRequest) String() string {
 func (*UpdateBurstGroupsConfigRequest) ProtoMessage() {}
 
 func (x *UpdateBurstGroupsConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[21]
+	mi := &file_photo_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1767,7 +1819,7 @@ func (x *UpdateBurstGroupsConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBurstGroupsConfigRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBurstGroupsConfigRequest) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{21}
+	return file_photo_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdateBurstGroupsConfigRequest) GetFine() *BurstProfileConfig {
@@ -1794,7 +1846,7 @@ type SetBurstGroupCoverRequest struct {
 
 func (x *SetBurstGroupCoverRequest) Reset() {
 	*x = SetBurstGroupCoverRequest{}
-	mi := &file_photo_service_proto_msgTypes[22]
+	mi := &file_photo_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1806,7 +1858,7 @@ func (x *SetBurstGroupCoverRequest) String() string {
 func (*SetBurstGroupCoverRequest) ProtoMessage() {}
 
 func (x *SetBurstGroupCoverRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_photo_service_proto_msgTypes[22]
+	mi := &file_photo_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1819,7 +1871,7 @@ func (x *SetBurstGroupCoverRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBurstGroupCoverRequest.ProtoReflect.Descriptor instead.
 func (*SetBurstGroupCoverRequest) Descriptor() ([]byte, []int) {
-	return file_photo_service_proto_rawDescGZIP(), []int{22}
+	return file_photo_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SetBurstGroupCoverRequest) GetGroupId() string {
@@ -1969,7 +2021,10 @@ const file_photo_service_proto_rawDesc = "" +
 	"\x10description_time\x18\x04 \x01(\tR\x0fdescriptionTime\"<\n" +
 	"\x16UpdatePhotoTagsRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04tags\x18\x02 \x01(\tR\x04tags\"$\n" +
+	"\x04tags\x18\x02 \x01(\tR\x04tags\"C\n" +
+	"\x18UpdatePhotoShotAtRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\ashot_at\x18\x02 \x01(\x03R\x06shotAt\"$\n" +
 	"\x12DeletePhotoRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"=\n" +
 	"\x13DeletePhotoResponse\x12\x16\n" +
@@ -1998,7 +2053,7 @@ const file_photo_service_proto_rawDesc = "" +
 	"\x06coarse\x18\x02 \x01(\v2\x17.api.BurstProfileConfigR\x06coarse\"Q\n" +
 	"\x19SetBurstGroupCoverRequest\x12\x19\n" +
 	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x19\n" +
-	"\bphoto_id\x18\x02 \x01(\tR\aphotoId2\x8b\t\n" +
+	"\bphoto_id\x18\x02 \x01(\tR\aphotoId2\xf3\t\n" +
 	"\fPhotoService\x12[\n" +
 	"\fSearchPhotos\x12\x18.api.SearchPhotosRequest\x1a\x19.api.SearchPhotosResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/v1/photos\x12U\n" +
 	"\rGetPhotoStats\x12\n" +
@@ -2006,7 +2061,9 @@ const file_photo_service_proto_rawDesc = "" +
 	"\x11ListPhotoSegments\x12\x1d.api.ListPhotoSegmentsRequest\x1a\x1e.api.ListPhotoSegmentsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/photos/segments\x12f\n" +
 	"\x0eGetPhotoDetail\x12\x1a.api.GetPhotoDetailRequest\x1a\x1b.api.GetPhotoDetailResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/v1/photos/{id}\x12_\n" +
 	"\x0fUpdatePhotoTags\x12\x1b.api.UpdatePhotoTagsRequest\x1a\n" +
-	".api.Empty\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/api/v1/photos/{id}/tags\x12]\n" +
+	".api.Empty\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/api/v1/photos/{id}/tags\x12f\n" +
+	"\x11UpdatePhotoShotAt\x12\x1d.api.UpdatePhotoShotAtRequest\x1a\n" +
+	".api.Empty\"&\x82\xd3\xe4\x93\x02 :\x01*\x1a\x1b/api/v1/photos/{id}/shot_at\x12]\n" +
 	"\vDeletePhoto\x12\x17.api.DeletePhotoRequest\x1a\x18.api.DeletePhotoResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/api/v1/photos/{id}\x12j\n" +
 	"\x12RebuildBurstGroups\x12\n" +
 	".api.Empty\x1a\x1f.api.RebuildBurstGroupsResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/api/v1/burst-groups/rebuild\x12j\n" +
@@ -2031,7 +2088,7 @@ func file_photo_service_proto_rawDescGZIP() []byte {
 	return file_photo_service_proto_rawDescData
 }
 
-var file_photo_service_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_photo_service_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_photo_service_proto_goTypes = []any{
 	(*SearchPhotosRequest)(nil),            // 0: api.SearchPhotosRequest
 	(*PhotoItem)(nil),                      // 1: api.PhotoItem
@@ -2048,15 +2105,16 @@ var file_photo_service_proto_goTypes = []any{
 	(*GetPhotoDetailRequest)(nil),          // 12: api.GetPhotoDetailRequest
 	(*GetPhotoDetailResponse)(nil),         // 13: api.GetPhotoDetailResponse
 	(*UpdatePhotoTagsRequest)(nil),         // 14: api.UpdatePhotoTagsRequest
-	(*DeletePhotoRequest)(nil),             // 15: api.DeletePhotoRequest
-	(*DeletePhotoResponse)(nil),            // 16: api.DeletePhotoResponse
-	(*RebuildBurstGroupsResponse)(nil),     // 17: api.RebuildBurstGroupsResponse
-	(*GetBurstGroupsStatusResponse)(nil),   // 18: api.GetBurstGroupsStatusResponse
-	(*BurstProfileConfig)(nil),             // 19: api.BurstProfileConfig
-	(*GetBurstGroupsConfigResponse)(nil),   // 20: api.GetBurstGroupsConfigResponse
-	(*UpdateBurstGroupsConfigRequest)(nil), // 21: api.UpdateBurstGroupsConfigRequest
-	(*SetBurstGroupCoverRequest)(nil),      // 22: api.SetBurstGroupCoverRequest
-	(*Empty)(nil),                          // 23: api.Empty
+	(*UpdatePhotoShotAtRequest)(nil),       // 15: api.UpdatePhotoShotAtRequest
+	(*DeletePhotoRequest)(nil),             // 16: api.DeletePhotoRequest
+	(*DeletePhotoResponse)(nil),            // 17: api.DeletePhotoResponse
+	(*RebuildBurstGroupsResponse)(nil),     // 18: api.RebuildBurstGroupsResponse
+	(*GetBurstGroupsStatusResponse)(nil),   // 19: api.GetBurstGroupsStatusResponse
+	(*BurstProfileConfig)(nil),             // 20: api.BurstProfileConfig
+	(*GetBurstGroupsConfigResponse)(nil),   // 21: api.GetBurstGroupsConfigResponse
+	(*UpdateBurstGroupsConfigRequest)(nil), // 22: api.UpdateBurstGroupsConfigRequest
+	(*SetBurstGroupCoverRequest)(nil),      // 23: api.SetBurstGroupCoverRequest
+	(*Empty)(nil),                          // 24: api.Empty
 }
 var file_photo_service_proto_depIdxs = []int32{
 	1,  // 0: api.SearchPhotosResponse.items:type_name -> api.PhotoItem
@@ -2068,34 +2126,36 @@ var file_photo_service_proto_depIdxs = []int32{
 	9,  // 6: api.GetPhotoStatsResponse.monthly:type_name -> api.MonthlyStat
 	10, // 7: api.GetPhotoStatsResponse.hourly:type_name -> api.HourlyStat
 	1,  // 8: api.GetPhotoDetailResponse.photo:type_name -> api.PhotoItem
-	19, // 9: api.GetBurstGroupsConfigResponse.fine:type_name -> api.BurstProfileConfig
-	19, // 10: api.GetBurstGroupsConfigResponse.coarse:type_name -> api.BurstProfileConfig
-	19, // 11: api.UpdateBurstGroupsConfigRequest.fine:type_name -> api.BurstProfileConfig
-	19, // 12: api.UpdateBurstGroupsConfigRequest.coarse:type_name -> api.BurstProfileConfig
+	20, // 9: api.GetBurstGroupsConfigResponse.fine:type_name -> api.BurstProfileConfig
+	20, // 10: api.GetBurstGroupsConfigResponse.coarse:type_name -> api.BurstProfileConfig
+	20, // 11: api.UpdateBurstGroupsConfigRequest.fine:type_name -> api.BurstProfileConfig
+	20, // 12: api.UpdateBurstGroupsConfigRequest.coarse:type_name -> api.BurstProfileConfig
 	0,  // 13: api.PhotoService.SearchPhotos:input_type -> api.SearchPhotosRequest
-	23, // 14: api.PhotoService.GetPhotoStats:input_type -> api.Empty
+	24, // 14: api.PhotoService.GetPhotoStats:input_type -> api.Empty
 	3,  // 15: api.PhotoService.ListPhotoSegments:input_type -> api.ListPhotoSegmentsRequest
 	12, // 16: api.PhotoService.GetPhotoDetail:input_type -> api.GetPhotoDetailRequest
 	14, // 17: api.PhotoService.UpdatePhotoTags:input_type -> api.UpdatePhotoTagsRequest
-	15, // 18: api.PhotoService.DeletePhoto:input_type -> api.DeletePhotoRequest
-	23, // 19: api.PhotoService.RebuildBurstGroups:input_type -> api.Empty
-	23, // 20: api.PhotoService.GetBurstGroupsStatus:input_type -> api.Empty
-	23, // 21: api.PhotoService.GetBurstGroupsConfig:input_type -> api.Empty
-	21, // 22: api.PhotoService.UpdateBurstGroupsConfig:input_type -> api.UpdateBurstGroupsConfigRequest
-	22, // 23: api.PhotoService.SetBurstGroupCover:input_type -> api.SetBurstGroupCoverRequest
-	2,  // 24: api.PhotoService.SearchPhotos:output_type -> api.SearchPhotosResponse
-	11, // 25: api.PhotoService.GetPhotoStats:output_type -> api.GetPhotoStatsResponse
-	5,  // 26: api.PhotoService.ListPhotoSegments:output_type -> api.ListPhotoSegmentsResponse
-	13, // 27: api.PhotoService.GetPhotoDetail:output_type -> api.GetPhotoDetailResponse
-	23, // 28: api.PhotoService.UpdatePhotoTags:output_type -> api.Empty
-	16, // 29: api.PhotoService.DeletePhoto:output_type -> api.DeletePhotoResponse
-	17, // 30: api.PhotoService.RebuildBurstGroups:output_type -> api.RebuildBurstGroupsResponse
-	18, // 31: api.PhotoService.GetBurstGroupsStatus:output_type -> api.GetBurstGroupsStatusResponse
-	20, // 32: api.PhotoService.GetBurstGroupsConfig:output_type -> api.GetBurstGroupsConfigResponse
-	23, // 33: api.PhotoService.UpdateBurstGroupsConfig:output_type -> api.Empty
-	23, // 34: api.PhotoService.SetBurstGroupCover:output_type -> api.Empty
-	24, // [24:35] is the sub-list for method output_type
-	13, // [13:24] is the sub-list for method input_type
+	15, // 18: api.PhotoService.UpdatePhotoShotAt:input_type -> api.UpdatePhotoShotAtRequest
+	16, // 19: api.PhotoService.DeletePhoto:input_type -> api.DeletePhotoRequest
+	24, // 20: api.PhotoService.RebuildBurstGroups:input_type -> api.Empty
+	24, // 21: api.PhotoService.GetBurstGroupsStatus:input_type -> api.Empty
+	24, // 22: api.PhotoService.GetBurstGroupsConfig:input_type -> api.Empty
+	22, // 23: api.PhotoService.UpdateBurstGroupsConfig:input_type -> api.UpdateBurstGroupsConfigRequest
+	23, // 24: api.PhotoService.SetBurstGroupCover:input_type -> api.SetBurstGroupCoverRequest
+	2,  // 25: api.PhotoService.SearchPhotos:output_type -> api.SearchPhotosResponse
+	11, // 26: api.PhotoService.GetPhotoStats:output_type -> api.GetPhotoStatsResponse
+	5,  // 27: api.PhotoService.ListPhotoSegments:output_type -> api.ListPhotoSegmentsResponse
+	13, // 28: api.PhotoService.GetPhotoDetail:output_type -> api.GetPhotoDetailResponse
+	24, // 29: api.PhotoService.UpdatePhotoTags:output_type -> api.Empty
+	24, // 30: api.PhotoService.UpdatePhotoShotAt:output_type -> api.Empty
+	17, // 31: api.PhotoService.DeletePhoto:output_type -> api.DeletePhotoResponse
+	18, // 32: api.PhotoService.RebuildBurstGroups:output_type -> api.RebuildBurstGroupsResponse
+	19, // 33: api.PhotoService.GetBurstGroupsStatus:output_type -> api.GetBurstGroupsStatusResponse
+	21, // 34: api.PhotoService.GetBurstGroupsConfig:output_type -> api.GetBurstGroupsConfigResponse
+	24, // 35: api.PhotoService.UpdateBurstGroupsConfig:output_type -> api.Empty
+	24, // 36: api.PhotoService.SetBurstGroupCover:output_type -> api.Empty
+	25, // [25:37] is the sub-list for method output_type
+	13, // [13:25] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -2113,7 +2173,7 @@ func file_photo_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_photo_service_proto_rawDesc), len(file_photo_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

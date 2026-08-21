@@ -24,6 +24,7 @@ const (
 	PhotoService_ListPhotoSegments_FullMethodName       = "/api.PhotoService/ListPhotoSegments"
 	PhotoService_GetPhotoDetail_FullMethodName          = "/api.PhotoService/GetPhotoDetail"
 	PhotoService_UpdatePhotoTags_FullMethodName         = "/api.PhotoService/UpdatePhotoTags"
+	PhotoService_UpdatePhotoShotAt_FullMethodName       = "/api.PhotoService/UpdatePhotoShotAt"
 	PhotoService_DeletePhoto_FullMethodName             = "/api.PhotoService/DeletePhoto"
 	PhotoService_RebuildBurstGroups_FullMethodName      = "/api.PhotoService/RebuildBurstGroups"
 	PhotoService_GetBurstGroupsStatus_FullMethodName    = "/api.PhotoService/GetBurstGroupsStatus"
@@ -49,6 +50,8 @@ type PhotoServiceClient interface {
 	GetPhotoDetail(ctx context.Context, in *GetPhotoDetailRequest, opts ...grpc.CallOption) (*GetPhotoDetailResponse, error)
 	// 更新标签
 	UpdatePhotoTags(ctx context.Context, in *UpdatePhotoTagsRequest, opts ...grpc.CallOption) (*Empty, error)
+	// 修改拍摄时间（写 DB + 写 EXIF）
+	UpdatePhotoShotAt(ctx context.Context, in *UpdatePhotoShotAtRequest, opts ...grpc.CallOption) (*Empty, error)
 	// 删除照片（含文件清理）
 	DeletePhoto(ctx context.Context, in *DeletePhotoRequest, opts ...grpc.CallOption) (*DeletePhotoResponse, error)
 	// 触发连拍分组全量重算（异步）
@@ -115,6 +118,16 @@ func (c *photoServiceClient) UpdatePhotoTags(ctx context.Context, in *UpdatePhot
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
 	err := c.cc.Invoke(ctx, PhotoService_UpdatePhotoTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *photoServiceClient) UpdatePhotoShotAt(ctx context.Context, in *UpdatePhotoShotAtRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PhotoService_UpdatePhotoShotAt_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +211,8 @@ type PhotoServiceServer interface {
 	GetPhotoDetail(context.Context, *GetPhotoDetailRequest) (*GetPhotoDetailResponse, error)
 	// 更新标签
 	UpdatePhotoTags(context.Context, *UpdatePhotoTagsRequest) (*Empty, error)
+	// 修改拍摄时间（写 DB + 写 EXIF）
+	UpdatePhotoShotAt(context.Context, *UpdatePhotoShotAtRequest) (*Empty, error)
 	// 删除照片（含文件清理）
 	DeletePhoto(context.Context, *DeletePhotoRequest) (*DeletePhotoResponse, error)
 	// 触发连拍分组全量重算（异步）
@@ -234,6 +249,9 @@ func (UnimplementedPhotoServiceServer) GetPhotoDetail(context.Context, *GetPhoto
 }
 func (UnimplementedPhotoServiceServer) UpdatePhotoTags(context.Context, *UpdatePhotoTagsRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdatePhotoTags not implemented")
+}
+func (UnimplementedPhotoServiceServer) UpdatePhotoShotAt(context.Context, *UpdatePhotoShotAtRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdatePhotoShotAt not implemented")
 }
 func (UnimplementedPhotoServiceServer) DeletePhoto(context.Context, *DeletePhotoRequest) (*DeletePhotoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePhoto not implemented")
@@ -360,6 +378,24 @@ func _PhotoService_UpdatePhotoTags_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PhotoServiceServer).UpdatePhotoTags(ctx, req.(*UpdatePhotoTagsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PhotoService_UpdatePhotoShotAt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePhotoShotAtRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PhotoServiceServer).UpdatePhotoShotAt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PhotoService_UpdatePhotoShotAt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PhotoServiceServer).UpdatePhotoShotAt(ctx, req.(*UpdatePhotoShotAtRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -498,6 +534,10 @@ var PhotoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdatePhotoTags",
 			Handler:    _PhotoService_UpdatePhotoTags_Handler,
+		},
+		{
+			MethodName: "UpdatePhotoShotAt",
+			Handler:    _PhotoService_UpdatePhotoShotAt_Handler,
 		},
 		{
 			MethodName: "DeletePhoto",

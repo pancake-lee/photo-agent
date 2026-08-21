@@ -130,6 +130,7 @@ Class | Method | HTTP request | Description
 *PhotoServiceApi* | [**photo_service_search_photos**](docs/PhotoServiceApi.md#photo_service_search_photos) | **GET** /api/v1/photos | 
 *PhotoServiceApi* | [**photo_service_set_burst_group_cover**](docs/PhotoServiceApi.md#photo_service_set_burst_group_cover) | **PUT** /api/v1/burst-groups/{groupId}/cover | 
 *PhotoServiceApi* | [**photo_service_update_burst_groups_config**](docs/PhotoServiceApi.md#photo_service_update_burst_groups_config) | **PUT** /api/v1/burst-groups/config | 
+*PhotoServiceApi* | [**photo_service_update_photo_shot_at**](docs/PhotoServiceApi.md#photo_service_update_photo_shot_at) | **PUT** /api/v1/photos/{id}/shot_at | 
 *PhotoServiceApi* | [**photo_service_update_photo_tags**](docs/PhotoServiceApi.md#photo_service_update_photo_tags) | **PUT** /api/v1/photos/{id}/tags | 
 *QueryServiceApi* | [**query_service_execute_sql**](docs/QueryServiceApi.md#query_service_execute_sql) | **POST** /api/v1/sql/query | 
 *QueryServiceApi* | [**query_service_get_attribute_values**](docs/QueryServiceApi.md#query_service_get_attribute_values) | **GET** /api/v1/sql/photos/attribute-values | 
@@ -225,6 +226,7 @@ Class | Method | HTTP request | Description
  - [ApiUpdatePhotoGroupResponse](docs/ApiUpdatePhotoGroupResponse.md)
  - [ApiUpdatePhotoRequest](docs/ApiUpdatePhotoRequest.md)
  - [ApiUpdatePhotoResponse](docs/ApiUpdatePhotoResponse.md)
+ - [ApiUpdatePhotoShotAtRequest](docs/ApiUpdatePhotoShotAtRequest.md)
  - [ApiUpdatePhotoTagsRequest](docs/ApiUpdatePhotoTagsRequest.md)
  - [ApiUpdateTimelineEventRequest](docs/ApiUpdateTimelineEventRequest.md)
  - [ApiUpdateTimelineEventResponse](docs/ApiUpdateTimelineEventResponse.md)

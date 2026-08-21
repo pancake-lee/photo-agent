@@ -1918,6 +1918,25 @@ export interface ApiUpdatePhotoResponse {
 /**
  * 
  * @export
+ * @interface ApiUpdatePhotoShotAtRequest
+ */
+export interface ApiUpdatePhotoShotAtRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiUpdatePhotoShotAtRequest
+     */
+    id?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiUpdatePhotoShotAtRequest
+     */
+    shotAt?: string;
+}
+/**
+ * 
+ * @export
  * @interface ApiUpdatePhotoTagsRequest
  */
 export interface ApiUpdatePhotoTagsRequest {
@@ -3860,6 +3879,43 @@ export const PhotoServiceApiFetchParamCreator = function (configuration?: Config
             };
         },
         /**
+         * 修改拍摄时间（写 DB + 写 EXIF）
+         * @param {ApiUpdatePhotoShotAtRequest} body 
+         * @param {string} id 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceUpdatePhotoShotAt(body: ApiUpdatePhotoShotAtRequest, id: string, options: any = {}): FetchArgs {
+            // verify required parameter 'body' is not null or undefined
+            if (body === null || body === undefined) {
+                throw new RequiredError('body','Required parameter body was null or undefined when calling photoServiceUpdatePhotoShotAt.');
+            }
+            // verify required parameter 'id' is not null or undefined
+            if (id === null || id === undefined) {
+                throw new RequiredError('id','Required parameter id was null or undefined when calling photoServiceUpdatePhotoShotAt.');
+            }
+            const localVarPath = `/api/v1/photos/{id}/shot_at`
+                .replace(`{${"id"}}`, encodeURIComponent(String(id)));
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'PUT' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+            const needsSerialization = (<any>"ApiUpdatePhotoShotAtRequest" !== "string") || localVarRequestOptions.headers['Content-Type'] === 'application/json';
+            localVarRequestOptions.body =  needsSerialization ? JSON.stringify(body || {}) : (body || "");
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 更新标签
          * @param {ApiUpdatePhotoTagsRequest} body 
          * @param {string} id 
@@ -4115,6 +4171,25 @@ export const PhotoServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
+         * 修改拍摄时间（写 DB + 写 EXIF）
+         * @param {ApiUpdatePhotoShotAtRequest} body 
+         * @param {string} id 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceUpdatePhotoShotAt(body: ApiUpdatePhotoShotAtRequest, id: string, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiEmpty> {
+            const localVarFetchArgs = PhotoServiceApiFetchParamCreator(configuration).photoServiceUpdatePhotoShotAt(body, id, options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 更新标签
          * @param {ApiUpdatePhotoTagsRequest} body 
          * @param {string} id 
@@ -4260,6 +4335,16 @@ export const PhotoServiceApiFactory = function (configuration?: Configuration, f
          */
         photoServiceUpdateBurstGroupsConfig(body: ApiUpdateBurstGroupsConfigRequest, options?: any) {
             return PhotoServiceApiFp(configuration).photoServiceUpdateBurstGroupsConfig(body, options)(fetch, basePath);
+        },
+        /**
+         * 修改拍摄时间（写 DB + 写 EXIF）
+         * @param {ApiUpdatePhotoShotAtRequest} body 
+         * @param {string} id 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        photoServiceUpdatePhotoShotAt(body: ApiUpdatePhotoShotAtRequest, id: string, options?: any) {
+            return PhotoServiceApiFp(configuration).photoServiceUpdatePhotoShotAt(body, id, options)(fetch, basePath);
         },
         /**
          * 更新标签
@@ -4418,6 +4503,18 @@ export class PhotoServiceApi extends BaseAPI {
      */
     public photoServiceUpdateBurstGroupsConfig(body: ApiUpdateBurstGroupsConfigRequest, options?: any) {
         return PhotoServiceApiFp(this.configuration).photoServiceUpdateBurstGroupsConfig(body, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 修改拍摄时间（写 DB + 写 EXIF）
+     * @param {ApiUpdatePhotoShotAtRequest} body 
+     * @param {string} id 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof PhotoServiceApi
+     */
+    public photoServiceUpdatePhotoShotAt(body: ApiUpdatePhotoShotAtRequest, id: string, options?: any) {
+        return PhotoServiceApiFp(this.configuration).photoServiceUpdatePhotoShotAt(body, id, options)(this.fetch, this.basePath);
     }
 
     /**

@@ -29,6 +29,7 @@ const OperationPhotoServiceRebuildBurstGroups = "/api.PhotoService/RebuildBurstG
 const OperationPhotoServiceSearchPhotos = "/api.PhotoService/SearchPhotos"
 const OperationPhotoServiceSetBurstGroupCover = "/api.PhotoService/SetBurstGroupCover"
 const OperationPhotoServiceUpdateBurstGroupsConfig = "/api.PhotoService/UpdateBurstGroupsConfig"
+const OperationPhotoServiceUpdatePhotoShotAt = "/api.PhotoService/UpdatePhotoShotAt"
 const OperationPhotoServiceUpdatePhotoTags = "/api.PhotoService/UpdatePhotoTags"
 
 type PhotoServiceHTTPServer interface {
@@ -53,6 +54,8 @@ type PhotoServiceHTTPServer interface {
 	SetBurstGroupCover(context.Context, *SetBurstGroupCoverRequest) (*Empty, error)
 	// UpdateBurstGroupsConfig 保存连拍分组两档位阈值（写入 app_settings）
 	UpdateBurstGroupsConfig(context.Context, *UpdateBurstGroupsConfigRequest) (*Empty, error)
+	// UpdatePhotoShotAt 修改拍摄时间（写 DB + 写 EXIF）
+	UpdatePhotoShotAt(context.Context, *UpdatePhotoShotAtRequest) (*Empty, error)
 	// UpdatePhotoTags 更新标签
 	UpdatePhotoTags(context.Context, *UpdatePhotoTagsRequest) (*Empty, error)
 }
@@ -64,6 +67,7 @@ func RegisterPhotoServiceHTTPServer(s *http.Server, srv PhotoServiceHTTPServer) 
 	r.GET("/api/v1/photos/segments", _PhotoService_ListPhotoSegments0_HTTP_Handler(srv))
 	r.GET("/api/v1/photos/{id}", _PhotoService_GetPhotoDetail0_HTTP_Handler(srv))
 	r.PUT("/api/v1/photos/{id}/tags", _PhotoService_UpdatePhotoTags0_HTTP_Handler(srv))
+	r.PUT("/api/v1/photos/{id}/shot_at", _PhotoService_UpdatePhotoShotAt0_HTTP_Handler(srv))
 	r.DELETE("/api/v1/photos/{id}", _PhotoService_DeletePhoto0_HTTP_Handler(srv))
 	r.POST("/api/v1/burst-groups/rebuild", _PhotoService_RebuildBurstGroups0_HTTP_Handler(srv))
 	r.GET("/api/v1/burst-groups/status", _PhotoService_GetBurstGroupsStatus0_HTTP_Handler(srv))
@@ -166,6 +170,31 @@ func _PhotoService_UpdatePhotoTags0_HTTP_Handler(srv PhotoServiceHTTPServer) fun
 		http.SetOperation(ctx, OperationPhotoServiceUpdatePhotoTags)
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			return srv.UpdatePhotoTags(ctx, req.(*UpdatePhotoTagsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*Empty)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _PhotoService_UpdatePhotoShotAt0_HTTP_Handler(srv PhotoServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in UpdatePhotoShotAtRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPhotoServiceUpdatePhotoShotAt)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.UpdatePhotoShotAt(ctx, req.(*UpdatePhotoShotAtRequest))
 		})
 		out, err := h(ctx, &in)
 		if err != nil {
@@ -327,6 +356,8 @@ type PhotoServiceHTTPClient interface {
 	SetBurstGroupCover(ctx context.Context, req *SetBurstGroupCoverRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	// UpdateBurstGroupsConfig 保存连拍分组两档位阈值（写入 app_settings）
 	UpdateBurstGroupsConfig(ctx context.Context, req *UpdateBurstGroupsConfigRequest, opts ...http.CallOption) (rsp *Empty, err error)
+	// UpdatePhotoShotAt 修改拍摄时间（写 DB + 写 EXIF）
+	UpdatePhotoShotAt(ctx context.Context, req *UpdatePhotoShotAtRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	// UpdatePhotoTags 更新标签
 	UpdatePhotoTags(ctx context.Context, req *UpdatePhotoTagsRequest, opts ...http.CallOption) (rsp *Empty, err error)
 }
@@ -472,6 +503,20 @@ func (c *PhotoServiceHTTPClientImpl) UpdateBurstGroupsConfig(ctx context.Context
 	pattern := "/api/v1/burst-groups/config"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationPhotoServiceUpdateBurstGroupsConfig))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PUT", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdatePhotoShotAt 修改拍摄时间（写 DB + 写 EXIF）
+func (c *PhotoServiceHTTPClientImpl) UpdatePhotoShotAt(ctx context.Context, in *UpdatePhotoShotAtRequest, opts ...http.CallOption) (*Empty, error) {
+	var out Empty
+	pattern := "/api/v1/photos/{id}/shot_at"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationPhotoServiceUpdatePhotoShotAt))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "PUT", path, in, &out, opts...)
 	if err != nil {
