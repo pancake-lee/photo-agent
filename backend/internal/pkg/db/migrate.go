@@ -66,6 +66,20 @@ func Migrate() error {
 		plogger.Info("DB migrate: added timeline_manual column to photos")
 	}
 
+	// photos 表补 description_model / description_time 列（VLM 实时生成后入库）
+	if !g.Migrator().HasColumn(&model.Photo{}, "description_model") {
+		if err := g.Exec("ALTER TABLE photos ADD COLUMN description_model TEXT NOT NULL DEFAULT ''").Error; err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: added description_model column to photos")
+	}
+	if !g.Migrator().HasColumn(&model.Photo{}, "description_time") {
+		if err := g.Exec("ALTER TABLE photos ADD COLUMN description_time TEXT NOT NULL DEFAULT ''").Error; err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: added description_time column to photos")
+	}
+
 	// timeline_events 表按需补建（时间线事件，从 timeline.json 迁移）
 	if !g.Migrator().HasTable(&model.TimelineEvent{}) {
 		if err := g.Migrator().CreateTable(&model.TimelineEvent{}); err != nil {

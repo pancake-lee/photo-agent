@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { NLayout, NLayoutContent, NLayoutHeader, useMessage } from 'naive-ui'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
@@ -28,24 +28,26 @@ const {
   relocateTo, relocateToStart, loadDown, loadUp, fetchSegments, fetchStats,
   fetchTimelines, fetchPhotoDetail, closeDetail, applyFilters, resetFilters,
   deletePhoto, openBurstGroup, closeBurstGroup, setBurstCover, auxiliaryError,
+  refreshPhoto,
 } = usePhotos()
 const { showUploadModal, files, uploading, currentConflict, addFiles, removeFile, startUpload, openUploadModal, closeUploadModal } = useUpload()
-const { status: vlmStatus, startQueue, stopQueue, enqueuePhoto, onComplete } = useVlmQueue()
-const { status: embedStatus, startQueue: startEmbedQueue, stopQueue: stopEmbedQueue, enqueuePhoto: enqueueEmbedPhoto, onComplete: onEmbedComplete } = useEmbedQueue()
+const { status: vlmStatus, startQueue, stopQueue, enqueuePhoto, onComplete, describeProcessingIds, fetchDescribeProgress, stopDescribePolling, fetchStatus: fetchVlmQueueStatus, startPolling: startVlmPolling } = useVlmQueue()
+const { status: embedStatus, startQueue: startEmbedQueue, stopQueue: stopEmbedQueue, enqueuePhoto: enqueueEmbedPhoto, onComplete: onEmbedComplete, embedProcessingIds, fetchEmbedProgress, stopEmbedProgressPolling, fetchStatus: fetchEmbedQueueStatus, startPolling: startEmbedPolling } = useEmbedQueue()
 const { embeddedIds, embedStats, fetchEmbeddedIds, fetchEmbedStats } = useEmbedStatus()
 const { status: burstStatus, rebuild: rebuildBurst, fetchStatus: fetchBurstStatus, stopPolling: stopBurstPolling } = useBurstGroups()
-const processingIds = ref<Set<string>>(new Set())
 const showDescModal = ref(false)
 const descPhoto = ref<PhotoDetailType | null>(null)
 const showConflictModal = ref(false)
 const conflictResolver = ref<((resolution: ConflictResolution) => void) | null>(null)
+const detailDescribeProcessing = computed(() => !!selectedPhoto.value && describeProcessingIds.value.has(selectedPhoto.value.id))
+const detailEmbedProcessing = computed(() => !!selectedPhoto.value && embedProcessingIds.value.has(selectedPhoto.value.id))
 
 async function handleStartVlm() { try { const result = await startQueue(); message[result.total === 0 ? 'info' : 'success'](result.total === 0 ? '所有照片已有描述，无需处理' : `VLM 预处理已启动，共 ${result.total} 张`) } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
 async function handleStopVlm() { await stopQueue(); message.info('VLM 预处理已中止'); relocateToStart(); fetchStats() }
-async function handleTriggerDescribe(photoId: string) { processingIds.value = new Set([...processingIds.value, photoId]); try { await enqueuePhoto(photoId); message.success('已加入 VLM 处理队列') } catch (e) { message.error(e instanceof Error ? e.message : '入队失败'); processingIds.value.delete(photoId) } }
+async function handleTriggerDescribe(photoId: string) { try { await enqueuePhoto(photoId); await fetchDescribeProgress() } catch (e) { message.error(e instanceof Error ? e.message : 'VLM 处理失败') } }
 async function handleStartEmbed() { try { const result = await startEmbedQueue(); message[result.total === 0 ? 'info' : 'success'](result.total === 0 ? '所有照片已有嵌入，无需处理' : `Embed 已启动，共 ${result.total} 张`) } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
 async function handleStopEmbed() { await stopEmbedQueue(); message.info('Embed 已中止'); relocateToStart(); fetchStats(); fetchEmbedStats() }
-async function handleTriggerEmbed(photoId: string) { try { await enqueueEmbedPhoto(photoId); message.success('已加入 Embed 处理队列') } catch (e) { message.error(e instanceof Error ? e.message : '入队失败') } }
+async function handleTriggerEmbed(photoId: string) { try { await enqueueEmbedPhoto(photoId); await fetchEmbedProgress() } catch (e) { message.error(e instanceof Error ? e.message : '入队失败') } }
 function handleViewDescription() { if (selectedPhoto.value) { descPhoto.value = selectedPhoto.value; showDescModal.value = true } }
 function handleRegenerateDescription() { if (descPhoto.value) handleTriggerDescribe(descPhoto.value.id); showDescModal.value = false }
 async function handleDeletePhoto(photoId: string) { try { await deletePhoto(photoId); message.success('图片已删除'); fetchStats() } catch (e) { message.error(e instanceof Error ? e.message : '删除失败') } }
@@ -61,10 +63,36 @@ function handleSegmentModeChange(mode: SegmentMode) { settings.segmentMode = mod
 watch(showConflictModal, (visible) => { if (!visible && conflictResolver.value) { conflictResolver.value('skip'); conflictResolver.value = null } })
 watch(photos, (list) => fetchEmbeddedIds(list.map((photo) => photo.id)))
 watch(auxiliaryError, (text) => { if (text) message.error(text) })
+watch(describeProcessingIds, (newIds, oldIds) => {
+  for (const id of oldIds) {
+    if (!newIds.has(id)) {
+      refreshPhoto(id)
+      message.success('VLM 描述已生成')
+    }
+  }
+})
+watch(embedProcessingIds, (newIds, oldIds) => {
+  for (const id of oldIds) {
+    if (!newIds.has(id)) {
+      fetchEmbeddedIds(photos.value.map((p) => p.id))
+      fetchEmbedStats()
+    }
+  }
+})
 onComplete(() => { relocateToStart(); fetchStats() })
 onEmbedComplete(() => { relocateToStart(); fetchStats(); fetchEmbedStats() })
-onMounted(async () => { await applyFilters(); fetchStats(); fetchTimelines(); fetchEmbedStats(); fetchBurstStatus() })
-onUnmounted(stopBurstPolling)
+onMounted(async () => {
+  await applyFilters()
+  fetchStats()
+  fetchTimelines()
+  fetchEmbedStats()
+  fetchBurstStatus()
+  fetchDescribeProgress()
+  fetchEmbedProgress()
+  fetchVlmQueueStatus().then(() => { if (vlmStatus.value.running) startVlmPolling() })
+  fetchEmbedQueueStatus().then(() => { if (embedStatus.value.running) startEmbedPolling() })
+})
+onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgressPolling() })
 </script>
 
 <template>
@@ -79,12 +107,12 @@ onUnmounted(stopBurstPolling)
     </NLayoutHeader>
     <NLayoutContent><div class="content-wrapper">
       <PhotoListBrowser
-        :photos="photos" :loading="loading" :loading-down="loadingDown" :loading-up="loadingUp" :no-more-down="noMoreDown" :no-more-up="noMoreUp" :error="error" :processing-ids="processingIds" :embedded-ids="embeddedIds" :view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :segments="segments" :relocate-to="relocateTo" :load-down="loadDown" :load-up="loadUp"
+        :photos="photos" :loading="loading" :loading-down="loadingDown" :loading-up="loadingUp" :no-more-down="noMoreDown" :no-more-up="noMoreUp" :error="error" :processing-ids="describeProcessingIds" :embed-processing-ids="embedProcessingIds" :embedded-ids="embeddedIds" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" :view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :segments="segments" :relocate-to="relocateTo" :load-down="loadDown" :load-up="loadUp"
         @view-detail="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @delete-photo="handleDeletePhoto" @open-burst-group="handleOpenBurstGroup" @retry="relocateToStart" @back-to-latest="resetFilters"
       />
     </div></NLayoutContent>
   </NLayout>
-  <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" @close="closeDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
+  <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" @close="closeDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
   <BurstGroupModal :show="burstModalGroup !== ''" :group-id="burstModalGroup" :members="burstModalMembers" :cover-id="burstModalCoverId" :loading="burstModalLoading" @close="closeBurstGroup" @view-detail="fetchPhotoDetail" @set-cover="handleBurstSetCover" />
   <DescriptionModal :show="showDescModal" :filename="descPhoto?.filename || ''" :description="descPhoto?.description || ''" :model="descPhoto?.description_model || ''" :processed-at="descPhoto?.description_time || ''" @close="showDescModal = false" @regenerate="handleRegenerateDescription" />
   <UploadModal :show="showUploadModal" :files="files" :uploading="uploading" @close="closeUploadModal" @add-files="addFiles" @remove-file="removeFile" @start-upload="handleUploadStart" />

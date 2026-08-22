@@ -224,13 +224,12 @@ func (s *PhotoServer) GetPhotoDetail(
 	}
 
 	item := photoDO2Item(photo)
-	descEntry, _ := getDescriptionEntry(photo.FilePath, conf.C.Storage.DescriptionsPath)
 
 	return &api.GetPhotoDetailResponse{
 		Photo:            item,
 		ImageUrl:         fmt.Sprintf("/api/v1/photos/%s/image", photo.ID),
-		DescriptionModel: descEntry.Model,
-		DescriptionTime:  descEntry.ProcessedAt,
+		DescriptionModel: photo.DescriptionModel,
+		DescriptionTime:  photo.DescriptionTime,
 	}, nil
 }
 

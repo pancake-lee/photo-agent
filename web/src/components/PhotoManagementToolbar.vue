@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   NBadge,
   NButton,
@@ -99,67 +99,153 @@ function updateDateEnd(value: number | null) {
   date.setHours(23, 59, 59, 999)
   filterShotAtEnd.value = date.toISOString()
 }
+
+const COLLAPSE_THRESHOLD = 1000
+const toolbarRef = ref<HTMLElement | null>(null)
+const collapsed = ref(false)
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  if (!toolbarRef.value) return
+  resizeObserver = new ResizeObserver((entries) => {
+    collapsed.value = entries[0].contentRect.width < COLLAPSE_THRESHOLD
+  })
+  resizeObserver.observe(toolbarRef.value)
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
 </script>
 
 <template>
-  <div class="toolbar">
+  <div ref="toolbarRef" class="toolbar">
     <div class="toolbar-left">
       <h3 class="toolbar-title">图片管理</h3>
-      <span class="total-count">共 {{ stats?.total ?? total }} 张</span>
-      <NTooltip trigger="hover" placement="top">
-        <template #trigger>
-          <NButton size="small" @click="$emit('cycleViewLevel')">
-            展示：{{ viewLevelLabels[burstViewLevel] }}
-          </NButton>
-        </template>
-        点击切换连拍展示级别（全部展开 / 精细折叠 / 模糊折叠）
-      </NTooltip>
-      <NSelect :value="segmentMode" :options="segmentModeOptions" size="small" style="width: 96px" @update:value="$emit('changeSegmentMode', $event as SegmentMode)" />
-      <NButton size="small" @click="$emit('toggleSortOrder')">
-        {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
-      </NButton>
-      <NPopover trigger="click" placement="bottom-start" :to="false" style="width: 360px">
-        <template #trigger>
-          <NButton size="small" class="filter-trigger">
-            <template #icon>
-              <NBadge :value="activeFilterCount" :offset="[-2, 2]" :show="activeFilterCount > 0">
-                <NIcon><InformationCircleOutline /></NIcon>
-              </NBadge>
-            </template>
-            更多
-          </NButton>
-        </template>
-        <div class="filter-panel">
-          <div class="filter-group">
-            <div class="filter-group-title">搜索</div>
-            <NInput v-model:value="searchFilename" placeholder="搜索文件名" size="small" clearable @keyup.enter="$emit('applyFilters')">
-              <template #prefix><NIcon><SearchOutline /></NIcon></template>
-            </NInput>
-          </div>
-          <div class="filter-group">
-            <div class="filter-group-title">筛选</div>
-            <div class="filter-group-row">
-              <span class="filter-label">拍摄日期</span>
-              <NDatePicker type="date" clearable placeholder="起始日期" size="small" style="width: 132px" @update:value="updateDateStart" />
-              <span class="filter-label">至</span>
-              <NDatePicker type="date" clearable placeholder="结束日期" size="small" style="width: 132px" @update:value="updateDateEnd" />
+
+      <!-- 内联模式：宽度充足 -->
+      <div v-show="!collapsed" class="toolbar-inline">
+        <span class="total-count">共 {{ stats?.total ?? total }} 张</span>
+        <NTooltip trigger="hover" placement="top">
+          <template #trigger>
+            <NButton size="small" @click="$emit('cycleViewLevel')">
+              展示：{{ viewLevelLabels[burstViewLevel] }}
+            </NButton>
+          </template>
+          点击切换连拍展示级别（全部展开 / 精细折叠 / 模糊折叠）
+        </NTooltip>
+        <NSelect :value="segmentMode" :options="segmentModeOptions" size="small" style="width: 96px" @update:value="$emit('changeSegmentMode', $event as SegmentMode)" />
+        <NButton size="small" @click="$emit('toggleSortOrder')">
+          {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
+        </NButton>
+        <NPopover trigger="click" placement="bottom-start" :to="false" style="width: 360px">
+          <template #trigger>
+            <NButton size="small" class="filter-trigger">
+              <template #icon>
+                <NBadge :value="activeFilterCount" :offset="[-2, 2]" :show="activeFilterCount > 0">
+                  <NIcon><InformationCircleOutline /></NIcon>
+                </NBadge>
+              </template>
+              更多
+            </NButton>
+          </template>
+          <div class="filter-panel">
+            <div class="filter-group">
+              <div class="filter-group-title">搜索</div>
+              <NInput v-model:value="searchFilename" placeholder="搜索文件名" size="small" clearable @keyup.enter="$emit('applyFilters')">
+                <template #prefix><NIcon><SearchOutline /></NIcon></template>
+              </NInput>
             </div>
-            <div class="filter-group-row">
-              <span class="filter-label">活动</span>
-              <NSelect v-model:value="filterTimeline" :options="timelineOptions" placeholder="全部活动" clearable size="small" style="flex: 1" @update:value="$emit('applyFilters')" />
+            <div class="filter-group">
+              <div class="filter-group-title">筛选</div>
+              <div class="filter-group-row">
+                <span class="filter-label">拍摄日期</span>
+                <NDatePicker type="date" clearable placeholder="起始日期" size="small" style="width: 132px" @update:value="updateDateStart" />
+                <span class="filter-label">至</span>
+                <NDatePicker type="date" clearable placeholder="结束日期" size="small" style="width: 132px" @update:value="updateDateEnd" />
+              </div>
+              <div class="filter-group-row">
+                <span class="filter-label">活动</span>
+                <NSelect v-model:value="filterTimeline" :options="timelineOptions" placeholder="全部活动" clearable size="small" style="flex: 1" @update:value="$emit('applyFilters')" />
+              </div>
             </div>
-          </div>
-          <div class="filter-group">
-            <div class="filter-group-title">统计</div>
-            <div class="stats-summary">
-              <span>数据完整 {{ embedStats?.with_embedding ?? '...' }} 张</span><span class="stats-sep">|</span>
-              <span>VLM待处理 {{ stats?.without_description ?? '...' }} 张</span><span class="stats-sep">|</span>
-              <span>Embed待处理 {{ pendingEmbedCount }} 张</span>
+            <div class="filter-group">
+              <div class="filter-group-title">统计</div>
+              <div class="stats-summary">
+                <span>数据完整 {{ embedStats?.with_embedding ?? '...' }} 张</span><span class="stats-sep">|</span>
+                <span>VLM待处理 {{ stats?.without_description ?? '...' }} 张</span><span class="stats-sep">|</span>
+                <span>Embed待处理 {{ pendingEmbedCount }} 张</span>
+              </div>
             </div>
+            <div class="filter-panel-footer"><NButton size="tiny" quaternary @click="$emit('resetFilters')">重置筛选</NButton></div>
           </div>
-          <div class="filter-panel-footer"><NButton size="tiny" quaternary @click="$emit('resetFilters')">重置筛选</NButton></div>
-        </div>
-      </NPopover>
+        </NPopover>
+      </div>
+
+      <!-- 折叠模式：宽度不足 -->
+      <div v-show="collapsed" class="toolbar-collapsed">
+        <NPopover trigger="click" placement="bottom-start" :to="false" style="width: 360px">
+          <template #trigger>
+            <NButton size="small">
+              <template #icon>
+                <NBadge :value="activeFilterCount" :offset="[-2, 2]" :show="activeFilterCount > 0">
+                  <NIcon><InformationCircleOutline /></NIcon>
+                </NBadge>
+              </template>
+              更多
+            </NButton>
+          </template>
+          <div class="filter-panel">
+            <div class="filter-group">
+              <div class="filter-group-title">视图</div>
+              <div class="collapsed-controls">
+                <span class="total-count">共 {{ stats?.total ?? total }} 张</span>
+                <NTooltip trigger="hover" placement="top">
+                  <template #trigger>
+                    <NButton size="small" @click="$emit('cycleViewLevel')">
+                      {{ viewLevelLabels[burstViewLevel] }}
+                    </NButton>
+                  </template>
+                  点击切换连拍展示级别
+                </NTooltip>
+                <NSelect :value="segmentMode" :options="segmentModeOptions" size="small" style="width: 96px" @update:value="$emit('changeSegmentMode', $event as SegmentMode)" />
+                <NButton size="small" @click="$emit('toggleSortOrder')">
+                  {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
+                </NButton>
+              </div>
+            </div>
+            <div class="filter-group">
+              <div class="filter-group-title">搜索</div>
+              <NInput v-model:value="searchFilename" placeholder="搜索文件名" size="small" clearable @keyup.enter="$emit('applyFilters')">
+                <template #prefix><NIcon><SearchOutline /></NIcon></template>
+              </NInput>
+            </div>
+            <div class="filter-group">
+              <div class="filter-group-title">筛选</div>
+              <div class="filter-group-row">
+                <span class="filter-label">拍摄日期</span>
+                <NDatePicker type="date" clearable placeholder="起始日期" size="small" style="width: 132px" @update:value="updateDateStart" />
+                <span class="filter-label">至</span>
+                <NDatePicker type="date" clearable placeholder="结束日期" size="small" style="width: 132px" @update:value="updateDateEnd" />
+              </div>
+              <div class="filter-group-row">
+                <span class="filter-label">活动</span>
+                <NSelect v-model:value="filterTimeline" :options="timelineOptions" placeholder="全部活动" clearable size="small" style="flex: 1" @update:value="$emit('applyFilters')" />
+              </div>
+            </div>
+            <div class="filter-group">
+              <div class="filter-group-title">统计</div>
+              <div class="stats-summary">
+                <span>数据完整 {{ embedStats?.with_embedding ?? '...' }} 张</span><span class="stats-sep">|</span>
+                <span>VLM待处理 {{ stats?.without_description ?? '...' }} 张</span><span class="stats-sep">|</span>
+                <span>Embed待处理 {{ pendingEmbedCount }} 张</span>
+              </div>
+            </div>
+            <div class="filter-panel-footer"><NButton size="tiny" quaternary @click="$emit('resetFilters')">重置筛选</NButton></div>
+          </div>
+        </NPopover>
+      </div>
     </div>
     <NSpace :wrap="false">
       <NTooltip v-if="vlmRunning" trigger="hover"><template #trigger><NTag type="info" size="large" class="progress-tag" :style="{ cursor: 'pointer' }" @click="$emit('stopVlm')">{{ vlmCompleted }}/{{ vlmTotal }}</NTag></template>点击中止处理</NTooltip>
@@ -177,6 +263,8 @@ function updateDateEnd(value: number | null) {
 .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; }
 .toolbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .toolbar-title { margin: 0; font-size: 16px; white-space: nowrap; }
+.toolbar-inline { display: flex; align-items: center; gap: 12px; }
+.toolbar-collapsed { display: flex; align-items: center; }
 .total-count, .filter-label { font-size: 13px; color: var(--n-text-color-3); white-space: nowrap; }
 .filter-trigger { flex-shrink: 0; }
 .filter-panel, .filter-group { display: flex; flex-direction: column; }
@@ -188,4 +276,5 @@ function updateDateEnd(value: number | null) {
 .stats-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; font-size: 13px; color: var(--n-text-color-3); }
 .stats-sep { margin: 0 8px; color: var(--n-divider-color); }
 .progress-tag { font-size: 14px; padding: 4px 16px; }
+.collapsed-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>

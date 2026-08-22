@@ -5,15 +5,15 @@ type Config struct {
 	Storage struct {
 		PhotoPath          string `default:"./data/photos"`
 		PhotoSrc           string `default:"./data/photos_src"`
-		DescriptionsPath   string `default:"./data/descriptions.json"`
 		TimelinePath       string
 		TimelineWindowDays int `default:"7"`
 	}
 	VLM struct {
 		MaxImageSizeMB float64 `default:"1"`
-		APIKey         string  // fallback when Embedding.APIKey is empty
+		APIKey         string
 		Model          string
 		BaseURL        string
+		Prompt         string
 	}
 	Embedding struct {
 		APIKey  string

@@ -46,7 +46,6 @@ class Config:
         self.llm_request_timeout: float = 60.0
 
         self.project_root: pathlib.Path = pathlib.Path(".")
-        self.descriptions_path: str = ""
 
         self._load_from_yaml(config_path)
 
@@ -147,7 +146,6 @@ class Config:
         self.project_root = pathlib.Path(
             self._require(data, "storage", "project_root")
         ).resolve()
-        self.descriptions_path = self._require(data, "storage", "descriptions_path")
 
     def resolve_path(self, rel_path: str) -> pathlib.Path:
         """

@@ -35,16 +35,11 @@ cp ./configs/config.yaml .local/my-config.yaml
 # 编辑 .local/my-config.yaml，填入你的 API Key 和照片路径
 ```
 
-### 2. 预处理照片（VLM 生成描述）
+### 2. 启动服务（三个终端）
 
 ```bash
 make backend
-./bin/batch_vlm -c .local/my-config.yaml -input /path/to/your/photos
-```
 
-### 3. 启动服务（三个终端）
-
-```bash
 # 终端 1: Go 后端
 ./bin/server -c .local/my-config.yaml
 
@@ -131,8 +126,7 @@ flowchart TD
 ```
 photo-agent/
 ├── backend/              # Go 业务后端
-│   ├── cmd/server/       # HTTP 服务 + AutoSync
-│   └── cmd/batch_vlm/    # 批量 VLM 预处理 CLI
+│   └── cmd/server/       # HTTP 服务入口
 ├── agent/                # Python AI 服务层
 │   ├── chain/            # LangGraph 编排 + FastAPI 服务
 │   ├── vectorstore/      # ChromaDB 封装
@@ -140,7 +134,7 @@ photo-agent/
 │   └── scripts/          # 索引脚本、评估脚本
 ├── web/                  # Vue 3 前端
 ├── configs/              # 配置模板
-├── data/                 # 运行时数据（照片/SQLite/ChromaDB/descriptions.json）
+├── data/                 # 运行时数据（照片/SQLite/ChromaDB）
 ├── dify/                 # 早期 Dify 验证，保留参考（非核心方案）
 └── docs/                 # 项目文档
 ```

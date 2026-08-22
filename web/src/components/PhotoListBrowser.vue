@@ -16,7 +16,10 @@ const props = defineProps<{
   noMoreUp: boolean
   error: string | null
   processingIds: Set<string>
+  embedProcessingIds: Set<string>
   embeddedIds: Set<string>
+  vlmBatchRunning: boolean
+  embedBatchRunning: boolean
   viewLevel: BurstViewLevel
   segmentMode: SegmentMode
   segments: PhotoSegmentNavItem[]
@@ -129,7 +132,7 @@ onUnmounted(() => gridScrollRef.value?.removeEventListener('scroll', updateActiv
       <PhotoGrid
         :photos="photos" :loading="loading" :loading-down="loadingDown" :loading-up="loadingUp"
         :no-more-down="noMoreDown" :no-more-up="noMoreUp" :error="error"
-        :processing-ids="processingIds" :embedded-ids="embeddedIds" :view-level="viewLevel" :segment-mode="segmentMode"
+        :processing-ids="processingIds" :embed-processing-ids="embedProcessingIds" :embedded-ids="embeddedIds" :vlm-batch-running="vlmBatchRunning" :embed-batch-running="embedBatchRunning" :view-level="viewLevel" :segment-mode="segmentMode"
         @view-detail="$emit('viewDetail', $event)" @trigger-describe="$emit('triggerDescribe', $event)"
         @trigger-embed="$emit('triggerEmbed', $event)" @delete-photo="$emit('deletePhoto', $event)"
         @open-burst-group="(groupId, coverId) => $emit('openBurstGroup', groupId, coverId)"

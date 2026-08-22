@@ -35,8 +35,6 @@ func main() {
 		plogger.Fatalf("scan config failed: %v", err)
 	}
 
-	service.AutoSync() // 阻塞，同步
-
 	// 注册所有服务：genCURD 标准 CRUD + 业务扩展服务
 	var defaultSvr service.DefaultCURDServer
 	var photoSvr service.PhotoServer

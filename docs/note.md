@@ -406,3 +406,20 @@ classify → "combined"
 **原因**：分段浏览（LB1）依赖照片流时间有序，非时间排序下按天/活动分段线会反复跳跃失去意义。与其做「切换排序时分段自动退化」的兼容分支，直接收敛排序维度，交互和实现都更简单（用户确认）。
 
 **影响**：PhotoManagement 排序下拉框移除，UI 简化为一个升降序切换按钮。
+
+---
+
+## 16. VLM 描述从预生成文件同步改为实时 API 调用（CL1，2026-08-22）
+
+**原方案**：VLM 描述通过 `batch_vlm` CLI 预生成到 `descriptions.json`，Go 后端启动时 `AutoSync` 读取该文件同步到 SQLite。
+
+**变更**：
+
+- 删除 `descriptions.json`、`batch_vlm` CLI、`AutoSync` 目录扫描导入
+- Go 后端 `VlmServer.DescribePhoto` 改为实时调用火山方舟 Responses API 生成描述
+- `description_model` / `description_time` 从 descriptions.json 迁入 photos 表（新增两列）
+- 上传成为唯一导入路径，VLM/Embed 在 Web 页面形成闭环
+
+**废弃代码**：`descriptions.go`、`svc_auto_sync.go`、`bin/batch_vlm`、`conf.C.Storage.DescriptionsPath`
+
+**复用逻辑**：`parseVlmAttrs` / `extractJSONBlock` / `vlmJSON` 从 `svc_auto_sync.go` 迁入 `svc_vlm.go`；旧 `internal/vlm/client.go` 和 `compress.go` 适配为 `vlm_client.go` 和 `vlm_compress.go`

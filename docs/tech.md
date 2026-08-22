@@ -22,15 +22,14 @@ flowchart LR
     C -->|黄金用例| J["agent/data/golden_queries.json"]
 
     B --> K["照片 CRUD / 文件服务 / 统计 API"]
-    B --> L["AutoSync: 磁盘 → descriptions.json → SQLite"]
-    B --> M["VLM Queue: 异步批量图片描述"]
+    B --> M["VLM: 实时调用 VLM API 生成描述"]
     B --> N["Embedding HTTP 代理<br>OpenAI 格式 → 火山引擎"]
     B --> O["SQLite<br>照片元数据 + 结构化属性"]
 ```
 
 ### 1.1 职责边界
 
-- **Go 后端**：照片元数据管理、文件服务、导入流水线、VLM 预处理、Embedding 代理、SQL 查询执行、OpenAPI 自描述。**不负责**：Agent 编排、向量检索、对话管理。
+- **Go 后端**：照片元数据管理、文件服务、上传导入、VLM 实时描述生成、Embedding 代理、SQL 查询执行、OpenAPI 自描述。**不负责**：Agent 编排、向量检索、对话管理。
 - **Python AI 服务层**：LangGraph Agent 编排、Chroma 向量检索、Text-to-SQL（NL→LLM→SQL→Go执行）、Function Calling 工具调用、FastAPI 对话服务。**不负责**：直接访问数据库或文件系统（所有数据操作通过 Go API）。
 - **Web 前端**：照片管理（上传/浏览/筛选/删除）、AI 对话界面、VLM/Embedding 队列可视化。**不负责**：AI 推理、文件存储。
 
@@ -47,28 +46,17 @@ flowchart LR
 
 ## 3. 核心数据流
 
-### 3.1 照片导入流程
+### 3.1 照片导入与 VLM 闭环
 
 ```mermaid
 flowchart TD
-    A[用户上传 / 目录放置照片] --> B[Go Backend 接收]
-    B -->|上传路径| C["POST /api/v1/photos/upload<br>保存原图 → 压缩缩略图 → 写入 SQLite"]
-    B -->|目录路径| D["server 启动时 AutoSync<br>扫描 photo_path"]
-    C --> E[VLM 预处理<br>获取描述]
-    D --> E
-    E -->|Web 触发| F["POST /api/v1/vlm/queue/start<br>VlmQueue 异步处理"]
-    E -->|CLI 触发| G["batch_vlm 命令扫描目录<br>输出 descriptions.json"]
-    F --> H["VLM 描述 → descriptions.json"]
-    G --> H
-    H --> I["raw description: Markdown 文本<br>含 json 结构化块"]
-    H --> J["ParseStructuredAttributes<br>提取 objects/colors/scene/lighting/mood/composition"]
-    I --> K[AutoSync 或 VlmQueue.ProcessAndSave]
-    J --> K
-    K --> L["新照片: 写入 SQLite photos 表<br>含 6 个结构化属性字段"]
-    K --> M["已存在: 对比变化 → 更新 SQLite"]
-    L --> N["Python 侧: index_photos.py / EmbedQueue"]
-    M --> N
-    N --> O["通过 Go Embedding 代理获取向量<br>写入 ChromaDB<br>仅存 photo_id + chunk_index"]
+    A[Web 上传照片] --> B["POST /api/v1/photos/upload<br>保存原图 → 压缩缩略图 → 读 EXIF → 写入 SQLite"]
+    B --> C["详情页点击'生成描述'"]
+    C --> D["POST /api/v1/photos/:id/describe<br>Go 后端实时调用 VLM API"]
+    D --> E["VLM 返回描述 + 结构化 JSON 块"]
+    E --> F["解析结构化属性<br>objects/colors/scene/lighting/mood/composition"]
+    F --> G["写入 SQLite photos 表<br>description + description_model + description_time + 6 个属性"]
+    G --> H["顶栏 Embed 按钮触发<br>Python EmbedQueue → Go Embedding 代理 → ChromaDB"]
 ```
 
 ### 3.2 Agent 查询路由（LangGraph）
@@ -138,10 +126,9 @@ flowchart TD
 
 ### 3.5 VLM 预处理
 
-- **批量 CLI**：`backend/cmd/batch_vlm/main.go` — 独立于 server，扫描目录 → VLM API → descriptions.json，中间每 10 张保存一次防止数据丢失，默认 3 并发
-- **Web 队列**：Go 后端 VlmQueue — 通过 API 启停，单张/批量入队，异步调用 VLM → 写 descriptions.json → 更新 SQLite description 字段
-- **图片压缩**：上传时直接用 ImageMagick 压缩（`convert -resize 512x512> -quality 85`），保留完整 EXIF
-- **结构化提取**：`ParseStructuredAttributes()` 从 VLM 输出的 ```json 块中解析 6 个维度，通过映射函数（mapScene/mapLighting/mapMood）将中文描述归一化为英文标签
+- **VLM 描述生成**：Go 后端 `VlmServer` — 单张实时调用火山方舟 Responses API 生成描述，批量模式遍历无描述照片逐张生成。描述 + 模型名 + 时间直接写入 SQLite photos 表
+- **图片压缩**：VLM 调用前自动用 ImageMagick 压缩（`convert -resize 512x512> -quality 85`），上传时同样压缩生成缩略图
+- **结构化提取**：`parseVlmAttrs()` 从 VLM 输出的 ```json 块中解析 6 个维度（objects/colors/scene/lighting/mood/composition）
 
 ### 3.6 ChromaDB 向量库设计
 
@@ -150,7 +137,7 @@ flowchart TD
 **索引流程**：
 
 ```
-descriptions.json → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go代理) → ChromaDB
+photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go代理) → ChromaDB
 ```
 
 **检索流程**：
@@ -343,18 +330,12 @@ metadata = {
 # embedding = Go 代理返回的向量
 ```
 
-### 5.3 descriptions.json
+### 5.3 photos 表 VLM 字段
 
-```json
-{
-  "相对路径/photo.jpg": {
-    "description": "VLM 输出的 Markdown 文本（含 ```json 结构化块）",
-    "model": "doubao-vision-pro",
-    "processed_at": "2026-01-01T00:00:00Z",
-    "shot_at": "2025-12-31T10:30:00Z"
-  }
-}
-```
+- `description` — VLM 生成的 Markdown 文本（含 ```json 结构化块）
+- `description_model` — 生成描述的模型名
+- `description_time` — 生成时间
+- `objects` / `colors` / `scene` / `lighting` / `mood` / `composition` — 从描述 JSON 块中解析的 6 个结构化属性
 
 ---
 
@@ -364,14 +345,17 @@ metadata = {
 photo-agent/
 ├── backend/                      # Go 业务后端
 │   ├── cmd/
-│   │   ├── server/main.go        # HTTP 服务入口
-│   │   └── batch_vlm/main.go     # VLM 批量预处理 CLI
+│   │   └── server/main.go        # HTTP 服务入口
 │   ├── internal/
-│   │   ├── api/                  # Gin handlers（routes/schema/photo/upload/vlm/query/...）
-│   │   ├── model/                # GORM 模型（photo.go）
-│   │   ├── service/              # 业务逻辑（sync/photo/processor/vlm_queue/descriptions/...）
-│   │   ├── config/               # YAML 配置加载
-│   │   └── vlm/                  # VLM HTTP 客户端 + 图片压缩
+│   │   ├── defaultService/
+│   │   │   ├── service/          # 业务逻辑（photo/vlm/embedding/burst/...）
+│   │   │   ├── data/             # DAO 层
+│   │   │   └── conf/             # 配置结构
+│   │   ├── pkg/
+│   │   │   ├── api/              # Proto 生成的 Go 代码
+│   │   │   ├── db/               # GORM 模型 + 迁移
+│   │   │   └── perr/             # 错误定义
+│   │   └── proto/                # Proto 定义文件
 │   └── go.mod
 ├── agent/                        # Python AI 服务层
 │   ├── chain/
@@ -401,8 +385,7 @@ photo-agent/
 │   ├── photos/                   # 照片文件
 │   ├── sqlite/                   # SQLite 数据库
 │   ├── chroma/                   # ChromaDB 向量库
-│   ├── suggest_history.json      # 选题建议历史（持久化存储）
-│   └── descriptions.json         # VLM 描述中间文件
+│   └── suggest_history.json      # 选题建议历史（持久化存储）
 └── docs/                         # 项目文档
     ├── tech.md                   # 本文档
     ├── prd.md                    # 产品需求
@@ -444,13 +427,11 @@ photo-agent/
 ## 9. 次要模块速览
 
 - **Go**：
-  - `cmd/batch_vlm`：独立于 server 的批量 VLM CLI，不再维护 Dify 知识库写入功能
-  - `internal/service/processor.go`：EXIF 提取 + 图片尺寸读取，早期导入流程，现在主要逻辑在 sync.go
-  - `internal/service/timeline.go`：从用户提供的 Markdown 表格解析时间线事件
-  - `internal/vlm/dify.go`：Dify 知识库写入（已废弃，保留兼容）
+  - `internal/defaultService/service/file_util.go`：EXIF 提取 + 图片尺寸读取 + ImageMagick 压缩
+  - `internal/defaultService/service/timeline.go`：从用户提供的 Markdown 表格解析时间线事件
 - **Python**：
   - `chain/evaluation.py`：RAG 检索评估（黄金查询 + MRR/P@10 指标）
   - `chain/function_agent.py` / `chain/react_agent.py`：早期 Agent 实验代码，已被 photo_agent.py 取代
   - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag），用于单独测试各模块
-  - `scripts/index_photos.py`：批量将 descriptions.json 分块嵌入 ChromaDB
+  - `scripts/index_photos.py`：批量将 photos 表描述分块嵌入 ChromaDB（早期脚本，现由 Python EmbedQueue 替代）
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护

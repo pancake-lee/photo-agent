@@ -57,6 +57,8 @@ class EmbedQueue:
         self._lock = threading.Lock()
         self._pending: queue.Queue[str] = queue.Queue()
         self._workers: list[threading.Thread] = []
+        self._processing: set[str] = set()
+        self._batch_pending: set[str] = set()
 
     # ------------------------------------------------------------------ #
     # 公开接口
@@ -98,6 +100,14 @@ class EmbedQueue:
             if not photo_ids:
                 return {"status": "done", "total": 0, "message": "没有需要 embedding 的照片"}
 
+            # 过滤掉正在被单张处理的照片
+            photo_ids = [pid for pid in photo_ids if pid not in self._processing]
+            if not photo_ids:
+                return {"status": "done", "total": 0, "message": "所有照片正在单张处理中"}
+
+            # 记录批量待处理 ID，阻止单张请求冲突
+            self._batch_pending = set(photo_ids)
+
             # 填充队列
             self._total = len(photo_ids)
             self._completed = 0
@@ -129,6 +139,7 @@ class EmbedQueue:
                 return {"status": "not_running"}
 
             self._running = False
+            self._batch_pending.clear()
 
             # 排空 pending 队列
             while not self._pending.empty():
@@ -144,8 +155,12 @@ class EmbedQueue:
         return {"status": "stopped"}
 
     def enqueue_one(self, photo_id: str) -> dict:
-        """单张照片入队。队列未运行时自动启动。"""
+        """单张照片入队。队列未运行时自动启动。已在处理中则跳过。"""
         with self._lock:
+            if photo_id in self._processing:
+                return {"status": "already_processing", "photo_id": photo_id}
+            if photo_id in self._batch_pending:
+                return {"status": "in_batch_queue", "photo_id": photo_id}
             if not self._running:
                 self._total = 1
                 self._completed = 0
@@ -173,6 +188,11 @@ class EmbedQueue:
                 "failed": self._failed,
                 "current_file": self._current,
             }
+
+    def processing_ids(self) -> list[str]:
+        """返回当前正在处理的照片 ID 列表。"""
+        with self._lock:
+            return list(self._processing)
 
     def get_embed_stats(self) -> dict:
         """
@@ -261,6 +281,9 @@ class EmbedQueue:
 
         流程：Go API 获取照片 → chunk → embed → ChromaDB 写入。
         """
+        with self._lock:
+            self._processing.add(photo_id)
+            self._batch_pending.discard(photo_id)
         try:
             # 1. 从 Go API 获取照片数据（通过 SDK）
             photo_api = bksdk.get_photo_api(self._go_url)
@@ -311,6 +334,8 @@ class EmbedQueue:
             self._inc_failed()
         finally:
             self._set_current("")
+            with self._lock:
+                self._processing.discard(photo_id)
 
     # ------------------------------------------------------------------ #
     # 分块辅助

@@ -27,6 +27,10 @@ const props = defineProps<{
   show: boolean
   photo: PhotoDetail | null
   loading: boolean
+  describeProcessing: boolean
+  embedProcessing: boolean
+  vlmBatchRunning?: boolean
+  embedBatchRunning?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -56,6 +60,18 @@ watch(
     embedLoading.value = true
     embedInfo.value = await fetchEmbedInfo(photoId)
     embedLoading.value = false
+  }
+)
+
+// Embed 处理完成后自动刷新 embed 详情
+watch(
+  () => props.embedProcessing,
+  async (processing, wasProcessing) => {
+    if (wasProcessing && !processing && props.photo?.id) {
+      embedLoading.value = true
+      embedInfo.value = await fetchEmbedInfo(props.photo.id)
+      embedLoading.value = false
+    }
   }
 )
 
@@ -184,6 +200,8 @@ async function saveShotAt() {
               </NButton>
               <NButton
                 size="small"
+                :loading="describeProcessing"
+                :disabled="vlmBatchRunning"
                 @click="$emit('triggerDescribe', photo.id)"
               >
                 重新生成
@@ -195,6 +213,8 @@ async function saveShotAt() {
             <NButton
               size="small"
               type="primary"
+              :loading="describeProcessing"
+              :disabled="vlmBatchRunning"
               style="margin-top: 8px"
               @click="$emit('triggerDescribe', photo.id)"
             >
@@ -230,6 +250,8 @@ async function saveShotAt() {
             </NDescriptions>
             <NButton
               size="small"
+              :loading="embedProcessing"
+              :disabled="embedBatchRunning"
               style="margin-top: 8px"
               @click="$emit('triggerEmbed', photo.id)"
             >
@@ -241,6 +263,8 @@ async function saveShotAt() {
             <NButton
               size="small"
               type="warning"
+              :loading="embedProcessing"
+              :disabled="embedBatchRunning"
               style="margin-top: 8px"
               @click="$emit('triggerEmbed', photo.id)"
             >

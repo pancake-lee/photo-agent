@@ -13,7 +13,10 @@ import { formatDate } from '../utils/format'
 const props = withDefaults(defineProps<{
   photo: PhotoListItem
   processing?: boolean
+  embedProcessing?: boolean
   isEmbedded?: boolean
+  vlmBatchRunning?: boolean
+  embedBatchRunning?: boolean
   /** 连拍展示级别：all 全部展开 / fine 精细折叠 / coarse 模糊折叠 */
   viewLevel?: BurstViewLevel
 }>(), {
@@ -45,7 +48,7 @@ function handleCardClick() {
 }
 
 function handleStatusClick() {
-  if (props.processing) return
+  if (props.processing || props.vlmBatchRunning) return
   if (props.photo.has_description) {
     emit('viewDetail', props.photo.id)
   } else {
@@ -54,7 +57,7 @@ function handleStatusClick() {
 }
 
 function handleEmbedClick() {
-  if (props.processing) return
+  if (props.processing || props.embedBatchRunning) return
   if (props.isEmbedded) return
   if (props.photo.has_description) {
     emit('triggerEmbed', props.photo.id)
@@ -126,8 +129,9 @@ function formatExifTooltip(): string {
             </div>
             <!-- Embed 状态图标（左下角） -->
             <div class="photo-embed-status">
+              <NSpin v-if="embedProcessing" size="small" />
               <NButton
-                v-if="isEmbedded"
+                v-else-if="isEmbedded"
                 size="tiny"
                 circle
                 type="info"

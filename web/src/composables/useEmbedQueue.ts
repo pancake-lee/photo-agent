@@ -16,6 +16,10 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 let onCompleteCallback: (() => void) | null = null
 let usageCount = 0
 
+// 单张 Embed 处理进度跟踪（纯内存状态，由后端 /api/embed/progress 驱动）
+const embedProcessingIds = ref<Set<string>>(new Set())
+let embedProgressTimer: ReturnType<typeof setInterval> | null = null
+
 export function useEmbedQueue() {
   async function fetchStatus() {
     try {
@@ -66,9 +70,7 @@ export function useEmbedQueue() {
       throw new Error(err.error || err.detail || '启动失败')
     }
     const data = await resp.json()
-    if (data.total > 0) {
-      startPolling()
-    }
+    startPolling()
     return data
   }
 
@@ -88,6 +90,30 @@ export function useEmbedQueue() {
     })
     if (!resp.ok) throw new Error('入队失败')
     return await resp.json()
+  }
+
+  async function fetchEmbedProgress() {
+    try {
+      const resp = await fetch(`${getAgentBase()}/embed/progress`)
+      if (!resp.ok) return
+      const data: { processing_ids: string[] } = await resp.json()
+      const ids = new Set(data.processing_ids || [])
+      embedProcessingIds.value = ids
+      if (ids.size > 0 && !embedProgressTimer) {
+        embedProgressTimer = setInterval(fetchEmbedProgress, EMBED_POLL_INTERVAL)
+      } else if (ids.size === 0) {
+        stopEmbedProgressPolling()
+      }
+    } catch (e) {
+      console.debug('Embed 进度查询失败', e)
+    }
+  }
+
+  function stopEmbedProgressPolling() {
+    if (embedProgressTimer) {
+      clearInterval(embedProgressTimer)
+      embedProgressTimer = null
+    }
   }
 
   function onComplete(fn: (() => void) | null) {
@@ -113,5 +139,8 @@ export function useEmbedQueue() {
     stopQueue,
     enqueuePhoto,
     onComplete,
+    embedProcessingIds,
+    fetchEmbedProgress,
+    stopEmbedProgressPolling,
   }
 }

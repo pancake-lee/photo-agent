@@ -10,8 +10,8 @@
 ```mermaid
 flowchart TD
     A[1. 环境准备<br>Go + Python + Node.js] --> B[2. 配置文件<br>.local/my-config.yaml]
-    B --> C[3. VLM 预处理<br>batch_vlm → descriptions.json]
-    C --> D[4. 启动服务<br>Go 后端 + Python Agent + Web 前端]
+    B --> D[3. 启动服务<br>Go 后端 + Python Agent + Web 前端]
+    D --> E[4. Web 上传照片<br>→ VLM 生成描述 → Embed 入库]
 ```
 
 ---
@@ -27,7 +27,7 @@ cd /root/code/photo-agent
 
 # 编译 Go 后端
 make backend
-# 产物: bin/server, bin/batch_vlm
+# 产物: bin/server
 
 # Python 环境
 cd agent
@@ -76,21 +76,7 @@ storage:
 
 ---
 
-## 3. VLM 预处理
-
-将照片放入 `data/photos/` 目录（支持 `.jpg` `.jpeg` `.png` `.webp`），然后：
-
-```bash
-./bin/batch_vlm -c .local/my-config.yaml
-```
-
-- 并发调用 VLM，每张照片生成结构化视觉描述
-- 每 10 张自动保存中间结果，支持断点续传
-- 输出 `data/descriptions.json`
-
----
-
-## 4. 启动服务
+## 3. 启动服务
 
 三个进程，各占一个终端：
 
@@ -106,11 +92,11 @@ python chain/photo_agent.py -c ../.local/my-config.yaml --serve
 cd web && pnpm dev
 ```
 
-访问 `http://localhost:10006` 开始使用。Go 后端启动时自动执行 AutoSync（增量导入照片 + 解析结构化属性 + 提取 EXIF）。
+访问 `http://localhost:10006` 开始使用。通过 Web 前端上传照片，在详情页点击"生成描述"实时调用 VLM，再通过"Embed"按钮将描述嵌入向量库。
 
 ---
 
-## 5. 验证清单
+## 4. 验证清单
 
 - [ ] `make backend` 编译通过
 - [ ] `.local/my-config.yaml` 中 API Key 有效
@@ -124,24 +110,12 @@ cd web && pnpm dev
 
 ## 常见问题
 
-### Q: batch_vlm 中断后如何恢复？
+### Q: 新增照片后如何处理？
 
-直接重新运行，已处理的照片自动跳过。如需强制重新生成，加`--force`参数：
-
-```bash
-./bin/batch_vlm -c .local/my-config.yaml --force
-```
-
-### Q: 新增照片后如何更新？
-
-```bash
-# 1. VLM 预处理新照片
-./bin/batch_vlm -c .local/my-config.yaml
-
-# 2. 重启 Go 后端触发 AutoSync（自动解析 EXIF + 入库）
-
-# 3. Web 界面点击"开始批量 Embed"触发向量索引
-```
+通过 Web 前端上传照片，然后在图片管理页：
+1. 点击照片详情页的"生成描述"实时调用 VLM
+2. 或点击顶栏"VLM"按钮批量处理所有无描述照片
+3. 处理完成后点击"Embed"按钮将描述嵌入向量库
 
 ### Q: 如何重建 ChromaDB 索引？
 

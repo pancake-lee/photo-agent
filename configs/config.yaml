@@ -19,8 +19,6 @@ Storage:
   PhotoSrc: "./data/photos/src"
   # 压缩后的图片存储路径
   PhotoPath: "./data/photos/compressed"
-  # vlm 图像识别结果输出路径
-  DescriptionsPath: "./data/descriptions.json"
   # 用户提供的时间线文件路径
   TimelinePath: "./data/timeline.json"
   # 时间线活动窗口天数（活动日前后各 N 天内的照片归入该活动）
@@ -29,6 +27,8 @@ Storage:
 VLM:
   # 单张图片最大尺寸（超过自动压缩）
   MaxImageSizeMB: 0.2
+  # VLM 描述生成提示词文件路径
+  Prompt: ./configs/vlm_prompt.md
 
 Embedding:
   APIKey: ""
@@ -60,8 +60,6 @@ storage:
   photo_src: "./data/photos/src"
   # 压缩后的图片存储路径
   photo_path: "./data/photos/compressed"
-  # vlm 图像识别结果输出路径
-  descriptions_path: "./data/descriptions.json"
   # 用户提供的时间线文件路径
   timeline_path: "./data/timeline.md"
 

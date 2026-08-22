@@ -19,7 +19,10 @@ const props = defineProps<{
   noMoreUp: boolean
   error: string | null
   processingIds: Set<string>
+  embedProcessingIds: Set<string>
   embeddedIds: Set<string>
+  vlmBatchRunning: boolean
+  embedBatchRunning: boolean
   /** 连拍展示级别：all 全部展开 / fine 精细折叠 / coarse 模糊折叠 */
   viewLevel: BurstViewLevel
   /** 分段浏览方式：day / month / activity，空串表示不分段 */
@@ -183,7 +186,10 @@ onBeforeUnmount(() => observedScrollRoot?.removeEventListener('scroll', maybeLoa
           :photo="item.photo"
           :view-level="viewLevel"
           :processing="processingIds.has(item.photo.id)"
+          :embed-processing="embedProcessingIds.has(item.photo.id)"
           :is-embedded="embeddedIds.has(item.photo.id)"
+          :vlm-batch-running="vlmBatchRunning"
+          :embed-batch-running="embedBatchRunning"
           @view-detail="(id) => $emit('viewDetail', id)"
           @trigger-describe="(id) => $emit('triggerDescribe', id)"
           @trigger-embed="(id) => $emit('triggerEmbed', id)"

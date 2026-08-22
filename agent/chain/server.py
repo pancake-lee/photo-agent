@@ -624,6 +624,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         q: embed_queue.EmbedQueue = req.app.state.embed_queue
         return q.status()
 
+    @app.get("/api/embed/progress")
+    async def embed_progress(req: fastapi.Request):
+        """查询当前正在处理中的照片 ID 列表。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return {"processing_ids": q.processing_ids()}
+
     @app.post("/api/embed/photos/{photo_id}")
     async def embed_single_photo(photo_id: str, req: fastapi.Request):
         """嵌入单张照片到 ChromaDB。由前端单张触发调用。"""

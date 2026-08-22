@@ -33,6 +33,12 @@ service VlmService {
             body: "*"
         };
     }
+    // 查询单张照片 VLM 描述进度
+    rpc GetDescribeProgress (Empty) returns (GetDescribeProgressResponse) {
+        option (google.api.http) = {
+            get: "/api/v1/vlm/describe/progress"
+        };
+    }
 }
 
 // --------------------------------------------------
@@ -79,4 +85,11 @@ message DescribePhotoRequest {
 
 message DescribePhotoResponse {
     bool queued = 1;
+}
+
+// --------------------------------------------------
+// GetDescribeProgress
+
+message GetDescribeProgressResponse {
+    repeated string processing_ids = 1;
 }

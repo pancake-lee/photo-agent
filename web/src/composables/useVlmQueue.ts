@@ -19,6 +19,10 @@ let onCompleteCallback: (() => void) | null = null
 // 组件引用计数：仅最后一个使用该 composable 的组件卸载时才停止轮询
 let usageCount = 0
 
+// 单张 VLM 描述进度跟踪（纯内存状态）
+const describeProcessingIds = ref<Set<string>>(new Set())
+let describePollTimer: ReturnType<typeof setInterval> | null = null
+
 export function useVlmQueue() {
   async function fetchStatus() {
     try {
@@ -65,9 +69,7 @@ export function useVlmQueue() {
 
   async function startQueue(force = false) {
     const data = await vlmApi.vlmServiceStartVlmQueue({ force })
-    if (data.total && data.total > 0) {
-      startPolling()
-    }
+    startPolling()
     return data
   }
 
@@ -85,6 +87,29 @@ export function useVlmQueue() {
   // 注册 VLM 完成回调（自动清除）
   function onComplete(fn: (() => void) | null) {
     onCompleteCallback = fn
+  }
+
+  // 单张 VLM 描述进度管理
+  async function fetchDescribeProgress() {
+    try {
+      const resp = await vlmApi.vlmServiceGetDescribeProgress()
+      const ids = new Set(resp.processingIds || [])
+      describeProcessingIds.value = ids
+      if (ids.size > 0 && !describePollTimer) {
+        describePollTimer = setInterval(fetchDescribeProgress, VLM_POLL_INTERVAL)
+      } else if (ids.size === 0) {
+        stopDescribePolling()
+      }
+    } catch (e) {
+      console.debug('VLM 描述进度查询失败', e)
+    }
+  }
+
+  function stopDescribePolling() {
+    if (describePollTimer) {
+      clearInterval(describePollTimer)
+      describePollTimer = null
+    }
   }
 
   // 组件卸载时递减引用计数，最后一个组件卸载时停止轮询
@@ -107,5 +132,8 @@ export function useVlmQueue() {
     stopQueue,
     enqueuePhoto,
     onComplete,
+    describeProcessingIds,
+    fetchDescribeProgress,
+    stopDescribePolling,
   }
 }

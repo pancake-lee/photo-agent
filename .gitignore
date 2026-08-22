@@ -50,6 +50,9 @@ data/*
 .pids
 .env
 logs
+.qoder
+.claude
+.claude-plugin
 
 # Wails
 client/frontend/dist/*
