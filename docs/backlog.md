@@ -12,6 +12,7 @@
 | ------ | ---------- | ---- | ------------------------------ | ---- |
 | 待规划 | 导入工作流 | W12  | ImportWorkflow.vue 拆分        |      |
 | 已规划 | 组图检索   | GR1  | 三 Collection 向量库改造       |      |
+| 已规划 | 图片管理   | CL1  | 上传/VLM/Embed 闭环 + 废弃描述同步清理 |      |
 
 > 其余 6 项待规划任务经审阅后迁至 [docs/design/2026-08-22-future-requirements.md](design/2026-08-22-future-requirements.md)。
 
@@ -95,6 +96,34 @@
 
 ---
 
+### CL1 上传/VLM/Embed 闭环（VLM 实时生成 + 废弃描述同步清理）
+
+- **用户原始描述**：图片管理已完成迭代（能上传、能管时间线）。详情页点"生成描述"和"生成 Embedding"应实时调用 vlm/embedding 模型生成并展示到页面；顶部 VLM/Embed 按钮处理所有缺数据的照片（Embed 指已有 VLM 描述但未 embed 的照片）。descriptions.json 及 batch_vlm 已废弃，后端启动时的描述同步逻辑应移除，让上传/vlm/embed 在页面形成闭环，embed 生成直接入库 Chroma。
+- **状态**：已规划
+- **背景**：v1.0.10 后图片管理页已具备上传/时间线/连拍分组/分段浏览能力，但 VLM 描述仍是"从预生成文件同步"的旧机制。`DescribePhoto`/`StartVlmQueue`（`svc_vlm.go`）只读 `descriptions.json` 同步到 DB，不调 VLM。新导入照片（如 `202608-山西旅游` 目录 239 张）不在该文件里，点"生成描述"返回 `Queued:false` 且前端一直转圈。真正的 VLM 生成工具 `batch_vlm`（`backend/cmd/batch_vlm` + `internal/vlm/client.go`/`compress.go` + `internal/service/vlm_pipeline.go`/`vlm_queue.go`）在提交 `65653be`（backend-new 替换 backend）时被删，只剩陈旧二进制 `bin/batch_vlm`。
+- **分析**（闭环缺口 + 废弃清单）：
+  - 缺口 1（功能）：Go 后端无任何 VLM 生成代码，`conf.C.VLM` 只被 embedding 代理复用，`DescribePhoto`/`StartVlmQueue` 是纯文件同步。
+  - 缺口 2（数据）：详情页 `description_model`/`description_time` 来自 `GetPhotoDetail` 里的 `getDescriptionEntry`（读 descriptions.json），photos 表无这两列，清理后需入库。
+  - 缺口 3（前端）：`handleTriggerDescribe` 成功时不清 `processingIds`，`PhotoGrid` 的 `processing` 一直转圈。
+  - Embed 侧已闭环（Python `EmbedQueue` 取描述 → 分块 → embed → Chroma），无需改。
+  - 废弃代码：`descriptions.go` 整文件、`svc_auto_sync.go` 整文件（目录扫描导入 + MD5 dedup + descriptions.json 读取，`parseVlmAttrs`/`extractJSONBlock` 迁出复用）、`svc_vlm.go` 的 `loadDescriptions`/`getDescriptionEntry` 用法、`svc_photo.go` 的 `getDescriptionEntry`、`conf.C.Storage.DescriptionsPath`、`defaultService.go` 的 `AutoSync()` 调用、`bin/batch_vlm` 及 docs 引用。上传成为唯一导入路径（`createPhotoRecord` 已含 EXIF/时间线匹配）。
+- **方案**：
+  1. 复用旧 VLM 调用逻辑（作为库，不恢复 batch_vlm CLI）：从 `65653be^` 取 `internal/vlm/client.go`（火山方舟 Responses API：`input_image` + `input_text`）与 `compress.go`（ImageMagick 压缩到 512px），适配新 conf（`conf.C.VLM`）与 `putil.NewHttpRequestJson`。`conf.go` 的 `VLM` 增加 `Prompt` 字段（读 `.local/vlm_prompt.md`），图片从 `PhotoPath` 取已压缩图。调用链为：web 发起 → 后端 `VlmServer` API → 该库调火山方舟 → 写 DB。
+  2. 改造 `VlmServer`：`DescribePhoto` 单张实时生成描述 → 解析结构化属性 → 写 DB；`StartVlmQueue`/`runVlmQueue` 遍历 `GetPhotosWithoutDescription` 批量生成（加并发控制）。复用 `parseVlmAttrs`。
+  3. 加列：photos 表加 `description_model`/`description_time`（`migrate.go` 幂等 `AddColumn`），生成时写入；`GetPhotoDetail` 改读 DB。
+  4. 删除 AutoSync 与 descriptions.json：删 `descriptions.go` 与 `svc_auto_sync.go` 整文件，`defaultService.go` 移除 `service.AutoSync()`；`parseVlmAttrs`/`extractJSONBlock`/`vlmJSON` 迁到 VLM 服务文件复用；`conf.go` 去掉 `DescriptionsPath`。上传成为唯一导入路径（`createPhotoRecord` 已含 EXIF/时间线匹配，无需目录扫描）。
+  5. 前端：`handleTriggerDescribe` 成功路径也清理 `processingIds`（或由 `onComplete` 统一刷新详情）；`useVlmQueue` 单张入队后触发轮询。
+  6. 清理 batch_vlm：删 `bin/batch_vlm` 二进制，不恢复 `backend/cmd/batch_vlm` CLI 源码；更新 tech.md/note.md/README/deploy.md 中 batch_vlm 引用。
+- **验收**：
+  - [ ] 上传照片后详情页点"生成描述"，真实调 VLM，description 入库并展示，转圈结束
+  - [ ] 顶部"VLM"按钮批量处理所有无描述照片并写库
+  - [ ] "Embed"按钮把有描述照片 embed 进 Chroma，对话/RAG 能检索到新照片
+  - [ ] 后端启动不再读 descriptions.json
+  - [ ] 详情页与 DescriptionModal 正确展示模型与生成时间（来自 DB）
+  - [ ] 删除照片后 DB/文件/Chroma 三处一致
+
+---
+
 ## 决策历史
 
 - **2026-06-05**：产品定位从"摄影资产助手"收敛为"AI 选题助手"，废弃 25 项优化点，按 roadmap 四阶段重建 backlog。原有 task_3.md 技术点已吸收或明确拒绝。
@@ -113,3 +142,4 @@
 - **2026-08-22**：v1.0.10 版本归档。连拍分组（BG1，P1-P4/P6 代码全部落地）、照片列表浏览（LB1-LB8，整体评估 8.1）、日常小需求（D1/D2）全部完成。BG1 经用户确认按 Done 归档，其 P5 真实库抽检调阈值与 LB5 时间线重算、跨时区分段核对、D1 Windows 双开一并转入日常使用验证，不另立条目。已完成条目迁至 `docs/archive/v1.0.10.md`。
 - **2026-08-22**：backlog 待规划任务审阅。7 项待规划任务基于 v1.0.10 代码现状重新评估，6 项（1.4 / 3.2 / 3.3 / 4.1 / 4.2 / B2）确认仍有价值但当前不急于启动完整设计，迁移至 `docs/design/2026-08-22-future-requirements.md` 作为未来需求暂存；W12（ImportWorkflow.vue 拆分）为纯可维护性改进，保留在 backlog 随时可执行。
 - **2026-08-22**：GR1 组图检索规划。需求源自用户与 Web AI 讨论产生的设计草案，经代码审阅后修正数据模型名称（`burst_groups` → `photo_groups`）、补全前端已有基础（BurstGroupModal / PhotoCard 角标 / 折叠视图）、对齐现有 Embedding 管线（`embed_queue.py` / `ChromaPhotoStore`）。方案选择：用户选定三 Collection 架构（`photos` / `photos_fine` / `photos_coarse`），封面图入库对应组 Collection，检索时按粒度切换。
+- **2026-08-22**：CL1 图片管理闭环规划。VLM 描述生成从"预生成文件同步"改为"实时调用 VLM"，调用链为 web 发起 → 后端 `VlmServer` API 处理（不恢复 batch_vlm CLI，仅复用 `internal/vlm` 包的调用逻辑作为库）；descriptions.json、batch_vlm 及 AutoSync 目录扫描导入一并废弃删除，上传成为唯一导入路径；`description_model`/`description_time` 由 descriptions.json 迁入 photos 表（新增两列）；Embed 侧已闭环（Python EmbedQueue → Chroma）无需改。
