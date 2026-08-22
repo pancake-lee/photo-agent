@@ -10,15 +10,6 @@
 
 | 状态   | 阶段       | 序号 | 任务                           | 评估 |
 | ------ | ---------- | ---- | ------------------------------ | ---- |
-| WIP   | 连拍分组   | BG1  | 连拍分组（识别 + 折叠展示）    |      |
-| Done   | 列表浏览   | LB1  | 照片列表分段浏览               | 8.3  |
-| Done   | 列表浏览   | LB2  | 照片列表滑动窗口预加载 + 四项 bug 修复 | 7.9 |
-| Done   | 列表浏览   | LB3  | 滚动到边缘不再加载（高度链断裂） | 7.7  |
-| Done   | 列表浏览   | LB4  | 导航跳转不准确（坐标 + 锚点）  | 8.5  |
-| Done   | 时间线     | LB5  | 散片自动时间线 + 时间线管理页 | 7.9  |
-| Done   | 列表浏览   | LB6  | 图片管理顶栏重排（单行 + 弹出收纳） | 8.4 |
-| Done   | 列表浏览   | LB7  | PhotoManagement.vue 拆分       |      |
-| Done   | 列表浏览   | LB8  | LB 系列遗留小项（请求去重/静默失败/单测边界/UTC 分段键） | |
 | 待规划 | Phase 1    | 1.4  | 黄金用例评估体系扩展           |      |
 | 待规划 | Phase 3    | 3.2  | 多轮对话上下文感知             |      |
 | 待规划 | Phase 3    | 3.3  | 摄影报告生成                   |      |
@@ -26,8 +17,6 @@
 | 待规划 | Phase 4    | 4.2  | 系列感维护                     |      |
 | 待规划 | 缺陷修复   | B2   | 时间线规律维度无候选           |      |
 | 待规划 | 导入工作流 | W12  | ImportWorkflow.vue 拆分        |      |
-| Done   | 日常小需求 | D1   | 客户端单实例启动               |      |
-| Done   | 日常小需求 | D2   | 对话列表多选批量删除           |      |
 
 ---
 
@@ -64,167 +53,9 @@
 
 ## 任务详情
 
-### 连拍分组
-
-### BG1 连拍分组（识别 + 折叠展示）
-
-- **用户原始描述**：自动识别照片库中的连拍组，浏览时同一场景的连拍照片以"组"为单位折叠展示，保留查看单张的能力。
-- **状态**：WIP（P1-P4 已实现，P5 实测调优待进行，P6 体验升级已规划 2026-08-20）
-- **背景**：库内 1436 张照片按 shot_at 排序，相邻间隔 ≤2s 有 190 对、2~5s 有 55 对，连拍数据量级可观。当前 PhotoGrid 平铺展示，连拍占据大量视觉空间，干扰浏览节奏。识别方案：时间窗（≤5s）划分候选组 + dHash 汉明距离验证 + SSIM 灰区二次确认，全程传统算法零 token。详细设计见 [docs/design/2026-08-19-1-burst-grouping-design.md](../design/2026-08-19-1-burst-grouping-design.md)。
-- **方案**（五个子阶段，详见设计文档第 9 节）：
-  - **P1 数据层**：`sql/photo_groups.sql` 建组表 + photos.sql 加 burst_group_id 列（逻辑关联，无外键约束）→ `make initDB/gorm/curd` 重新生成 → `db/migrate.go` 扩展幂等迁移 → conf.go + config.yaml 加 burst 阈值段
-  - **P2 proto 与 DAO**：photo_service.proto 加 RebuildBurstGroups/GetBurstGroupsStatus rpc、PhotoItem 加 burst_group_id/burst_cover/burst_count 字段、SearchPhotosRequest 加 burst_group_id 过滤参数 → `make api` → DAO 层：列表查询支持组过滤 + 响应拼装 burst 字段
-  - **P3 算法主体**：`svc_burst_group.go`，时间窗分割/哈希切分/SSIM 灰区为纯函数（构造数据单测）；ImageMagick 生成 dHash + compare SSIM 封装；rebuild 异步 goroutine + 进度状态（与 VLM/Embed 队列同模式）
-  - **P4 前端**：设置页"连拍分组"卡片（rebuild 按钮 + 轮询进度 + 当前组数）；PhotoGrid 封面折叠展示（角标 ×N，展开按 burst_group_id 拉取组内成员）
-  - **P5 实测调优**：真实库全量 rebuild，人工抽检按验收标准评估，调阈值
-  - **P6 体验升级**（2026-08-20 用户需求并入，详见设计文档）：① 组展开改弹窗（原尺寸主图不放大 + 缩略列表切换 + 设为封面 + 点主图进详情抽屉）② rebuild 入口移到图片管理顶栏批量按钮旁 ③ 阈值拆精细/模糊两档，设置页网页可编辑（存 app_settings 表），rebuild 一次算两档 ④ 图片管理三级展示（全部展开/精细折叠/模糊折叠）循环切换按钮 + 持久化
-- **分析**：算法选型（时间窗+内容相似度）、哈希实现（复用 ImageMagick）、存储模型（photo_groups 独立表 + 逻辑关联列）、rebuild 异步化、代码生成链路（make curd 全套）均已在规划阶段与用户确认。缩略图已压缩至 ~0.2MB（MaxImageSizeMB=0.2），dHash 缩放至 9x8 后每张 spawn convert 约 15ms，全量 1436 张预估 20~60s，异步模式下可接受。NEF 与 shot_at 零值记录不参与分组。
-- **验收**：
-  - [ ] 人工标注 50~100 组，识别准确率 ≥ 90%
-  - [ ] 全量 rebuild 耗时 < 60s；异步执行不阻塞其他 API，重复触发返回 already_running
-  - [ ] 误归组率 < 5%，漏归组率 < 8%
-  - [x] 单测覆盖：时间窗分割、哈希切分、灰区 SSIM 判定、单张不成组（零值 shot_at 过滤在 DAO 层 SQL 实现，非纯函数单测）
-  - [ ] 前端折叠/展开正常，筛选视图下分组生效
-  - [ ] P6：一次 rebuild 产出两档分组，精细/模糊折叠各自生效；三级切换持久化后刷新保持
-  - [ ] P6：弹窗内切换/设为封面/点图进详情正常；设置页保存两档参数后 rebuild 按新参数生效
-
----
-
-### 列表浏览
-
-### LB1 照片列表分段浏览
-
-- **用户原始描述**：照片列表按拍摄时间或活动标签分段并插入分割线，右侧提供导航快速跳转，滚动加载替代翻页。
-- **状态**：Done（2026-08-20 生成完成，编译/单测/build 自检通过）
-- **背景**：图片管理页当前为分页 + 统一方形网格（每页 24 张），库内 1323 张非 NEF 照片约 60 页，翻页难以定位时间段。目标：分段浏览（按天/月/活动三种分段方式 + 分割线 + 右侧导航 + 滚动加载）。设计文档：[docs/design/2026-08-20-1-photo-list-segmented-browse-design.md](../design/2026-08-20-1-photo-list-segmented-browse-design.md)
-- **方案**（纯前端为主，唯一后端改动是 timeline="none" sentinel 过滤）：
-  - 后端：svc 层把 `timeline == "none"` 翻译为空值过滤（3 张散图占 25%，「未分类」段落导航跳转依赖此能力），proto/SDK 不变
-  - 前端分段：分割线组件 + 按天/月/活动分组计算（computed）+ 分段方式切换（settings store 持久化）
-  - 右侧导航：月份导航复用 stats.monthly、活动导航复用 GET /timelines；滚动高亮跟随；点击已加载段落锚点滚动，未加载段落筛选重置式跳转（月导航设 shotAtStart/End，活动导航设 timeline）
-  - 滚动加载：pageSize 调大到 100，触底追加下一页，移除分页组件
-  - 排序收敛（用户已确认）：移除「按文件名/按导入时间」排序及 UI，仅保留拍摄时间升/降序，保证分段前提恒成立
-- **分析**：与连拍分组（BG1）正交，分割线基于实际渲染照片计算，组折叠不影响分割线。跳转策略选筛选重置式（用户已确认），性能好但流不连续，导航提供「回到最新」恢复。shot_at 零值 2 张归「未知时间」段落不进导航；活动导航「未分类」项排活动之后。边界：筛选生效时导航保持全局列表不收窄，仅高亮当前可见段落
-- **验收**：
-  - [x] 分割线按天/月/活动正确插入；连拍组折叠不影响分割线（月模式运行时实测「2026 年 8 月 114 张」等渲染正常，天/活动共用同分组计算；连拍折叠正交经代码审查确认）
-  - [x] 右侧导航正确高亮跟随；点击跳转正确（LB2 修订为窗口重定位后实测有效；原始「重置拉取」语义已被 LB2 取代）
-  - [x] 按天方式下导航降为月份（segment.ts navKeyOfDivider 统一取月粒度）
-  - [x] 滚动加载追加照片，分页组件移除（LB2 窗口模型取代，分页状态无残留）
-  - [x] 「未分类」「未知时间」段落落位正确；timeline="none" sentinel 生效（API total=190 与 DB 空标签数一致）
-  - [x] 排序 UI 收敛为升降序切换（实测顶栏仅「↓ 降序」切换按钮，无文件名/导入时间入口）
-  - [ ] 2000+ 张滚动流畅（当前库 1323 张实测流畅，未达 2000+ 口径）
-  - [x] `pnpm build` 通过；后端 sentinel 单测 PASS
-- **评估**：8.3（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
-
-### LB2 照片列表滑动窗口预加载 + 四项 bug 修复
-
-- **用户原始描述**：分割线完全看不到；点击右侧月份后上下无法滚动、无法加载前后月份（导航应只定位跳转不影响持续加载）；整个网页会滚动露出空白（应只有照片列表滚动）；照片 hover 气泡几乎无延迟弹出且在气泡上滚动会滚动整个网页。同时提出滑动窗口预加载方向：上一屏/下一屏内存预加载，滚动滑动窗口加载，点击跳转加载目标窗口（当屏 + 上下预加载），右侧导航由后端专用接口加载。
-- **状态**：Done（2026-08-21 生成完成，编译/单测/build 自检通过）
-- **背景**：LB1 分段浏览已生成，但「筛选重置式跳转」锁死流、NGrid 丢弃分割线、NLayout 整页滚动、NTooltip 无延迟挂 body 四项问题暴露。设计文档：[docs/design/2026-08-21-1-photo-list-window-preload-design.md](../design/2026-08-21-1-photo-list-window-preload-design.md)
-- **方案**：
-  - 数据模型：从「page + 只追加」改为「完整排序过滤列表上的连续窗口」，窗口两端各预留一页缓冲，滚动接近边界向滚动方向取下一页，窗口超上限淘汰反方向最远页
-  - 后端：新增 ListPhotoSegments 专用导航接口，返回每个分段的 key/label/count/offset（offset = 段首张照片在完整列表的 0 基位置），复用 SearchPhotos 筛选排序参数保证 offset 对齐
-  - 前端：窗口缓冲 + 双向滚动（向上前插补偿滚动位置/向下追加）+ 导航跳转改为窗口重定位（不再改筛选）+ 「回到最新」重建窗口
-  - UI 修复：分割线改用 CSS 网格渲染（NGrid 丢弃非网格子节点）；列表区改有界滚动容器（NLayout 整页滚动）；气泡加 delay + 就地渲染（挂 body 导致滚动穿透）
-- **分析**：跳转策略由 LB1「筛选重置式」修订为「窗口重定位」，是对 4.2 节决策的反转。连拍折叠在渲染层做，offset 针对全量列表计算，两者正交。后端导航接口实现方式（proto RPC vs 裸 HTTP 路由）、筛选时导航是否收窄，为两个待确认决策点（见设计文档第 5 节）。
-- **验收**：
-  - [x] 上下双向滚动流连续，向上/向下都能加载相邻月份/活动
-  - [x] 导航点击仅定位跳转不改筛选，跳转后上下仍可继续加载
-  - [x] 预加载生效，滚动无明显等待
-  - [x] 后端导航接口 offset + count 正确，前端定位正确（2026-08-21 评估实测：desc/asc offset 正确反转、16 个月份 count 与 SQL 逐项一致）
-  - [x] 分割线按天/月/活动可见并正确跨行（实测渲染「2026 年 8 月 114 张」）
-  - [x] 只有照片列表滚动，整页不滚、无空白露出（当时误判为通过，实际未生效，见 LB3；LB3 补链后经实测整页滚动消除）
-  - [x] 气泡有触发延迟，气泡上滚动的是照片列表（PhotoCard.vue `:delay="300" :to="false"`）
-  - [x] 连拍折叠/筛选/排序/分段切换下定位与 offset 同步正确
-  - [x] 2000+ 张滚动流畅，窗口内存有上界（MAX_WINDOW_PAGES=10 即 1000 张上界；1323 张库实测流畅，2000+ 口径未测）
-- **评估**：7.9（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
-
-### LB3 滚动到边缘不再加载（高度链断裂）
-
-- **用户原始描述**：图片管理，滚动到当前数据边缘后，没有自动继续加载。
-- **状态**：Done（2026-08-21 生成完成，`pnpm build` 通过）
-- **背景**：LB2 把列表区设计成「有界滚动容器」，但 `.grid-main` 实际从未成为滚动容器，`scroll` 事件一次都没触发，向下加载因此永不触发。设计文档：[docs/design/2026-08-21-1-photo-list-window-preload-design.md](../design/2026-08-21-1-photo-list-window-preload-design.md) 第 4.2 节
-- **方案**：
-  - 根因：naive-ui `NLayout` 内层 `.n-layout-scroll-container` 是 block 布局，`NLayoutContent` 自带的 `flex:auto` 失效、高度塌成 auto，下游 `.content-wrapper` / `.grid-main` 的 `height:100%` 全部解析为 auto，`.grid-main` 高度等于内容高度，`overflow-y:auto` 永不生效
-  - 修复：给根 `NLayout` 加 `.page-layout` 类，`:deep()` 把内层 scroll-container 改为纵向 flex，header `flex-shrink:0`、content `flex:1;min-height:0`，补齐高度链
-  - 附带修 `PhotoGrid.handleScroll` 两处：顶部分支 early return 会吞掉底部判定；加载结束后无主动复检（连拍折叠下一页 100 张可能只渲染十几张封面，视口填不满就再无滚动事件）
-- **分析**：同一根因还连带 LB2 的「整页滚动」实际未修复、右侧分段导航跟随整页滚走、`updateActiveNav` 从不触发导致高亮不跟随。上一版的 IntersectionObserver 写法失败也是同因：root 不是滚动容器时哨兵恒定相交，回调只在 observe 那一刻触发一次。方案在「修回原设计 / 改动风险面 / 长期维护成本」三项上取补齐高度链，代价是依赖 naive-ui 内部类名 `.n-layout-content`、`.n-layout-scroll-container`
-- **验收**：
-  - [x] 滚动到窗口下沿自动追加下一页，持续滚动不中断（2026-08-21 评估实测：Playwright 点击导航跳转后窗口重定位成功，滚动加载链路已激活）
-  - [x] 滚动到窗口上沿自动前插上一页，视口内容不跳变（代码审查确认前插+补偿逻辑完整；PhotoCard 固定 aspect-ratio 使卡片高度稳定，跳变风险低）
-  - [ ] 连拍折叠（精细/模糊）下首屏填不满时自动继续加载至填满（代码审查确认 watch+nextTick(maybeLoad) 复检逻辑存在，未做运行时专项验证）
-  - [x] 工具栏/统计栏/筛选栏固定不动，只有照片列表区域滚动（LB6 顶栏单行后实测整页滚动已消除）
-  - [x] 右侧分段导航固定可见，高亮随滚动跟随（实测点击「2026 年 2 月」后 active 高亮与目标一致）
-  - [x] `pnpm build` 通过
-- **评估**：7.7（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
-
-### LB4 导航跳转不准确（坐标 + 锚点）
-
-- **用户原始描述**：导航跳转不准确，有偏差。
-- **状态**：Done（2026-08-21 生成完成，`pnpm build` 通过）
-- **背景**：LB2 滚动基础功能验收通过后暴露。设计文档：[docs/design/2026-08-21-1-photo-list-window-preload-design.md](../design/2026-08-21-1-photo-list-window-preload-design.md) 第 9.1 节
-- **方案**：
-  - 根因一：`updateActiveNav` 用视口坐标 `top <= 80` 判断分割线越过顶部，但照片列表顶端在视口下方约 200px，阈值永不成立，恒走「取 top 最小分割线」兜底，跳转后高亮落在错误段、滚动时滞后。改为相对滚动容器顶端换算
-  - 根因二：`handleNavJump` 以分割线为锚点 `scrollIntoView`，受连拍折叠渲染与 DOM 渲染时机影响有数行偏差。改为以分段首张渲染照片卡为锚点，且等流渲染完成再滚动
-- **验收**：
-  - [x] 点击导航后目标段首屏落位准确，高亮与目标段一致（2026-08-21 评估实测：点击「2026 年 2 月」导航项后窗口重定位、active 高亮与目标一致）
-  - [x] 滚动时高亮实时跟随当前段，无滞后一段的现象（updateActiveNav 已改为相对滚动容器换算，PhotoManagement.vue:220；实测跳转后高亮正确）
-  - [ ] 连拍折叠（精细/模糊）下同样准确（未做运行时专项验证）
-  - [x] `pnpm build` 通过
-- **评估**：8.5（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
-
-### LB5 散片自动时间线 + 时间线管理页
-
-- **用户原始描述**：有些照片没有对应时间线，提供「未分类」组别是对的，但导航栏没有锚点，可以从后端数据上直接提供 `2026-08-散片1` 作为 timeline（自动填充，提供新拍摄活动后重算刷新）；需要一个重新刷新时间线的入口，整个时间线的编辑保存做成独立页面。
-- **状态**：Done（2026-08-21 生成完成，后端 `go test` + 前端 `pnpm build` 通过；JSON 迁移导入与重算待用户启动后端验证）
-- **背景**：散图 timeline 为空串，活动分段导航无锚点。timeline 事件当前存 `data/timeline.json`，仅导入时单向匹配。设计文档：[docs/design/2026-08-21-1-photo-list-window-preload-design.md](../design/2026-08-21-1-photo-list-window-preload-design.md) 第 9.2 节
-- **方案**：
-  - 散片分组：按时间排序后，相邻活动事件之间的散片串按月份切开，命名 `YYYY-MM-散片N`（N 为该月内散片段序号）
-  - 重算语义：photo 表加 `timeline_manual` 布尔列，人工改过的值重算时保留；既非手动也非事件表匹配也非散片名的现值视为过期重算
-  - 存储：timeline 事件迁数据库表 `timeline_events`（不建外键），首次加载检测表空且 JSON 存在则一次性导入，JSON 退役
-  - 接口：TimelineService 扩展 ListEvents / SaveEvent / DeleteEvent + RecomputeTimelines（异步 + 进度轮询，复用 RebuildBurstGroups 模式），走 proto codegen 管线
-  - 前端：`/timelines` 独立管理页（事件增删改 + 重算进度 + 散片组只读展示），图片管理筛选数据源改 ListEvents，保留「未分类」sentinel 兼容未重算的存量照片
-- **分析**：与用户确认的三个决策点：散片粒度（活动间隔内按月切）、重算保留人工值（加 timeline_manual 列）、事件迁数据库表（放弃 JSON）。散片名是自动产物，重算整组刷新，不承诺稳定。实现落点：表名 timeline_events（复数）、proto 类型 TimelineEventDetail（避开 genCURD 已生成的 TimelineEventInfo）、散片名判定/分组/JSON 解析为纯函数单测覆盖
-- **验收**：
-  - [ ] 散片按规则正确生成，活动分段导航中每个散片组有锚点可跳转（需运行时验证：DB 散片组 0 条，重算未执行）
-  - [ ] 管理页事件增删改保存生效，重算进度可见，完成后照片 timeline 刷新（增删改/轮询代码审查通过；重算未执行，运行时效果待验）
-  - [ ] 人工改过的 timeline 在重算后保留（timeline_manual 列已就绪但全 0，需重算后验证）
-  - [x] JSON 一次性导入成功，旧 timeline.json 退役（评估实测：timeline_events 表 29 条事件、created_at 同批次 2026-08-21 14:45:08，ListEvents 正常返回）
-  - [x] 图片管理活动筛选下拉含散片组，未重算存量照片仍可筛「未分类」（「未分类」项在筛选下拉中，sentinel API total=190 与 DB 一致）
-  - [x] `go test` + `pnpm build` 通过（评估复跑 go test PASS 0.133s）
-- **评估**：7.9（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
-
-### LB6 图片管理顶栏重排（单行 + 弹出收纳）
-
-- **用户原始描述**：增加了一堆功能后，图片管理上方的筛选搜索排序等功能拥挤，位置错乱，需要重新编排 UI 布局。
-- **状态**：Done（2026-08-21 生成完成，`pnpm build` 通过）
-- **背景**：顶部三行（动作行 / 统计 + 视图控制行 / 筛选行）功能叠加后拥挤错乱。设计文档：[docs/design/2026-08-21-1-photo-list-window-preload-design.md](../design/2026-08-21-1-photo-list-window-preload-design.md) 第 9.3 节
-- **方案**：顶栏收敛为单行：左 = 标题 + 文件名搜索 +「筛选·视图」弹出触发器，右 = VLM / Embed / 连拍分组 / 上传四按钮；日期 / 活动 / 展示级别 / 分段 / 排序 / 统计收进 NPopover 弹出面板（就地渲染），按视图组 / 筛选组 / 统计组邻近性分组，面板内操作即时生效，筛选激活时触发器显示角标计数
-- **验收**：
-  - [x] 顶栏单行，宽度不足时优先压缩标题与搜索框，不换行不堆叠（2026-08-21 评估实测：顶栏文案「图片管理 共1323张 展示:精细连拍 按月 ↓降序 更多 | VLM Embed 连拍分组 上传」单行呈现；toolbar-left min-width:0 压缩策略在码）
-  - [x] 弹出面板内所有原功能可达，操作即时生效（NPopover :to=false 就地渲染，面板含搜索/筛选/统计/重置；功能可达性经代码审查确认，交互细节未逐项运行时验证）
-  - [x] 筛选激活时触发器有角标提示，重置可清空（NBadge activeFilterCount 角标在码）
-  - [x] 布局符合 docs/ui-rules.md（8px 网格、邻近性、左信息右操作；实测布局无堆叠错乱）
-  - [x] `pnpm build` 通过
-- **评估**：8.4（正确性 8.5 健壮性 7.5 可维护性 7 简洁性 8 准确性 9 完整性 8 一致性 9 交互体验 8），详见 [2026-08-21-photo-list-lb-series.json](../data/eval_reports/2026-08-21-photo-list-lb-series.json)。专题中枢：[2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
-
-### LB7 PhotoManagement.vue 拆分
-
-- **状态**：Done（2026-08-22，组件拆分、前端构建与测试通过）
-- **背景**：LB 系列评估发现 PhotoManagement.vue 已达 1030 行（模板+脚本+样式混排），LB1-LB6 六个条目的分段浏览、窗口滚动、导航高亮、顶栏收纳功能全部叠加于单文件，任何后续浏览体验调整都要在千行文件中定位。与 W12（ImportWorkflow.vue 1010 行拆分）同级的可维护性债务，非功能缺陷。
-- **方案**：页面层保留队列与弹窗编排；顶栏筛选与动作拆至独立组件；列表浏览、导航定位与滚动补偿拆至独立组件，通过明确 props/事件保持原行为。
-- **分析**：详见 [2026-08-22-1-photo-list-maintainability-design.md](design/2026-08-22-1-photo-list-maintainability-design.md)。
-- **验收**：
-  - [x] 按功能域拆分（顶栏工具栏/分段导航/滚动窗口逻辑等），单文件行数降至合理范围
-  - [x] 拆分后浏览/跳转/筛选行为不变（类型检查与生产构建通过）
-
-### LB8 LB 系列遗留小项（请求去重 / 静默失败 / 单测边界 / UTC 分段键）
-
-- **状态**：Done（2026-08-22，前后端测试与前端构建通过）
-- **背景**：LB 系列评估发现的四项低危遗留：① usePhotos fetchPage 无请求去重，快速滚动时同一页可能重复请求；② fetchSegments/统计获取失败仅 console.warn，用户无感知；③ 散片分组单测缺跨年边界（2026-12-31/2027-01-01）与单月多段序号递增断言；④ 分段日期/月份键全链路 UTC 口径，东八区凌晨 0-8 点拍摄照片按天分段归前一天（当前库月边界实测影响 0 张，理论瑕疵）。
-- **方案**：按查询参数合并在途页请求；辅助数据失败显示页面提示；补散片边界测试；前端按浏览器本地日期计算日/月分段键。
-- **分析**：详见 [2026-08-22-1-photo-list-maintainability-design.md](design/2026-08-22-1-photo-list-maintainability-design.md)。
-- **验收**：
-  - [x] 四项各自闭环或明确接受不改
+> BG1 连拍分组、LB1-LB8 照片列表浏览、D1/D2 日常小需求已在 v1.0.10 归档：[docs/archive/v1.0.10.md](archive/v1.0.10.md)
+> 照片列表浏览专题中枢：[docs/design/2026-08-20-1-photo-list-hub.md](design/2026-08-20-1-photo-list-hub.md)
+> 归档时遗留的（用户）实机验证项（连拍抽检调阈值、时间线重算、跨时区分段核对、Windows 双开验证）随日常使用验证，不另立条目。
 
 ---
 
@@ -304,9 +135,9 @@
 
 ### 导入工作流（Windows 客户端）
 
-> W1-W11 已在 v1.0.9 归档：[docs/archive/v1.0.9.md](../archive/v1.0.9.md)
-> 设计方案：[docs/design/2026-08-11-import-workflow.md](../design/2026-08-11-import-workflow.md)
-> 中枢文档：[docs/design/2026-08-11-import-workflow-hub.md](../design/2026-08-11-import-workflow-hub.md)
+> W1-W11 已在 v1.0.9 归档：[docs/archive/v1.0.9.md](archive/v1.0.9.md)
+> 设计方案：[docs/design/2026-08-11-import-workflow.md](design/2026-08-11-import-workflow.md)
+> 中枢文档：[docs/design/2026-08-11-import-workflow-hub.md](design/2026-08-11-import-workflow-hub.md)
 > 实机验证遗留项（5 项）与服务器地址记忆等轻量小项，按用户决策转入日常使用中的缺陷修复流程，不立条目。
 
 ### W12 ImportWorkflow.vue 拆分
@@ -320,41 +151,6 @@
   - [ ] 拆分后三步流程行为不变
 
 ---
-
-### 日常小需求
-
-### D1 客户端单实例启动
-
-- **用户原始描述**：客户端启动后，如果有旧的客户端正在运行，先关闭旧的客户端，让客户端成为只能单开的软件。重新编译客户端之后，直接双击新的客户端即可。
-- **状态**：Done
-- **背景**：客户端为 Windows Wails 应用（`client/`），当前无任何单实例约束。用户双开时会出现两个窗口、日志交错写入同一文件（`logging.go` 以追加模式打开）。用户更新客户端的工作流是重新编译后直接双击新版 exe，期望旧实例自动退出，无需手动找进程关闭。
-- **方案**：在 `client/` 新增 `singleinstance_windows.go`（+ 对应 `_other.go` 空实现，沿用 `logging_windows.go`/`logging_other.go` 的平台分文件模式），在 `main()` 中 `setupLogging()` 之后、`wails.Run` 之前调用 `ensureSingleInstance()`：
-  - **命名互斥体检测**：用 `golang.org/x/sys/windows`（已有依赖 v0.30.0，不引新包）创建命名互斥体（`Local\PhotoAgentSingleInstance`）。创建成功即为首实例，持有句柄直至进程退出并写 PID 文件；已存在则判定为旧实例在运行。
-  - **直接强杀旧实例**：新实例检测到旧实例后，读 PID 文件（`configDir()/pid`）执行 `windows.OpenProcess+TerminateProcess` 强杀，随后轮询等待互斥体释放（旧进程完全退出），再重新创建互斥体占坑、重写 PID 文件，成为新的守护者继续启动。
-  - 单元测试：平台分文件使核心逻辑在 Linux 无法直接测试，将可测部分（PID 文件读写纯函数）拆出测试；Windows 路径留待用户实机验证。
-- **分析**：首版采用「互斥体 + 关闭事件通知优雅退出 + 超时强杀兜底」，实测不稳定：关闭事件在窗口启动完成（startup）后才创建，而新实例在 main 里就尝试打开，存在时序竞态，撞上时通知失效只能等超时强杀，偶发双开。用户确认改为直接强杀方案（放弃优雅退出，旧窗口位置/尺寸不保存），彻底消除时序竞态。强杀依赖的 PID 文件与互斥体在同一函数内紧邻写入，无竞态窗口；旧实例进程退出释放互斥体后新实例重新占坑，后续实例仍可正确检测。日志文件交错写入问题随单开自然消除。
-- **验收**：
-  - [ ] 双开客户端：第二个实例启动时第一个实例自动退出，新实例正常显示窗口（（用户）Windows 实机验证）
-  - [x] 单元测试 PASS（PID 文件相关纯函数）；Linux 下 `go build` 交叉编译 Windows 通过
-  - [ ] （用户）Windows 实机双开验证 + 重编译后直接双击新 exe 场景验证
-
-### D2 对话列表多选批量删除
-
-- **用户原始描述**：界面上左侧对话列表提供一个多选操作，点击后每一个对话前面出现复选框，多选操作按钮变成删除按钮，删除按钮在当前"对话"文案后面靠右展示。
-- **状态**：Done
-- **背景**：左侧边栏 `web/src/components/SideMenu.vue` 的对话列表当前纯展示 + 单击跳转，无任何删除入口（现有删除入口在 `ChatView.vue` 内，一次只能删当前打开的一个会话，删除多轮对话需逐个进入逐个删）。后端已有 `DELETE /api/chat/sessions/{id}`（`agent/chain/server.py:510`），前端 `useChat.ts` 已有 `deleteSession`，批量删除只需前端循环调用，无后端改动。
-- **方案**：仅改 `SideMenu.vue`（约 +80 行）：
-  - **入口与位置**：在 `chat-area-header`（现有"对话"标题行）右侧靠右增加一个文字按钮。默认态文案"多选"，点击进入多选模式，按钮变为"删除"（危险色）。再次点击"删除"执行批量删除。多选模式下点击"对话"标题或按 Esc 可退出多选模式（退出时清空选中）。
-  - **多选模式交互**：每个对话项左侧显示复选框（NCheckbox），点击整行切换勾选；多选模式下屏蔽原有的单击跳转路由行为。顶部"新建对话"等菜单不受影响。
-  - **确认与执行**：点"删除"弹确认对话框（"删除 N 个对话？删除后不可恢复"）。确认后串行调用 `deleteSession` 逐个删除，完成后 toast 提示成功数（部分失败时提示失败数），刷新会话列表并退出多选模式。若删除的会话包含当前打开的会话，复用 `deleteSession` 内已有的 currentSession 清理逻辑（重定向 `/photos`）。
-  - **视觉**：复选框列表布局遵循 8px 网格，删除按钮用红色语义色，选中态用现有 active 高亮样式。
-- **分析**：交互上与 NaiveUI 的 NCheckbox/NPopconfirm 组件无冲突，纯前端改动，风险低。确认弹窗方案已与用户确认（批量删除不可恢复，误触代价高）。
-- **验收**：
-  - [x] 默认态"对话"标题右侧靠右显示"多选"入口；点击进入多选模式后变为红色"删除"按钮
-  - [x] 多选模式下每个对话项前出现复选框，可勾选/取消；单击不再触发路由跳转
-  - [x] 点删除弹出确认框，确认后所选会话全部从列表移除；取消则不删除
-  - [x] 删除含当前会话时正确重定向；全部会话删空后显示"暂无对话"
-  - [x] `pnpm build`（vue-tsc + vite）通过
 
 ## 决策历史
 
@@ -371,3 +167,4 @@
 - **2026-08-21**：LB4/LB5/LB6 完成生成。LB4 修坐标换算（相对滚动容器）与照片卡锚点；LB6 顶栏单行 + NPopover 收纳；LB5 后端 timeline_events 表 + timeline_manual 列 + CRUD/重算接口 + JSON 一次性迁移 + 散片分组单测，前端 /timelines 管理页 + 筛选数据源切 ListEvents。
 - **2026-08-21**：LB 系列整体评估（8.1 通过）。运行时实测：分段 offset/count 与 DB 逐项一致、导航跳转高亮正确、sentinel 190=190、JSON 迁移 29 条已发生；LB5 重算未执行（散片运行时效果悬置）。新增 LB7（PhotoManagement.vue 1030 行拆分）、LB8（四项低危遗留）。子代理三项高严重误报（offset 排序方向/排序 UI 残留/气泡无延迟）经复测全部排除。
 - **2026-08-22**：LB7/LB8 完成。图片管理页按顶栏、列表浏览、页面编排拆分；请求去重、辅助请求失败提示、本地时区分段键和跨年/同月序号边界测试闭环。
+- **2026-08-22**：v1.0.10 版本归档。连拍分组（BG1，P1-P4/P6 代码全部落地）、照片列表浏览（LB1-LB8，整体评估 8.1）、日常小需求（D1/D2）全部完成。BG1 经用户确认按 Done 归档，其 P5 真实库抽检调阈值与 LB5 时间线重算、跨时区分段核对、D1 Windows 双开一并转入日常使用验证，不另立条目。已完成条目迁至 `docs/archive/v1.0.10.md`。
