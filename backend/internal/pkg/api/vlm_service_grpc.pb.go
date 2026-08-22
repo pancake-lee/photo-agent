@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VlmService_StartVlmQueue_FullMethodName     = "/api.VlmService/StartVlmQueue"
-	VlmService_StopVlmQueue_FullMethodName      = "/api.VlmService/StopVlmQueue"
-	VlmService_GetVlmQueueStatus_FullMethodName = "/api.VlmService/GetVlmQueueStatus"
-	VlmService_DescribePhoto_FullMethodName     = "/api.VlmService/DescribePhoto"
+	VlmService_StartVlmQueue_FullMethodName       = "/api.VlmService/StartVlmQueue"
+	VlmService_StopVlmQueue_FullMethodName        = "/api.VlmService/StopVlmQueue"
+	VlmService_GetVlmQueueStatus_FullMethodName   = "/api.VlmService/GetVlmQueueStatus"
+	VlmService_DescribePhoto_FullMethodName       = "/api.VlmService/DescribePhoto"
+	VlmService_GetDescribeProgress_FullMethodName = "/api.VlmService/GetDescribeProgress"
 )
 
 // VlmServiceClient is the client API for VlmService service.
@@ -39,6 +40,8 @@ type VlmServiceClient interface {
 	GetVlmQueueStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetVlmQueueStatusResponse, error)
 	// 单张照片触发 VLM 描述
 	DescribePhoto(ctx context.Context, in *DescribePhotoRequest, opts ...grpc.CallOption) (*DescribePhotoResponse, error)
+	// 查询单张照片 VLM 描述进度
+	GetDescribeProgress(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetDescribeProgressResponse, error)
 }
 
 type vlmServiceClient struct {
@@ -89,6 +92,16 @@ func (c *vlmServiceClient) DescribePhoto(ctx context.Context, in *DescribePhotoR
 	return out, nil
 }
 
+func (c *vlmServiceClient) GetDescribeProgress(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetDescribeProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDescribeProgressResponse)
+	err := c.cc.Invoke(ctx, VlmService_GetDescribeProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VlmServiceServer is the server API for VlmService service.
 // All implementations must embed UnimplementedVlmServiceServer
 // for forward compatibility.
@@ -103,6 +116,8 @@ type VlmServiceServer interface {
 	GetVlmQueueStatus(context.Context, *Empty) (*GetVlmQueueStatusResponse, error)
 	// 单张照片触发 VLM 描述
 	DescribePhoto(context.Context, *DescribePhotoRequest) (*DescribePhotoResponse, error)
+	// 查询单张照片 VLM 描述进度
+	GetDescribeProgress(context.Context, *Empty) (*GetDescribeProgressResponse, error)
 	mustEmbedUnimplementedVlmServiceServer()
 }
 
@@ -124,6 +139,9 @@ func (UnimplementedVlmServiceServer) GetVlmQueueStatus(context.Context, *Empty) 
 }
 func (UnimplementedVlmServiceServer) DescribePhoto(context.Context, *DescribePhotoRequest) (*DescribePhotoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DescribePhoto not implemented")
+}
+func (UnimplementedVlmServiceServer) GetDescribeProgress(context.Context, *Empty) (*GetDescribeProgressResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDescribeProgress not implemented")
 }
 func (UnimplementedVlmServiceServer) mustEmbedUnimplementedVlmServiceServer() {}
 func (UnimplementedVlmServiceServer) testEmbeddedByValue()                    {}
@@ -218,6 +236,24 @@ func _VlmService_DescribePhoto_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VlmService_GetDescribeProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VlmServiceServer).GetDescribeProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VlmService_GetDescribeProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VlmServiceServer).GetDescribeProgress(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VlmService_ServiceDesc is the grpc.ServiceDesc for VlmService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -240,6 +276,10 @@ var VlmService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DescribePhoto",
 			Handler:    _VlmService_DescribePhoto_Handler,
+		},
+		{
+			MethodName: "GetDescribeProgress",
+			Handler:    _VlmService_GetDescribeProgress_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

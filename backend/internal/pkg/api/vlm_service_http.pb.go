@@ -20,6 +20,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationVlmServiceDescribePhoto = "/api.VlmService/DescribePhoto"
+const OperationVlmServiceGetDescribeProgress = "/api.VlmService/GetDescribeProgress"
 const OperationVlmServiceGetVlmQueueStatus = "/api.VlmService/GetVlmQueueStatus"
 const OperationVlmServiceStartVlmQueue = "/api.VlmService/StartVlmQueue"
 const OperationVlmServiceStopVlmQueue = "/api.VlmService/StopVlmQueue"
@@ -27,6 +28,8 @@ const OperationVlmServiceStopVlmQueue = "/api.VlmService/StopVlmQueue"
 type VlmServiceHTTPServer interface {
 	// DescribePhoto 单张照片触发 VLM 描述
 	DescribePhoto(context.Context, *DescribePhotoRequest) (*DescribePhotoResponse, error)
+	// GetDescribeProgress 查询单张照片 VLM 描述进度
+	GetDescribeProgress(context.Context, *Empty) (*GetDescribeProgressResponse, error)
 	// GetVlmQueueStatus 查询 VLM 队列状态
 	GetVlmQueueStatus(context.Context, *Empty) (*GetVlmQueueStatusResponse, error)
 	// StartVlmQueue 启动 VLM 队列处理
@@ -41,6 +44,7 @@ func RegisterVlmServiceHTTPServer(s *http.Server, srv VlmServiceHTTPServer) {
 	r.POST("/api/v1/vlm/queue/stop", _VlmService_StopVlmQueue0_HTTP_Handler(srv))
 	r.GET("/api/v1/vlm/queue/status", _VlmService_GetVlmQueueStatus0_HTTP_Handler(srv))
 	r.POST("/api/v1/photos/{id}/describe", _VlmService_DescribePhoto0_HTTP_Handler(srv))
+	r.GET("/api/v1/vlm/describe/progress", _VlmService_GetDescribeProgress0_HTTP_Handler(srv))
 }
 
 func _VlmService_StartVlmQueue0_HTTP_Handler(srv VlmServiceHTTPServer) func(ctx http.Context) error {
@@ -131,9 +135,30 @@ func _VlmService_DescribePhoto0_HTTP_Handler(srv VlmServiceHTTPServer) func(ctx 
 	}
 }
 
+func _VlmService_GetDescribeProgress0_HTTP_Handler(srv VlmServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in Empty
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationVlmServiceGetDescribeProgress)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetDescribeProgress(ctx, req.(*Empty))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetDescribeProgressResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type VlmServiceHTTPClient interface {
 	// DescribePhoto 单张照片触发 VLM 描述
 	DescribePhoto(ctx context.Context, req *DescribePhotoRequest, opts ...http.CallOption) (rsp *DescribePhotoResponse, err error)
+	// GetDescribeProgress 查询单张照片 VLM 描述进度
+	GetDescribeProgress(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetDescribeProgressResponse, err error)
 	// GetVlmQueueStatus 查询 VLM 队列状态
 	GetVlmQueueStatus(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetVlmQueueStatusResponse, err error)
 	// StartVlmQueue 启动 VLM 队列处理
@@ -158,6 +183,20 @@ func (c *VlmServiceHTTPClientImpl) DescribePhoto(ctx context.Context, in *Descri
 	opts = append(opts, http.Operation(OperationVlmServiceDescribePhoto))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetDescribeProgress 查询单张照片 VLM 描述进度
+func (c *VlmServiceHTTPClientImpl) GetDescribeProgress(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetDescribeProgressResponse, error) {
+	var out GetDescribeProgressResponse
+	pattern := "/api/v1/vlm/describe/progress"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationVlmServiceGetDescribeProgress))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

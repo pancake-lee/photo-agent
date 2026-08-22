@@ -147,6 +147,7 @@ Class | Method | HTTP request | Description
 *TimelineServiceApi* | [**timeline_service_recompute_timelines**](docs/TimelineServiceApi.md#timeline_service_recompute_timelines) | **POST** /api/v1/timeline-events/recompute | 
 *TimelineServiceApi* | [**timeline_service_save_event**](docs/TimelineServiceApi.md#timeline_service_save_event) | **POST** /api/v1/timeline-events | 
 *VlmServiceApi* | [**vlm_service_describe_photo**](docs/VlmServiceApi.md#vlm_service_describe_photo) | **POST** /api/v1/photos/{id}/describe | 
+*VlmServiceApi* | [**vlm_service_get_describe_progress**](docs/VlmServiceApi.md#vlm_service_get_describe_progress) | **GET** /api/v1/vlm/describe/progress | 
 *VlmServiceApi* | [**vlm_service_get_vlm_queue_status**](docs/VlmServiceApi.md#vlm_service_get_vlm_queue_status) | **GET** /api/v1/vlm/queue/status | 
 *VlmServiceApi* | [**vlm_service_start_vlm_queue**](docs/VlmServiceApi.md#vlm_service_start_vlm_queue) | **POST** /api/v1/vlm/queue/start | 
 *VlmServiceApi* | [**vlm_service_stop_vlm_queue**](docs/VlmServiceApi.md#vlm_service_stop_vlm_queue) | **POST** /api/v1/vlm/queue/stop | 
@@ -182,6 +183,7 @@ Class | Method | HTTP request | Description
  - [ApiGetAttributeValuesResponse](docs/ApiGetAttributeValuesResponse.md)
  - [ApiGetBurstGroupsConfigResponse](docs/ApiGetBurstGroupsConfigResponse.md)
  - [ApiGetBurstGroupsStatusResponse](docs/ApiGetBurstGroupsStatusResponse.md)
+ - [ApiGetDescribeProgressResponse](docs/ApiGetDescribeProgressResponse.md)
  - [ApiGetPhotoDetailResponse](docs/ApiGetPhotoDetailResponse.md)
  - [ApiGetPhotoGroupListResponse](docs/ApiGetPhotoGroupListResponse.md)
  - [ApiGetPhotoListResponse](docs/ApiGetPhotoListResponse.md)

@@ -711,6 +711,19 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.GetPhotosByTimelineResponse'
+    /api/v1/vlm/describe/progress:
+        get:
+            tags:
+                - VlmService
+            description: 查询单张照片 VLM 描述进度
+            operationId: VlmService_GetDescribeProgress
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.GetDescribeProgressResponse'
     /api/v1/vlm/queue/start:
         post:
             tags:
@@ -1298,6 +1311,13 @@ components:
                 coarseGroupCount:
                     type: integer
                     format: int32
+        api.GetDescribeProgressResponse:
+            type: object
+            properties:
+                processingIds:
+                    type: array
+                    items:
+                        type: string
         api.GetPhotoDetailResponse:
             type: object
             properties:

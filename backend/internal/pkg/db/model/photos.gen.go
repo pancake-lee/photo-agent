@@ -20,6 +20,8 @@ type Photo struct {
 	TimelineManual     int32     `gorm:"column:timeline_manual;not null" json:"timeline_manual"`
 	Tags               string    `gorm:"column:tags;type:TEXT" json:"tags"`
 	Description        string    `gorm:"column:description;not null" json:"description"`
+	DescriptionModel   string    `gorm:"column:description_model;not null" json:"description_model"`
+	DescriptionTime    string    `gorm:"column:description_time;not null" json:"description_time"`
 	Objects            string    `gorm:"column:objects;not null" json:"objects"`
 	Colors             string    `gorm:"column:colors;not null" json:"colors"`
 	Scene              string    `gorm:"column:scene;not null" json:"scene"`

@@ -285,6 +285,9 @@ describe("VlmServiceApi", () => {
     const id: string = "id_example"
     return expect(instance.vlmServiceDescribePhoto(body, id, {})).resolves.toBe(null)
   })
+  test("vlmServiceGetDescribeProgress", () => {
+    return expect(instance.vlmServiceGetDescribeProgress({})).resolves.toBe(null)
+  })
   test("vlmServiceGetVlmQueueStatus", () => {
     return expect(instance.vlmServiceGetVlmQueueStatus({})).resolves.toBe(null)
   })

@@ -378,6 +378,50 @@ func (x *DescribePhotoResponse) GetQueued() bool {
 	return false
 }
 
+type GetDescribeProgressResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProcessingIds []string               `protobuf:"bytes,1,rep,name=processing_ids,json=processingIds,proto3" json:"processing_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDescribeProgressResponse) Reset() {
+	*x = GetDescribeProgressResponse{}
+	mi := &file_vlm_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDescribeProgressResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDescribeProgressResponse) ProtoMessage() {}
+
+func (x *GetDescribeProgressResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vlm_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDescribeProgressResponse.ProtoReflect.Descriptor instead.
+func (*GetDescribeProgressResponse) Descriptor() ([]byte, []int) {
+	return file_vlm_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetDescribeProgressResponse) GetProcessingIds() []string {
+	if x != nil {
+		return x.ProcessingIds
+	}
+	return nil
+}
+
 var File_vlm_service_proto protoreflect.FileDescriptor
 
 const file_vlm_service_proto_rawDesc = "" +
@@ -402,7 +446,9 @@ const file_vlm_service_proto_rawDesc = "" +
 	"\x14DescribePhotoRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"/\n" +
 	"\x15DescribePhotoResponse\x12\x16\n" +
-	"\x06queued\x18\x01 \x01(\bR\x06queued2\xa6\x03\n" +
+	"\x06queued\x18\x01 \x01(\bR\x06queued\"D\n" +
+	"\x1bGetDescribeProgressResponse\x12%\n" +
+	"\x0eprocessing_ids\x18\x01 \x03(\tR\rprocessingIds2\x92\x04\n" +
 	"\n" +
 	"VlmService\x12j\n" +
 	"\rStartVlmQueue\x12\x19.api.StartVlmQueueRequest\x1a\x1a.api.StartVlmQueueResponse\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api/v1/vlm/queue/start\x12X\n" +
@@ -410,7 +456,9 @@ const file_vlm_service_proto_rawDesc = "" +
 	".api.Empty\x1a\x19.api.StopVlmQueueResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/v1/vlm/queue/stop\x12a\n" +
 	"\x11GetVlmQueueStatus\x12\n" +
 	".api.Empty\x1a\x1e.api.GetVlmQueueStatusResponse\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/api/v1/vlm/queue/status\x12o\n" +
-	"\rDescribePhoto\x12\x19.api.DescribePhotoRequest\x1a\x1a.api.DescribePhotoResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/api/v1/photos/{id}/describeB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
+	"\rDescribePhoto\x12\x19.api.DescribePhotoRequest\x1a\x1a.api.DescribePhotoResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/api/v1/photos/{id}/describe\x12j\n" +
+	"\x13GetDescribeProgress\x12\n" +
+	".api.Empty\x1a .api.GetDescribeProgressResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/vlm/describe/progressB\x1eZ\x1cbackend/internal/pkg/api;apib\x06proto3"
 
 var (
 	file_vlm_service_proto_rawDescOnce sync.Once
@@ -424,29 +472,32 @@ func file_vlm_service_proto_rawDescGZIP() []byte {
 	return file_vlm_service_proto_rawDescData
 }
 
-var file_vlm_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_vlm_service_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_vlm_service_proto_goTypes = []any{
-	(*StartVlmQueueRequest)(nil),      // 0: api.StartVlmQueueRequest
-	(*StartVlmQueueResponse)(nil),     // 1: api.StartVlmQueueResponse
-	(*StopVlmQueueResponse)(nil),      // 2: api.StopVlmQueueResponse
-	(*VlmQueueStatus)(nil),            // 3: api.VlmQueueStatus
-	(*GetVlmQueueStatusResponse)(nil), // 4: api.GetVlmQueueStatusResponse
-	(*DescribePhotoRequest)(nil),      // 5: api.DescribePhotoRequest
-	(*DescribePhotoResponse)(nil),     // 6: api.DescribePhotoResponse
-	(*Empty)(nil),                     // 7: api.Empty
+	(*StartVlmQueueRequest)(nil),        // 0: api.StartVlmQueueRequest
+	(*StartVlmQueueResponse)(nil),       // 1: api.StartVlmQueueResponse
+	(*StopVlmQueueResponse)(nil),        // 2: api.StopVlmQueueResponse
+	(*VlmQueueStatus)(nil),              // 3: api.VlmQueueStatus
+	(*GetVlmQueueStatusResponse)(nil),   // 4: api.GetVlmQueueStatusResponse
+	(*DescribePhotoRequest)(nil),        // 5: api.DescribePhotoRequest
+	(*DescribePhotoResponse)(nil),       // 6: api.DescribePhotoResponse
+	(*GetDescribeProgressResponse)(nil), // 7: api.GetDescribeProgressResponse
+	(*Empty)(nil),                       // 8: api.Empty
 }
 var file_vlm_service_proto_depIdxs = []int32{
 	3, // 0: api.GetVlmQueueStatusResponse.status:type_name -> api.VlmQueueStatus
 	0, // 1: api.VlmService.StartVlmQueue:input_type -> api.StartVlmQueueRequest
-	7, // 2: api.VlmService.StopVlmQueue:input_type -> api.Empty
-	7, // 3: api.VlmService.GetVlmQueueStatus:input_type -> api.Empty
+	8, // 2: api.VlmService.StopVlmQueue:input_type -> api.Empty
+	8, // 3: api.VlmService.GetVlmQueueStatus:input_type -> api.Empty
 	5, // 4: api.VlmService.DescribePhoto:input_type -> api.DescribePhotoRequest
-	1, // 5: api.VlmService.StartVlmQueue:output_type -> api.StartVlmQueueResponse
-	2, // 6: api.VlmService.StopVlmQueue:output_type -> api.StopVlmQueueResponse
-	4, // 7: api.VlmService.GetVlmQueueStatus:output_type -> api.GetVlmQueueStatusResponse
-	6, // 8: api.VlmService.DescribePhoto:output_type -> api.DescribePhotoResponse
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
+	8, // 5: api.VlmService.GetDescribeProgress:input_type -> api.Empty
+	1, // 6: api.VlmService.StartVlmQueue:output_type -> api.StartVlmQueueResponse
+	2, // 7: api.VlmService.StopVlmQueue:output_type -> api.StopVlmQueueResponse
+	4, // 8: api.VlmService.GetVlmQueueStatus:output_type -> api.GetVlmQueueStatusResponse
+	6, // 9: api.VlmService.DescribePhoto:output_type -> api.DescribePhotoResponse
+	7, // 10: api.VlmService.GetDescribeProgress:output_type -> api.GetDescribeProgressResponse
+	6, // [6:11] is the sub-list for method output_type
+	1, // [1:6] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -464,7 +515,7 @@ func file_vlm_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vlm_service_proto_rawDesc), len(file_vlm_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

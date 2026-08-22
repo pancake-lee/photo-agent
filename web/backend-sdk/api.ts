@@ -608,6 +608,19 @@ export interface ApiGetBurstGroupsStatusResponse {
 /**
  * 
  * @export
+ * @interface ApiGetDescribeProgressResponse
+ */
+export interface ApiGetDescribeProgressResponse {
+    /**
+     * 
+     * @type {Array<string>}
+     * @memberof ApiGetDescribeProgressResponse
+     */
+    processingIds?: Array<string>;
+}
+/**
+ * 
+ * @export
  * @interface ApiGetPhotoDetailResponse
  */
 export interface ApiGetPhotoDetailResponse {
@@ -5564,6 +5577,28 @@ export const VlmServiceApiFetchParamCreator = function (configuration?: Configur
             };
         },
         /**
+         * 查询单张照片 VLM 描述进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        vlmServiceGetDescribeProgress(options: any = {}): FetchArgs {
+            const localVarPath = `/api/v1/vlm/describe/progress`;
+            const localVarUrlObj = url.parse(localVarPath, true);
+            const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
+            // fix override query string Detail: https://stackoverflow.com/a/7517673/1077943
+            localVarUrlObj.search = null;
+            localVarRequestOptions.headers = Object.assign({}, localVarHeaderParameter, options.headers);
+
+            return {
+                url: url.format(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * 查询 VLM 队列状态
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5676,6 +5711,23 @@ export const VlmServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
+         * 查询单张照片 VLM 描述进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        vlmServiceGetDescribeProgress(options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<ApiGetDescribeProgressResponse> {
+            const localVarFetchArgs = VlmServiceApiFetchParamCreator(configuration).vlmServiceGetDescribeProgress(options);
+            return (fetch: FetchAPI = isomorphicFetch, basePath: string = BASE_PATH) => {
+                return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
+                    if (response.status >= 200 && response.status < 300) {
+                        return response.json();
+                    } else {
+                        throw response;
+                    }
+                });
+            };
+        },
+        /**
          * 查询 VLM 队列状态
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5748,6 +5800,14 @@ export const VlmServiceApiFactory = function (configuration?: Configuration, fet
             return VlmServiceApiFp(configuration).vlmServiceDescribePhoto(body, id, options)(fetch, basePath);
         },
         /**
+         * 查询单张照片 VLM 描述进度
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        vlmServiceGetDescribeProgress(options?: any) {
+            return VlmServiceApiFp(configuration).vlmServiceGetDescribeProgress(options)(fetch, basePath);
+        },
+        /**
          * 查询 VLM 队列状态
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5793,6 +5853,16 @@ export class VlmServiceApi extends BaseAPI {
      */
     public vlmServiceDescribePhoto(body: ApiDescribePhotoRequest, id: string, options?: any) {
         return VlmServiceApiFp(this.configuration).vlmServiceDescribePhoto(body, id, options)(this.fetch, this.basePath);
+    }
+
+    /**
+     * 查询单张照片 VLM 描述进度
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof VlmServiceApi
+     */
+    public vlmServiceGetDescribeProgress(options?: any) {
+        return VlmServiceApiFp(this.configuration).vlmServiceGetDescribeProgress(options)(this.fetch, this.basePath);
     }
 
     /**
