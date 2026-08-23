@@ -19,6 +19,8 @@ import (
 
 var errQuotaExceeded = errors.New("VLM API quota exceeded")
 
+var vlmHTTPClient = &http.Client{Timeout: 60 * time.Second}
+
 func describeImage(imagePath string) (string, string, error) {
 	cfg := conf.C.VLM
 
@@ -77,7 +79,7 @@ func describeImage(imagePath string) (string, string, error) {
 		return "", "", fmt.Errorf("build request failed: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := vlmHTTPClient.Do(httpReq)
 	if err != nil {
 		return "", "", fmt.Errorf("http request failed: %w", err)
 	}

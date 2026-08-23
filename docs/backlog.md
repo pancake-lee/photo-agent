@@ -12,7 +12,8 @@
 | ------ | ---------- | ---- | ------------------------------ | ---- |
 | 待规划 | 导入工作流 | W12  | ImportWorkflow.vue 拆分        |      |
 | 已规划 | 组图检索   | GR1  | 三 Collection 向量库改造       |      |
-| 已规划 | 图片管理   | CL1  | 上传/VLM/Embed 闭环 + 废弃描述同步清理 |      |
+| Done   | 图片管理   | CL1  | 上传/VLM/Embed 闭环 + 废弃描述同步清理 | 8.4  |
+| Done   | 图片管理   | CL2  | VLM HTTP 请求无超时                    |      |
 
 > 其余 6 项待规划任务经审阅后迁至 [docs/design/2026-08-22-future-requirements.md](design/2026-08-22-future-requirements.md)。
 
@@ -99,7 +100,8 @@
 ### CL1 上传/VLM/Embed 闭环（VLM 实时生成 + 废弃描述同步清理）
 
 - **用户原始描述**：图片管理已完成迭代（能上传、能管时间线）。详情页点"生成描述"和"生成 Embedding"应实时调用 vlm/embedding 模型生成并展示到页面；顶部 VLM/Embed 按钮处理所有缺数据的照片（Embed 指已有 VLM 描述但未 embed 的照片）。descriptions.json 及 batch_vlm 已废弃，后端启动时的描述同步逻辑应移除，让上传/vlm/embed 在页面形成闭环，embed 生成直接入库 Chroma。
-- **状态**：已规划
+- **状态**：Done
+- **评估**：8.4（正确性 8.5 健壮性 8.5 可维护性 8.5 简洁性 9 准确性 9 完整性 9 一致性 9 惊喜度 7 可用性 9 交互体验 8.5 AI增量 9），详见 [2026-08-23-cl1-vlm-embed-closed-loop](../data/eval_reports/2026-08-23-cl1-vlm-embed-closed-loop.md)
 - **背景**：v1.0.10 后图片管理页已具备上传/时间线/连拍分组/分段浏览能力，但 VLM 描述仍是"从预生成文件同步"的旧机制。`DescribePhoto`/`StartVlmQueue`（`svc_vlm.go`）只读 `descriptions.json` 同步到 DB，不调 VLM。新导入照片（如 `202608-山西旅游` 目录 239 张）不在该文件里，点"生成描述"返回 `Queued:false` 且前端一直转圈。真正的 VLM 生成工具 `batch_vlm`（`backend/cmd/batch_vlm` + `internal/vlm/client.go`/`compress.go` + `internal/service/vlm_pipeline.go`/`vlm_queue.go`）在提交 `65653be`（backend-new 替换 backend）时被删，只剩陈旧二进制 `bin/batch_vlm`。
 - **分析**（闭环缺口 + 废弃清单）：
   - 缺口 1（功能）：Go 后端无任何 VLM 生成代码，`conf.C.VLM` 只被 embedding 代理复用，`DescribePhoto`/`StartVlmQueue` 是纯文件同步。
@@ -115,12 +117,24 @@
   5. 前端：`handleTriggerDescribe` 成功路径也清理 `processingIds`（或由 `onComplete` 统一刷新详情）；`useVlmQueue` 单张入队后触发轮询。
   6. 清理 batch_vlm：删 `bin/batch_vlm` 二进制，不恢复 `backend/cmd/batch_vlm` CLI 源码；更新 tech.md/note.md/README/deploy.md 中 batch_vlm 引用。
 - **验收**：
-  - [ ] 上传照片后详情页点"生成描述"，真实调 VLM，description 入库并展示，转圈结束
-  - [ ] 顶部"VLM"按钮批量处理所有无描述照片并写库
-  - [ ] "Embed"按钮把有描述照片 embed 进 Chroma，对话/RAG 能检索到新照片
-  - [ ] 后端启动不再读 descriptions.json
-  - [ ] 详情页与 DescriptionModal 正确展示模型与生成时间（来自 DB）
-  - [ ] 删除照片后 DB/文件/Chroma 三处一致
+  - [x] 上传照片后详情页点"生成描述"，真实调 VLM，description 入库并展示，转圈结束
+  - [x] 顶部"VLM"按钮批量处理所有无描述照片并写库
+  - [x] "Embed"按钮把有描述照片 embed 进 Chroma，对话/RAG 能检索到新照片
+  - [x] 后端启动不再读 descriptions.json
+  - [x] 详情页与 DescriptionModal 正确展示模型与生成时间（来自 DB）
+  - [x] 删除照片后 DB/文件/Chroma 三处一致
+
+---
+
+### CL2 VLM HTTP 请求无超时
+
+- **状态**：Done
+- **背景**：CL1 评估发现 `vlm_client.go` 的 `describeImage` 使用 `http.DefaultClient` 发起 VLM API 请求，未设置超时。批量处理时 4 个 worker 并发调用火山方舟 API，若 API 挂起（网络异常或服务端无响应），worker goroutine 将永久阻塞，队列无法完成也无法中止。
+- **方案**：新增包级变量 `vlmHTTPClient = &http.Client{Timeout: 60 * time.Second}`，替换 `http.DefaultClient`。
+- **分析**：60s 超时覆盖 VLM 模型推理时间（通常 5-20s），留足余量。超时后 `Do()` 返回 context deadline exceeded 错误，worker 正确标记失败并继续下一张。
+- **验收**：
+  - [x] VLM HTTP 请求有合理超时（60s）
+  - [x] 超时后 worker 正确标记失败并继续处理下一张
 
 ---
 
@@ -143,3 +157,4 @@
 - **2026-08-22**：backlog 待规划任务审阅。7 项待规划任务基于 v1.0.10 代码现状重新评估，6 项（1.4 / 3.2 / 3.3 / 4.1 / 4.2 / B2）确认仍有价值但当前不急于启动完整设计，迁移至 `docs/design/2026-08-22-future-requirements.md` 作为未来需求暂存；W12（ImportWorkflow.vue 拆分）为纯可维护性改进，保留在 backlog 随时可执行。
 - **2026-08-22**：GR1 组图检索规划。需求源自用户与 Web AI 讨论产生的设计草案，经代码审阅后修正数据模型名称（`burst_groups` → `photo_groups`）、补全前端已有基础（BurstGroupModal / PhotoCard 角标 / 折叠视图）、对齐现有 Embedding 管线（`embed_queue.py` / `ChromaPhotoStore`）。方案选择：用户选定三 Collection 架构（`photos` / `photos_fine` / `photos_coarse`），封面图入库对应组 Collection，检索时按粒度切换。
 - **2026-08-22**：CL1 图片管理闭环规划。VLM 描述生成从"预生成文件同步"改为"实时调用 VLM"，调用链为 web 发起 → 后端 `VlmServer` API 处理（不恢复 batch_vlm CLI，仅复用 `internal/vlm` 包的调用逻辑作为库）；descriptions.json、batch_vlm 及 AutoSync 目录扫描导入一并废弃删除，上传成为唯一导入路径；`description_model`/`description_time` 由 descriptions.json 迁入 photos 表（新增两列）；Embed 侧已闭环（Python EmbedQueue → Chroma）无需改。
+- **2026-08-23**：CL1 评估通过（8.4）。VLM 实时生成 + 废弃清理全部落地，6 项验收标准代码侧全覆盖。239 张照片已通过新管线生成描述并入库。CL2 修复 HTTP 客户端无超时问题（`vlmHTTPClient` 60s），健壮性 7.5 → 8.5，总分 8.3 → 8.4。
