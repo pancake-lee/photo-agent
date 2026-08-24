@@ -13,8 +13,11 @@ import {
   NTooltip,
 } from 'naive-ui'
 import {
+  CheckboxOutline,
   CloudUploadOutline,
+  CloseOutline,
   GridOutline,
+  ImagesOutline,
   InformationCircleOutline,
   LayersOutline,
   PlayOutline,
@@ -40,6 +43,9 @@ const props = defineProps<{
   burstRunning: boolean
   burstProcessed: number
   burstTotal: number
+  selectionMode: boolean
+  selectedCount: number
+  showIntervalSelect: boolean
 }>()
 
 const searchFilename = defineModel<string>('searchFilename', { required: true })
@@ -59,6 +65,11 @@ const emit = defineEmits<{
   stopEmbed: []
   rebuildBurst: []
   upload: []
+  toggleSelectionMode: []
+  selectAll: []
+  clearSelection: []
+  intervalSelect: []
+  goToPostStudio: []
 }>()
 
 const segmentModeOptions = [
@@ -247,7 +258,15 @@ onBeforeUnmount(() => {
         </NPopover>
       </div>
     </div>
-    <NSpace :wrap="false">
+    <NSpace v-if="selectionMode" :wrap="false">
+      <span class="selection-count">已选 {{ selectedCount }} 张</span>
+      <NButton @click="$emit('selectAll')">全选</NButton>
+      <NButton :disabled="selectedCount === 0" @click="$emit('clearSelection')">取消全选</NButton>
+      <NButton v-if="showIntervalSelect" @click="$emit('intervalSelect')">区间选择</NButton>
+      <NButton type="primary" :disabled="selectedCount === 0" @click="$emit('goToPostStudio')"><template #icon><NIcon><ImagesOutline /></NIcon></template>图文工坊</NButton>
+      <NButton @click="$emit('toggleSelectionMode')"><template #icon><NIcon><CloseOutline /></NIcon></template>退出选择</NButton>
+    </NSpace>
+    <NSpace v-else :wrap="false">
       <NTooltip v-if="vlmRunning" trigger="hover"><template #trigger><NTag type="info" size="large" class="progress-tag" :style="{ cursor: 'pointer' }" @click="$emit('stopVlm')">{{ vlmCompleted }}/{{ vlmTotal }}</NTag></template>点击中止处理</NTooltip>
       <NButton v-else type="primary" @click="$emit('startVlm')"><template #icon><NIcon><PlayOutline /></NIcon></template>VLM</NButton>
       <NTooltip v-if="embedRunning" trigger="hover"><template #trigger><NTag type="warning" size="large" class="progress-tag" :style="{ cursor: 'pointer' }" @click="$emit('stopEmbed')">Embed {{ embedCompleted }}/{{ embedTotal }}</NTag></template>点击中止处理</NTooltip>
@@ -255,6 +274,7 @@ onBeforeUnmount(() => {
       <NTooltip v-if="burstRunning" trigger="hover"><template #trigger><NTag type="info" size="large" class="progress-tag" :style="{ cursor: 'pointer' }">连拍 {{ burstProcessed }}/{{ burstTotal }}</NTag></template>正在重算连拍分组</NTooltip>
       <NButton v-else @click="$emit('rebuildBurst')"><template #icon><NIcon><GridOutline /></NIcon></template>连拍分组</NButton>
       <NButton @click="$emit('upload')"><template #icon><NIcon><CloudUploadOutline /></NIcon></template>上传图片</NButton>
+      <NButton @click="$emit('toggleSelectionMode')"><template #icon><NIcon><CheckboxOutline /></NIcon></template>选择模式</NButton>
     </NSpace>
   </div>
 </template>
@@ -266,6 +286,7 @@ onBeforeUnmount(() => {
 .toolbar-inline { display: flex; align-items: center; gap: 12px; }
 .toolbar-collapsed { display: flex; align-items: center; }
 .total-count, .filter-label { font-size: 13px; color: var(--n-text-color-3); white-space: nowrap; }
+.selection-count { font-size: 13px; color: var(--n-text-color-2); white-space: nowrap; }
 .filter-trigger { flex-shrink: 0; }
 .filter-panel, .filter-group { display: flex; flex-direction: column; }
 .filter-panel { gap: 16px; padding: 4px 0; }

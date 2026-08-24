@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NCard, NButton, NIcon, NSpin, NTooltip, NPopconfirm } from 'naive-ui'
+import { NCard, NButton, NIcon, NSpin, NTooltip, NPopconfirm, NCheckbox } from 'naive-ui'
 import {
   CheckmarkCircle,
   AddCircleOutline,
   TrashOutline,
   LayersOutline,
+  CloseOutline,
 } from '@vicons/ionicons5'
 import type { PhotoListItem, BurstViewLevel } from '../types/photo'
 import { formatDate } from '../utils/format'
@@ -19,8 +20,29 @@ const props = withDefaults(defineProps<{
   embedBatchRunning?: boolean
   /** 连拍展示级别：all 全部展开 / fine 精细折叠 / coarse 模糊折叠 */
   viewLevel?: BurstViewLevel
+  /** 是否处于选择模式 */
+  selectionMode?: boolean
+  /** 是否已被选中 */
+  selected?: boolean
+  /** 是否显示 VLM 状态图标（图片管理用） */
+  showStatus?: boolean
+  /** 是否显示 Embed 状态图标（图片管理用） */
+  showEmbed?: boolean
+  /** 是否显示删除按钮（图片管理用） */
+  showDelete?: boolean
+  /** 是否显示移除按钮（图文工坊用，与删除互斥） */
+  showRemove?: boolean
+  /** 是否显示 EXIF 悬浮提示 */
+  showTooltip?: boolean
 }>(), {
   viewLevel: 'fine',
+  selectionMode: false,
+  selected: false,
+  showStatus: true,
+  showEmbed: true,
+  showDelete: true,
+  showRemove: false,
+  showTooltip: true,
 })
 
 const emit = defineEmits<{
@@ -29,6 +51,8 @@ const emit = defineEmits<{
   triggerEmbed: [photoId: string]
   deletePhoto: [photoId: string]
   openBurstGroup: [groupId: string, coverId: string]
+  toggleSelect: [photoId: string]
+  remove: [photoId: string]
 }>()
 
 /** 折叠级别下的连拍组封面：点击卡片打开连拍组弹窗，而非照片详情 */
@@ -40,7 +64,9 @@ const isCollapsedCover = computed(
 )
 
 function handleCardClick() {
-  if (isCollapsedCover.value) {
+  if (props.selectionMode) {
+    emit('toggleSelect', props.photo.id)
+  } else if (isCollapsedCover.value) {
     emit('openBurstGroup', props.photo.burst_group_id, props.photo.id)
   } else {
     emit('viewDetail', props.photo.id)
@@ -79,12 +105,13 @@ function formatExifTooltip(): string {
 </script>
 
 <template>
-  <NTooltip trigger="hover" :delay="300" :to="false">
+  <NTooltip trigger="hover" :delay="300" :to="false" :disabled="!showTooltip">
     <template #trigger>
       <NCard
         :bordered="true"
         size="small"
         class="photo-card"
+        :class="{ 'is-selected': selectionMode && selected }"
         :data-photo-id="photo.id"
         hoverable
         @click="handleCardClick"
@@ -96,13 +123,16 @@ function formatExifTooltip(): string {
               :alt="photo.filename"
               loading="lazy"
             />
-            <div v-if="photo.has_nef" class="photo-nef-badge" title="有对应 NEF 原始文件">NEF</div>
+            <div v-if="selectionMode" class="photo-select" @click.stop>
+              <NCheckbox :checked="selected" @update:checked="emit('toggleSelect', photo.id)" />
+            </div>
+            <div v-if="photo.has_nef" class="photo-nef-badge" :class="{ 'with-select': selectionMode }" title="有对应 NEF 原始文件">NEF</div>
             <div
               v-if="isCollapsedCover"
               class="photo-burst-badge"
               title="连拍组封面，点击查看组内照片"
             >×{{ photo.burst_count }}</div>
-            <div class="photo-status">
+            <div v-if="!selectionMode && showStatus" class="photo-status">
               <NSpin v-if="processing" size="small" />
               <NButton
                 v-else-if="photo.has_description"
@@ -128,7 +158,7 @@ function formatExifTooltip(): string {
               </NButton>
             </div>
             <!-- Embed 状态图标（左下角） -->
-            <div class="photo-embed-status">
+            <div v-if="!selectionMode && showEmbed" class="photo-embed-status">
               <NSpin v-if="embedProcessing" size="small" />
               <NButton
                 v-else-if="isEmbedded"
@@ -164,7 +194,7 @@ function formatExifTooltip(): string {
                 </template>
               </NButton>
             </div>
-            <div class="photo-delete">
+            <div v-if="!selectionMode && showDelete" class="photo-delete">
               <NPopconfirm
                 @positive-click="$emit('deletePhoto', photo.id)"
               >
@@ -183,6 +213,18 @@ function formatExifTooltip(): string {
                 确定删除该图片？（原图文件和数据库记录将被永久删除）
               </NPopconfirm>
             </div>
+            <div v-if="!selectionMode && showRemove" class="photo-delete">
+              <NButton
+                size="tiny"
+                circle
+                type="error"
+                @click.stop="emit('remove', photo.id)"
+              >
+                <template #icon>
+                  <NIcon><CloseOutline /></NIcon>
+                </template>
+              </NButton>
+            </div>
           </div>
         </template>
         <div class="photo-name">{{ photo.filename }}</div>
@@ -199,6 +241,9 @@ function formatExifTooltip(): string {
 }
 .photo-card:hover {
   transform: translateY(-2px);
+}
+.photo-card.is-selected {
+  box-shadow: 0 0 0 2px #63e2b7;
 }
 .photo-thumb {
   position: relative;
@@ -226,6 +271,16 @@ function formatExifTooltip(): string {
   font-weight: 600;
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
+}
+.photo-nef-badge.with-select {
+  left: 24px;
+}
+.photo-select {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  cursor: pointer;
+  z-index: 2;
 }
 .photo-burst-badge {
   position: absolute;

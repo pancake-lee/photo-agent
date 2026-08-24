@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { NLayout, NLayoutContent, NLayoutHeader, useMessage } from 'naive-ui'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
@@ -20,6 +21,7 @@ import type { SegmentMode } from '../utils/segment'
 import type { ConflictResolution } from '../types/upload'
 
 const message = useMessage()
+const router = useRouter()
 const {
   photos, total, loading, loadingDown, loadingUp, noMoreDown, noMoreUp, error,
   selectedPhoto, showDetail, detailLoading, stats, timelines, segments,
@@ -43,6 +45,83 @@ const detailDescribeProcessing = computed(() => !!selectedPhoto.value && describ
 const detailEmbedProcessing = computed(() => !!selectedPhoto.value && embedProcessingIds.value.has(selectedPhoto.value.id))
 // 详情抽屉上/下一张导航：以当前加载的照片窗口为列表
 const photoNavList = computed(() => photos.value.map((p) => ({ id: p.id, label: p.filename })))
+
+// ── 选择模式（路径 B：自选图片进入图文工坊）──
+const selectionMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+const selectedCount = computed(() => selectedIds.value.size)
+// 恰好选中 2 张时显示「区间选择」按钮
+const showIntervalSelect = computed(() => selectedIds.value.size === 2)
+// 当前窗口内按展示顺序（拍摄时间排序）可见的照片 id，与 PhotoGrid 的连拍折叠逻辑一致
+const visiblePhotoIds = computed(() => {
+  const list = settings.burstViewLevel === 'all'
+    ? photos.value
+    : photos.value.filter((p) => p.burst_group_id === '' || p.burst_cover)
+  return list.map((p) => p.id)
+})
+
+function toggleSelectionMode() {
+  if (selectionMode.value) {
+    selectionMode.value = false
+    selectedIds.value = new Set()
+  } else {
+    selectionMode.value = true
+  }
+}
+
+function toggleSelect(photoId: string) {
+  const next = new Set(selectedIds.value)
+  if (next.has(photoId)) next.delete(photoId)
+  else next.add(photoId)
+  selectedIds.value = next
+}
+
+function selectIds(ids: string[]) {
+  if (!ids.length) return
+  const next = new Set(selectedIds.value)
+  ids.forEach((id) => next.add(id))
+  selectedIds.value = next
+}
+
+function selectAllVisible() {
+  selectIds(visiblePhotoIds.value)
+}
+
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+// 区间选择：勾选两张已选照片之间（按拍摄时间排序）的所有照片
+function intervalSelect() {
+  const ids = visiblePhotoIds.value
+  const positions = [...selectedIds.value]
+    .map((id) => ids.indexOf(id))
+    .filter((i) => i >= 0)
+    .sort((a, b) => a - b)
+  if (positions.length < 2) return
+  selectIds(ids.slice(positions[0], positions[positions.length - 1] + 1))
+}
+
+function goToPostStudio() {
+  if (selectedIds.value.size === 0) return
+  // 按当前窗口顺序（拍摄时间排序）携带全部已选照片，窗口外残留的排到末尾
+  const order = new Map<string, number>()
+  photos.value.forEach((p, i) => order.set(p.id, i))
+  const photoById = new Map(photos.value.map((p) => [p.id, p]))
+  const ids = [...selectedIds.value].sort(
+    (a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER),
+  )
+  // 折叠视图下，勾选连拍组封面视为「选中整组」，用 g: 前缀标记，图文工坊据此展开
+  const isCollapsed = settings.burstViewLevel !== 'all'
+  const tokens = ids.map((id) => {
+    const p = photoById.get(id)
+    if (p && isCollapsed && p.burst_cover && p.burst_group_id && p.burst_count > 1) {
+      return `g:${p.burst_group_id}:${id}`
+    }
+    return id
+  })
+  router.push({ path: '/post-studio', query: { photo_ids: tokens.join(',') } })
+}
 
 async function handleStartVlm() { try { const result = await startQueue(); message[result.total === 0 ? 'info' : 'success'](result.total === 0 ? '所有照片已有描述，无需处理' : `VLM 预处理已启动，共 ${result.total} 张`) } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
 async function handleStopVlm() { await stopQueue(); message.info('VLM 预处理已中止'); relocateToStart(); fetchStats() }
@@ -104,13 +183,16 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         v-model:search-filename="searchFilename" v-model:filter-timeline="filterTimeline" v-model:filter-shot-at-start="filterShotAtStart" v-model:filter-shot-at-end="filterShotAtEnd"
         :total="total" :stats="stats" :embed-stats="embedStats" :timelines="timelines" :burst-view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :sort-order="sortOrder"
         :vlm-running="vlmStatus.running" :vlm-completed="vlmStatus.completed" :vlm-total="vlmStatus.total" :embed-running="embedStatus.running" :embed-completed="embedStatus.completed" :embed-total="embedStatus.total" :burst-running="burstStatus.running" :burst-processed="burstStatus.processed" :burst-total="burstStatus.total"
+        :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect"
         @apply-filters="applyFilters" @reset-filters="resetFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
+        @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @go-to-post-studio="goToPostStudio"
       />
     </NLayoutHeader>
     <NLayoutContent><div class="content-wrapper">
       <PhotoListBrowser
         :photos="photos" :loading="loading" :loading-down="loadingDown" :loading-up="loadingUp" :no-more-down="noMoreDown" :no-more-up="noMoreUp" :error="error" :processing-ids="describeProcessingIds" :embed-processing-ids="embedProcessingIds" :embedded-ids="embeddedIds" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" :view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :segments="segments" :relocate-to="relocateTo" :load-down="loadDown" :load-up="loadUp"
-        @view-detail="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @delete-photo="handleDeletePhoto" @open-burst-group="handleOpenBurstGroup" @retry="relocateToStart" @back-to-latest="resetFilters"
+        :selection-mode="selectionMode" :selected-ids="selectedIds"
+        @view-detail="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @delete-photo="handleDeletePhoto" @open-burst-group="handleOpenBurstGroup" @retry="relocateToStart" @back-to-latest="resetFilters" @toggle-select="toggleSelect"
       />
     </div></NLayoutContent>
   </NLayout>

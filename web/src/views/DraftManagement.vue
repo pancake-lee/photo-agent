@@ -33,6 +33,13 @@ function imageUrl(id: string): string {
   return id ? `${getApiBase()}/photos/${id}/image` : ''
 }
 
+// 草稿 photo_ids 中连拍组以 g:<组id>:<封面id> 标记，缩略图展示其封面（最后一段为封面 id）
+function thumbPhotoId(pid: string): string {
+  if (!pid.startsWith('g:')) return pid
+  const parts = pid.slice(2).split(':')
+  return parts[parts.length - 1] || ''
+}
+
 async function fetchDrafts() {
   isLoading.value = true
   try {
@@ -144,15 +151,15 @@ function styleLabel(style: string): string {
                   <NTag v-if="d.style" size="small" round :bordered="false">{{ styleLabel(d.style) }}</NTag>
                   <span class="draft-time">{{ formatDate(d.updated_at) }}</span>
                 </div>
-                <p class="draft-preview">{{ d.content?.slice(0, 100) || '暂无内容' }}</p>
+                <p class="draft-preview">{{ d.content || '暂无内容' }}</p>
 
                 <div v-if="d.photo_ids?.length" class="draft-photos">
                   <img
                     v-for="pid in d.photo_ids.slice(0, 6)"
                     :key="pid"
-                    :src="imageUrl(pid)"
+                    :src="imageUrl(thumbPhotoId(pid))"
                     class="draft-photo-thumb"
-                    :title="pid"
+                    :title="thumbPhotoId(pid)"
                   />
                   <span v-if="d.photo_ids.length > 6" class="photo-rest">+{{ d.photo_ids.length - 6 }}</span>
                 </div>
@@ -261,10 +268,13 @@ function styleLabel(style: string): string {
   font-size: 13px;
   color: var(--n-text-color-2);
   line-height: 1.6;
+  /* 正文完整展示，超过 10 行折断并在末尾显示省略号 */
+  white-space: pre-wrap;
+  word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
 }
 

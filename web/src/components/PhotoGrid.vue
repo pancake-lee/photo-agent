@@ -27,6 +27,10 @@ const props = defineProps<{
   viewLevel: BurstViewLevel
   /** 分段浏览方式：day / month / activity，空串表示不分段 */
   segmentMode: SegmentMode | null
+  /** 是否处于选择模式 */
+  selectionMode: boolean
+  /** 已选中的照片 id 集合 */
+  selectedIds: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -39,6 +43,7 @@ const emit = defineEmits<{
   loadDown: []
   loadUp: []
   retry: []
+  toggleSelect: [photoId: string]
 }>()
 
 // 滚动容器：由父级 PhotoManagement 通过 provide 注入（.grid-main 有界滚动容器）。
@@ -190,11 +195,14 @@ onBeforeUnmount(() => observedScrollRoot?.removeEventListener('scroll', maybeLoa
           :is-embedded="embeddedIds.has(item.photo.id)"
           :vlm-batch-running="vlmBatchRunning"
           :embed-batch-running="embedBatchRunning"
+          :selection-mode="selectionMode"
+          :selected="selectedIds.has(item.photo.id)"
           @view-detail="(id) => $emit('viewDetail', id)"
           @trigger-describe="(id) => $emit('triggerDescribe', id)"
           @trigger-embed="(id) => $emit('triggerEmbed', id)"
           @delete-photo="(id) => $emit('deletePhoto', id)"
           @open-burst-group="(gid, coverId) => $emit('openBurstGroup', gid, coverId)"
+          @toggle-select="(id) => $emit('toggleSelect', id)"
         />
       </template>
     </div>

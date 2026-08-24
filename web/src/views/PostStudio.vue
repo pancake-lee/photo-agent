@@ -7,13 +7,15 @@ import {
   NSelect, NSpace, NEmpty, NIcon, NTag, NSpin, NModal, NCheckbox,
   useMessage,
 } from 'naive-ui'
-import { AddOutline, CreateOutline, CloseOutline } from '@vicons/ionicons5'
+import { AddOutline, CreateOutline } from '@vicons/ionicons5'
 import draggable from 'vuedraggable'
 import { getApiBase, getAgentBase } from '../config'
 import { photoApi } from '../backend-sdk-client'
 import PhotoDetail from '../components/PhotoDetail.vue'
-import type { ApiPhotoItem, ApiGetPhotoDetailResponse } from '../../backend-sdk/api'
-import type { PhotoDetail as PhotoDetailType } from '../types/photo'
+import PhotoCard from '../components/PhotoCard.vue'
+import BurstGroupModal from '../components/BurstGroupModal.vue'
+import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse } from '../../backend-sdk/api'
+import type { PhotoDetail as PhotoDetailType, PhotoListItem } from '../types/photo'
 
 const route = useRoute()
 const message = useMessage()
@@ -23,7 +25,15 @@ interface PhotoItem {
   filename: string
   description: string
   image_url: string
+  burst_group_id: string
+  burst_cover: boolean
+  burst_count: number
 }
+
+// 图文工坊照片列表条目：单张照片 或 连拍组（组内成员懒加载后常驻）
+type StudioItem =
+  | { kind: 'photo'; key: string; photo: PhotoItem }
+  | { kind: 'group'; key: string; groupId: string; cover: PhotoItem; members: PhotoItem[] }
 
 const styleOptions = [
   { label: '文艺', value: 'literary' },
@@ -35,7 +45,7 @@ const styleOptions = [
 // 提示词模式的默认文本，用户可在此基础上修改
 const DEFAULT_PROMPT = '介绍一下这次出行的行程，重点写印象最深的场景'
 
-const photos = ref<PhotoItem[]>([])
+const items = ref<StudioItem[]>([])
 const title = ref('')
 const content = ref('')
 const style = ref('casual')
@@ -59,7 +69,19 @@ const showDetail = ref(false)
 const detailLoading = ref(false)
 const selectedDetail = ref<PhotoDetailType | null>(null)
 
-const hasPhotos = computed(() => photos.value.length > 0)
+// 连拍组浏览弹窗（复用图片管理 BurstGroupModal 的 curate 模式）
+const showGroupModal = ref(false)
+const groupModalGroupId = ref('')
+const groupModalCoverId = ref('')
+const groupModalMembers = ref<{ id: string; thumbnail_url: string; filename: string }[]>([])
+const curatingIndex = ref(-1)
+
+// 扁平化照片列表（连拍组展开为成员），用于生成文案 / 详情导航
+const flatPhotos = computed(() =>
+  items.value.flatMap((it) => (it.kind === 'photo' ? [it.photo] : it.members)),
+)
+
+const hasPhotos = computed(() => items.value.length > 0)
 const canSave = computed(() => hasPhotos.value || title.value.trim() || content.value.trim())
 
 const promptOrDraft = computed<string>({
@@ -84,6 +106,36 @@ function photoToItem(p: ApiPhotoItem): PhotoItem {
     filename: p.filename ?? '',
     description: p.description ?? '',
     image_url: p.id ? imageUrl(p.id) : '',
+    burst_group_id: p.burstGroupId ?? '',
+    burst_cover: p.burstCover ?? false,
+    burst_count: p.burstCount ?? 0,
+  }
+}
+
+// 单张照片详情 → PhotoItem
+async function fetchPhoto(id: string): Promise<PhotoItem | null> {
+  try {
+    const resp = await photoApi.photoServiceGetPhotoDetail(id)
+    return resp.photo ? photoToItem(resp.photo) : null
+  } catch {
+    return null
+  }
+}
+
+// 按 burst_group_id 拉取组内成员（按拍摄时间正序）
+async function fetchGroupMembers(groupId: string): Promise<PhotoItem[]> {
+  // 组 id 形如 burst_fine_xxx / burst_coarse_xxx，据此决定过滤哪一档分组列
+  const profile = groupId.startsWith('burst_coarse_') ? 'coarse' : 'fine'
+  try {
+    const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
+      1, 100,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      'shot_at', 'asc',
+      groupId, profile,
+    )
+    return (resp.items ?? []).map(photoToItem)
+  } catch {
+    return []
   }
 }
 
@@ -128,7 +180,103 @@ function toPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetailType {
 }
 
 // 上/下一张导航列表：图文工坊用的是「已选帖子的照片列表」
-const photoNavList = computed(() => photos.value.map((p) => ({ id: p.photo_id, label: p.filename })))
+const photoNavList = computed(() => flatPhotos.value.map((p) => ({ id: p.photo_id, label: p.filename })))
+
+// 条目 → PhotoCard 所需的 PhotoListItem（EXIF 等字段留空，工坊内不展示）
+function toCardPhoto(it: StudioItem): PhotoListItem {
+  if (it.kind === 'group') {
+    return {
+      id: it.cover.photo_id,
+      filename: it.cover.filename,
+      file_path: '',
+      timeline: '',
+      tags: '',
+      description: '',
+      shot_at: null,
+      width: 0,
+      height: 0,
+      brand: '',
+      model: '',
+      lens: '',
+      focal_length: '',
+      aperture: '',
+      iso: 0,
+      exposure_time: '',
+      latitude: null,
+      longitude: null,
+      altitude: null,
+      imported_at: '',
+      has_description: false,
+      thumbnail_url: it.cover.image_url,
+      has_nef: false,
+      burst_group_id: it.groupId,
+      burst_cover: true,
+      burst_count: it.members.length,
+    }
+  }
+  const p = it.photo
+  return {
+    id: p.photo_id,
+    filename: p.filename,
+    file_path: '',
+    timeline: '',
+    tags: '',
+    description: p.description,
+    shot_at: null,
+    width: 0,
+    height: 0,
+    brand: '',
+    model: '',
+    lens: '',
+    focal_length: '',
+    aperture: '',
+    iso: 0,
+    exposure_time: '',
+    latitude: null,
+    longitude: null,
+    altitude: null,
+    imported_at: '',
+    has_description: !!p.description,
+    thumbnail_url: p.image_url,
+    has_nef: false,
+    burst_group_id: '',
+    burst_cover: false,
+    burst_count: 0,
+  }
+}
+
+function openGroupBrowser(index: number) {
+  const it = items.value[index]
+  if (it?.kind !== 'group') return
+  curatingIndex.value = index
+  groupModalGroupId.value = it.groupId
+  groupModalCoverId.value = it.cover.photo_id
+  groupModalMembers.value = it.members.map((m) => ({
+    id: m.photo_id,
+    thumbnail_url: m.image_url,
+    filename: m.filename,
+  }))
+  showGroupModal.value = true
+}
+
+function handleCurate(selectedIds: string[]) {
+  const idx = curatingIndex.value
+  const it = items.value[idx]
+  if (idx < 0 || it?.kind !== 'group') return
+  const chosen = it.members.filter((m) => selectedIds.includes(m.photo_id))
+  const replacements: StudioItem[] = chosen.map((m) => ({
+    kind: 'photo',
+    key: m.photo_id,
+    photo: m,
+  }))
+  items.value.splice(idx, 1, ...replacements)
+  showGroupModal.value = false
+  curatingIndex.value = -1
+}
+
+function removeItem(index: number) {
+  items.value.splice(index, 1)
+}
 
 async function openPhotoDetail(id: string) {
   detailLoading.value = true
@@ -150,7 +298,7 @@ onMounted(async () => {
   if (qDraftId) {
     await loadDraft(qDraftId)
   } else if (qPhotoIds) {
-    await addPhotosByIds(qPhotoIds.split(',').filter(Boolean))
+    await addItemsFromTokens(qPhotoIds.split(',').filter(Boolean))
   }
 })
 
@@ -166,7 +314,7 @@ async function loadDraft(id: string) {
     style.value = data.style || 'casual'
     source.value = data.source || 'self_select'
     if (data.photo_ids?.length) {
-      await addPhotosByIds(data.photo_ids)
+      await addItemsFromTokens(data.photo_ids)
     }
   } catch (e: any) {
     message.error(e.message || '加载草稿失败')
@@ -175,31 +323,29 @@ async function loadDraft(id: string) {
   }
 }
 
-async function addPhotosByIds(ids: string[]) {
-  const missing = ids.filter(id => id && !photos.value.some(p => p.photo_id === id))
+// 按 token 加载条目：普通 id → 单张；g:<封面id> → 连拍组（含成员）
+async function addItemsFromTokens(tokens: string[]) {
+  const missing = tokens.filter((t) => t && !items.value.some((it) => it.key === t))
   if (!missing.length) return
   isPhotosLoading.value = true
   try {
-    const results = await Promise.all(missing.map(async (id) => {
-      try {
-        const resp = await photoApi.photoServiceGetPhotoDetail(id)
-        return resp.photo ? photoToItem(resp.photo) : null
-      } catch {
-        return null
-      }
-    }))
-    for (const item of results) {
-      if (item && !photos.value.some(p => p.photo_id === item.photo_id)) {
-        photos.value.push(item)
+    for (const token of missing) {
+      if (token.startsWith('g:')) {
+        const [groupId, coverId] = token.slice(2).split(':')
+        if (!groupId || !coverId) continue
+        const cover = await fetchPhoto(coverId)
+        if (!cover) continue
+        const members = await fetchGroupMembers(groupId)
+        if (members.length === 0) console.warn('[PostStudio] 连拍组成员为空:', groupId)
+        items.value.push({ kind: 'group', key: token, groupId, cover, members })
+      } else {
+        const photo = await fetchPhoto(token)
+        if (photo) items.value.push({ kind: 'photo', key: token, photo })
       }
     }
   } finally {
     isPhotosLoading.value = false
   }
-}
-
-function removePhoto(index: number) {
-  photos.value.splice(index, 1)
 }
 
 async function handleGenerate() {
@@ -217,8 +363,8 @@ async function handleGenerate() {
   try {
     const isPrompt = mode.value === 'prompt'
     const body = isPrompt
-      ? { photo_ids: photos.value.map(p => p.photo_id), style: style.value, prompt: promptText.value }
-      : { content: draftInput.value, style: style.value, photo_ids: photos.value.map(p => p.photo_id) }
+      ? { photo_ids: flatPhotos.value.map(p => p.photo_id), style: style.value, prompt: promptText.value }
+      : { content: draftInput.value, style: style.value, photo_ids: flatPhotos.value.map(p => p.photo_id) }
     const resp = await fetch(`${getAgentBase()}/post-studio/${isPrompt ? 'generate' : 'refine'}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -243,11 +389,16 @@ async function handleGenerate() {
   }
 }
 
+// 草稿 photo_ids：单张存真实 id，连拍组存 g:<组id>:<封面id> 以保留组结构
+function draftPhotoIds(): string[] {
+  return items.value.map((it) => (it.kind === 'photo' ? it.photo.photo_id : `g:${it.groupId}:${it.cover.photo_id}`))
+}
+
 async function saveDraft() {
   const body = {
     title: title.value,
     content: content.value,
-    photo_ids: photos.value.map(p => p.photo_id),
+    photo_ids: draftPhotoIds(),
     style: style.value,
     source: source.value,
   }
@@ -310,7 +461,7 @@ function togglePickerPhoto(id: string) {
 }
 
 async function confirmPickerSelection() {
-  await addPhotosByIds([...photoPickerSelected.value])
+  await addItemsFromTokens([...photoPickerSelected.value])
   showPhotoPicker.value = false
 }
 </script>
@@ -338,7 +489,7 @@ async function confirmPickerSelection() {
           <!-- 照片区 -->
           <div class="panel photo-panel">
             <div class="panel-header">
-              <span class="panel-title">照片<template v-if="photos.length"> · {{ photos.length }} 张</template></span>
+              <span class="panel-title">照片<template v-if="items.length"> · {{ items.length }} 张</template></span>
               <NButton size="small" @click="openPhotoPicker">
                 <template #icon><NIcon><AddOutline /></NIcon></template>
                 添加照片
@@ -352,19 +503,24 @@ async function confirmPickerSelection() {
             <NSpin :show="isPhotosLoading">
               <draggable
                 v-if="hasPhotos"
-                v-model="photos"
-                item-key="photo_id"
+                v-model="items"
+                item-key="key"
                 class="photo-grid"
                 ghost-class="photo-ghost"
               >
                 <template #item="{ element, index }">
-                  <div class="photo-card" @click="openPhotoDetail(element.photo_id)">
-                    <img :src="element.image_url" :alt="element.filename" class="photo-thumb" />
-                    <button class="photo-remove" title="移除" @click.stop="removePhoto(index)">
-                      <NIcon :size="14"><CloseOutline /></NIcon>
-                    </button>
-                    <div class="photo-name">{{ element.filename }}</div>
-                  </div>
+                  <PhotoCard
+                    :photo="toCardPhoto(element)"
+                    :view-level="element.kind === 'group' ? 'fine' : 'all'"
+                    :show-status="false"
+                    :show-embed="false"
+                    :show-delete="false"
+                    :show-remove="true"
+                    :show-tooltip="false"
+                    @view-detail="openPhotoDetail"
+                    @open-burst-group="() => openGroupBrowser(index)"
+                    @remove="removeItem(index)"
+                  />
                 </template>
               </draggable>
             </NSpin>
@@ -498,6 +654,19 @@ async function confirmPickerSelection() {
     @close="showDetail = false"
     @navigate="openPhotoDetail"
   />
+
+  <!-- 连拍组浏览弹窗（复用图片管理样式，curate 模式：复选 + 连拍精选） -->
+  <BurstGroupModal
+    :show="showGroupModal"
+    :group-id="groupModalGroupId"
+    :members="groupModalMembers"
+    :cover-id="groupModalCoverId"
+    :loading="false"
+    mode="curate"
+    @close="showGroupModal = false"
+    @view-detail="openPhotoDetail"
+    @curate="handleCurate"
+  />
 </template>
 
 <style scoped>
@@ -563,55 +732,6 @@ async function confirmPickerSelection() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 12px;
-}
-
-.photo-card {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 6px;
-  overflow: hidden;
-  cursor: grab;
-  border: 1px solid var(--n-border-color);
-}
-.photo-card:active { cursor: grabbing; }
-
-.photo-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.photo-remove {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.photo-card:hover .photo-remove { opacity: 1; }
-
-.photo-name {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.45);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .photo-ghost {

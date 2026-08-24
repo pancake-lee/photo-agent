@@ -26,6 +26,8 @@ const props = defineProps<{
   relocateTo: (offset: number) => Promise<void>
   loadDown: () => Promise<number>
   loadUp: () => Promise<number>
+  selectionMode: boolean
+  selectedIds: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +38,7 @@ const emit = defineEmits<{
   openBurstGroup: [groupId: string, coverId: string]
   retry: []
   backToLatest: []
+  toggleSelect: [photoId: string]
 }>()
 
 const navItems = computed<NavItem[]>(() => props.segments.map(({ key, label, count }) => ({ key, label, count })))
@@ -133,10 +136,12 @@ onUnmounted(() => gridScrollRef.value?.removeEventListener('scroll', updateActiv
         :photos="photos" :loading="loading" :loading-down="loadingDown" :loading-up="loadingUp"
         :no-more-down="noMoreDown" :no-more-up="noMoreUp" :error="error"
         :processing-ids="processingIds" :embed-processing-ids="embedProcessingIds" :embedded-ids="embeddedIds" :vlm-batch-running="vlmBatchRunning" :embed-batch-running="embedBatchRunning" :view-level="viewLevel" :segment-mode="segmentMode"
+        :selection-mode="selectionMode" :selected-ids="selectedIds"
         @view-detail="$emit('viewDetail', $event)" @trigger-describe="$emit('triggerDescribe', $event)"
         @trigger-embed="$emit('triggerEmbed', $event)" @delete-photo="$emit('deletePhoto', $event)"
         @open-burst-group="(groupId, coverId) => $emit('openBurstGroup', groupId, coverId)"
         @divider-el="setDividerEl" @load-down="handleLoadDown" @load-up="handleLoadUp" @retry="$emit('retry')"
+        @toggle-select="(id) => $emit('toggleSelect', id)"
       />
     </div>
     <PhotoSegmentNav :items="navItems" :active-key="activeNavKey" @jump="handleNavJump" @back-to-latest="$emit('backToLatest')" />

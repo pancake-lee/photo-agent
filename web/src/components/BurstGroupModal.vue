@@ -6,30 +6,46 @@
  * 底部缩略列表切换当前照片，「设为封面」把当前照片设为组封面，点击主图进照片详情。
  */
 import { ref, watch, computed } from 'vue'
-import { NModal, NButton, NIcon, NSpin, NEmpty, NTooltip } from 'naive-ui'
-import { StarOutline } from '@vicons/ionicons5'
-import type { PhotoListItem } from '../types/photo'
+import { NModal, NButton, NIcon, NSpin, NEmpty, NTooltip, NCheckbox } from 'naive-ui'
+import { StarOutline, CheckmarkCircleOutline } from '@vicons/ionicons5'
 
-const props = defineProps<{
+// 连拍组成员的最小展示形态：图片管理与图文工坊的成员对象都满足此结构
+interface BurstMember {
+  id: string
+  thumbnail_url: string
+  filename: string
+}
+
+const props = withDefaults(defineProps<{
   show: boolean
   groupId: string
-  members: PhotoListItem[]
+  members: BurstMember[]
   coverId: string
   loading: boolean
-}>()
+  /** cover：图片管理设为封面；curate：图文工坊连拍精选 */
+  mode?: 'cover' | 'curate'
+}>(), {
+  mode: 'cover',
+})
 
 const emit = defineEmits<{
   close: []
   viewDetail: [photoId: string]
   setCover: [photoId: string]
+  curate: [photoIds: string[]]
 }>()
 
 // 当前选中的照片：打开弹窗时默认停在封面
 const selectedId = ref('')
+// curate 模式下已勾选的子图集合
+const selectedIds = ref<Set<string>>(new Set())
+
+const isCurate = computed(() => props.mode === 'curate')
 
 watch(
   () => props.groupId,
   (gid) => {
+    selectedIds.value = new Set()
     if (gid) {
       selectedId.value = props.coverId
     } else {
@@ -60,9 +76,29 @@ function selectPhoto(id: string) {
   selectedId.value = id
 }
 
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+
+function handleThumbClick(id: string) {
+  if (isCurate.value) toggleSelect(id)
+  selectPhoto(id)
+}
+
 function handleSetCover() {
   if (!selectedId.value || isCover.value) return
   emit('setCover', selectedId.value)
+}
+
+function handleCurate() {
+  const ids = props.members
+    .filter((m) => selectedIds.value.has(m.id))
+    .map((m) => m.id)
+  if (ids.length === 0) return
+  emit('curate', ids)
 }
 </script>
 
@@ -103,10 +139,24 @@ function handleSetCover() {
         </NTooltip>
       </div>
 
-      <!-- 操作行：左侧当前照片文件名，右侧设为封面 -->
+      <!-- 操作行：左侧当前照片文件名，右侧封面 / 精选操作 -->
       <div class="burst-actions">
         <span class="burst-filename">{{ selected?.filename ?? '' }}</span>
-        <NTooltip :disabled="!isCover" trigger="hover">
+        <div v-if="isCurate" class="burst-curate-actions">
+          <span class="burst-selected-count">已选 {{ selectedIds.size }} 张</span>
+          <NButton
+            size="small"
+            type="primary"
+            :disabled="selectedIds.size === 0"
+            @click="handleCurate"
+          >
+            <template #icon>
+              <NIcon size="14"><CheckmarkCircleOutline /></NIcon>
+            </template>
+            连拍精选
+          </NButton>
+        </div>
+        <NTooltip v-else :disabled="!isCover" trigger="hover">
           <template #trigger>
             <NButton
               size="small"
@@ -125,7 +175,7 @@ function handleSetCover() {
         </NTooltip>
       </div>
 
-      <!-- 底部缩略列表：点击切换 -->
+      <!-- 底部缩略列表：点击切换（curate 模式下同时勾选） -->
       <div class="burst-strip">
         <div
           v-for="p in members"
@@ -133,9 +183,16 @@ function handleSetCover() {
           class="burst-thumb-wrap"
           :class="{ 'burst-thumb-active': p.id === selectedId }"
           :title="p.filename"
-          @click="selectPhoto(p.id)"
+          @click="handleThumbClick(p.id)"
         >
           <img :src="p.thumbnail_url" :alt="p.filename" class="burst-thumb" />
+          <NCheckbox
+            v-if="isCurate"
+            :checked="selectedIds.has(p.id)"
+            class="burst-thumb-check"
+            @click.stop
+            @update:checked="toggleSelect(p.id)"
+          />
           <span v-if="p.id === coverId" class="burst-thumb-cover-mark">封面</span>
         </div>
       </div>
@@ -182,6 +239,16 @@ function handleSetCover() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.burst-curate-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.burst-selected-count {
+  font-size: 12px;
+  color: var(--n-text-color-2);
+  white-space: nowrap;
+}
 .burst-strip {
   display: flex;
   flex-wrap: nowrap;
@@ -210,6 +277,11 @@ function handleSetCover() {
   height: 64px;
   object-fit: cover;
   border-radius: 4px;
+}
+.burst-thumb-check {
+  position: absolute;
+  top: 2px;
+  right: 2px;
 }
 .burst-thumb-cover-mark {
   position: absolute;
