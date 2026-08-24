@@ -32,13 +32,15 @@ const styleOptions = [
   { label: '攻略', value: 'guide' },
 ]
 
+// 提示词模式的默认文本，用户可在此基础上修改
+const DEFAULT_PROMPT = '介绍一下这次出行的行程，重点写印象最深的场景'
+
 const photos = ref<PhotoItem[]>([])
 const title = ref('')
 const content = ref('')
 const style = ref('casual')
 const source = ref('self_select')
 const mode = ref<'prompt' | 'draft'>('prompt')
-const DEFAULT_PROMPT = '根据图片内容输出文案，要求：1. 语言为中文；2. 适合社交媒体发布；3. 文字简洁有趣，能吸引人阅读；4. 适当加入表情符号'
 const promptText = ref(DEFAULT_PROMPT)
 const draftInput = ref('')
 const isGenerating = ref(false)
@@ -216,7 +218,7 @@ async function handleGenerate() {
     const isPrompt = mode.value === 'prompt'
     const body = isPrompt
       ? { photo_ids: photos.value.map(p => p.photo_id), style: style.value, prompt: promptText.value }
-      : { content: draftInput.value, style: style.value }
+      : { content: draftInput.value, style: style.value, photo_ids: photos.value.map(p => p.photo_id) }
     const resp = await fetch(`${getAgentBase()}/post-studio/${isPrompt ? 'generate' : 'refine'}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -229,7 +231,11 @@ async function handleGenerate() {
     const data = await resp.json()
     title.value = data.title || ''
     content.value = data.content || ''
-    message.success(isPrompt ? '文案已生成' : '文案已润色')
+    if (data.warnings?.length) {
+      data.warnings.forEach((w: string) => message.warning(w))
+    } else {
+      message.success(isPrompt ? '文案已生成' : '文案已润色')
+    }
   } catch (e: any) {
     message.error(e.message || '操作失败')
   } finally {
@@ -395,7 +401,7 @@ async function confirmPickerSelection() {
                 v-model:value="promptOrDraft"
                 type="textarea"
                 :placeholder="mode === 'prompt'
-                  ? '描述你的要求，留空则按默认生成'
+                  ? '补充本次的具体要求，可留空。例如：重点写第二天爬山那段'
                   : '请输入文案'"
                 :rows="3"
               />

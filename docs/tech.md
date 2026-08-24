@@ -263,8 +263,8 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 
 **图文工坊**：
 
-- `POST /api/post-studio/generate` — 提示词模式生成文案（photo_ids + style + prompt → title + content）
-- `POST /api/post-studio/refine` — 草稿模式润色文案（content + style → title + content）
+- `POST /api/post-studio/generate` — 提示词模式生成文案（photo_ids + style + prompt → title + content + warnings）
+- `POST /api/post-studio/refine` — 草稿模式润色文案（content + style + photo_ids → title + content + warnings）
 
 ### 4.3 Web 前端路由
 

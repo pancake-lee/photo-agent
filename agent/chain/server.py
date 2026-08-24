@@ -30,6 +30,7 @@ import chain.embed_queue as embed_queue
 import chain.evaluation as evaluation_mod
 import chain.cluster as cluster_mod
 import chain.suggest as suggest_mod
+import chain.post_studio as post_studio_mod
 import chain.tracer as tracer_mod
 import chain.eval_engine as eval_engine
 import vectorstore.chroma_client as chroma_client
@@ -433,11 +434,13 @@ class PostStudioGenerateRequest(pydantic.BaseModel):
 class PostStudioRefineRequest(pydantic.BaseModel):
     content: str
     style: str = ""
+    photo_ids: list[str] = []
 
 
 class PostStudioGenerateResponse(pydantic.BaseModel):
     title: str
     content: str
+    warnings: list[str] = []
 
 
 # ── 应用工厂 ──────────────────────────────────────────────
@@ -2096,119 +2099,61 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
     # ── 图文工坊 ──────────────────────────────────────────
 
-    def _fetch_photo_descriptions(photo_ids: list[str]) -> list[dict]:
-        """从 Go 后端批量获取照片描述信息。"""
-        import utils.http_client as http_utils
-        client = http_utils.create_client(timeout=30.0)
-        results = []
-        try:
-            for pid in photo_ids:
-                resp = client.get(f"{cfg.go_backend_url}/api/v1/photos/{pid}")
-                resp.raise_for_status()
-                data = resp.json()
-                results.append({
-                    "photo_id": pid,
-                    "filename": data.get("filename", ""),
-                    "description": data.get("description", ""),
-                    "image_url": f"/api/v1/photos/{pid}/image",
-                })
-        finally:
-            client.close()
-        return results
-
     @app.post("/api/post-studio/generate", response_model=PostStudioGenerateResponse)
     async def post_studio_generate(req: fastapi.Request, body: PostStudioGenerateRequest):
-        import utils.llm_factory as llm_factory
-        import langchain_core.messages as lc_messages
+        cfg = req.app.state.cfg
 
         if not body.photo_ids:
             raise fastapi.HTTPException(status_code=400, detail="需要至少一张照片")
 
-        photos = _fetch_photo_descriptions(body.photo_ids)
+        try:
+            photos = post_studio_mod.fetch_photos(cfg.go_backend_url, body.photo_ids)
+        except Exception:
+            logger.exception("图文工坊获取照片详情失败")
+            raise fastapi.HTTPException(status_code=500, detail="获取照片详情失败，请稍后重试")
 
-        photo_context = ""
-        for i, p in enumerate(photos, 1):
-            desc = p["description"] or "（无描述）"
-            photo_context += f"\n照片{i}（{p['filename']}）：{desc}\n"
+        try:
+            title, content, warnings = post_studio_mod.generate_post(
+                cfg, photos, body.style, body.prompt,
+            )
+        except ValueError as exc:
+            raise fastapi.HTTPException(status_code=400, detail=str(exc))
+        except RuntimeError as exc:
+            raise fastapi.HTTPException(status_code=500, detail=str(exc))
+        except Exception:
+            logger.exception("文案生成失败")
+            raise fastapi.HTTPException(status_code=500, detail="生成失败，请稍后重试")
 
-        style_hint = ""
-        if body.style:
-            style_map = {
-                "literary": "文艺风格，语言优美细腻，注重意境和情感表达",
-                "documentary": "纪实风格，真实客观，注重细节和故事性",
-                "casual": "轻松活泼，口语化，适合社交媒体分享",
-                "guide": "攻略风格，实用为主，包含拍摄 tips 和地点信息",
-            }
-            style_hint = style_map.get(body.style, body.style)
-
-        prompt_hint = ""
-        if body.prompt:
-            prompt_hint = f"\n用户的具体要求：{body.prompt}"
-
-        system_msg = """你是一位专业的摄影帖子文案创作者。根据用户提供的照片描述，生成一篇帖子。
-
-输出格式要求：
-- 第一行输出帖子标题（不加任何前缀标记）
-- 空一行后输出正文内容（Markdown 格式）
-- 正文中适当引用照片内容，但不要用"照片1""照片2"这样的编号，而是自然融入叙事
-
-风格要求：""" + (style_hint or "自然流畅，有感染力") + prompt_hint
-
-        user_msg = f"以下是用户的照片信息：{photo_context}\n请根据以上照片生成一篇帖子。"
-
-        llm = llm_factory.create_llm(cfg, temperature=0.7)
-        resp = llm.invoke([
-            lc_messages.SystemMessage(content=system_msg),
-            lc_messages.HumanMessage(content=user_msg),
-        ])
-
-        raw = resp.content.strip()
-        lines = raw.split("\n", 1)
-        title = lines[0].strip().lstrip("#").strip()
-        content = lines[1].strip() if len(lines) > 1 else ""
-
-        return {"title": title, "content": content}
+        return {"title": title, "content": content, "warnings": warnings}
 
     @app.post("/api/post-studio/refine", response_model=PostStudioGenerateResponse)
     async def post_studio_refine(req: fastapi.Request, body: PostStudioRefineRequest):
-        import utils.llm_factory as llm_factory
-        import langchain_core.messages as lc_messages
+        cfg = req.app.state.cfg
 
         if not body.content.strip():
             raise fastapi.HTTPException(status_code=400, detail="内容不能为空")
 
-        style_hint = ""
-        if body.style:
-            style_map = {
-                "literary": "文艺风格，语言优美细腻，注重意境和情感表达",
-                "documentary": "纪实风格，真实客观，注重细节和故事性",
-                "casual": "轻松活泼，口语化，适合社交媒体分享",
-                "guide": "攻略风格，实用为主，包含拍摄 tips 和地点信息",
-            }
-            style_hint = style_map.get(body.style, body.style)
+        photos = []
+        if body.photo_ids:
+            try:
+                photos = post_studio_mod.fetch_photos(cfg.go_backend_url, body.photo_ids)
+            except Exception:
+                logger.exception("图文工坊获取照片详情失败")
+                raise fastapi.HTTPException(status_code=500, detail="获取照片详情失败，请稍后重试")
 
-        system_msg = """你是一位专业的文案编辑。用户会给你一篇草稿，请在保留原文结构和核心内容的基础上进行润色优化。
+        try:
+            title, content, warnings = post_studio_mod.refine_post(
+                cfg, photos, body.style, body.content,
+            )
+        except ValueError as exc:
+            raise fastapi.HTTPException(status_code=400, detail=str(exc))
+        except RuntimeError as exc:
+            raise fastapi.HTTPException(status_code=500, detail=str(exc))
+        except Exception:
+            logger.exception("文案润色失败")
+            raise fastapi.HTTPException(status_code=500, detail="润色失败，请稍后重试")
 
-输出格式要求：
-- 第一行输出优化后的标题（不加任何前缀标记）
-- 空一行后输出优化后的正文内容（Markdown 格式）
-
-润色要求：改善文字表达，使语言更流畅、更有感染力，但不要大幅改变原文的结构和意图。""" + ("\n风格要求：" + style_hint if style_hint else "")
-
-        user_msg = f"请润色以下草稿内容：\n\n{body.content}"
-
-        llm = llm_factory.create_llm(cfg, temperature=0.5)
-        resp = llm.invoke([
-            lc_messages.SystemMessage(content=system_msg),
-            lc_messages.HumanMessage(content=user_msg),
-        ])
-
-        raw = resp.content.strip()
-        lines = raw.split("\n", 1)
-        title = lines[0].strip().lstrip("#").strip()
-        content = lines[1].strip() if len(lines) > 1 else ""
-
-        return {"title": title, "content": content}
+        return {"title": title, "content": content, "warnings": warnings}
 
     return app
 
