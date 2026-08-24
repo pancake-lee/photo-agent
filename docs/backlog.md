@@ -14,6 +14,7 @@
 | 已规划 | 组图检索   | GR1  | 三 Collection 向量库改造       |      |
 | Done   | 图片管理   | CL1  | 上传/VLM/Embed 闭环 + 废弃描述同步清理 | 8.4  |
 | Done   | 图片管理   | CL2  | VLM HTTP 请求无超时                    |      |
+| Done   | 图文工坊   | PS1  | 后端基础 + 图文工坊核心页面            |      |
 
 > 其余 6 项待规划任务经审阅后迁至 [docs/design/2026-08-22-future-requirements.md](design/2026-08-22-future-requirements.md)。
 
@@ -136,6 +137,32 @@
   - [x] VLM HTTP 请求有合理超时（60s）
   - [x] 超时后 worker 正确标记失败并继续处理下一张
 
+---
+
+### PS1 后端基础 + 图文工坊核心页面
+
+- **状态**：Done
+- **背景**：图文工坊是"创作工作台"，接收两条路径的输入（图片管理选图 / 主题发现采纳提案），提供 AI 辅助文案生成和编辑能力。设计文档：[docs/design/2026-08-23-post-studio-design.md](design/2026-08-23-post-studio-design.md)
+- **方案**：
+  - Go 后端：新增 `drafts` 表（id / title / content / photo_ids JSON / style / source / status / created_at / updated_at），幂等迁移；DAO 层 CRUD；service 层业务逻辑；API 端点 `POST /api/v1/drafts`（创建）、`PUT /api/v1/drafts/:id`（更新）、`DELETE /api/v1/drafts/:id`（删除）、`GET /api/v1/drafts`（列表）、`GET /api/v1/drafts/:id`（详情）
+  - Python AI 服务：新增 `POST /api/post-studio/generate`（提示词模式：接收 photo_ids + style + prompt → 从 Go 获取照片描述 → 构建 prompt → 调 LLM → 返回标题 + 正文）和 `POST /api/post-studio/refine`（草稿模式：接收 content + style → 润色优化 → 返回修改后文本）。复用现有 `conf.C.LLM` 配置，不新增配置项
+  - Vue 前端：新增 `PostStudio.vue`（单栏布局：照片区 + 文案区，含风格选择器、两种生成模式切换、标题/正文编辑、保存草稿）和 `DraftManagement.vue`（草稿列表，含标题/照片缩略图/文案预览/时间/来源/状态）；路由 `#/post-studio` 和 `#/drafts`；菜单增加“图文工坊”和“草稿管理”入口；照片网格支持拖拽排序（vuedraggable）和移除
+  - 页面间传参：URL query params（`#/post-studio?photo_ids=a,b,c`、`#/post-studio?draft_id=xxx`）
+  - 更新 tech.md API 设计和项目结构
+- **分析**：
+  - 草稿存 Go SQLite 而非 Python：草稿引用照片 ID，Go 是照片元数据唯一数据源，保持一致性
+  - Python 生成文案时通过 Go API 获取照片描述（与现有 RAG/Text-to-SQL 模式一致），不直接访问 Go 数据库
+  - 文案生成采用非流式响应（结果填入可编辑文本区，非对话场景）
+  - 照片网格拖拽使用 vuedraggable（Vue 3 + SortableJS），需新增依赖
+- **验收**：
+  - [x] 图文工坊页面可空状态进入，能添加照片、选风格、输入提示词生成文案
+  - [x] 草稿模式可粘贴文本并润色优化
+  - [x] 照片网格支持拖拽排序和移除
+  - [x] 保存草稿后出现在草稿管理列表
+  - [x] 草稿管理列表点击进入图文工坊继续编辑
+  - [x] 菜单顺序与设计文档一致
+
+---
 ---
 
 ## 决策历史
