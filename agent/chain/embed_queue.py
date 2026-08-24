@@ -21,6 +21,7 @@ import queue
 import threading
 import sys
 import pathlib
+from datetime import datetime, timezone
 
 import utils.backend_sdk as bksdk
 import config as cfg_module
@@ -347,8 +348,11 @@ class EmbedQueue:
         """
         对单张照片描述分片，返回 (chunks, metadatas)。
 
-        metadata 仅保留 photo_id 和 chunk_index，结构化属性由 Go SQLite 统一管理，
-        RAG 检索不做 ChromaDB where 过滤（详见 docs/chroma-metadata-design.md）。
+        metadata 保留两类信息：
+        - 关联标识：photo_id + chunk_index（去重、清理孤立数据、chunk 排序）
+        - 向量操作记录：model + embedded_at（向量生成时所用的模型与时间，属向量溯源信息，
+          非图片结构化属性，图片结构化属性仍由 Go SQLite 统一管理）
+        RAG 检索不做 ChromaDB where 过滤（详见 docs/design/2026-06-23-chroma-metadata-design.md）。
         """
         strategy = self._cfg.chunk_strategy
         if strategy == "none":
@@ -370,11 +374,16 @@ class EmbedQueue:
             raise ValueError(f"未知的分块策略: {strategy}")
 
         photo_id = photo.id or ""
+        # 向量操作记录：同一照片的多个 chunk 在同一次嵌入中生成，model 与时间一致
+        embedded_at = datetime.now(timezone.utc).isoformat()
+        model = self._cfg.embedding_model
         metadatas: list[dict] = []
         for idx, _ in enumerate(chunks):
             metadatas.append({
                 "photo_id": photo_id,
                 "chunk_index": idx,
+                "model": model,
+                "embedded_at": embedded_at,
             })
 
         return chunks, metadatas

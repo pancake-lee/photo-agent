@@ -175,16 +175,16 @@ class ChromaPhotoStore:
         """
         获取单张照片的 embedding 详细信息。
 
-        ChromaDB metadata 仅存 photo_id + chunk_index，不再冗余存储 model/embedded_at。
-        返回的 model 字段来自配置文件（由上层注入），此处固定返回 null。
+        ChromaDB metadata 存 photo_id + chunk_index（关联标识），以及 model + embedded_at
+        （向量操作记录，向量生成时所用的模型与时间）。旧数据可能缺后两者，此时返回 None。
 
         返回:
             {
                 "photo_id": "...",
                 "chunks": 3,
-                "model": null,             # 不再存于 Chroma metadata
-                "embedded_at": null,       # 不再存于 Chroma metadata
-                "chunk_info": [...],       # 各 chunk 的 id/chunk_index/preview
+                "model": "text-embedding-...",   # 向量生成时所用模型（旧数据可能为 null）
+                "embedded_at": "2026-...",       # 向量生成时间，ISO 8601 UTC（旧数据可能为 null）
+                "chunk_info": [...],             # 各 chunk 的 id/chunk_index/preview
             }
             若该 photo_id 无 embedding 数据则返回 None。
         """
@@ -198,6 +198,10 @@ class ChromaPhotoStore:
 
         metas = raw.get("metadatas", [])
         docs = raw.get("documents", [])
+
+        # 向量操作记录：同一照片的多个 chunk 在同一次嵌入中生成，model/embedded_at 一致，
+        # 取首个 chunk 的 metadata 即可
+        first_meta = metas[0] if metas else {}
 
         # 各 chunk 的 id、chunk_index、内容预览
         chunk_info: list[dict] = []
@@ -213,8 +217,8 @@ class ChromaPhotoStore:
         return {
             "photo_id": photo_id,
             "chunks": len(ids),
-            "model": None,
-            "embedded_at": None,
+            "model": first_meta.get("model"),
+            "embedded_at": first_meta.get("embedded_at"),
             "chunk_info": chunk_info,
         }
 

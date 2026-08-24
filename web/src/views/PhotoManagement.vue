@@ -41,6 +41,8 @@ const showConflictModal = ref(false)
 const conflictResolver = ref<((resolution: ConflictResolution) => void) | null>(null)
 const detailDescribeProcessing = computed(() => !!selectedPhoto.value && describeProcessingIds.value.has(selectedPhoto.value.id))
 const detailEmbedProcessing = computed(() => !!selectedPhoto.value && embedProcessingIds.value.has(selectedPhoto.value.id))
+// 详情抽屉上/下一张导航：以当前加载的照片窗口为列表
+const photoNavList = computed(() => photos.value.map((p) => ({ id: p.id, label: p.filename })))
 
 async function handleStartVlm() { try { const result = await startQueue(); message[result.total === 0 ? 'info' : 'success'](result.total === 0 ? '所有照片已有描述，无需处理' : `VLM 预处理已启动，共 ${result.total} 张`) } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
 async function handleStopVlm() { await stopQueue(); message.info('VLM 预处理已中止'); relocateToStart(); fetchStats() }
@@ -112,7 +114,7 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
       />
     </div></NLayoutContent>
   </NLayout>
-  <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" @close="closeDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
+  <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :nav-list="photoNavList" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" @close="closeDetail" @navigate="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
   <BurstGroupModal :show="burstModalGroup !== ''" :group-id="burstModalGroup" :members="burstModalMembers" :cover-id="burstModalCoverId" :loading="burstModalLoading" @close="closeBurstGroup" @view-detail="fetchPhotoDetail" @set-cover="handleBurstSetCover" />
   <DescriptionModal :show="showDescModal" :filename="descPhoto?.filename || ''" :description="descPhoto?.description || ''" :model="descPhoto?.description_model || ''" :processed-at="descPhoto?.description_time || ''" @close="showDescModal = false" @regenerate="handleRegenerateDescription" />
   <UploadModal :show="showUploadModal" :files="files" :uploading="uploading" @close="closeUploadModal" @add-files="addFiles" @remove-file="removeFile" @start-upload="handleUploadStart" />

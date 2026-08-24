@@ -28,6 +28,16 @@ const routes = [
     component: () => import('../views/SuggestView.vue'),
   },
   {
+    path: '/post-studio',
+    name: 'post-studio',
+    component: () => import('../views/PostStudio.vue'),
+  },
+  {
+    path: '/drafts',
+    name: 'drafts',
+    component: () => import('../views/DraftManagement.vue'),
+  },
+  {
     path: '/chat/:sessionId?',
     name: 'chat',
     component: () => import('../views/ChatView.vue'),

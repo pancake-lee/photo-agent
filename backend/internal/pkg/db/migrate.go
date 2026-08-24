@@ -88,5 +88,13 @@ func Migrate() error {
 		plogger.Info("DB migrate: created timeline_events table")
 	}
 
+	// drafts 表按需补建（图文工坊草稿）
+	if !g.Migrator().HasTable(&model.Draft{}) {
+		if err := g.Migrator().CreateTable(&model.Draft{}); err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: created drafts table")
+	}
+
 	return nil
 }

@@ -46,6 +46,7 @@ func main() {
 	openapiSvr := service.NewOpenAPIServer("./openapi.yaml")
 	var healthSvr service.HealthServer
 	var storageSvr service.StorageServer
+	var draftSvr service.DraftServer
 
 	papp.SetIgnoreAuth() // 开发阶段，忽略 auth 验证
 	papp.RunKratosApp(
@@ -58,5 +59,6 @@ func main() {
 		&embeddingSvr,
 		openapiSvr,
 		&healthSvr,
-		&storageSvr)
+		&storageSvr,
+		&draftSvr)
 }

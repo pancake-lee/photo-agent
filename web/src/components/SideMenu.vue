@@ -5,13 +5,14 @@ import { NLayoutSider, NMenu, NIcon, NCheckbox, NModal, NButton, NSpace, useMess
 import {
   ImageOutline,
   AddOutline,
-  BookmarkOutline,
-  GitNetworkOutline,
   BulbOutline,
   SettingsOutline,
   ChatbubblesOutline,
   CloudUploadOutline,
-  CalendarOutline,
+  CreateOutline,
+  FolderOpenOutline,
+  TimeOutline,
+  StarOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
@@ -61,24 +62,19 @@ const topMenuOptions = computed<MenuOption[]>(() => {
       icon: renderIcon(ImageOutline),
     },
     {
-      label: '时间线',
-      key: '/timelines',
-      icon: renderIcon(CalendarOutline),
-    },
-    {
-      label: '黄金用例',
-      key: '/golden-queries',
-      icon: renderIcon(BookmarkOutline),
-    },
-    {
-      label: '组图发现',
-      key: '/cluster',
-      icon: renderIcon(GitNetworkOutline),
-    },
-    {
       label: '主题发现',
       key: '/suggest',
       icon: renderIcon(BulbOutline),
+    },
+    {
+      label: '图文工坊',
+      key: '/post-studio',
+      icon: renderIcon(CreateOutline),
+    },
+    {
+      label: '草稿管理',
+      key: '/drafts',
+      icon: renderIcon(FolderOpenOutline),
     },
   ]
 
@@ -109,6 +105,8 @@ const selectedKey = computed(() => {
   if (path === '/golden-queries') return '/golden-queries'
   if (path === '/cluster') return '/cluster'
   if (path === '/suggest') return '/suggest'
+  if (path === '/post-studio') return '/post-studio'
+  if (path === '/drafts') return '/drafts'
   if (path === '/import') return '/import'
   if (path === '/settings') return '/settings'
   return '/photos'
@@ -266,9 +264,25 @@ onMounted(() => window.addEventListener('keydown', onKeydown))
         </template>
       </NModal>
 
-      <!-- ═══ 底部：设置（固定） ═══ -->
+      <!-- ═══ 底部：时间线 / 黄金用例 / 设置（固定） ═══ -->
       <div class="bottom-section">
         <div class="menu-divider" />
+        <div
+          class="bottom-item"
+          :class="{ active: selectedKey === '/timelines' }"
+          @click="router.push('/timelines')"
+        >
+          <NIcon size="18"><TimeOutline /></NIcon>
+          <span class="bottom-item-text">时间线</span>
+        </div>
+        <div
+          class="bottom-item"
+          :class="{ active: selectedKey === '/golden-queries' }"
+          @click="router.push('/golden-queries')"
+        >
+          <NIcon size="18"><StarOutline /></NIcon>
+          <span class="bottom-item-text">黄金用例</span>
+        </div>
         <div
           class="bottom-item"
           :class="{ active: selectedKey === '/settings' }"

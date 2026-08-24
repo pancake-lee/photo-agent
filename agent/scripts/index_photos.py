@@ -93,7 +93,8 @@ def _prepare_chunks(
     """
     对单条照片描述进行分片，返回 chunk 文本列表和对应的 metadata 列表。
 
-    metadata 仅保留 photo_id 和 chunk_index，结构化属性由 Go SQLite 统一管理。
+    metadata 保留 photo_id + chunk_index（关联标识），以及 model + embedded_at
+    （向量操作记录：生成向量所用模型与时间）。
 
     参数:
         photo_id:    照片文件名
@@ -123,11 +124,16 @@ def _prepare_chunks(
     else:
         raise ValueError(f"未知的分块策略: {strategy}")
 
+    # 向量操作记录：同一照片的多个 chunk 在同一次嵌入中生成，model 与时间一致
+    embedded_at = datetime.now(timezone.utc).isoformat()
+    model = cfg.embedding_model
     metadatas = []
     for idx, _ in enumerate(chunks):
         metadatas.append({
             "photo_id": photo_id,
             "chunk_index": idx,
+            "model": model,
+            "embedded_at": embedded_at,
         })
 
     return chunks, metadatas

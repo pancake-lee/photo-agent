@@ -25,6 +25,7 @@ import pathlib
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 
 import httpx
 import utils.http_client as http_utils
@@ -73,7 +74,8 @@ def prepare_chunks(photo: dict, description: str, cfg: cfg_module.Config) -> tup
     """
     对单张照片描述分片，返回 (chunks, metadatas)。
 
-    metadata 仅保留 photo_id 和 chunk_index，结构化属性由 Go SQLite 统一管理。
+    metadata 保留 photo_id + chunk_index（关联标识），以及 model + embedded_at
+    （向量操作记录：生成向量所用模型与时间）。
     """
     strategy = cfg.chunk_strategy
     if strategy == "none":
@@ -95,11 +97,16 @@ def prepare_chunks(photo: dict, description: str, cfg: cfg_module.Config) -> tup
         raise ValueError(f"未知的分块策略: {strategy}")
 
     photo_id = photo.get("id", "")
+    # 向量操作记录：同一照片的多个 chunk 在同一次嵌入中生成，model 与时间一致
+    embedded_at = datetime.now(timezone.utc).isoformat()
+    model = cfg.embedding_model
     metadatas: list[dict] = []
     for idx, _ in enumerate(chunks):
         metadatas.append({
             "photo_id": photo_id,
             "chunk_index": idx,
+            "model": model,
+            "embedded_at": embedded_at,
         })
 
     return chunks, metadatas

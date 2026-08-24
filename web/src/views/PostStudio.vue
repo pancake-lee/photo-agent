@@ -1,0 +1,689 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  NLayout, NLayoutContent, NLayoutHeader,
+  NButton, NInput, NRadioGroup, NRadioButton,
+  NSelect, NSpace, NEmpty, NIcon, NTag, NSpin, NModal, NCheckbox,
+  useMessage,
+} from 'naive-ui'
+import { AddOutline, CreateOutline, CloseOutline } from '@vicons/ionicons5'
+import draggable from 'vuedraggable'
+import { getApiBase, getAgentBase } from '../config'
+import { photoApi } from '../backend-sdk-client'
+import PhotoDetail from '../components/PhotoDetail.vue'
+import type { ApiPhotoItem, ApiGetPhotoDetailResponse } from '../../backend-sdk/api'
+import type { PhotoDetail as PhotoDetailType } from '../types/photo'
+
+const route = useRoute()
+const message = useMessage()
+
+interface PhotoItem {
+  photo_id: string
+  filename: string
+  description: string
+  image_url: string
+}
+
+const styleOptions = [
+  { label: '文艺', value: 'literary' },
+  { label: '纪实', value: 'documentary' },
+  { label: '轻松', value: 'casual' },
+  { label: '攻略', value: 'guide' },
+]
+
+const photos = ref<PhotoItem[]>([])
+const title = ref('')
+const content = ref('')
+const style = ref('casual')
+const source = ref('self_select')
+const mode = ref<'prompt' | 'draft'>('prompt')
+const DEFAULT_PROMPT = '根据图片内容输出文案，要求：1. 语言为中文；2. 适合社交媒体发布；3. 文字简洁有趣，能吸引人阅读；4. 适当加入表情符号'
+const promptText = ref(DEFAULT_PROMPT)
+const draftInput = ref('')
+const isGenerating = ref(false)
+const isLoading = ref(false)
+const isPhotosLoading = ref(false)
+const draftId = ref('')
+
+const showPhotoPicker = ref(false)
+const photoPickerQuery = ref('')
+const photoPickerResults = ref<PhotoItem[]>([])
+const photoPickerSelected = ref<Set<string>>(new Set())
+const isPickerLoading = ref(false)
+
+// 照片详情抽屉（复用图片管理的 PhotoDetail）
+const showDetail = ref(false)
+const detailLoading = ref(false)
+const selectedDetail = ref<PhotoDetailType | null>(null)
+
+const hasPhotos = computed(() => photos.value.length > 0)
+const canSave = computed(() => hasPhotos.value || title.value.trim() || content.value.trim())
+
+const promptOrDraft = computed<string>({
+  get: () => (mode.value === 'prompt' ? promptText.value : draftInput.value),
+  set: (v: string) => {
+    if (mode.value === 'prompt') promptText.value = v
+    else draftInput.value = v
+  },
+})
+
+const generateDisabled = computed(() => (
+  mode.value === 'draft' && !draftInput.value.trim()
+))
+
+function imageUrl(id: string): string {
+  return id ? `${getApiBase()}/photos/${id}/image` : ''
+}
+
+function photoToItem(p: ApiPhotoItem): PhotoItem {
+  return {
+    photo_id: p.id ?? '',
+    filename: p.filename ?? '',
+    description: p.description ?? '',
+    image_url: p.id ? imageUrl(p.id) : '',
+  }
+}
+
+function adaptUnixSec(s?: string): string | null {
+  if (!s || s === '0') return null
+  const sec = Number(s)
+  if (!Number.isFinite(sec) || sec <= 0) return null
+  return new Date(sec * 1000).toISOString()
+}
+
+// 详情抽屉数据适配：SDK 响应 → PhotoDetail（与 usePhotos 的 adaptPhotoDetail 同构）
+function toPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetailType {
+  const p = resp.photo
+  const id = p?.id ?? ''
+  return {
+    id,
+    filename: p?.filename ?? '',
+    file_path: p?.filePath ?? '',
+    timeline: p?.timeline ?? '',
+    tags: p?.tags ?? '',
+    description: p?.description ?? '',
+    shot_at: adaptUnixSec(p?.shotAt),
+    width: p?.width ?? 0,
+    height: p?.height ?? 0,
+    brand: p?.brand ?? '',
+    model: p?.model ?? '',
+    lens: p?.lens ?? '',
+    focal_length: p?.focalLength ?? '',
+    aperture: p?.aperture ?? '',
+    iso: p?.iso ?? 0,
+    exposure_time: p?.exposureTime ?? '',
+    latitude: p?.latitude ?? null,
+    longitude: p?.longitude ?? null,
+    altitude: p?.altitude ?? null,
+    imported_at: adaptUnixSec(p?.importedAt) ?? '',
+    has_description: p?.hasDescription ?? false,
+    thumbnail_url: id ? imageUrl(id) : '',
+    image_url: id ? imageUrl(id) : '',
+    description_model: resp.descriptionModel ?? '',
+    description_time: resp.descriptionTime ?? '',
+  }
+}
+
+// 上/下一张导航列表：图文工坊用的是「已选帖子的照片列表」
+const photoNavList = computed(() => photos.value.map((p) => ({ id: p.photo_id, label: p.filename })))
+
+async function openPhotoDetail(id: string) {
+  detailLoading.value = true
+  try {
+    const resp = await photoApi.photoServiceGetPhotoDetail(id)
+    selectedDetail.value = toPhotoDetail(resp)
+    showDetail.value = true
+  } catch (e: any) {
+    message.error(e?.message || '获取照片详情失败')
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  const qDraftId = route.query.draft_id as string
+  const qPhotoIds = route.query.photo_ids as string
+
+  if (qDraftId) {
+    await loadDraft(qDraftId)
+  } else if (qPhotoIds) {
+    await addPhotosByIds(qPhotoIds.split(',').filter(Boolean))
+  }
+})
+
+async function loadDraft(id: string) {
+  isLoading.value = true
+  try {
+    const resp = await fetch(`${getApiBase()}/drafts/${id}`)
+    if (!resp.ok) throw new Error('加载草稿失败')
+    const data = await resp.json()
+    draftId.value = data.id
+    title.value = data.title || ''
+    content.value = data.content || ''
+    style.value = data.style || 'casual'
+    source.value = data.source || 'self_select'
+    if (data.photo_ids?.length) {
+      await addPhotosByIds(data.photo_ids)
+    }
+  } catch (e: any) {
+    message.error(e.message || '加载草稿失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function addPhotosByIds(ids: string[]) {
+  const missing = ids.filter(id => id && !photos.value.some(p => p.photo_id === id))
+  if (!missing.length) return
+  isPhotosLoading.value = true
+  try {
+    const results = await Promise.all(missing.map(async (id) => {
+      try {
+        const resp = await photoApi.photoServiceGetPhotoDetail(id)
+        return resp.photo ? photoToItem(resp.photo) : null
+      } catch {
+        return null
+      }
+    }))
+    for (const item of results) {
+      if (item && !photos.value.some(p => p.photo_id === item.photo_id)) {
+        photos.value.push(item)
+      }
+    }
+  } finally {
+    isPhotosLoading.value = false
+  }
+}
+
+function removePhoto(index: number) {
+  photos.value.splice(index, 1)
+}
+
+async function handleGenerate() {
+  if (mode.value === 'prompt') {
+    if (!hasPhotos.value) {
+      message.warning('请先添加照片')
+      return
+    }
+  } else if (!draftInput.value.trim()) {
+    message.warning('请粘贴草稿内容')
+    return
+  }
+
+  isGenerating.value = true
+  try {
+    const isPrompt = mode.value === 'prompt'
+    const body = isPrompt
+      ? { photo_ids: photos.value.map(p => p.photo_id), style: style.value, prompt: promptText.value }
+      : { content: draftInput.value, style: style.value }
+    const resp = await fetch(`${getAgentBase()}/post-studio/${isPrompt ? 'generate' : 'refine'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error(err.detail || (isPrompt ? '生成失败' : '润色失败'))
+    }
+    const data = await resp.json()
+    title.value = data.title || ''
+    content.value = data.content || ''
+    message.success(isPrompt ? '文案已生成' : '文案已润色')
+  } catch (e: any) {
+    message.error(e.message || '操作失败')
+  } finally {
+    isGenerating.value = false
+  }
+}
+
+async function saveDraft() {
+  const body = {
+    title: title.value,
+    content: content.value,
+    photo_ids: photos.value.map(p => p.photo_id),
+    style: style.value,
+    source: source.value,
+  }
+
+  try {
+    let resp: Response
+    if (draftId.value) {
+      resp = await fetch(`${getApiBase()}/drafts/${draftId.value}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } else {
+      resp = await fetch(`${getApiBase()}/drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    }
+    if (!resp.ok) throw new Error('保存失败')
+    const data = await resp.json()
+    draftId.value = data.id
+    message.success('草稿已保存')
+  } catch (e: any) {
+    message.error(e.message || '保存失败')
+  }
+}
+
+function openPhotoPicker() {
+  showPhotoPicker.value = true
+  photoPickerQuery.value = ''
+  photoPickerResults.value = []
+  photoPickerSelected.value = new Set()
+  loadPickerPhotos()
+}
+
+async function loadPickerPhotos(keyword = '') {
+  isPickerLoading.value = true
+  try {
+    const resp = await photoApi.photoServiceSearchPhotos(
+      1, 50, undefined, undefined, keyword || undefined,
+    )
+    photoPickerResults.value = (resp.items ?? []).map(photoToItem)
+  } catch {
+    message.error('加载照片失败')
+    photoPickerResults.value = []
+  } finally {
+    isPickerLoading.value = false
+  }
+}
+
+function togglePickerPhoto(id: string) {
+  const next = new Set(photoPickerSelected.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  photoPickerSelected.value = next
+}
+
+async function confirmPickerSelection() {
+  await addPhotosByIds([...photoPickerSelected.value])
+  showPhotoPicker.value = false
+}
+</script>
+
+<template>
+  <NLayout class="studio-layout">
+    <NLayoutHeader bordered>
+      <div class="page-header">
+        <div class="page-header-left">
+          <NIcon size="20"><CreateOutline /></NIcon>
+          <h3 class="page-title">图文工坊</h3>
+          <NTag v-if="draftId" size="small" :bordered="false">编辑草稿</NTag>
+        </div>
+        <NSpace>
+          <NButton size="small" type="primary" :disabled="!canSave" @click="saveDraft">
+            保存草稿
+          </NButton>
+        </NSpace>
+      </div>
+    </NLayoutHeader>
+
+    <NLayoutContent>
+      <div class="page-content">
+        <NSpin :show="isLoading">
+          <!-- 照片区 -->
+          <div class="panel photo-panel">
+            <div class="panel-header">
+              <span class="panel-title">照片<template v-if="photos.length"> · {{ photos.length }} 张</template></span>
+              <NButton size="small" @click="openPhotoPicker">
+                <template #icon><NIcon><AddOutline /></NIcon></template>
+                添加照片
+              </NButton>
+            </div>
+
+            <div v-if="!hasPhotos" class="photo-empty">
+              <NEmpty description="暂无照片，点击「添加照片」开始选择" />
+            </div>
+
+            <NSpin :show="isPhotosLoading">
+              <draggable
+                v-if="hasPhotos"
+                v-model="photos"
+                item-key="photo_id"
+                class="photo-grid"
+                ghost-class="photo-ghost"
+              >
+                <template #item="{ element, index }">
+                  <div class="photo-card" @click="openPhotoDetail(element.photo_id)">
+                    <img :src="element.image_url" :alt="element.filename" class="photo-thumb" />
+                    <button class="photo-remove" title="移除" @click.stop="removePhoto(index)">
+                      <NIcon :size="14"><CloseOutline /></NIcon>
+                    </button>
+                    <div class="photo-name">{{ element.filename }}</div>
+                  </div>
+                </template>
+              </draggable>
+            </NSpin>
+          </div>
+
+          <!-- 文案区 -->
+          <div class="panel copy-panel">
+            <div class="controls-row">
+              <div class="field-group style-select">
+                <label class="field-label">风格</label>
+                <NSelect
+                  v-model:value="style"
+                  :options="styleOptions"
+                  placeholder="选择或输入风格"
+                  filterable
+                  tag
+                  clearable
+                  size="small"
+                />
+              </div>
+
+              <div class="field-group mode-select">
+                <label class="field-label">模式</label>
+                <NRadioGroup v-model:value="mode" size="small">
+                  <NRadioButton value="prompt">提示词</NRadioButton>
+                  <NRadioButton value="draft">草稿润色</NRadioButton>
+                </NRadioGroup>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">{{ mode === 'prompt' ? '提示词' : '草稿内容' }}</label>
+              <NInput
+                v-model:value="promptOrDraft"
+                type="textarea"
+                :placeholder="mode === 'prompt'
+                  ? '描述你的要求，留空则按默认生成'
+                  : '请输入文案'"
+                :rows="3"
+              />
+            </div>
+
+            <div class="generate-row">
+              <NButton
+                :type="mode === 'prompt' ? 'primary' : 'warning'"
+                :loading="isGenerating"
+                :disabled="generateDisabled"
+                @click="handleGenerate"
+              >
+                {{ mode === 'prompt' ? '生成文案' : '润色文案' }}
+              </NButton>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">标题</label>
+              <NInput v-model:value="title" placeholder="帖子标题（AI 会自动生成）" />
+            </div>
+
+            <div class="field-group content-editor">
+              <label class="field-label">正文</label>
+              <NInput
+                v-model:value="content"
+                type="textarea"
+                placeholder="AI 生成的内容会填入这里，你也可以直接编辑"
+                :rows="8"
+              />
+            </div>
+          </div>
+        </NSpin>
+      </div>
+    </NLayoutContent>
+
+    <!-- 照片选择弹窗 -->
+    <NModal
+      v-model:show="showPhotoPicker"
+      preset="card"
+      title="选择照片"
+      style="width: min(90vw, 720px)"
+    >
+      <div class="picker-search">
+        <NInput
+          v-model:value="photoPickerQuery"
+          placeholder="搜索照片（关键词、标签）"
+          clearable
+          @keyup.enter="loadPickerPhotos(photoPickerQuery)"
+        />
+        <NButton :loading="isPickerLoading" @click="loadPickerPhotos(photoPickerQuery)">搜索</NButton>
+      </div>
+
+      <NSpin :show="isPickerLoading">
+        <div v-if="photoPickerResults.length" class="picker-grid">
+          <div
+            v-for="p in photoPickerResults"
+            :key="p.photo_id"
+            class="picker-item"
+            :class="{ selected: photoPickerSelected.has(p.photo_id) }"
+            @click="togglePickerPhoto(p.photo_id)"
+          >
+            <img :src="p.image_url" :alt="p.filename" class="picker-thumb" />
+            <NCheckbox
+              :checked="photoPickerSelected.has(p.photo_id)"
+              class="picker-check"
+              @click.stop
+              @update:checked="togglePickerPhoto(p.photo_id)"
+            />
+          </div>
+        </div>
+        <NEmpty v-else-if="!isPickerLoading" description="没有找到照片" />
+      </NSpin>
+
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showPhotoPicker = false">取消</NButton>
+          <NButton type="primary" :disabled="photoPickerSelected.size === 0" @click="confirmPickerSelection">
+            添加 {{ photoPickerSelected.size }} 张
+          </NButton>
+        </NSpace>
+      </template>
+    </NModal>
+  </NLayout>
+
+  <!-- 照片详情抽屉（复用图片管理，仅展示信息，不含 VLM/Embed 处理入口） -->
+  <PhotoDetail
+    :show="showDetail"
+    :photo="selectedDetail"
+    :loading="detailLoading"
+    :nav-list="photoNavList"
+    :describe-processing="false"
+    :embed-processing="false"
+    :show-vlm-actions="false"
+    @close="showDetail = false"
+    @navigate="openPhotoDetail"
+  />
+</template>
+
+<style scoped>
+.studio-layout :deep(.n-layout-scroll-container) { display: flex; flex-direction: column; }
+.studio-layout :deep(.n-layout-header) { flex-shrink: 0; }
+.studio-layout :deep(.n-layout-content) { flex: 1; min-height: 0; }
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+}
+.page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.page-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.page-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 24px 24px;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.panel {
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 12px;
+}
+
+.photo-card {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: grab;
+  border: 1px solid var(--n-border-color);
+}
+.photo-card:active { cursor: grabbing; }
+
+.photo-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.photo-card:hover .photo-remove { opacity: 1; }
+
+.photo-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.photo-ghost {
+  opacity: 0.4;
+  outline: 2px dashed var(--n-color-primary);
+}
+
+.copy-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.controls-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+}
+.style-select { flex: 0 0 200px; }
+.mode-select { flex: 0 0 auto; }
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--n-text-color-2);
+}
+
+.generate-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.content-editor :deep(textarea) {
+  min-height: 160px;
+}
+
+/* 照片选择弹窗 */
+.picker-search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.picker-search :deep(.n-input) { flex: 1; }
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.picker-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+.picker-item.selected { border-color: var(--n-color-primary); }
+
+.picker-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.picker-check {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+}
+</style>
