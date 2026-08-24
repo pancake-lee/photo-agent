@@ -190,6 +190,14 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `GET /import/jobs/:id` — 导入进度
 - `GET /health` — 健康检查
 
+**图文工坊草稿**：
+
+- `POST /drafts` — 创建草稿（title/content/photo_ids/style/source）
+- `PUT /drafts/:id` — 更新草稿
+- `DELETE /drafts/:id` — 删除草稿
+- `GET /drafts` — 草稿列表
+- `GET /drafts/:id` — 单条草稿详情
+
 **独立路由**（非 `/api/v1` 前缀）：
 
 - `POST /v1/embeddings` — Embedding 代理（OpenAI 格式 → 火山引擎）
@@ -251,7 +259,12 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `POST /api/cluster/results/:id/evaluate-themes` — 批量评估簇标题（支持 cluster_ids 筛选）
 - `POST /api/cluster/results/:id/clusters/:cid/evaluate-theme` — 单簇标题评估（不含跨簇规则）
 - `GET /api/eval/reports` — 历史评估报告列表
-- `GET /api/eval/reports/:id` — 单份评估报告详情 |
+- `GET /api/eval/reports/:id` — 单份评估报告详情
+
+**图文工坊**：
+
+- `POST /api/post-studio/generate` — 提示词模式生成文案（photo_ids + style + prompt → title + content）
+- `POST /api/post-studio/refine` — 草稿模式润色文案（content + style → title + content）
 
 ### 4.3 Web 前端路由
 
@@ -259,6 +272,8 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `#/chat/:sessionId?` (ChatView) — AI 对话界面
 - `#/golden-queries` (GoldenQueryManagement) — 黄金查询用例管理
 - `#/cluster` (ClusterView) — 聚类分析与组图发现
+- `#/post-studio` (PostStudio) — 图文工坊（创作工作台）
+- `#/drafts` (DraftManagement) — 草稿管理
 
 Vite 开发代理：
 
@@ -374,7 +389,7 @@ photo-agent/
 │   └── demo/                     # 独立演示入口（text_to_sql / query_router）
 ├── web/                          # Web 前端
 │   ├── src/
-│   │   ├── views/                # PhotoManagement.vue + ChatView.vue
+│   │   ├── views/                # PhotoManagement + ChatView + PostStudio + DraftManagement
 │   │   ├── components/           # PhotoGrid/Card/Detail + Upload + Chat
 │   │   ├── composables/          # 状态管理（usePhotos/useUpload/useChat/useVlmQueue/...）
 │   │   ├── types/                # TypeScript 类型定义
@@ -383,7 +398,7 @@ photo-agent/
 ├── configs/                      # 公共配置模板
 ├── data/                         # 运行时数据
 │   ├── photos/                   # 照片文件
-│   ├── sqlite/                   # SQLite 数据库
+│   ├── sqlite/                   # SQLite 数据库（含 drafts 表）
 │   ├── chroma/                   # ChromaDB 向量库
 │   └── suggest_history.json      # 选题建议历史（持久化存储）
 └── docs/                         # 项目文档

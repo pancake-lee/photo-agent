@@ -69,14 +69,17 @@ ChromaDB 仅存储 photo_id 和 chunk_index，结构化过滤完全交给 Text-t
 |------|------|
 | `photo_id` | 关联 Go 照片、去重、清理孤立数据 |
 | `chunk_index` | chunk 排序 |
+| `model` | 向量操作记录：生成向量所用模型 |
+| `embedded_at` | 向量操作记录：向量生成时间（ISO 8601 UTC） |
 
-移除的字段（均由 Go 后端 SQLite 提供）：
+移除的字段（图片结构化属性，均由 Go 后端 SQLite 提供）：
 
 - `file_path` — Go 有
 - `shot_at` — Go 有
 - `objects`, `colors`, `scene`, `lighting`, `mood`, `composition` — Go 有
-- `embed_model` — 配置文件已知
-- `embedded_at` — 非关键信息
+
+说明：`model` / `embedded_at` 与上述"图片结构化属性"性质不同，它们是向量本身的操作记录（溯源信息），
+在生成向量时一并写入，供详情面板展示向量的生成模型与时间，不参与 RAG 检索的 where 过滤。
 
 ### RAG 检索链路
 
@@ -93,3 +96,4 @@ ChromaDB 仅存储 photo_id 和 chunk_index，结构化过滤完全交给 Text-t
 ## 变更记录
 
 - **2026-06-23**：决策采用路线 B，移除 ChromaDB 冗余 metadata
+- **2026-08-24**：在 metadata 中补充 `model` / `embedded_at` 作为向量操作记录（溯源信息），供详情面板展示向量的生成模型与时间
