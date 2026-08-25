@@ -39,6 +39,23 @@ CONTEXT_PROMPT = (
     "用户问题：{question}"
 )
 
+# 检索粒度 → Chroma Collection
+# photo:  全量照片，每张独立参与检索（默认，行为与改造前一致）
+# fine:   精细连拍组，仅组封面参与检索，一组只出一个结果
+# coarse: 模糊连拍组，同上但分组更宽松
+GRANULARITY_COLLECTIONS = {
+    "photo": chroma_client.COLLECTION_PHOTOS,
+    "fine": chroma_client.COLLECTION_BURST_FINE,
+    "coarse": chroma_client.COLLECTION_BURST_COARSE,
+}
+
+
+def resolve_collection(granularity: str) -> str:
+    """把检索粒度映射为 Collection 名，未知粒度回落到全量照片集合。"""
+    return GRANULARITY_COLLECTIONS.get(
+        granularity or "photo", chroma_client.COLLECTION_PHOTOS,
+    )
+
 
 def _build_context(results: list[dict], cfg: config.Config) -> tuple[str, list[dict]]:
     """
@@ -76,25 +93,32 @@ def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
     """
     从检索结果提取去重的结构化照片引用，并行获取原始文件名。
 
+    命中来自连拍组集合时，metadata 带 group_id/photo_count，
+    此时额外附上 burst_group_id 与 burst_count，供前端渲染组卡片。
+
     参数:
         results: Chroma 检索结果列表
         cfg:     配置对象
 
     返回:
-        [{photo_id, filename, image_url}, ...]
+        [{photo_id, filename, image_url, burst_group_id?, burst_count?}, ...]
     """
     if not results:
         return []
 
-    # 去重提取 photo_id
+    # 去重提取 photo_id，同时记录其所属连拍组（组集合检索时才有）
     seen: set[str] = set()
     photo_ids: list[str] = []
+    group_info: dict[str, tuple[str, int]] = {}
     for r in results:
         meta = r.get("metadata") or {}
         pid = meta.get("photo_id", "")
         if pid and pid not in seen:
             seen.add(pid)
             photo_ids.append(pid)
+            gid = meta.get("group_id", "")
+            if gid:
+                group_info[pid] = (gid, int(meta.get("photo_count") or 0))
 
     import utils.backend_sdk as bksdk
     photo_api = bksdk.get_photo_api(cfg.go_backend_url)
@@ -127,11 +151,16 @@ def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
     # 构建引用列表（保持去重顺序）
     refs: list[dict] = []
     for pid in photo_ids:
-        refs.append({
+        ref = {
             "photo_id": pid,
             "filename": filename_map.get(pid, pid),
             "image_url": f"{cfg.go_backend_url}/api/v1/photos/{pid}/image",
-        })
+        }
+        if pid in group_info:
+            gid, count = group_info[pid]
+            ref["burst_group_id"] = gid
+            ref["burst_count"] = count
+        refs.append(ref)
 
     return refs
 
@@ -185,14 +214,16 @@ def _retrieve(
     cfg: config.Config,
     question: str,
     n_results: int = 5,
+    granularity: str = "photo",
 ) -> list[dict]:
     """
     对用户问题进行 Embedding 并在 Chroma 中检索 Top-K 结果（纯向量相似度）。
 
     参数:
-        cfg:        配置对象
-        question:   用户问题
-        n_results:  返回的最相似结果数量
+        cfg:         配置对象
+        question:    用户问题
+        n_results:   返回的最相似结果数量
+        granularity: 检索粒度 photo/fine/coarse，决定查询哪个 Collection
 
     返回:
         扁平化的检索结果列表
@@ -204,7 +235,7 @@ def _retrieve(
 
     store = chroma_client.ChromaPhotoStore(
         persist_dir=str(cfg.resolve_path("./data/chroma")),
-        collection_name="photos",
+        collection_name=resolve_collection(granularity),
     )
 
     vectors = emb.embed_texts([question])
@@ -298,6 +329,7 @@ def retrieve_photo_ids(
     distance_threshold: float | None = None,
     auto_distance_ratio: float = 1.8,
     with_details: bool = False,
+    granularity: str = "photo",
 ) -> list[str] | tuple[list[str], list[dict]]:
     """
     纯向量语义检索，仅返回 photo_id 列表（按相似度降序）。
@@ -313,12 +345,13 @@ def retrieve_photo_ids(
         auto_distance_ratio: 自动比值断层阈值（默认 1.8），0 表示关闭
         with_details:        为 True 时返回 (ids, results) 元组，
                             results 含 distance 字段用于 trace
+        granularity:         检索粒度 photo/fine/coarse，组粒度下返回的是组封面 ID
 
     返回:
         按相似度降序排列的 photo_id 列表，或 (ids, results) 元组
     """
     # 检索更多 chunk 再聚合到照片级别
-    results = _retrieve(cfg, question, n_results=n_results * 3)
+    results = _retrieve(cfg, question, n_results=n_results * 3, granularity=granularity)
     results = _aggregate_by_photo(results, top_n=n_results)
 
     # 自动比值断层过滤
@@ -355,6 +388,7 @@ def answer_question(
     aggregate: bool = True,
     distance_threshold: float | None = None,
     auto_distance_ratio: float = 1.8,
+    granularity: str = "photo",
 ) -> tuple[str, list[dict]]:
     """
     执行完整 RAG 链路（纯向量语义检索），返回答案和结构化照片引用。
@@ -373,13 +407,15 @@ def answer_question(
         distance_threshold:  绝对距离阈值，超过此值的结果被丢弃（None 表示不过滤）
         auto_distance_ratio: 自动比值断层阈值（默认 1.8），0 表示关闭此算法。
                              算法：相邻 dist[i+1]/dist[i] >= ratio 时截断
+        granularity:         检索粒度 photo/fine/coarse。组粒度下命中的是连拍组封面，
+                             返回的引用会带 burst_group_id/burst_count
 
     返回:
         (LLM 生成的回答文本, 结构化照片引用列表)
     """
     # 聚合模式下先检索更多 chunk，再聚合到照片级别
     retrieve_n = n_results * 3 if aggregate else n_results
-    results = _retrieve(cfg, question, n_results=retrieve_n)
+    results = _retrieve(cfg, question, n_results=retrieve_n, granularity=granularity)
 
     if aggregate:
         results = _aggregate_by_photo(results, top_n=n_results)

@@ -10,7 +10,14 @@ export interface PhotoRef {
   photo_id: string
   filename: string
   image_url: string
+  /** 连拍组粒度检索时才有：命中的连拍组 ID，photo_id 即该组封面 */
+  burst_group_id?: string
+  /** 该连拍组内的照片数 */
+  burst_count?: number
 }
+
+/** 检索粒度：photo 单张照片 / fine 精细连拍组 / coarse 模糊连拍组 */
+export type Granularity = 'photo' | 'fine' | 'coarse'
 
 export interface ChatMessage {
   id: number

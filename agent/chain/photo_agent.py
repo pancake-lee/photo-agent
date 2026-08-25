@@ -50,6 +50,7 @@ import utils.token_tracker as token_tracker
 class RouterState(typing.TypedDict):
     """查询路由的共享 State。"""
     question: str
+    granularity: str        # 检索粒度 photo/fine/coarse，见 photo_rag.GRANULARITY_COLLECTIONS
     query_type: str
     sql_result: dict
     rag_answer: str
@@ -136,6 +137,7 @@ def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
             cfg, state["question"],
             distance_threshold=cfg.rag_distance_threshold,
             auto_distance_ratio=cfg.rag_auto_distance_ratio,
+            granularity=state.get("granularity", "photo"),
         )
     except Exception as exc:
         answer_text = f"RAG 检索失败: {exc}"
@@ -209,6 +211,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     """
     cfg = _get_cfg(config)
     question = state["question"]
+    granularity = state.get("granularity", "photo")
     _log = logging.getLogger(__name__)
 
     try:
@@ -227,6 +230,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 cfg, question,
                 distance_threshold=cfg.rag_distance_threshold,
                 auto_distance_ratio=cfg.rag_auto_distance_ratio,
+                granularity=granularity,
             )
             return {
                 "combined_result": {
@@ -247,6 +251,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 cfg, question,
                 distance_threshold=cfg.rag_distance_threshold,
                 auto_distance_ratio=cfg.rag_auto_distance_ratio,
+                granularity=granularity,
             )
             return {
                 "combined_result": {
@@ -260,14 +265,25 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 "photos": photo_refs,
             }
 
-        # Step 2: RAG 语义检索
-        rag_ids = photo_rag.retrieve_photo_ids(
+        # Step 2: RAG 语义检索（组粒度下命中的是连拍组封面）
+        rag_ids, rag_results = photo_rag.retrieve_photo_ids(
             cfg, question,
             n_results=20,
             distance_threshold=cfg.rag_distance_threshold,
             auto_distance_ratio=cfg.rag_auto_distance_ratio,
+            with_details=True,
+            granularity=granularity,
         )
         _log.info("[combined] RAG 检索返回 %d 个 photo_id", len(rag_ids))
+
+        # 封面 photo_id -> (group_id, photo_count)，用于给最终结果补组信息
+        group_info: dict[str, tuple[str, int]] = {}
+        for r in rag_results:
+            meta = r.get("metadata") or {}
+            gid = meta.get("group_id", "")
+            pid = meta.get("photo_id", "")
+            if gid and pid:
+                group_info[pid] = (gid, int(meta.get("photo_count") or 0))
 
         # Step 3: 取交集（保持 RAG 相似度排序）
         sql_set = set(sql_ids)
@@ -284,6 +300,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 cfg, question,
                 distance_threshold=cfg.rag_distance_threshold,
                 auto_distance_ratio=cfg.rag_auto_distance_ratio,
+                granularity=granularity,
             )
             return {
                 "combined_result": {
@@ -308,11 +325,16 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
             pid = pd.get("id", "")
             desc = pd.get("description", "") or "无描述"
             context_lines.append(f"[{i}] 照片 {pid}\n描述: {desc}")
-            photo_refs.append({
+            ref = {
                 "photo_id": pid,
                 "filename": pd.get("filename", pid),
                 "image_url": f"{cfg.go_backend_url}/api/v1/photos/{pid}/image",
-            })
+            }
+            if pid in group_info:
+                gid, count = group_info[pid]
+                ref["burst_group_id"] = gid
+                ref["burst_count"] = count
+            photo_refs.append(ref)
 
         context = "\n\n".join(context_lines)
 
@@ -354,6 +376,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 cfg, question,
                 distance_threshold=cfg.rag_distance_threshold,
                 auto_distance_ratio=cfg.rag_auto_distance_ratio,
+                granularity=granularity,
             )
         except Exception:
             answer_text = f"组合查询和 RAG 降级均失败: {exc}"
@@ -539,10 +562,17 @@ class PhotoAgent:
         else:
             _log.info("   Token 追踪: 已开启（无单价配置，仅记录 token 数）")
 
-    def route(self, question: str) -> RouterState:
-        """路由单次查询，自动分发到 SQL / RAG / Tool 分支。"""
+    def route(self, question: str, granularity: str = "photo") -> RouterState:
+        """路由单次查询，自动分发到 SQL / RAG / Tool 分支。
+
+        参数:
+            question:    用户问题
+            granularity: 检索粒度 photo/fine/coarse。photo 为单张照片检索（默认），
+                         fine/coarse 走连拍组封面集合，一组只返回一个结果
+        """
         initial: RouterState = {
             "question": question,
+            "granularity": granularity,
             "query_type": "",
             "sql_result": {},
             "rag_answer": "",

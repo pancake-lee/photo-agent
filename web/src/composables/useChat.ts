@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   ChatSessionDetail,
   SendMessageResponse,
+  Granularity,
 } from '../types/chat'
 
 import { getAgentBase } from '../config'
@@ -63,7 +64,10 @@ async function loadSession(sessionId: string) {
   }
 }
 
-async function sendMessage(question: string): Promise<SendMessageResponse> {
+async function sendMessage(
+  question: string,
+  granularity: Granularity = 'photo'
+): Promise<SendMessageResponse> {
   if (!currentSession.value) {
     throw new Error('没有活动会话')
   }
@@ -86,7 +90,7 @@ async function sendMessage(question: string): Promise<SendMessageResponse> {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, granularity }),
       }
     )
     if (!resp.ok) {

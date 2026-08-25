@@ -34,7 +34,7 @@ const {
 } = usePhotos()
 const { showUploadModal, files, uploading, currentConflict, addFiles, removeFile, startUpload, openUploadModal, closeUploadModal } = useUpload()
 const { status: vlmStatus, startQueue, stopQueue, enqueuePhoto, onComplete, describeProcessingIds, fetchDescribeProgress, stopDescribePolling, fetchStatus: fetchVlmQueueStatus, startPolling: startVlmPolling } = useVlmQueue()
-const { status: embedStatus, startQueue: startEmbedQueue, stopQueue: stopEmbedQueue, enqueuePhoto: enqueueEmbedPhoto, onComplete: onEmbedComplete, embedProcessingIds, fetchEmbedProgress, stopEmbedProgressPolling, fetchStatus: fetchEmbedQueueStatus, startPolling: startEmbedPolling } = useEmbedQueue()
+const { status: embedStatus, startQueue: startEmbedQueue, stopQueue: stopEmbedQueue, enqueuePhoto: enqueueEmbedPhoto, syncGroupCollections, onComplete: onEmbedComplete, embedProcessingIds, fetchEmbedProgress, stopEmbedProgressPolling, fetchStatus: fetchEmbedQueueStatus, startPolling: startEmbedPolling } = useEmbedQueue()
 const { embeddedIds, embedStats, fetchEmbeddedIds, fetchEmbedStats } = useEmbedStatus()
 const { status: burstStatus, rebuild: rebuildBurst, fetchStatus: fetchBurstStatus, stopPolling: stopBurstPolling } = useBurstGroups()
 const showDescModal = ref(false)
@@ -132,7 +132,9 @@ async function handleTriggerEmbed(photoId: string) { try { await enqueueEmbedPho
 function handleViewDescription() { if (selectedPhoto.value) { descPhoto.value = selectedPhoto.value; showDescModal.value = true } }
 function handleRegenerateDescription() { if (descPhoto.value) handleTriggerDescribe(descPhoto.value.id); showDescModal.value = false }
 async function handleDeletePhoto(photoId: string) { try { await deletePhoto(photoId); message.success('图片已删除'); fetchStats() } catch (e) { message.error(e instanceof Error ? e.message : '删除失败') } }
-async function handleRebuildBurst() { try { const status = await rebuildBurst(() => { message.success(`连拍分组完成，精细 ${burstStatus.value.group_count} 组 / 模糊 ${burstStatus.value.coarse_group_count} 组`); relocateToStart() }); message[status === 'already_running' ? 'info' : 'success'](status === 'already_running' ? '连拍分组已在进行中' : '连拍分组重算已启动') } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
+async function handleRebuildBurst() { try { const status = await rebuildBurst(() => { message.success(`连拍分组完成，精细 ${burstStatus.value.group_count} 组 / 模糊 ${burstStatus.value.coarse_group_count} 组`); relocateToStart(); syncBurstVectors() }); message[status === 'already_running' ? 'info' : 'success'](status === 'already_running' ? '连拍分组已在进行中' : '连拍分组重算已启动') } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
+// 分组变了组向量集合就过期了，重建完成后立即对齐（封面向量复用全量集合，不重跑 Embedding）
+async function syncBurstVectors() { try { const counts = await syncGroupCollections(); message.success(`连拍组向量已同步，精细 ${counts.fine ?? 0} 组 / 模糊 ${counts.coarse ?? 0} 组`) } catch (e) { message.warning(e instanceof Error ? e.message : '连拍组向量同步失败') } }
 function handleCycleViewLevel() { const order = ['all', 'fine', 'coarse'] as const; settings.burstViewLevel = order[(order.indexOf(settings.burstViewLevel) + 1) % order.length]; applyFilters() }
 function handleOpenBurstGroup(groupId: string, coverId: string) { openBurstGroup(groupId, coverId) }
 function handleBurstSetCover(photoId: string) { setBurstCover(burstModalGroup.value, photoId).then(() => message.success('已设为封面')).catch((e) => message.error(e instanceof Error ? e.message : '设为封面失败')) }

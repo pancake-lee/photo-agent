@@ -32,6 +32,11 @@ def get_photo_api(base_url: str) -> sdk.PhotoServiceApi:
     return sdk.PhotoServiceApi(api_client=get_api_client(base_url))
 
 
+def get_curd_api(base_url: str) -> sdk.DefaultCURDApi:
+    """通用 CURD API（photo_groups 等表的直接读写）。"""
+    return sdk.DefaultCURDApi(api_client=get_api_client(base_url))
+
+
 def get_query_api(base_url: str) -> sdk.QueryServiceApi:
     return sdk.QueryServiceApi(api_client=get_api_client(base_url))
 

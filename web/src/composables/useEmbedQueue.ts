@@ -92,6 +92,15 @@ export function useEmbedQueue() {
     return await resp.json()
   }
 
+  // 连拍组重建后同步组向量集合：复用全量集合的封面向量，不重跑 Embedding
+  async function syncGroupCollections(): Promise<Record<string, number>> {
+    const resp = await fetch(`${getAgentBase()}/embed/groups/sync`, {
+      method: 'POST',
+    })
+    if (!resp.ok) throw new Error('连拍组向量同步失败')
+    return await resp.json()
+  }
+
   async function fetchEmbedProgress() {
     try {
       const resp = await fetch(`${getAgentBase()}/embed/progress`)
@@ -138,6 +147,7 @@ export function useEmbedQueue() {
     startQueue,
     stopQueue,
     enqueuePhoto,
+    syncGroupCollections,
     onComplete,
     embedProcessingIds,
     fetchEmbedProgress,

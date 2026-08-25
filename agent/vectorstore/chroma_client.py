@@ -38,13 +38,19 @@ import chromadb
 import chromadb.config as chroma_config
 
 
+# 组图检索的三个 Collection 名：全量照片 / 精细连拍组封面 / 模糊连拍组封面
+COLLECTION_PHOTOS = "photos"
+COLLECTION_BURST_FINE = "photos_burst_fine"
+COLLECTION_BURST_COARSE = "photos_burst_coarse"
+
+
 class ChromaPhotoStore:
     """基于 ChromaDB 的照片描述向量存储。"""
 
     def __init__(
         self,
         persist_dir: str = "./data/chroma",
-        collection_name: str = "photos",
+        collection_name: str = COLLECTION_PHOTOS,
     ):
         """
         初始化 ChromaDB 持久化客户端并获取/创建 Collection。
@@ -253,6 +259,94 @@ class ChromaPhotoStore:
         orphan_ids = all_ids - valid_photo_ids
         for pid in orphan_ids:
             self.delete(where={"photo_id": pid})
+        return len(orphan_ids)
+
+    # ------------------------------------------------------------------ #
+    # 连拍组集合专用操作（photos_burst_fine / photos_burst_coarse）
+    # ------------------------------------------------------------------ #
+
+    def add_group_cover(
+        self,
+        group_id: str,
+        cover_photo_id: str,
+        photo_count: int,
+        documents: list[str],
+        embeddings: list[list[float]],
+        model: str = "",
+    ) -> None:
+        """
+        写入/覆盖一个连拍组的封面描述文档（组集合专用）。
+
+        组集合以 group_id 为文档主键，封面更换或组重建后重嵌入时直接覆盖。
+        metadata 额外记录 cover_photo_id 与 photo_count，供检索结果组装组卡片。
+
+        参数:
+            group_id: 连拍组 ID（如 burst_fine_xxxx）。
+            cover_photo_id: 封面照片 ID。
+            photo_count: 组内照片数。
+            documents: 封面描述分块后的文本片段。
+            embeddings: 与 documents 对应的预计算向量。
+            model: 向量生成所用模型名（向量溯源信息）。
+        """
+        from datetime import datetime, timezone
+
+        ids = [f"{group_id}#{i}" for i in range(len(documents))]
+        metadatas = [
+            {
+                "group_id": group_id,
+                "photo_id": cover_photo_id,
+                "chunk_index": i,
+                "photo_count": photo_count,
+                "model": model,
+                "embedded_at": datetime.now(timezone.utc).isoformat(),
+            }
+            for i in range(len(documents))
+        ]
+        self.delete_group(group_id)
+        self.collection.add(
+            ids=ids,
+            documents=documents,
+            metadatas=metadatas,  # type: ignore[arg-type]
+            embeddings=embeddings,  # type: ignore[arg-type]
+        )
+
+    def delete_group(self, group_id: str) -> None:
+        """删除组集合中指定组的全部文档。"""
+        self.collection.delete(where={"group_id": group_id})
+
+    def get_embedded_group_ids(self) -> set[str]:
+        """返回组集合中已嵌入的 group_id 集合（从 metadata 提取去重）。"""
+        result = self.collection.get(include=["metadatas"])
+        ids: set[str] = set()
+        for meta in (result.get("metadatas") or []):
+            if meta and "group_id" in meta:
+                ids.add(meta["group_id"])
+        return ids
+
+    def get_group_cover_photo_ids(self) -> dict[str, str]:
+        """返回组集合中 group_id -> 当前记录的封面 photo_id 映射。
+
+        用于差量同步时判断封面是否已更换。
+        """
+        result = self.collection.get(include=["metadatas"])
+        mapping: dict[str, str] = {}
+        for meta in (result.get("metadatas") or []):
+            if meta and "group_id" in meta and "photo_id" in meta:
+                # 同组多个 chunk 的 photo_id 一致，重复赋值无影响
+                mapping[meta["group_id"]] = meta["photo_id"]
+        return mapping
+
+    def cleanup_group_orphans(self, valid_group_ids: set[str]) -> int:
+        """
+        删除组集合中 group_id 不在 valid_group_ids 中的孤立文档。
+
+        连拍组重建后组 ID 全部变化，此方法清理旧组残留。
+        返回删除的 group_id 数量。
+        """
+        all_group_ids = self.get_embedded_group_ids()
+        orphan_ids = all_group_ids - valid_group_ids
+        for gid in orphan_ids:
+            self.delete_group(gid)
         return len(orphan_ids)
 
     # ------------------------------------------------------------------ #

@@ -283,6 +283,8 @@ class UpdateSessionRequest(pydantic.BaseModel):
 
 class SendMessageRequest(pydantic.BaseModel):
     question: str
+    # 检索粒度：photo（单张，默认）/ fine（精细连拍组）/ coarse（模糊连拍组）
+    granularity: str = "photo"
 
 
 class SessionResponse(pydantic.BaseModel):
@@ -561,7 +563,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         # 调用 Agent 路由
         try:
-            result = agent_inst.route(question)
+            result = agent_inst.route(question, granularity=body.granularity)
         except Exception as exc:
             logger.exception("Agent 路由失败")
             # 保存错误消息（仅向前端暴露通用提示，避免泄露内部信息）
@@ -617,6 +619,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         q: embed_queue.EmbedQueue = req.app.state.embed_queue
         removed = q.cleanup_orphans()
         return {"removed": removed}
+
+    @app.post("/api/embed/groups/sync")
+    async def embed_groups_sync(req: fastapi.Request):
+        """同步连拍组向量集合（连拍组重建后调用，复用全量集合封面向量）。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return q.sync_group_collections()
 
     @app.post("/api/embed/photos/status")
     async def embed_photos_status(body: dict, req: fastapi.Request):

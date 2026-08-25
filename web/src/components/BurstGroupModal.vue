@@ -22,8 +22,8 @@ const props = withDefaults(defineProps<{
   members: BurstMember[]
   coverId: string
   loading: boolean
-  /** cover：图片管理设为封面；curate：图文工坊连拍精选 */
-  mode?: 'cover' | 'curate'
+  /** cover：图片管理设为封面；curate：图文工坊连拍精选；browse：只浏览不带操作 */
+  mode?: 'cover' | 'curate' | 'browse'
 }>(), {
   mode: 'cover',
 })
@@ -41,6 +41,7 @@ const selectedId = ref('')
 const selectedIds = ref<Set<string>>(new Set())
 
 const isCurate = computed(() => props.mode === 'curate')
+const isBrowse = computed(() => props.mode === 'browse')
 
 watch(
   () => props.groupId,
@@ -156,7 +157,7 @@ function handleCurate() {
             连拍精选
           </NButton>
         </div>
-        <NTooltip v-else :disabled="!isCover" trigger="hover">
+        <NTooltip v-else-if="!isBrowse" :disabled="!isCover" trigger="hover">
           <template #trigger>
             <NButton
               size="small"

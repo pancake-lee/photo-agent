@@ -13,14 +13,19 @@ import {
   NSpin,
   NSpace,
   NModal,
+  NRadioGroup,
+  NRadioButton,
   useMessage,
 } from 'naive-ui'
 import { TrashOutline, SendOutline, ImageOutline, DownloadOutline, BookmarkOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
-import { getAgentBase } from '../config'
-import type { PhotoRef } from '../types/chat'
+import { getAgentBase, getApiBase } from '../config'
+import type { PhotoRef, Granularity } from '../types/chat'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
+import BurstGroupModal from '../components/BurstGroupModal.vue'
+import { photoApi } from '../backend-sdk-client'
+import type { ApiSearchPhotosResponse } from '../../backend-sdk/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +46,14 @@ const {
 const inputText = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 const isCreating = ref(false)
+
+// 检索粒度：会话内保持，直到用户主动切换
+const granularity = ref<Granularity>('photo')
+const granularityOptions: { label: string; value: Granularity }[] = [
+  { label: '精确检索', value: 'photo' },
+  { label: '精细连拍组', value: 'fine' },
+  { label: '模糊连拍组', value: 'coarse' },
+]
 
 // 路由类型中文映射
 const routeLabel: Record<string, string> = {
@@ -111,7 +124,7 @@ async function handleSend() {
   }
 
   try {
-    await sendMessage(text)
+    await sendMessage(text, granularity.value)
     scrollToBottom()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '发送失败')
@@ -262,6 +275,66 @@ function downloadImageUrl(url: string, filename: string) {
     })
 }
 
+// ── 连拍组结果浏览 ──
+
+const groupModalVisible = ref(false)
+const groupModalId = ref('')
+const groupModalCoverId = ref('')
+const groupModalLoading = ref(false)
+const groupModalMembers = ref<{ id: string; thumbnail_url: string; filename: string }[]>([])
+
+// 组粒度检索的结果带 burst_group_id，用它区分组卡片与单张照片列表
+function isGroupRef(photo: PhotoRef): boolean {
+  return !!photo.burst_group_id
+}
+
+async function openGroupModal(photo: PhotoRef) {
+  const groupId = photo.burst_group_id
+  if (!groupId) return
+  groupModalId.value = groupId
+  groupModalCoverId.value = photo.photo_id
+  groupModalMembers.value = []
+  groupModalLoading.value = true
+  groupModalVisible.value = true
+  try {
+    groupModalMembers.value = await fetchGroupMembers(groupId)
+  } finally {
+    groupModalLoading.value = false
+  }
+}
+
+// 组 id 形如 burst_fine_xxx / burst_coarse_xxx，据此决定过滤哪一档分组列
+async function fetchGroupMembers(groupId: string) {
+  const profile = groupId.startsWith('burst_coarse_') ? 'coarse' : 'fine'
+  try {
+    const resp: ApiSearchPhotosResponse = await photoApi.photoServiceSearchPhotos(
+      1, 100,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      'shot_at', 'asc',
+      groupId, profile,
+    )
+    return (resp.items ?? []).map((it) => ({
+      id: it.id ?? '',
+      filename: it.filename ?? '',
+      thumbnail_url: it.id ? `${getApiBase()}/photos/${it.id}/image` : '',
+    }))
+  } catch (e) {
+    console.warn('获取连拍组成员失败', e)
+    return []
+  }
+}
+
+function closeGroupModal() {
+  groupModalVisible.value = false
+  groupModalId.value = ''
+}
+
+// 组内点击主图：聊天场景没有详情抽屉，直接用现有大图预览
+function viewGroupPhotoDetail(photoId: string) {
+  previewUrl.value = `${getApiBase()}/photos/${photoId}/image`
+  previewVisible.value = true
+}
+
 // ── 计算属性 ──
 
 const hasSession = computed(() => currentSession.value !== null)
@@ -362,7 +435,27 @@ const hasMessages = computed(() => messages.value.length > 0)
                 class="photo-attachments"
               >
                 <div class="attachments-header">📎 相关照片 ({{ msg.photos.length }})</div>
-                <div class="attachments-list">
+
+                <!-- 连拍组结果：封面缩略图 + 共 N 张，点击展开组内浏览 -->
+                <div
+                  v-if="msg.photos.some(isGroupRef)"
+                  class="group-cards"
+                >
+                  <div
+                    v-for="photo in msg.photos"
+                    :key="photo.photo_id"
+                    class="group-card"
+                    :title="photo.filename"
+                    @click="isGroupRef(photo) ? openGroupModal(photo) : previewPhoto(photo)"
+                  >
+                    <img :src="photo.image_url" :alt="photo.filename" class="group-card-img" />
+                    <div class="group-card-caption">
+                      共 {{ photo.burst_count || 1 }} 张
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else class="attachments-list">
                   <div
                     v-for="photo in msg.photos"
                     :key="photo.photo_id"
@@ -402,6 +495,18 @@ const hasMessages = computed(() => messages.value.length > 0)
 
     <!-- 底部输入区 -->
     <div class="chat-footer">
+      <!-- 检索粒度：会话内保持，切换后对后续提问生效 -->
+      <div class="granularity-bar">
+        <NRadioGroup v-model:value="granularity" size="small">
+          <NRadioButton
+            v-for="opt in granularityOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </NRadioButton>
+        </NRadioGroup>
+      </div>
       <div class="input-wrapper">
         <NInput
           v-model:value="inputText"
@@ -492,6 +597,18 @@ const hasMessages = computed(() => messages.value.length > 0)
       :show-download="true"
       :download-filename="'photo'"
     />
+
+    <!-- 连拍组展开弹窗（只浏览，不带封面/精选操作） -->
+    <BurstGroupModal
+      :show="groupModalVisible"
+      :group-id="groupModalId"
+      :members="groupModalMembers"
+      :cover-id="groupModalCoverId"
+      :loading="groupModalLoading"
+      mode="browse"
+      @close="closeGroupModal"
+      @view-detail="viewGroupPhotoDetail"
+    />
   </NLayout>
 </template>
 
@@ -572,6 +689,11 @@ const hasMessages = computed(() => messages.value.length > 0)
   border-top: 1px solid var(--n-border-color);
   background: var(--n-color-body);
 }
+.granularity-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
 .input-wrapper {
   display: flex;
   align-items: flex-end;
@@ -612,6 +734,35 @@ const hasMessages = computed(() => messages.value.length > 0)
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+/* 连拍组结果卡片：封面缩略图 + 组内张数 */
+.group-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.group-card {
+  width: 96px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--n-color-embedded);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.group-card:hover {
+  transform: translateY(-2px);
+}
+.group-card-img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+}
+.group-card-caption {
+  padding: 3px 6px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--n-text-color-3);
 }
 .attachment-item {
   display: flex;
