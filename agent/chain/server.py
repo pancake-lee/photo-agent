@@ -126,6 +126,54 @@ def _save_golden_queries(items: list[dict], dir_path: pathlib.Path) -> None:
     )
 
 
+def _append_photos_to_case(
+    items: list[dict],
+    golden_id: str,
+    photos: list["GoldenPhotoRef"],
+    fname_to_uuid: dict[str, str],
+) -> tuple[dict, int]:
+    """把期望照片追加到指定用例，原地修改 items，返回 (用例, 新增数量)。
+
+    照片以文件名（去后缀）为准，UUID 优先按文件名从图库解析；
+    同一（照片, 粒度）组合已存在时跳过，不视为错误。
+    """
+    if not photos:
+        raise fastapi.HTTPException(status_code=400, detail="追加照片不能为空")
+
+    target = next((it for it in items if it.get("id") == golden_id), None)
+    if target is None:
+        raise fastapi.HTTPException(status_code=404, detail="用例不存在")
+
+    existing_photos = target.setdefault("relevant_photos", [])
+    existing_keys = {
+        (p.get("photo_id", ""), p.get("granularity", "photo")) for p in existing_photos
+    }
+    added = 0
+    for p in photos:
+        pid = _normalize_ext(p.photo_id)
+        if not pid:
+            raise fastapi.HTTPException(status_code=400, detail="照片信息不完整：photo_id 为空")
+        fname = _normalize_ext(p.filename) or pid
+        photo_uuid = fname_to_uuid.get(pid) or fname_to_uuid.get(fname) or p.uuid
+        if not photo_uuid:
+            raise fastapi.HTTPException(status_code=400, detail=f"照片不在图库中：{fname}")
+        key = (pid, p.granularity)
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        existing_photos.append({
+            "photo_id": pid,
+            "filename": fname,
+            "uuid": photo_uuid,
+            "granularity": p.granularity,
+        })
+        added += 1
+
+    if added:
+        target["updated_at"] = datetime.datetime.now().isoformat()
+    return target, added
+
+
 # ── 选题历史 JSON 存储 ─────────────────────────────────────
 # v2（suggest_history_v2.json）是唯一数据源。
 # suggest_history.json 自 B13 起不再写入，仅保留文件供回退读取。
@@ -355,6 +403,12 @@ class GoldenQueryEvaluateRequest(pydantic.BaseModel):
     golden_id: str | None = None
 
 
+class GoldenPhotoAppendRequest(pydantic.BaseModel):
+    """向已有用例追加期望照片。已存在的（照片, 粒度）组合会被跳过。"""
+
+    photos: list[GoldenPhotoRef]
+
+
 class EvalPhotoItem(pydantic.BaseModel):
     photo_id: str      # 文件名（去后缀）
     filename: str      # 同 photo_id
@@ -362,6 +416,7 @@ class EvalPhotoItem(pydantic.BaseModel):
 
 
 class EvalDetailItem(pydantic.BaseModel):
+    golden_id: str = ""  # 对应黄金用例 ID，前端据此做单条评估和追加照片
     question: str
     precision: float
     recall: float
@@ -707,7 +762,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 {
                     "photo_id": _normalize_ext(p.photo_id),
                     "filename": _normalize_ext(p.filename),
-                    "uuid": _normalize_ext(p.photo_id),  # ChatView 传入的 photo_id 即 UUID
+                    # 显式传 uuid 时以其为准（管理页新建）；ChatView 未传 uuid，其 photo_id 即 UUID
+                    "uuid": p.uuid or _normalize_ext(p.photo_id),
                     "granularity": p.granularity,
                 }
                 for p in body.relevant_photos
@@ -777,6 +833,27 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         _save_golden_queries(items, gq_dir)
         return {"ok": True, "imported": added}
 
+    @app.post("/api/golden-queries/{golden_id}/photos", response_model=GoldenQueryItem)
+    async def append_golden_photos(
+        golden_id: str,
+        body: GoldenPhotoAppendRequest,
+        req: fastapi.Request,
+    ):
+        """向指定用例追加期望照片，用于把确认后的多余命中写回黄金集。
+
+        照片以文件名（去后缀）为准，UUID 从 Go 后端实时解析，
+        因此追加结果可以立即被下一次评估读取。
+        """
+        cfg = req.app.state.cfg
+        gq_dir = req.app.state.golden_queries_dir
+        items = _load_golden_queries(gq_dir)
+        fname_to_uuid = _build_filename_to_uuid(cfg.go_backend_url)
+        target, added = _append_photos_to_case(items, golden_id, body.photos, fname_to_uuid)
+        if added:
+            _save_golden_queries(items, gq_dir)
+        logger.info("用例 %s 追加 %d 张期望照片", golden_id, added)
+        return target
+
     @app.post("/api/golden-queries/evaluate", response_model=EvalResultResponse)
     async def evaluate_golden_queries(
         req: fastapi.Request,
@@ -815,6 +892,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 return [EvalPhotoItem(**p) for p in d.get(key, [])]
 
             flat_details.append(EvalDetailItem(
+                golden_id=d.get("golden_id", ""),
                 question=d.get("question", ""),
                 precision=round(d.get("precision", 0.0), 4),
                 recall=round(d.get("recall", 0.0), 4),

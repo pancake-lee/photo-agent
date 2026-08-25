@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { formatDate } from '../utils/format'
 import {
   NLayout,
@@ -14,6 +14,8 @@ import {
   NDataTable,
   NPopconfirm,
   NModal,
+  NInput,
+  NSelect,
   useMessage,
 } from 'naive-ui'
 import {
@@ -23,15 +25,26 @@ import {
   DownloadOutline,
   CloudUploadOutline,
   BarChartOutline,
+  AddOutline,
 } from '@vicons/ionicons5'
 import { getAgentBase, getApiBase } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
+import GoldenPhotoPicker from '../components/GoldenPhotoPicker.vue'
+
+type Granularity = 'photo' | 'fine' | 'coarse'
+
+const GRANULARITY_OPTIONS: { label: string; value: Granularity }[] = [
+  { label: '单张 photo', value: 'photo' },
+  { label: '连拍细组 fine', value: 'fine' },
+  { label: '连拍粗组 coarse', value: 'coarse' },
+]
 
 interface GoldenPhotoRef {
   photo_id: string
   filename: string
   uuid: string
+  granularity?: Granularity
 }
 
 interface GoldenQuery {
@@ -52,6 +65,7 @@ interface EvalPhotoItem {
 }
 
 interface EvalDetail {
+  golden_id: string
   question: string
   precision: number
   recall: number
@@ -92,6 +106,37 @@ const evalResult = ref<EvalResult | null>(null)
 const evalDetailVisible = ref(false)
 const evalDetailItem = ref<EvalDetail | null>(null)
 
+// 新建用例
+const createVisible = ref(false)
+const creating = ref(false)
+const createQuery = ref('')
+const createCategory = ref('')
+const createNotes = ref('')
+const createPhotos = ref<GoldenPhotoRef[]>([])
+
+// 行级单条评估：正在评估的用例 ID
+const rowEvaluatingId = ref('')
+
+// 评估明细中追加多余命中
+const appendSelected = ref<string[]>([])
+const appendGranularity = ref<Granularity>('photo')
+const appending = ref(false)
+
+/** FastAPI 错误既可能是 detail 字符串，也可能是校验错误数组，统一转成一行文本 */
+async function errText(resp: Response, fallback: string): Promise<string> {
+  try {
+    const body = await resp.json()
+    const detail = body?.detail
+    if (typeof detail === 'string') return detail
+    if (Array.isArray(detail)) {
+      return detail.map((d) => d.msg || JSON.stringify(d)).join('；')
+    }
+  } catch {
+    // 响应不是 JSON，走兜底文案
+  }
+  return fallback
+}
+
 // ── 图片预览 ──
 
 const previewShow = ref(false)
@@ -130,8 +175,7 @@ async function handleDelete(id: string) {
       items.value = items.value.filter((it) => it.id !== id)
       message.success('已删除')
     } else {
-      const err = await resp.json()
-      message.error(err.detail || '删除失败')
+      message.error(await errText(resp, '删除失败'))
     }
   } catch (e) {
     console.warn('删除黄金用例失败', e)
@@ -146,13 +190,27 @@ function showDetail(item: GoldenQuery) {
   detailVisible.value = true
 }
 
+/** 详情按粒度分组展示，旧用例没有粒度字段时按单张处理 */
+const detailPhotoGroups = computed(() => {
+  const item = detailItem.value
+  if (!item) return []
+  return GRANULARITY_OPTIONS.map((opt) => ({
+    label: opt.label,
+    photos: item.relevant_photos.filter((p) => (p.granularity || 'photo') === opt.value),
+  })).filter((group) => group.photos.length > 0)
+})
+
 // ── 导出 ──
 
 function handleExport() {
   const exportData = items.value.map(({ query_text, relevant_photos, category, notes }) => ({
     query_text,
-    // 导出时剥掉 uuid（UUID 是环境数据，迁移后可能变化）
-    relevant_photos: relevant_photos.map(({ photo_id, filename }) => ({ photo_id, filename })),
+    // 导出时剥掉 uuid（UUID 是环境数据，迁移后可能变化），保留粒度
+    relevant_photos: relevant_photos.map(({ photo_id, filename, granularity }) => ({
+      photo_id,
+      filename,
+      granularity: granularity || 'photo',
+    })),
     category,
     notes,
   }))
@@ -199,8 +257,7 @@ async function handleImport(event: Event) {
       message.success(`已导入 ${result.imported} 条用例`)
       await fetchItems()
     } else {
-      const err = await resp.json()
-      message.error(err.detail || '导入失败')
+      message.error(await errText(resp, '导入失败'))
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : '导入失败，请检查文件格式')
@@ -210,7 +267,84 @@ async function handleImport(event: Event) {
   }
 }
 
+// ── 新建用例 ──
+
+function openCreate() {
+  createQuery.value = ''
+  createCategory.value = ''
+  createNotes.value = ''
+  createPhotos.value = []
+  createVisible.value = true
+}
+
+/** 选择器只回传照片本身，粒度在已选列表里逐张指定，默认单张 */
+function onPickerChange(picked: { photo_id: string; filename: string; uuid: string }[]) {
+  const oldMap = new Map(createPhotos.value.map((p) => [p.photo_id, p.granularity]))
+  createPhotos.value = picked.map((p) => ({
+    ...p,
+    granularity: oldMap.get(p.photo_id) || 'photo',
+  }))
+}
+
+function removeCreatePhoto(photoId: string) {
+  createPhotos.value = createPhotos.value.filter((p) => p.photo_id !== photoId)
+}
+
+async function handleCreate() {
+  if (!createQuery.value.trim()) {
+    message.warning('请填写查询文本')
+    return
+  }
+  if (createPhotos.value.length === 0) {
+    message.warning('请至少选择一张期望照片')
+    return
+  }
+  creating.value = true
+  try {
+    const resp = await fetch(`${getAgentBase()}/golden-queries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query_text: createQuery.value.trim(),
+        relevant_photos: createPhotos.value.map((p) => ({
+          photo_id: p.photo_id,
+          filename: p.filename,
+          uuid: p.uuid,
+          granularity: p.granularity || 'photo',
+        })),
+        category: createCategory.value.trim(),
+        notes: createNotes.value.trim(),
+      }),
+    })
+    if (resp.ok) {
+      message.success('已新建黄金用例')
+      createVisible.value = false
+      await fetchItems()
+    } else {
+      message.error(await errText(resp, '新建失败'))
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '新建请求失败')
+  } finally {
+    creating.value = false
+  }
+}
+
 // ── 评估 ──
+
+/** 运行一次评估，golden_id 为空时评估全部用例 */
+async function runEvaluate(goldenId?: string): Promise<EvalResult | null> {
+  const resp = await fetch(`${getAgentBase()}/golden-queries/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(goldenId ? { golden_id: goldenId } : {}),
+  })
+  if (!resp.ok) {
+    message.error(await errText(resp, '评估失败'))
+    return null
+  }
+  return await resp.json()
+}
 
 async function handleEvaluate() {
   if (items.value.length === 0) {
@@ -221,14 +355,10 @@ async function handleEvaluate() {
   evalModalVisible.value = true
   evalResult.value = null
   try {
-    const resp = await fetch(`${getAgentBase()}/golden-queries/evaluate`, {
-      method: 'POST',
-    })
-    if (resp.ok) {
-      evalResult.value = await resp.json()
+    const result = await runEvaluate()
+    if (result) {
+      evalResult.value = result
     } else {
-      const err = await resp.json()
-      message.error(err.detail || '评估失败')
       evalModalVisible.value = false
     }
   } catch (e) {
@@ -239,9 +369,103 @@ async function handleEvaluate() {
   }
 }
 
+/** 行级单条评估：直接展开该条的命中/遗漏/多余命中明细 */
+async function handleEvaluateRow(row: GoldenQuery) {
+  if (rowEvaluatingId.value) return
+  rowEvaluatingId.value = row.id
+  try {
+    const result = await runEvaluate(row.id)
+    const detail = result?.details?.[0]
+    if (detail) {
+      showEvalDetail(detail)
+    } else if (result) {
+      message.warning('该用例没有返回评估结果')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '评估请求失败')
+  } finally {
+    rowEvaluatingId.value = ''
+  }
+}
+
 function showEvalDetail(row: EvalDetail) {
   evalDetailItem.value = row
+  appendSelected.value = []
+  appendGranularity.value = 'photo'
   evalDetailVisible.value = true
+}
+
+/** 单条复评后指标会变，用明细重算汇总，避免概览与明细对不上 */
+function recalcEvalSummary() {
+  const result = evalResult.value
+  if (!result || result.details.length === 0) return
+  const avg = (pick: (d: EvalDetail) => number) =>
+    result.details.reduce((sum, d) => sum + pick(d), 0) / result.details.length
+  result.precision_at_k = avg((d) => d.precision)
+  result.recall_at_k = avg((d) => d.recall)
+  result.mrr = avg((d) => d.mrr)
+}
+
+// ── 把确认后的多余命中加入用例 ──
+
+function toggleAppendPhoto(photoId: string) {
+  const idx = appendSelected.value.indexOf(photoId)
+  if (idx >= 0) {
+    appendSelected.value.splice(idx, 1)
+  } else {
+    appendSelected.value.push(photoId)
+  }
+}
+
+async function handleAppendPhotos() {
+  const detail = evalDetailItem.value
+  if (!detail || !detail.golden_id || appendSelected.value.length === 0) return
+
+  const photos = detail.miss_ids
+    .filter((p) => appendSelected.value.includes(p.photo_id))
+    .map((p) => ({
+      photo_id: p.photo_id,
+      filename: p.filename,
+      uuid: p.uuid,
+      granularity: appendGranularity.value,
+    }))
+
+  appending.value = true
+  try {
+    const resp = await fetch(
+      `${getAgentBase()}/golden-queries/${detail.golden_id}/photos`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos }),
+      },
+    )
+    if (!resp.ok) {
+      message.error(await errText(resp, '加入用例失败'))
+      return
+    }
+    message.success(`已加入 ${photos.length} 张照片，正在重新评估`)
+    appendSelected.value = []
+    await fetchItems()
+
+    // 追加后立刻复评，让明细与列表反映最新用例
+    const result = await runEvaluate(detail.golden_id)
+    const updated = result?.details?.[0]
+    if (updated) {
+      evalDetailItem.value = updated
+      if (evalResult.value) {
+        const idx = evalResult.value.details.findIndex((d) => d.golden_id === updated.golden_id)
+        if (idx >= 0) {
+          evalResult.value.details[idx] = updated
+          recalcEvalSummary()
+        }
+      }
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加入用例请求失败')
+  } finally {
+    appending.value = false
+  }
 }
 
 // ── 初始化 ──
@@ -260,9 +484,13 @@ const columns = [
   {
     title: '关联照片',
     key: 'relevant_photos',
-    width: 90,
+    width: 120,
     render(row: GoldenQuery) {
-      return `${row.relevant_photos.length} 张`
+      const grouped = row.relevant_photos.filter(
+        (p) => (p.granularity || 'photo') !== 'photo',
+      ).length
+      const base = `${row.relevant_photos.length} 张`
+      return grouped > 0 ? `${base}（组 ${grouped}）` : base
     },
   },
   {
@@ -285,7 +513,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 140,
+    width: 160,
     render(row: GoldenQuery) {
       return h(NSpace, null, {
         default: () => [
@@ -293,6 +521,21 @@ const columns = [
             NButton,
             { size: 'tiny', onClick: () => showDetail(row) },
             { icon: () => h(NIcon, null, { default: () => h(EyeOutline) }) },
+          ),
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              type: 'primary',
+              title: '评估该条用例',
+              loading: rowEvaluatingId.value === row.id,
+              disabled: !!rowEvaluatingId.value && rowEvaluatingId.value !== row.id,
+              onClick: (e: MouseEvent) => {
+                e.stopPropagation()
+                handleEvaluateRow(row)
+              },
+            },
+            { icon: () => h(NIcon, null, { default: () => h(BarChartOutline) }) },
           ),
           h(
             NPopconfirm,
@@ -373,6 +616,12 @@ const evalColumns = [
           </NTag>
         </div>
         <NSpace>
+          <NButton size="small" @click="openCreate">
+            <template #icon>
+              <NIcon><AddOutline /></NIcon>
+            </template>
+            新建
+          </NButton>
           <NButton
             size="small"
             type="primary"
@@ -424,10 +673,11 @@ const evalColumns = [
             <NEmpty description="暂无黄金查询用例">
               <template #extra>
                 <div class="empty-actions">
-                  <span class="empty-hint">在对话页保存用例，或导入已有的 JSON 文件</span>
-                  <NButton size="small" @click="triggerImport">
-                    导入 JSON
-                  </NButton>
+                  <span class="empty-hint">新建用例、在对话页保存，或导入已有的 JSON 文件</span>
+                  <NSpace>
+                    <NButton size="small" type="primary" @click="openCreate">新建用例</NButton>
+                    <NButton size="small" @click="triggerImport">导入 JSON</NButton>
+                  </NSpace>
                 </div>
               </template>
             </NEmpty>
@@ -477,12 +727,79 @@ const evalColumns = [
         <div class="detail-field">
           <span class="detail-label">关联照片 ({{ detailItem.relevant_photos.length }})</span>
           <PhotoThumbList
-            :photos="detailItem.relevant_photos"
+            v-if="detailPhotoGroups.length === 0"
+            :photos="[]"
             empty-text="无关联照片"
-            @preview="openPreview"
           />
+          <div v-for="group in detailPhotoGroups" :key="group.label" class="detail-photo-group">
+            <span class="detail-group-title">{{ group.label }} · {{ group.photos.length }} 张</span>
+            <PhotoThumbList :photos="group.photos" @preview="openPreview" />
+          </div>
         </div>
       </div>
+    </NModal>
+
+    <!-- 新建用例弹窗 -->
+    <NModal
+      v-model:show="createVisible"
+      preset="card"
+      title="新建黄金用例"
+      style="width: 760px; max-width: 95vw;"
+    >
+      <div class="create-body">
+        <div class="detail-field">
+          <span class="detail-label">查询文本</span>
+          <NInput v-model:value="createQuery" placeholder="例如：佛像和人的合照" />
+        </div>
+        <div class="create-row">
+          <div class="detail-field create-row-item">
+            <span class="detail-label">分类</span>
+            <NInput v-model:value="createCategory" placeholder="可留空" />
+          </div>
+          <div class="detail-field create-row-item">
+            <span class="detail-label">备注</span>
+            <NInput v-model:value="createNotes" placeholder="可留空" />
+          </div>
+        </div>
+
+        <div class="detail-field">
+          <span class="detail-label">选择期望照片</span>
+          <GoldenPhotoPicker :selected="createPhotos" @update:selected="onPickerChange" />
+        </div>
+
+        <div v-if="createPhotos.length" class="detail-field">
+          <span class="detail-label">已选照片与粒度 ({{ createPhotos.length }})</span>
+          <div class="picked-list">
+            <div v-for="photo in createPhotos" :key="photo.photo_id" class="picked-row">
+              <img
+                v-if="photo.uuid"
+                class="picked-thumb"
+                :src="`${getApiBase()}/photos/${photo.uuid}/image`"
+                @click="openPreview(photo.uuid)"
+              />
+              <span class="picked-name">{{ photo.filename }}</span>
+              <NSelect
+                v-model:value="photo.granularity"
+                size="small"
+                style="width: 160px"
+                :options="GRANULARITY_OPTIONS"
+              />
+              <NButton size="tiny" quaternary @click="removeCreatePhoto(photo.photo_id)">
+                <NIcon><TrashOutline /></NIcon>
+              </NButton>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <NSpace justify="end">
+          <NButton size="small" @click="createVisible = false">取消</NButton>
+          <NButton size="small" type="primary" :loading="creating" @click="handleCreate">
+            保存
+          </NButton>
+        </NSpace>
+      </template>
     </NModal>
 
     <!-- 评估结果弹窗 -->
@@ -575,13 +892,58 @@ const evalColumns = [
           <PhotoThumbList :photos="evalDetailItem.remaining_ids" empty-text="无遗漏" @preview="openPreview" />
         </div>
 
-        <!-- 未命中 -->
+        <!-- 未命中（多余命中）：确认后可加入当前用例 -->
         <div class="eval-section">
           <div class="eval-section-title">
             ⬜ 未命中 ({{ evalDetailItem.miss_ids.length }} 张)
-            <span class="eval-section-sub">检索到了但与查询不相关的照片</span>
+            <span class="eval-section-sub">检索到了但用例未标注的照片，确认正确后可加入用例</span>
           </div>
-          <PhotoThumbList :photos="evalDetailItem.miss_ids" empty-text="无多余" @preview="openPreview" />
+          <PhotoThumbList
+            v-if="!evalDetailItem.golden_id || evalDetailItem.miss_ids.length === 0"
+            :photos="evalDetailItem.miss_ids"
+            empty-text="无多余"
+            @preview="openPreview"
+          />
+          <template v-else>
+            <div class="miss-grid">
+              <div
+                v-for="photo in evalDetailItem.miss_ids"
+                :key="photo.photo_id"
+                class="miss-item"
+                :class="{ selected: appendSelected.includes(photo.photo_id) }"
+                @click="toggleAppendPhoto(photo.photo_id)"
+              >
+                <img class="miss-thumb" :src="`${getApiBase()}/photos/${photo.uuid}/image`" />
+                <span
+                  class="miss-preview"
+                  title="查看大图"
+                  @click.stop="openPreview(photo.uuid)"
+                >
+                  <NIcon size="12"><EyeOutline /></NIcon>
+                </span>
+                <span v-if="appendSelected.includes(photo.photo_id)" class="miss-check">✓</span>
+                <div class="miss-label">{{ photo.filename }}</div>
+              </div>
+            </div>
+            <div class="miss-actions">
+              <NSelect
+                v-model:value="appendGranularity"
+                size="small"
+                style="width: 160px"
+                :options="GRANULARITY_OPTIONS"
+              />
+              <NButton
+                size="small"
+                type="primary"
+                :loading="appending"
+                :disabled="appendSelected.length === 0"
+                @click="handleAppendPhotos"
+              >
+                加入用例（{{ appendSelected.length }}）
+              </NButton>
+              <span class="miss-hint">点击缩略图选择，加入后自动复评</span>
+            </div>
+          </template>
         </div>
       </div>
     </NModal>
@@ -646,6 +1008,59 @@ const evalColumns = [
 .detail-value {
   font-size: 14px;
   color: var(--n-text-color);
+}
+.detail-photo-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.detail-group-title {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+/* ── 新建用例 ── */
+.create-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 68vh;
+  overflow-y: auto;
+}
+.create-row {
+  display: flex;
+  gap: 16px;
+}
+.create-row-item {
+  flex: 1;
+}
+.picked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.picked-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.picked-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--n-border-color);
+  cursor: pointer;
+}
+.picked-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* ── 评估结果 ── */
 .eval-loading {
@@ -722,5 +1137,77 @@ const evalColumns = [
   font-weight: 400;
   color: var(--n-text-color-3);
   margin-left: 8px;
+}
+
+/* ── 多余命中选择 ── */
+.miss-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.miss-item {
+  position: relative;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.miss-item.selected {
+  border-color: var(--n-color-target);
+}
+.miss-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+.miss-preview {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.miss-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--n-color-target);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.miss-label {
+  font-size: 10px;
+  color: var(--n-text-color-3);
+  text-align: center;
+  padding: 2px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.miss-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.miss-hint {
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 </style>

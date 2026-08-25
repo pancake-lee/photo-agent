@@ -89,7 +89,11 @@ def _load_golden_queries_from_items(items: list[dict]) -> list[dict]:
                 })
             else:
                 refs.append({"photo_id": _normalize_id(photo), "granularity": "photo"})
-        result.append({"question": it.get("query_text", ""), "relevant_photos": refs})
+        result.append({
+            "id": it.get("id", ""),
+            "question": it.get("query_text", ""),
+            "relevant_photos": refs,
+        })
     return result
 
 
@@ -254,6 +258,7 @@ def run_evaluation(
             if verbose:
                 print(f"[{i+1}/{len(queries)}] err 检索失败: {question[:40]}... — {exc}")
             details.append({
+                "golden_id": q.get("id", ""),
                 "question": question,
                 "error": str(exc),
                 "precision": 0.0,
@@ -284,6 +289,7 @@ def run_evaluation(
             return result
 
         details.append({
+            "golden_id": q.get("id", ""),
             "question": question,
             "relevant_ids": sorted(relevant_ids),
             "retrieved_ids": retrieved_ids,

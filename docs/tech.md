@@ -233,7 +233,8 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `POST /api/golden-queries` — 创建用例
 - `POST /api/golden-queries/import` — 批量导入
 - `DELETE /api/golden-queries/:id` — 删除用例
-- `POST /api/golden-queries/evaluate` — 运行评估，返回 P@10/R@10/MRR
+- `POST /api/golden-queries/:id/photos` — 追加期望照片（可指定 photo/fine/coarse 粒度），已存在的组合跳过
+- `POST /api/golden-queries/evaluate` — 运行评估，返回 P@10/R@10/MRR；带 `golden_id` 时只评估该条，明细含 `golden_id`
 
 **选题建议（主题发现）**：
 
