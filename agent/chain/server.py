@@ -17,6 +17,7 @@ import datetime
 import os
 import threading
 import queue
+from typing import Literal
 
 
 import fastapi
@@ -107,6 +108,9 @@ def _load_golden_queries(dir_path: pathlib.Path) -> list[dict]:
                 {"photo_id": pid, "filename": pid} for pid in raw
             ]
             migrated = True
+        for photo in it.get("relevant_photos", []):
+            if isinstance(photo, dict):
+                photo.setdefault("granularity", "photo")
     if migrated:
         _save_golden_queries(items, dir_path)
     return items
@@ -327,6 +331,7 @@ class GoldenPhotoRef(pydantic.BaseModel):
     photo_id: str
     filename: str
     uuid: str = ""  # Go 后端 UUID，前端用于构造图片 URL；列表接口自动填充
+    granularity: Literal["photo", "fine", "coarse"] = "photo"
 
 
 class GoldenQueryCreateRequest(pydantic.BaseModel):
@@ -344,6 +349,10 @@ class GoldenQueryItem(pydantic.BaseModel):
     notes: str
     created_at: str
     updated_at: str
+
+
+class GoldenQueryEvaluateRequest(pydantic.BaseModel):
+    golden_id: str | None = None
 
 
 class EvalPhotoItem(pydantic.BaseModel):
@@ -699,6 +708,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     "photo_id": _normalize_ext(p.photo_id),
                     "filename": _normalize_ext(p.filename),
                     "uuid": _normalize_ext(p.photo_id),  # ChatView 传入的 photo_id 即 UUID
+                    "granularity": p.granularity,
                 }
                 for p in body.relevant_photos
             ],
@@ -752,6 +762,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     "photo_id": pid,
                     "filename": fname,
                     "uuid": fname_to_uuid.get(pid, ""),
+                    "granularity": p.granularity,
                 })
             items.append({
                 "id": uuid.uuid4().hex[:12],
@@ -767,12 +778,21 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         return {"ok": True, "imported": added}
 
     @app.post("/api/golden-queries/evaluate", response_model=EvalResultResponse)
-    async def evaluate_golden_queries(req: fastapi.Request):
-        """对当前全部黄金用例运行 RAG 检索评估。"""
+    async def evaluate_golden_queries(
+        req: fastapi.Request,
+        body: GoldenQueryEvaluateRequest | None = None,
+    ):
+        """对全部黄金用例或指定单条用例运行 RAG 检索评估。"""
         cfg = req.app.state.cfg
 
         # 从 JSON 加载用例（复用 evaluation 模块的加载逻辑）
         queries = evaluation_mod._load_golden_queries(cfg)
+        if body and body.golden_id:
+            stored = _load_golden_queries(req.app.state.golden_queries_dir)
+            selected = next((item for item in stored if item["id"] == body.golden_id), None)
+            if selected is None:
+                raise fastapi.HTTPException(status_code=404, detail="用例不存在")
+            queries = evaluation_mod._load_golden_queries_from_items([selected])
         if not queries:
             raise fastapi.HTTPException(status_code=400, detail="没有黄金用例可评估，请先导入用例")
 

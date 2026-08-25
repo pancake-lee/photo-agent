@@ -3,6 +3,8 @@
 > 量化评估指标，跟踪各模块质量趋势。每次运行评估后更新。
 >
 > 指标来源：`agent/chain/evaluation.py` + `agent/data/golden_queries.json`
+>
+> 测试逻辑：[eval-test-logic.md](eval-test-logic.md)
 
 ## RAG 检索基线
 

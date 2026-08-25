@@ -29,6 +29,8 @@ import embedding.embedder as embedder
 import vectorstore.chroma_client as chroma_client
 import chain.photo_rag as photo_rag
 
+GRANULARITIES = ("photo", "fine", "coarse")
+
 
 def _normalize_id(photo_id: str) -> str:
     """去除文件扩展名，兼容用户标注时只写文件名不写后缀的场景。"""
@@ -68,11 +70,31 @@ def _build_id_to_filename(go_backend_url: str) -> dict[str, str]:
     return mapping
 
 
-def _load_golden_queries(cfg: config.Config) -> list[dict]:
-    """从 agent/data/golden_queries.json 加载黄金用例。
+def _load_golden_queries_from_items(items: list[dict]) -> list[dict]:
+    """将 JSON 黄金用例转换为评估输入，并兼容旧格式。"""
+    # 适配 JSON 字段名 → evaluation 期望的字段名
+    # relevant_photos 可能是新格式 [{photo_id, filename}] 或旧格式 [str]
+    result = []
+    for it in items:
+        raw = it.get("relevant_photos", it.get("relevant_photo_ids", []))
+        refs = []
+        for photo in raw:
+            if isinstance(photo, dict):
+                granularity = photo.get("granularity", "photo")
+                if granularity not in GRANULARITIES:
+                    raise ValueError(f"未知检索粒度: {granularity}")
+                refs.append({
+                    "photo_id": _normalize_id(photo.get("photo_id", "")),
+                    "granularity": granularity,
+                })
+            else:
+                refs.append({"photo_id": _normalize_id(photo), "granularity": "photo"})
+        result.append({"question": it.get("query_text", ""), "relevant_photos": refs})
+    return result
 
-    文件不存在或为空时返回空列表；服务启动后需先导入用例。
-    """
+
+def _load_golden_queries(cfg: config.Config) -> list[dict]:
+    """从 agent/data/golden_queries.json 加载黄金用例。"""
     json_path = cfg.resolve_path("./data/golden_queries.json")
     if not json_path.exists():
         return []
@@ -80,20 +102,7 @@ def _load_golden_queries(cfg: config.Config) -> list[dict]:
         items = json.loads(json_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
-    if not items:
-        return []
-
-    # 适配 JSON 字段名 → evaluation 期望的字段名
-    # relevant_photos 可能是新格式 [{photo_id, filename}] 或旧格式 [str]
-    result = []
-    for it in items:
-        raw = it.get("relevant_photos", it.get("relevant_photo_ids", []))
-        if raw and isinstance(raw[0], dict):
-            ids = [_normalize_id(p.get("photo_id", "")) for p in raw]
-        else:
-            ids = [_normalize_id(pid) for pid in raw]
-        result.append({"question": it.get("query_text", ""), "relevant_photos": ids})
-    return result
+    return _load_golden_queries_from_items(items) if items else []
 
 
 def _match_ids(
@@ -166,10 +175,13 @@ def run_evaluation(
         model=cfg.embedding_model,
         tracker=tracker,
     )
-    store = chroma_client.ChromaPhotoStore(
-        persist_dir=str(cfg.resolve_path("./data/chroma")),
-        collection_name="photos",
-    )
+    stores = {
+        granularity: chroma_client.ChromaPhotoStore(
+            persist_dir=str(cfg.resolve_path("./data/chroma")),
+            collection_name=photo_rag.GRANULARITY_COLLECTIONS[granularity],
+        )
+        for granularity in GRANULARITIES
+    }
 
     # 构建 UUID ↔ 文件名 双向映射（ChromaDB 存 UUID，黄金用例标文件名）
     id_to_file = _build_id_to_filename(cfg.go_backend_url)
@@ -187,20 +199,40 @@ def run_evaluation(
 
     for i, q in enumerate(queries):
         question = q["question"]
-        relevant_ids = set(q.get("relevant_photos", []))
+        raw_relevant = q.get("relevant_photos", [])
+        relevant_by_granularity: dict[str, set[str]] = {g: set() for g in GRANULARITIES}
+        for ref in raw_relevant:
+            if isinstance(ref, dict):
+                granularity = ref.get("granularity", "photo")
+                photo_id = ref.get("photo_id", "")
+            else:
+                granularity = "photo"
+                photo_id = ref
+            if granularity not in GRANULARITIES:
+                raise ValueError(f"未知检索粒度: {granularity}")
+            if photo_id:
+                relevant_by_granularity[granularity].add(_normalize_id(photo_id))
+        relevant_ids = set().union(*relevant_by_granularity.values())
         recall_k = len(relevant_ids)
         fetch_k = max(precision_k, recall_k, 10)
 
         try:
             vectors = emb.embed_texts([question])
-            results = store.query(
-                query_embeddings=[vectors[0].tolist()],
-                n_results=fetch_k * 3,
-            )
-            aggregated = photo_rag._aggregate_by_photo(results, top_n=fetch_k)
+            aggregated = []
+            for granularity, granularity_relevant in relevant_by_granularity.items():
+                # 没有该粒度标注时不把另一个 Collection 的结果混入指标。
+                if not granularity_relevant:
+                    continue
+                results = stores[granularity].query(
+                    query_embeddings=[vectors[0].tolist()],
+                    n_results=fetch_k * 3,
+                )
+                aggregated.extend(
+                    photo_rag._aggregate_by_photo(results, top_n=fetch_k)
+                )
+            aggregated.sort(key=lambda item: item.get("distance", float("inf")))
             retrieved_ids = [
-                (r.get("metadata") or {}).get("photo_id", "")
-                for r in aggregated
+                (r.get("metadata") or {}).get("photo_id", "") for r in aggregated
             ]
             retrieved_ids = [pid for pid in retrieved_ids if pid]
 
