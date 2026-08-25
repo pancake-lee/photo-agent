@@ -113,6 +113,9 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
         query_type = "tool"
     else:
         query_type = "rag"
+    logging.getLogger(__name__).info(
+        "[路由] 「%s」 → %s", state["question"], query_type,
+    )
     return {"query_type": query_type}
 
 
@@ -132,14 +135,18 @@ def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
 
 def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
+    granularity = state.get("granularity", "photo")
+    _log = logging.getLogger(__name__)
     try:
         answer_text, photo_refs = photo_rag.answer_question(
             cfg, state["question"],
             distance_threshold=cfg.rag_distance_threshold,
             auto_distance_ratio=cfg.rag_auto_distance_ratio,
-            granularity=state.get("granularity", "photo"),
+            granularity=granularity,
         )
+        _log.info("[RAG] 粒度=%s, 返回 %d 个照片引用", granularity, len(photo_refs))
     except Exception as exc:
+        _log.exception("[RAG] 检索异常: %s", exc)
         answer_text = f"RAG 检索失败: {exc}"
         photo_refs = []
     return {"rag_answer": answer_text, "photos": photo_refs}

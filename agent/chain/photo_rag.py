@@ -233,18 +233,25 @@ def _retrieve(
         model=cfg.embedding_model,
     )
 
+    collection_name = resolve_collection(granularity)
     store = chroma_client.ChromaPhotoStore(
         persist_dir=str(cfg.resolve_path("./data/chroma")),
-        collection_name=resolve_collection(granularity),
+        collection_name=collection_name,
+    )
+    logger.info(
+        "[检索] 粒度=%s → collection=%s, 集合文档数=%d, n_results=%d",
+        granularity, collection_name, store.count(), n_results,
     )
 
     vectors = emb.embed_texts([question])
     query_embedding = vectors[0].tolist()
+    logger.info("[检索] query embedding 维度=%d", len(query_embedding))
 
     results = store.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
     )
+    logger.info("[检索] 原始返回 %d 条（chunk 级）", len(results))
 
     return results
 
@@ -353,6 +360,7 @@ def retrieve_photo_ids(
     # 检索更多 chunk 再聚合到照片级别
     results = _retrieve(cfg, question, n_results=n_results * 3, granularity=granularity)
     results = _aggregate_by_photo(results, top_n=n_results)
+    logger.info("[组合查询] 聚合后 %d 张照片（按距离升序）", len(results))
 
     # 自动比值断层过滤
     if auto_distance_ratio > 0:
@@ -424,7 +432,9 @@ def answer_question(
     if results:
         dists = [f"{r.get('distance', '?'):.4f}" if r.get('distance') is not None else "?" for r in results]
         pids = [(r.get("metadata") or {}).get("photo_id", "?") for r in results]
-        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s", len(results), dists)
+        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s, photo_ids=%s", len(results), dists, pids)
+    else:
+        logger.info("[过滤-输入] 聚合后 0 条（检索阶段即无结果，回答将提示未找到）")
 
     # 阶段 1: 自动比值断层过滤 — 检测距离序列中的显著跳跃
     if auto_distance_ratio > 0:
