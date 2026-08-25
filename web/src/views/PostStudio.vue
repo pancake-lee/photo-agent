@@ -293,10 +293,13 @@ async function openPhotoDetail(id: string) {
 
 onMounted(async () => {
   const qDraftId = route.query.draft_id as string
+  const qTopicId = route.query.topic_id as string
   const qPhotoIds = route.query.photo_ids as string
 
   if (qDraftId) {
     await loadDraft(qDraftId)
+  } else if (qTopicId) {
+    await loadTopic(qTopicId)
   } else if (qPhotoIds) {
     await addItemsFromTokens(qPhotoIds.split(',').filter(Boolean))
   }
@@ -318,6 +321,43 @@ async function loadDraft(id: string) {
     }
   } catch (e: any) {
     message.error(e.message || '加载草稿失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+interface TopicDetail {
+  title?: string
+  angle?: string
+  rationale?: string
+  photo_ids?: string[]
+  photo_sequence?: Array<{ photo_id?: string }>
+}
+
+async function loadTopic(id: string) {
+  isLoading.value = true
+  try {
+    const resp = await fetch(`${getAgentBase()}/suggest/history/${id}/detail`)
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error(err.detail || '加载选题失败')
+    }
+    const topic: TopicDetail = await resp.json()
+    const sequencePhotoIds = (topic.photo_sequence ?? [])
+      .map((item) => item.photo_id ?? '')
+      .filter(Boolean)
+    const photoIds = sequencePhotoIds.length > 0 ? sequencePhotoIds : (topic.photo_ids ?? [])
+
+    const topicReason = topic.rationale ?? topic.angle ?? ''
+    title.value = topic.title ?? ''
+    content.value = topicReason
+    draftInput.value = topicReason
+    mode.value = 'draft'
+    source.value = 'topic'
+    await addItemsFromTokens(photoIds)
+    message.success('已采纳选题，可继续编辑')
+  } catch (e: any) {
+    message.error(e?.message || '加载选题失败')
   } finally {
     isLoading.value = false
   }

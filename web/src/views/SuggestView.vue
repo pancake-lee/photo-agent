@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, h, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { formatDate } from '../utils/format'
 import {
   NLayout,
@@ -67,6 +68,7 @@ const PIPELINE_LABELS: Record<string, string> = {
 // ── 状态 ──
 
 const message = useMessage()
+const router = useRouter()
 const loading = ref(false)
 const history = ref<HistoryItem[]>([])
 const deletingId = ref<string | null>(null)
@@ -350,6 +352,10 @@ function handleCardClick(item: HistoryItem) {
   detailVisible.value = true
 }
 
+function adoptTopic(item: HistoryItem) {
+  router.push({ name: 'post-studio', query: { topic_id: item.id } })
+}
+
 function handleManualDone(itemId: string) {
   // 手动选题完成，刷新列表并打开详情
   loadHistory()
@@ -445,6 +451,13 @@ function handleDetailRefreshed() {
                     <NIcon size="16" :component="InformationCircleOutline" />
                   </template>
                   详情
+                </NButton>
+                <NButton
+                  size="tiny"
+                  type="primary"
+                  @click.stop="adoptTopic(item)"
+                >
+                  图文工坊
                 </NButton>
                 <NButton
                   size="tiny"
