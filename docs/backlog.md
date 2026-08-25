@@ -14,12 +14,12 @@
 | 已规划 | 组图检索   | GR1  | 三 Collection 向量库改造       |      |
 | Done   | 图片管理   | CL1  | 上传/VLM/Embed 闭环 + 废弃描述同步清理 | 8.4  |
 | Done   | 图片管理   | CL2  | VLM HTTP 请求无超时                    |      |
-| Done   | 图文工坊   | PS1  | 后端基础 + 图文工坊核心页面            |      |
-| Done   | 图文工坊   | PS5  | 照片详情大图查看（图文工坊 + 图片管理共用） |      |
-| Done   | 图文工坊   | PS2  | 图片管理选择模式                       |      |
-| Done   | 图文工坊   | PS3  | 主题发现采纳入口                       |      |
-| Done   | 图文工坊   | PS4  | 导出功能                               |      |
-| Done   | 图文工坊   | PS6  | 文案生成提示词结构重构                 |      |
+| Done   | 图文工坊   | PS1  | 后端基础 + 图文工坊核心页面            | 8.0  |
+| Done   | 图文工坊   | PS5  | 照片详情大图查看（图文工坊 + 图片管理共用） | 8.3  |
+| Done   | 图文工坊   | PS2  | 图片管理选择模式                       | 8.5  |
+| Done   | 图文工坊   | PS3  | 主题发现采纳入口                       | 8.3  |
+| Done   | 图文工坊   | PS4  | 导出功能                               | 7.8  |
+| Done   | 图文工坊   | PS6  | 文案生成提示词结构重构                 | 8.0  |
 
 > 其余 6 项待规划任务经审阅后迁至 [docs/design/2026-08-22-future-requirements.md](design/2026-08-22-future-requirements.md)。
 
@@ -147,6 +147,7 @@
 ### PS1 后端基础 + 图文工坊核心页面
 
 - **状态**：Done
+- **评估**：8.0（正确性 8.5 健壮性 7.5 可维护性 7.5 简洁性 8），详见 [评估报告](../data/eval_reports/2026-08-25-post-studio-ps-series.md)
 - **背景**：图文工坊是"创作工作台"，接收两条路径的输入（图片管理选图 / 主题发现采纳提案），提供 AI 辅助文案生成和编辑能力。设计文档：[docs/design/2026-08-23-post-studio-design.md](design/2026-08-23-post-studio-design.md)
 - **方案**：
   - Go 后端：新增 `drafts` 表（id / title / content / photo_ids JSON / style / source / status / created_at / updated_at），幂等迁移；DAO 层 CRUD；service 层业务逻辑；API 端点 `POST /api/v1/drafts`（创建）、`PUT /api/v1/drafts/:id`（更新）、`DELETE /api/v1/drafts/:id`（删除）、`GET /api/v1/drafts`（列表）、`GET /api/v1/drafts/:id`（详情）
@@ -172,6 +173,7 @@
 ### PS5 照片详情大图查看（图文工坊 + 图片管理共用）
 
 - **状态**：Done
+- **评估**：8.3（正确性 8.5 健壮性 7.5 可维护性 7.5 简洁性 8），详见 [评估报告](../data/eval_reports/2026-08-25-post-studio-ps-series.md)
 - **背景**：图文工坊的照片区原先点击照片无任何响应，缺少查看原图的途径。用户要求复用图片管理的详情抽屉，并升级为大图查看：不遮挡左侧菜单栏、左右切换上一张/下一张，图文工坊与图片管理的上/下一张 UI/UX 一致但列表不同。
 - **方案**：
   - 升级共享组件 `PhotoDetail.vue`：由 `NDrawer` 抽屉改为全屏灯箱（左侧半透明遮罩 + 放大原图 + 左右切换按钮 + `i/N` 计数 + 文件名）+ 右侧详情面板（EXIF / AI 描述 / Embedding，实色底白字）；`left: 220px` 避开左侧菜单栏；新增 `navList` 属性与 `navigate` 事件驱动上/下一张；新增 `showVlmActions` 控制处理按钮显隐
@@ -190,6 +192,7 @@
 ### PS2 图片管理选择模式
 
 - **状态**：Done
+- **评估**：8.5（正确性 8.5 健壮性 7.5 可维护性 7.5 简洁性 8），详见 [评估报告](../data/eval_reports/2026-08-25-post-studio-ps-series.md)
 - **背景**：图片管理页需增加多选模式，作为图文工坊的"路径 B（自选图片）"入口。设计文档：[docs/design/2026-08-23-post-studio-design.md](design/2026-08-23-post-studio-design.md)
 - **方案**：
   - PhotoManagement 顶栏增加"选择模式"切换按钮（与浏览模式互斥）
@@ -211,6 +214,7 @@
 ### PS3 主题发现采纳入口
 
 - **状态**：已完成
+- **评估**：8.3（正确性 8.5 健壮性 7.5 可维护性 7.5 简洁性 8），详见 [评估报告](../data/eval_reports/2026-08-25-post-studio-ps-series.md)
 - **背景**：主题发现生成选题提案后，用户可"采纳"进入图文工坊，作为"路径 A（AI 策展）"入口。设计文档：[docs/design/2026-08-23-post-studio-design.md](design/2026-08-23-post-studio-design.md)
 - **方案**：
   - 主题发现选题卡片右上角增加"图文工坊"按钮
@@ -228,6 +232,7 @@
 ### PS4 导出功能
 
 - **状态**：Done
+- **评估**：7.8（正确性 8.5 健壮性 7.5 可维护性 7.5 简洁性 8），详见 [评估报告](../data/eval_reports/2026-08-25-post-studio-ps-series.md)
 - **背景**：图文工坊完成编辑后，需支持文本和图片的多种导出方式。设计文档：[docs/design/2026-08-23-post-studio-design.md](design/2026-08-23-post-studio-design.md)
 - **方案**：
   - 文本导出（前端完成）：复制为 Markdown、复制为纯文本、下载为 .md 文件（含标题和正文）
@@ -245,6 +250,7 @@
 ### PS6 文案生成提示词结构重构
 
 - **状态**：Done
+- **评估**：8.0（正确性 8.5 健壮性 7.5 可维护性 7.5 简洁性 8），详见 [评估报告](../data/eval_reports/2026-08-25-post-studio-ps-series.md)
 - **背景**：用户在图文工坊选 3 张照片生成文案，产出内容与照片完全无关。排查发现 `_fetch_photo_descriptions` 按顶层 key 读 Go 的照片详情响应，而描述嵌在 `photo` 对象内，导致照片描述恒为空，LLM 拿到的是三个空壳。此外提示词结构本身缺少分层设计。设计文档：[docs/design/2026-08-24-1-post-studio-prompt-design.md](design/2026-08-24-1-post-studio-prompt-design.md)
 - **方案**：
   - 数据获取改用 `utils/backend_sdk` 的 `photo_service_get_photo_detail`，取结构化对象的 `.photo`，消除手拼 dict key 的 bug 类

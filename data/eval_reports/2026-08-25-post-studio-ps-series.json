@@ -1,0 +1,19 @@
+{
+  "report_id": "2026-08-25-post-studio-ps-series",
+  "backlog_id": "PS1-PS6",
+  "created_at": "2026-08-25T00:00:00Z",
+  "target": "图文工坊 PS1-PS6 系列整体评估",
+  "overall": 8.1,
+  "per_task": {"PS1": 8.0, "PS2": 8.5, "PS3": 8.3, "PS4": 7.8, "PS5": 8.3, "PS6": 8.0},
+  "dimension_scores": {"正确性": 8.5, "健壮性": 7.5, "可维护性": 7.5, "简洁性": 8.0, "准确性": 8.0, "完整性": 8.0, "一致性": 8.5, "惊喜度": 7.5, "可用性": 8.5, "交互体验": 8.0, "AI增量": 8.5},
+  "findings_for_backlog": [],
+  "verification_runtime": [
+    "backend /api/v1/health、agent /api/chat/health、web 均健康",
+    "GOTOOLCHAIN=local go test ./... PASS",
+    "agent/chain/test_post_studio_smoke.py PASS (6/6)",
+    "web pnpm build PASS",
+    "generate/refine 空参数均返回 400",
+    "真实 1 张及 3 张照片生成均 HTTP 200，输出含照片主体、场景和攻略 EXIF"
+  ],
+  "verification_commits": {"PS1": "4e90a6d", "PS2": "362c408", "PS3": "4d6796a", "PS4": "3b1b2da", "PS5": "4e90a6d", "PS6": "c379c51"}
+}
