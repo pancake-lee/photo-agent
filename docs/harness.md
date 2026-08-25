@@ -67,6 +67,7 @@ Go（plogger）和 Python（自建）统一输出结构化 JSON 日志，`trace_
 ### 评估数据
 
 - [docs/eval/baseline.md](eval/baseline.md) — 评估基线记录（RAG 检索 + 模块质量 + 管道正确性）
+- [docs/eval/eval-test-logic.md](eval/eval-test-logic.md) — 测试用例逻辑 + 三层回归 CLI（L0/L1/L2，「回归测试」称呼约定见该文第 0 节）
 - `data/eval_reports/` — 评估报告（`{date}-{topic}.json` 结构化 + `.md` 人工阅读，双格式）
 - `data/traces/` — Trace 结构化日志（JSONL）
 

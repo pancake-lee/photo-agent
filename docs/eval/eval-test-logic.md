@@ -5,6 +5,16 @@
 > 实现入口：[agent/chain/evaluation.py](../../agent/chain/evaluation.py)、
 > [agent/scripts/eval_regression.py](../../agent/scripts/eval_regression.py)。
 
+## 0. 称呼约定
+
+- **「回归测试」**（regression）：指这套三层 CLI，即 `agent/scripts/eval_regression.py`。用 L0 数据态、L1 函数级检索、L2 HTTP 契约三层断言定位失败层级，无 LLM、无浏览器。对话中说「跑回归测试」即在本目录执行：
+  ```bash
+  cd agent
+  .venv/bin/python scripts/eval_regression.py -c ../.local/pancake.yaml --level all
+  ```
+- **「评估」**：指黄金用例打分链路（`agent/chain/evaluation.py` + `eval_engine.py`），产出维度评分与报告。
+- 两者共用 `data/eval_seed_cases.json` 与同一套检索模块，但评估评效果、回归验闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。
+
 ## 1. 测试范围
 
 当前测试分为两组：
@@ -108,7 +118,7 @@ L0 不生成 embedding，也不执行语义查询。Go 服务不可访问、目�
 
 检索闭环：
 
-- 问题：`佛像和人的合照`。
+- 问题：`找找佛像和人的合照`。
 - 粒度：`photo`。
 - 预期排序首位：`DSC_2215`。
 

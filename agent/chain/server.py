@@ -550,6 +550,18 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     embed_q = embed_queue.EmbedQueue(cfg, chroma_store)
     app.state.embed_queue = embed_q
 
+    # 启动即后台对齐连拍组向量集合。
+    # 组集合只在批量 Embedding、前端重建连拍组完成回调或手动同步时才会刷新，
+    # 存量图库（照片早已嵌入、组早已建好）可能从未触发过这些事件，导致
+    # fine/coarse 集合为空、组图检索命中空集合。启动时对齐一次兜住这类缺口。
+    def _sync_groups_on_start() -> None:
+        try:
+            embed_q.sync_group_collections()
+        except Exception:
+            logger.exception("EmbedQueue: 启动时连拍组集合同步失败（可稍后手动同步）")
+
+    threading.Thread(target=_sync_groups_on_start, daemon=True).start()
+
     # 初始化黄金用例存储路径（存入 app.state，避免模块级全局变量）
     app.state.golden_queries_dir = cfg.resolve_path("./data")
 
