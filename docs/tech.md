@@ -197,6 +197,7 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `DELETE /drafts/:id` — 删除草稿
 - `GET /drafts` — 草稿列表
 - `GET /drafts/:id` — 单条草稿详情
+- `GET /drafts/:id/export` — 导出草稿 ZIP（原图 + Markdown）
 
 **独立路由**（非 `/api/v1` 前缀）：
 

@@ -1,8 +1,15 @@
 package service
 
 import (
+	"archive/zip"
 	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
 	"backend/internal/pkg/perr"
@@ -26,6 +33,7 @@ func (s *DraftServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 		r.DELETE("/api/v1/drafts/{id}", s.DeleteDraft)
 		r.GET("/api/v1/drafts", s.ListDrafts)
 		r.GET("/api/v1/drafts/{id}", s.GetDraft)
+		r.GET("/api/v1/drafts/{id}/export", s.ExportDraft)
 	}
 }
 
@@ -201,4 +209,83 @@ func (s *DraftServer) GetDraft(kctx khttp.Context) error {
 	}
 
 	return kctx.Result(200, draftDO2Response(draft))
+}
+
+// ExportDraft 将草稿正文和关联照片原图打包为 ZIP 下载。
+func (s *DraftServer) ExportDraft(kctx khttp.Context) error {
+	id := kctx.Vars().Get("id")
+	ctx := papp.NewAppCtx(kctx.Request().Context())
+
+	draft, err := data.DraftDAO.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	photoIDs := parsePhotoIDs(draft.PhotoIDs)
+	photos := make([]*data.PhotoDO, 0, len(photoIDs))
+	for _, photoID := range photoIDs {
+		if strings.HasPrefix(photoID, "g:") {
+			_, coverID, ok := strings.Cut(photoID[2:], ":")
+			if !ok {
+				return fmt.Errorf("invalid burst photo token: %s", photoID)
+			}
+			photoID = coverID
+		}
+		photo, getErr := data.PhotoDAO.GetByID(ctx, photoID)
+		if getErr != nil {
+			return getErr
+		}
+		path := filepath.Join(conf.C.Storage.PhotoSrc, photo.FilePath)
+		if _, statErr := os.Stat(path); statErr != nil {
+			return fmt.Errorf("photo source file unavailable: %s: %w", photoID, statErr)
+		}
+		photos = append(photos, photo)
+	}
+
+	response := kctx.Response()
+	response.Header().Set("Content-Type", "application/zip")
+	response.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"draft-%s.zip\"", id))
+	zw := zip.NewWriter(response)
+	usedNames := map[string]int{}
+	for _, photo := range photos {
+		name := uniqueZipName(filepath.Base(photo.FilePath), usedNames)
+		entry, createErr := zw.Create(filepath.Join("photos", name))
+		if createErr != nil {
+			return createErr
+		}
+		file, openErr := os.Open(filepath.Join(conf.C.Storage.PhotoSrc, photo.FilePath))
+		if openErr != nil {
+			return openErr
+		}
+		_, copyErr := io.Copy(entry, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+
+	markdownEntry, err := zw.Create("post.md")
+	if err != nil {
+		return err
+	}
+	markdown := "# " + draft.Title + "\n\n" + draft.Content + "\n"
+	if _, err = markdownEntry.Write([]byte(markdown)); err != nil {
+		return err
+	}
+	return zw.Close()
+}
+
+func uniqueZipName(name string, usedNames map[string]int) string {
+	if name == "" || name == "." {
+		name = "photo"
+	}
+	count := usedNames[name]
+	usedNames[name] = count + 1
+	if count == 0 {
+		return name
+	}
+	ext := filepath.Ext(name)
+	return strings.TrimSuffix(name, ext) + fmt.Sprintf("-%d", count+1) + ext
 }

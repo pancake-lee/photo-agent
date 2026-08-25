@@ -314,7 +314,7 @@ func (s *PhotoServer) DeletePhoto(
 // 原始 HTTP 路由 handler（非 proto 映射）
 // ================================================================
 
-// GetPhotoImageHandler 返回图片文件（JPG 从 PhotoPath 取缩略图，NEF 不支持浏览器渲染）
+// GetPhotoImageHandler 返回图片文件，默认返回缩略图，size=original 时返回源文件。
 func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 	id := kctx.Vars().Get("id")
 
@@ -326,11 +326,19 @@ func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 		return err
 	}
 
-	if photo.FileType == "nef" {
+	original := kctx.Request().URL.Query().Get("size") == "original"
+	if photo.FileType == "nef" && !original {
 		return kctx.Result(415, map[string]string{"error": "NEF raw files cannot be displayed in browser"})
 	}
 
-	fullPath := filepath.Join(conf.C.Storage.PhotoPath, photo.FilePath)
+	basePath := conf.C.Storage.PhotoPath
+	if original {
+		basePath = conf.C.Storage.PhotoSrc
+		if kctx.Request().URL.Query().Get("download") == "1" {
+			kctx.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(photo.FilePath)))
+		}
+	}
+	fullPath := filepath.Join(basePath, photo.FilePath)
 	http.ServeFile(kctx.Response(), kctx.Request(), fullPath)
 	return nil
 }

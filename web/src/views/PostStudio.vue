@@ -100,6 +100,10 @@ function imageUrl(id: string): string {
   return id ? `${getApiBase()}/photos/${id}/image` : ''
 }
 
+function originalImageUrl(id: string): string {
+  return id ? `${getApiBase()}/photos/${id}/image?size=original&download=1` : ''
+}
+
 function photoToItem(p: ApiPhotoItem): PhotoItem {
   return {
     photo_id: p.id ?? '',
@@ -467,6 +471,65 @@ async function saveDraft() {
   }
 }
 
+function markdownText(): string {
+  return `# ${title.value.trim() || '无标题'}\n\n${content.value}`
+}
+
+function plainText(): string {
+  return [title.value.trim(), content.value.trim()].filter(Boolean).join('\n\n')
+}
+
+async function copyText(text: string, successMessage: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success(successMessage)
+  } catch {
+    message.error('复制失败，请检查浏览器剪贴板权限')
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+function downloadMarkdown() {
+  downloadBlob(new Blob([markdownText()], { type: 'text/markdown;charset=utf-8' }), 'post.md')
+}
+
+function downloadPhoto(photo: PhotoItem) {
+  const anchor = document.createElement('a')
+  anchor.href = originalImageUrl(photo.photo_id)
+  anchor.download = photo.filename || 'photo'
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+}
+
+async function downloadZip() {
+  if (!draftId.value) {
+    message.warning('请先保存草稿，再导出 ZIP')
+    return
+  }
+  try {
+    const resp = await fetch(`${getApiBase()}/drafts/${draftId.value}/export`)
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error(err.error || err.message || 'ZIP 导出失败')
+    }
+    downloadBlob(await resp.blob(), `draft-${draftId.value}.zip`)
+    message.success('ZIP 已开始下载')
+  } catch (e: any) {
+    message.error(e?.message || 'ZIP 导出失败')
+  }
+}
+
 function openPhotoPicker() {
   showPhotoPicker.value = true
   photoPickerQuery.value = ''
@@ -629,6 +692,34 @@ async function confirmPickerSelection() {
               />
             </div>
           </div>
+
+          <!-- 导出区 -->
+          <div class="panel export-panel">
+            <div class="panel-header">
+              <span class="panel-title">导出</span>
+              <NSpace size="small" wrap>
+                <NButton size="small" @click="copyText(markdownText(), 'Markdown 已复制')">
+                  复制 Markdown
+                </NButton>
+                <NButton size="small" @click="copyText(plainText(), '纯文本已复制')">
+                  复制纯文本
+                </NButton>
+                <NButton size="small" @click="downloadMarkdown">
+                  下载 .md
+                </NButton>
+                <NButton size="small" type="primary" :disabled="!draftId" @click="downloadZip">
+                  下载 ZIP
+                </NButton>
+              </NSpace>
+            </div>
+            <div v-if="flatPhotos.length" class="export-photo-list">
+              <div v-for="photo in flatPhotos" :key="photo.photo_id" class="export-photo-item">
+                <span class="export-photo-name">{{ photo.filename }}</span>
+                <NButton size="tiny" @click="downloadPhoto(photo)">下载原图</NButton>
+              </div>
+            </div>
+            <span v-else class="export-hint">添加照片后可下载原图，保存草稿后可打包 ZIP。</span>
+          </div>
         </NSpin>
       </div>
     </NLayoutContent>
@@ -783,6 +874,34 @@ async function confirmPickerSelection() {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.export-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-photo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-photo-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.export-photo-name,
+.export-hint {
+  overflow: hidden;
+  color: var(--n-text-color-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .controls-row {
