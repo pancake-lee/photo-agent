@@ -6,20 +6,9 @@ import {
   NSteps,
   NStep,
   NCard,
-  NForm,
-  NFormItem,
-  NInput,
-  NButton,
-  NSpace,
-  NAlert,
-  NDescriptions,
-  NDescriptionsItem,
-  NCollapse,
-  NCollapseItem,
   NSpin,
   NEmpty,
   NModal,
-  NProgress,
   useMessage,
 } from 'naive-ui'
 import { wailsApi, wailsError, isWails, onSyncProgress } from '../utils/wails'
@@ -36,6 +25,10 @@ import type {
   SyncResult,
 } from '../utils/wails'
 import { settings } from '../stores/settings'
+import ImportWorkflowStep1 from '../components/ImportWorkflowStep1.vue'
+import ImportWorkflowStep2 from '../components/ImportWorkflowStep2.vue'
+import ImportWorkflowStep3 from '../components/ImportWorkflowStep3.vue'
+import type { CleanupAdviceRow, DirRow } from '../types/importWorkflow'
 
 const message = useMessage()
 
@@ -103,7 +96,7 @@ const likeAllSynced = computed(() => {
 })
 
 /** 收尾建议行：上传完成后按目录给出可删/需确认的文本建议（程序不删任何文件）。 */
-const cleanupAdviceRows = computed(() => {
+const cleanupAdviceRows = computed<CleanupAdviceRow[]>(() => {
   const r = syncResult.value
   if (!r) return []
   const folder = folderName.value
@@ -156,14 +149,6 @@ const folderExistsOnServer = computed(() => {
 })
 
 /** 中转目录逐行状态：创建状态 + 文件数 + 最新文件时间。 */
-interface DirRow {
-  name: string
-  state: 'created' | 'existed' | 'failed'
-  stateText: string
-  count: number
-  latest: string
-}
-
 const dirRows = computed<DirRow[]>(() => {
   const dirs = createResult.value?.dirs ?? []
   const scan = stagingScan.value
@@ -439,344 +424,65 @@ onUnmounted(() => {
           <NStep title="上传同步" description="上传到服务器" />
         </NSteps>
 
-        <!-- ═══ 步骤 1：新建活动 ═══ -->
-        <NCard v-if="step === 1" title="新建拍摄活动" size="small" class="step-card">
-          <template v-if="!stagingCreated">
-            <NForm label-placement="top" :show-feedback="false">
-              <NFormItem label="日期（YYYYMM）">
-                <NInput
-                  v-model:value="yearMonth"
-                  placeholder="202608"
-                  style="max-width: 240px"
-                />
-              </NFormItem>
-              <NFormItem label="活动名称（可选，留空表示随手拍）">
-                <NInput
-                  v-model:value="activityName"
-                  placeholder="如：山西旅游"
-                  style="max-width: 360px"
-                />
-              </NFormItem>
-              <NFormItem label="中转目录路径（full/like/nef 所在位置）">
-                <NSpace align="center">
-                  <NInput
-                    v-model:value="stagingPath"
-                    placeholder="如：D:\\照片中转\\"
-                    style="width: 420px"
-                  />
-                  <NButton @click="handleChooseDir">选择文件夹</NButton>
-                </NSpace>
-              </NFormItem>
-              <NFormItem>
-                <NButton type="primary" :loading="creating" @click="handleCreate">
-                  确认，创建中转目录
-                </NButton>
-              </NFormItem>
-            </NForm>
-          </template>
+        <ImportWorkflowStep1
+          v-if="step === 1"
+          v-model:year-month="yearMonth"
+          v-model:activity-name="activityName"
+          v-model:staging-path="stagingPath"
+          :staging-created="stagingCreated"
+          :folder-name="folderName"
+          :dir-rows="dirRows"
+          :creating="creating"
+          :refreshing="refreshing"
+          :on-choose-dir="handleChooseDir"
+          :on-create="handleCreate"
+          :on-refresh="() => loadScan(false)"
+          :on-back="() => { stagingCreated = false }"
+          :on-next="enterStep2"
+        />
 
-          <template v-else>
-            <div class="guide-block">
-              <p class="guide-intro">中转目录已就绪，请把文件放入对应文件夹（可用任意应用、任意方式）：</p>
-              <ul class="guide-list">
-                <li>全部照片（JPG）放入 <code>full/</code> 文件夹</li>
-                <li>个人收藏的照片（JPG）放入 <code>like/</code> 文件夹</li>
-                <li>本次拍摄对应的 NEF 原始文件放入 <code>nef/</code> 文件夹</li>
-              </ul>
+        <ImportWorkflowStep2
+          v-else-if="step === 2"
+          :analysis="analysis"
+          :analyzing="analyzing"
+          :migrating="migrating"
+          :migrate-result="migrateResult"
+          :can-proceed="canProceedToUpload"
+          :format-date="formatDate"
+          :has-warnings="hasWarnings"
+          :on-preview="openPreview"
+          :on-back="() => { step = 1 }"
+          :on-analyze="handleAnalyze"
+          :on-migrate="handleMigrate"
+          :on-next="() => { step = 3 }"
+        />
 
-              <div class="dir-status">
-                <div v-for="d in dirRows" :key="d.name" class="dir-row">
-                  <span class="dir-name">{{ d.name }}/{{ folderName }}/</span>
-                  <span class="dir-state" :class="`state-${d.state}`">{{ d.stateText }}</span>
-                  <span class="dir-meta">{{ d.count }} 个文件</span>
-                  <span class="dir-meta">日期：{{ d.latest }}</span>
-                </div>
-              </div>
-
-              <NAlert type="info" :bordered="false" class="guide-alert">
-                归档目录将命名为 <b>{{ folderName }}</b>。
-              </NAlert>
-            </div>
-
-            <NSpace justify="end" class="step-actions">
-              <NButton :loading="refreshing" @click="loadScan(false)">刷新状态</NButton>
-              <NButton @click="stagingCreated = false">上一步</NButton>
-              <NButton type="primary" @click="enterStep2">我已准备好，进入下一步</NButton>
-            </NSpace>
-          </template>
-        </NCard>
-
-        <!-- ═══ 步骤 2：分析报告 ═══ -->
-        <NCard v-else-if="step === 2" title="分析报告" size="small" class="step-card">
-          <NSpin :show="analyzing">
-            <template v-if="analysis">
-              <NDescriptions bordered :column="3" size="small" class="stats">
-                <NDescriptionsItem label="full 中 JPG 总数">
-                  {{ analysis.full_jpg_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="收藏 JPG 总数（like）">
-                  {{ analysis.like_jpg_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="nef 中 NEF 总数">
-                  {{ analysis.nef_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="收藏照片的 NEF（将迁移）">
-                  {{ analysis.favorite_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="已迁移 NEF（已在 like）">
-                  {{ analysis.migrated_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="跳过留存照片的 NEF">
-                  {{ analysis.retained_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="跳过废弃照片的 NEF">
-                  {{ analysis.discarded_count }}
-                </NDescriptionsItem>
-                <NDescriptionsItem label="时间范围">
-                  {{ formatDate(analysis.time_range.min) }} 至 {{ formatDate(analysis.time_range.max) }}
-                </NDescriptionsItem>
-              </NDescriptions>
-
-              <div v-if="hasWarnings(analysis)" class="warnings">
-                <NAlert
-                  v-if="analysis.outliers.length"
-                  type="warning"
-                  :bordered="false"
-                  class="warn-item"
-                >
-                  发现 {{ analysis.outliers.length }} 个文件日期偏离主要范围，请确认是否混入其他活动：
-                  {{ analysis.outliers.map((o) => `${o.name}（${formatDate(o.shot_at)}）`).join('、') }}
-                </NAlert>
-                <NCollapse v-if="analysis.missing_nef.length" class="lists">
-                  <NCollapseItem
-                    :title="`${analysis.missing_nef.length} 个 JPG 缺少对应 NEF（点击展开查看）`"
-                    name="missing"
-                  >
-                    <p class="collapse-hint">
-                      以下 JPG 在 full/like 中没有对应 NEF，请检查 NEF 是否完整复制。点击文件名预览图片。
-                    </p>
-                    <div class="file-list">
-                      <div
-                        v-for="f in analysis.missing_nef"
-                        :key="f.path"
-                        class="file-row clickable"
-                        @click="openPreview(f)"
-                      >
-                        <span class="file-name">{{ f.name }}</span>
-                        <span class="file-date">{{ f.dir }}/</span>
-                      </div>
-                    </div>
-                  </NCollapseItem>
-                </NCollapse>
-
-                <NCollapse v-if="analysis.no_date.length" class="lists">
-                  <NCollapseItem
-                    :title="`${analysis.no_date.length} 个文件无法读取拍摄时间（点击展开查看）`"
-                    name="nodate"
-                  >
-                    <p class="collapse-hint">以下文件无法读取拍摄时间，点击文件名预览图片。</p>
-                    <div class="file-list">
-                      <div
-                        v-for="f in analysis.no_date"
-                        :key="f.path"
-                        class="file-row clickable"
-                        @click="openPreview(f)"
-                      >
-                        <span class="file-name">{{ f.name }}</span>
-                        <span class="file-date">{{ f.dir }}/</span>
-                      </div>
-                    </div>
-                  </NCollapseItem>
-                </NCollapse>
-              </div>
-
-              <div v-if="migrateResult" class="migrate-result">
-                <NAlert type="success" :bordered="false">
-                  已迁移 {{ migrateResult.migrated_count }} 个 NEF 到 like 目录
-                  <template v-if="migrateResult.failed.length">
-                    ，{{ migrateResult.failed.length }} 个失败。
-                  </template>
-                </NAlert>
-                <NAlert type="info" :bordered="false" class="warn-item">
-                  仅复制、未删除任何文件。nef/ 目录中的文件请自行确认后清理。
-                </NAlert>
-              </div>
-            </template>
-
-            <NEmpty v-else-if="!analyzing" description="尚未分析，请点击下方按钮" size="small" />
-          </NSpin>
-
-          <NSpace justify="end" class="step-actions">
-            <NButton @click="step = 1">上一步</NButton>
-            <NButton :loading="analyzing" @click="handleAnalyze">重新分析</NButton>
-            <NButton
-              type="primary"
-              :loading="migrating"
-              :disabled="!analysis || analysis.favorite_count === 0"
-              @click="handleMigrate"
-            >
-              确认执行，迁移收藏 NEF
-            </NButton>
-            <NButton type="primary" :disabled="!canProceedToUpload" @click="step = 3">
-              进入下一步（上传）
-            </NButton>
-          </NSpace>
-        </NCard>
-
-        <!-- ═══ 步骤 3：上传同步 ═══ -->
-        <NCard v-else title="上传同步" size="small" class="step-card">
-          <NForm label-placement="top" :show-feedback="false">
-            <NFormItem label="服务器地址">
-              <NSpace align="center">
-                <NInput
-                  v-model:value="serverUrl"
-                  placeholder="http://192.168.1.100:10004"
-                  style="width: 360px"
-                />
-                <NButton :loading="fetchingInfo" @click="handleFetchInfo">连接并验证</NButton>
-              </NSpace>
-            </NFormItem>
-          </NForm>
-
-          <template v-if="storageInfo">
-            <NDescriptions bordered :column="2" size="small" class="stats storage-info">
-              <NDescriptionsItem label="存储根路径">{{ storageInfo.root }}</NDescriptionsItem>
-              <NDescriptionsItem label="总文件数">
-                {{ storageInfo.jpg_count }} 张 JPG，{{ storageInfo.nef_count }} 张 NEF
-              </NDescriptionsItem>
-              <NDescriptionsItem label="已有月份文件夹">
-                {{ storageInfo.months.join('、') || '—' }}
-              </NDescriptionsItem>
-              <NDescriptionsItem label="已有活动文件夹">
-                {{ storageInfo.activities.join('、') || '—' }}
-              </NDescriptionsItem>
-              <NDescriptionsItem label="上次同步时间">
-                {{ storageInfo.last_sync ? formatDate(storageInfo.last_sync) : '—' }}
-              </NDescriptionsItem>
-            </NDescriptions>
-
-            <NAlert
-              v-if="storageInfo.warning"
-              type="warning"
-              :bordered="false"
-              class="warn-item"
-            >
-              {{ storageInfo.warning }}
-            </NAlert>
-
-            <NAlert
-              :type="folderExistsOnServer ? 'warning' : 'info'"
-              :bordered="false"
-              class="warn-item"
-            >
-              <template v-if="folderExistsOnServer">
-                目录 <b>{{ folderName }}</b> 已存在，本次将追加到该目录。
-              </template>
-              <template v-else>
-                本次将新增目录 <b>{{ folderName }}</b>（{{ uploadJpgCount }} 张 JPG，{{ uploadNefCount }} 张 NEF）。
-              </template>
-            </NAlert>
-          </template>
-
-          <div v-if="syncing" class="sync-progress">
-            <NProgress
-              type="line"
-              :percentage="progressPercent"
-              :height="8"
-              :border-radius="4"
-            />
-            <p class="sync-progress-text">
-              已完成 {{ syncProgress?.completed ?? 0 }} / {{ syncProgress?.total ?? '—' }} 个文件
-            </p>
-          </div>
-
-          <div v-if="syncResult" class="sync-result">
-            <NDescriptions bordered :column="4" size="small" class="stats">
-              <NDescriptionsItem label="上传成功">{{ syncResult.succeeded }}</NDescriptionsItem>
-              <NDescriptionsItem v-if="syncResult.skipped > 0" label="跳过">{{ syncResult.skipped }}</NDescriptionsItem>
-              <NDescriptionsItem label="失败">{{ syncResult.failed }}</NDescriptionsItem>
-              <NDescriptionsItem label="耗时">{{ formatElapsed(syncResult.elapsed_ms) }}</NDescriptionsItem>
-            </NDescriptions>
-
-            <NCollapse v-if="syncResult.failed > 0" class="lists">
-              <NCollapseItem title="失败详情" name="failed">
-                <div class="file-list">
-                  <div v-for="f in syncResult.files.filter((x) => x.status !== 'stored' && x.status !== 'skipped')" :key="f.name" class="file-row">
-                    <span class="file-name">{{ f.name }}</span>
-                    <span class="file-date">{{ f.error }}</span>
-                  </div>
-                </div>
-              </NCollapseItem>
-            </NCollapse>
-
-            <!-- W11 收尾建议：程序不删除任何文件，仅提示本次归档子目录可否安全删除 -->
-            <NAlert type="info" :bordered="false" class="cleanup-title">
-              收尾建议（本次导入完成后，以下目录仅指 <b>{{ folderName }}</b> 归档子目录，请勿删除中转根目录下其他内容）
-            </NAlert>
-            <div class="cleanup-list">
-              <div v-for="row in cleanupAdviceRows" :key="row.dir" class="cleanup-row">
-                <span class="dir-name">{{ row.dir }}</span>
-                <span class="cleanup-tip" :class="row.ok ? 'tip-ok' : 'tip-warn'">{{ row.tip }}</span>
-              </div>
-            </div>
-          </div>
-
-          <NSpace justify="end" class="step-actions">
-            <NButton @click="step = 2">上一步</NButton>
-            <NButton
-              type="primary"
-              :loading="syncing || checkingConflicts"
-              :disabled="!storageInfo"
-              @click="handleSync"
-            >
-              开始同步
-            </NButton>
-          </NSpace>
-        </NCard>
+        <ImportWorkflowStep3
+          v-else
+          v-model:server-url="serverUrl"
+          v-model:show-confirm="showSyncConfirm"
+          :storage-info="storageInfo"
+          :fetching-info="fetchingInfo"
+          :syncing="syncing"
+          :checking-conflicts="checkingConflicts"
+          :sync-progress="syncProgress"
+          :progress-percent="progressPercent"
+          :sync-result="syncResult"
+          :folder-name="folderName"
+          :folder-exists="folderExistsOnServer"
+          :upload-jpg-count="uploadJpgCount"
+          :upload-nef-count="uploadNefCount"
+          :cleanup-advice-rows="cleanupAdviceRows"
+          :conflict-check="conflictCheck"
+          :has-conflicts="hasConflicts"
+          :format-date="formatDate"
+          :format-elapsed="formatElapsed"
+          :on-fetch-info="handleFetchInfo"
+          :on-back="() => { step = 2 }"
+          :on-sync="handleSync"
+          :on-confirm="confirmSync"
+        />
       </div>
-
-      <!-- 同步二次确认：展示重名汇总，选择跳过或覆盖 -->
-      <NModal
-        v-model:show="showSyncConfirm"
-        preset="card"
-        title="同步确认"
-        style="width: min(90vw, 520px)"
-      >
-        <template v-if="conflictCheck">
-          <NDescriptions bordered :column="1" size="small" class="stats conflict-summary">
-            <NDescriptionsItem label="待同步文件总数">{{ conflictCheck.total }}</NDescriptionsItem>
-            <NDescriptionsItem label="服务端已存在（重名）">
-              {{ conflictCheck.existing.length }}
-            </NDescriptionsItem>
-            <NDescriptionsItem label="新文件">{{ conflictCheck.new.length }}</NDescriptionsItem>
-          </NDescriptions>
-
-          <NAlert
-            v-if="hasConflicts"
-            type="warning"
-            :bordered="false"
-            class="warn-item"
-          >
-            有 {{ conflictCheck.existing.length }} 个文件与服务端重名，请选择处理方式。
-          </NAlert>
-          <NAlert v-else type="info" :bordered="false" class="warn-item">
-            没有重名文件，将全部上传。
-          </NAlert>
-        </template>
-
-        <template #footer>
-          <NSpace justify="end">
-            <NButton @click="showSyncConfirm = false">取消</NButton>
-            <NButton v-if="hasConflicts" @click="confirmSync('skip')">跳过已存在文件</NButton>
-            <NButton v-if="hasConflicts" type="warning" @click="confirmSync('overwrite')">
-              覆盖服务器现有文件
-            </NButton>
-            <NButton v-if="!hasConflicts" type="primary" @click="confirmSync('skip')">
-              开始上传
-            </NButton>
-          </NSpace>
-        </template>
-      </NModal>
 
       <NModal
         v-model:show="previewVisible"

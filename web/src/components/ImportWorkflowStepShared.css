@@ -1,0 +1,32 @@
+.step-card { width: 100%; }
+.stats { margin-bottom: 16px; }
+.storage-info { margin-top: 16px; }
+.warnings, .migrate-result, .sync-result, .sync-progress, .cleanup-list { display: flex; flex-direction: column; gap: 8px; }
+.warnings { margin-bottom: 16px; }
+.warn-item, .lists { margin-top: 8px; }
+.file-list { max-height: 240px; overflow-y: auto; }
+.file-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--n-border-color); font-size: 13px; }
+.file-row:last-child { border-bottom: none; }
+.file-name, .dir-name { color: var(--n-text-color); }
+.file-date, .dir-meta, .sync-progress-text, .cleanup-tip { color: var(--n-text-color-3); font-size: 12px; }
+.clickable { cursor: pointer; }
+.clickable:hover { background: var(--n-color-embedded); }
+.collapse-hint { margin: 0 0 8px; color: var(--n-text-color-3); font-size: 12px; }
+.step-actions { margin-top: 20px; }
+.guide-block { display: flex; flex-direction: column; gap: 8px; }
+.guide-intro { margin: 0; font-size: 14px; }
+.guide-list { margin: 0; padding-left: 20px; color: var(--n-text-color-2); font-size: 14px; line-height: 1.9; }
+.guide-list code, .dir-row, .cleanup-row { background: var(--n-color-embedded); border-radius: 4px; }
+.guide-list code { padding: 2px 6px; font-size: 12px; }
+.dir-status { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.dir-row, .cleanup-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; font-size: 13px; }
+.dir-name { font-weight: 600; }
+.dir-state { font-size: 12px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.state-created, .tip-ok { color: var(--n-success-color); }
+.state-existed { color: var(--n-info-color); }
+.state-failed { color: var(--n-error-color); }
+.sync-progress { margin-top: 16px; }
+.sync-progress-text { margin: 0; font-size: 13px; }
+.cleanup-title { margin-top: 4px; }
+.cleanup-row { align-items: baseline; }
+.tip-warn { color: var(--n-warning-color); }

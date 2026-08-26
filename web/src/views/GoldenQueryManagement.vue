@@ -13,8 +13,6 @@ import {
   NSpace,
   NDataTable,
   NPopconfirm,
-  NModal,
-  NInput,
   useMessage,
 } from 'naive-ui'
 import {
@@ -27,10 +25,11 @@ import {
   AddOutline,
 } from '@vicons/ionicons5'
 import { getAgentBase, getApiBase } from '../config'
-import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 import PhotoPickOverlay from '../components/PhotoPickOverlay.vue'
-import SelectedPhotoList, { type SelectedPhotoItem } from '../components/SelectedPhotoList.vue'
+import GoldenQueryDetailModal from '../components/GoldenQueryDetailModal.vue'
+import GoldenQueryCreateModal from '../components/GoldenQueryCreateModal.vue'
+import GoldenQueryEvaluationModals from '../components/GoldenQueryEvaluationModals.vue'
 import { photoApi } from '../backend-sdk-client'
 import {
   createPickSession,
@@ -38,58 +37,7 @@ import {
   clearPickSession,
   type PickedPhoto,
 } from '../utils/photoPickSession'
-
-type Granularity = 'photo' | 'fine' | 'coarse'
-
-interface GoldenPhotoRef {
-  photo_id: string
-  filename: string
-  uuid: string
-  granularity?: Granularity
-  burst_group_id?: string
-  burst_count?: number
-}
-
-interface GoldenQuery {
-  id: string
-  query_text: string
-  relevant_photos: GoldenPhotoRef[]
-  category: string
-  notes: string
-  created_at: string
-}
-
-// ── 评估相关类型 ──
-
-interface EvalPhotoItem {
-  photo_id: string
-  filename: string
-  uuid: string
-}
-
-interface EvalDetail {
-  golden_id: string
-  question: string
-  precision: number
-  recall: number
-  mrr: number
-  hits: number
-  retrieved: number
-  relevant: number
-  effective_k: number
-  hit_ids: EvalPhotoItem[]
-  miss_ids: EvalPhotoItem[]
-  remaining_ids: EvalPhotoItem[]
-}
-
-interface EvalResult {
-  precision_at_k: number
-  recall_at_k: number
-  mrr: number
-  total: number
-  precision_k: number
-  details: EvalDetail[]
-}
+import type { EvalDetail, EvalResult, GoldenPhotoRef, GoldenQuery } from '../types/goldenQuery'
 
 const message = useMessage()
 const items = ref<GoldenQuery[]>([])
@@ -99,7 +47,6 @@ const importing = ref(false)
 // 详情弹窗
 const detailVisible = ref(false)
 const detailItem = ref<GoldenQuery | null>(null)
-const detailEditing = ref(false)
 const detailSaving = ref(false)
 const detailQuery = ref('')
 const detailCategory = ref('')
@@ -224,12 +171,10 @@ function showDetail(item: GoldenQuery) {
   detailCategory.value = item.category
   detailNotes.value = item.notes
   detailPhotos.value = item.relevant_photos.map((photo) => ({ ...photo }))
-  detailEditing.value = true
   detailVisible.value = true
 }
 
 function cancelDetailEdit() {
-  detailEditing.value = false
   detailPhotos.value = []
   detailVisible.value = false
 }
@@ -890,246 +835,26 @@ const evalColumns = [
       </div>
     </NLayoutContent>
 
-    <!-- 黄金用例详情弹窗 -->
-    <NModal
-      v-model:show="detailVisible"
-      preset="card"
-      title="黄金用例详情"
-      style="width: 640px; max-width: 90vw;"
-    >
-      <div v-if="detailItem" class="detail-body">
-        <div class="detail-field">
-          <span class="detail-label">查询文本</span>
-          <NInput v-if="detailEditing" v-model:value="detailQuery" placeholder="请输入查询文本" />
-          <span v-else class="detail-value">{{ detailItem.query_text }}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">分类</span>
-          <NInput v-if="detailEditing" v-model:value="detailCategory" placeholder="可留空" />
-          <span v-else class="detail-value">{{ detailItem.category || '未分类' }}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">备注</span>
-          <NInput v-if="detailEditing" v-model:value="detailNotes" type="textarea" placeholder="可留空" />
-          <span v-else class="detail-value">{{ detailItem.notes || '无' }}</span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">创建时间</span>
-          <span class="detail-value">
-            {{ detailItem.created_at ? formatDate(detailItem.created_at) : '—' }}
-          </span>
-        </div>
-        <div class="detail-field">
-          <span class="detail-label">关联照片 ({{ detailEditing ? detailPhotos.length : detailItem.relevant_photos.length }})</span>
-          <PhotoThumbList
-            :photos="detailPhotos"
-            editable
-            auto-fit
-            empty-text="暂无关联照片，请增加照片"
-            @preview="openPreview"
-            @remove="removeDetailPhoto"
-            @add="openDetailPhotoPicker"
-          />
-        </div>
-      </div>
-      <template v-if="detailEditing" #footer>
-        <NSpace justify="end">
-          <NButton size="small" :disabled="detailSaving" @click="cancelDetailEdit">取消</NButton>
-          <NButton size="small" type="primary" :loading="detailSaving" @click="saveDetailEdit">保存</NButton>
-        </NSpace>
-      </template>
-    </NModal>
+    <GoldenQueryDetailModal v-model:show="detailVisible" :item="detailItem" :saving="detailSaving" :query="detailQuery" :category="detailCategory" :notes="detailNotes" :photos="detailPhotos" @update:query="detailQuery = $event" @update:category="detailCategory = $event" @update:notes="detailNotes = $event" @preview="openPreview" @remove="removeDetailPhoto" @add="openDetailPhotoPicker" @cancel="cancelDetailEdit" @save="saveDetailEdit" />
 
-    <!-- 新建用例弹窗 -->
-    <NModal
-      v-model:show="createVisible"
-      preset="card"
-      title="新建黄金用例"
-      style="width: 760px; max-width: 95vw;"
-    >
-      <div class="create-body">
-        <div class="detail-field">
-          <span class="detail-label">查询文本</span>
-          <NInput v-model:value="createQuery" placeholder="例如：佛像和人的合照" />
-        </div>
-        <div class="create-row">
-          <div class="detail-field create-row-item">
-            <span class="detail-label">分类</span>
-            <NInput v-model:value="createCategory" placeholder="可留空" />
-          </div>
-          <div class="detail-field create-row-item">
-            <span class="detail-label">备注</span>
-            <NInput v-model:value="createNotes" placeholder="可留空" />
-          </div>
-        </div>
+    <GoldenQueryCreateModal v-model:show="createVisible" :creating="creating" :query="createQuery" :category="createCategory" :notes="createNotes" :photos="createPhotos" @update:query="createQuery = $event" @update:category="createCategory = $event" @update:notes="createNotes = $event" @update:photos="createPhotos = $event" @preview="openPreview" @pick="openPickOverlay" @create="handleCreate" />
 
-        <div class="detail-field">
-          <span class="detail-label">选择期望照片</span>
-          <NButton size="small" @click="openPickOverlay">
-            选择照片（进入图片管理选图）
-          </NButton>
-        </div>
-
-        <div v-if="createPhotos.length" class="detail-field">
-          <span class="detail-label">已选照片 ({{ createPhotos.length }})</span>
-          <span class="selected-photo-hint">连拍集合会把所有子图加入黄金用例；如需精选，请进入连拍组操作。</span>
-          <SelectedPhotoList
-            :items="createPhotos as SelectedPhotoItem[]"
-            @update:items="createPhotos = $event"
-            @preview="openPreview"
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <NSpace justify="end">
-          <NButton size="small" @click="createVisible = false">取消</NButton>
-          <NButton size="small" type="primary" :loading="creating" @click="handleCreate">
-            保存
-          </NButton>
-        </NSpace>
-      </template>
-    </NModal>
-
-    <!-- 评估结果弹窗 -->
-    <NModal
-      v-model:show="evalModalVisible"
-      preset="card"
-      title="黄金用例评估结果"
-      style="width: 820px; max-width: 95vw;"
-      :mask-closable="!evaluating"
-    >
-      <div class="eval-table-hint">
-      随着时间推移，图库的变化，用例评估结果也会变化，主要表现为分数下降，是相关的照片增加导致的。<br>
-      请点击条目查看详情，确认遗漏/未命中的具体照片。<br>
-      遗漏：可能因为新照片得分更高，把目标照片挤出输出列表了。<br>
-      未命中：可能是新照片被检索到了，但“当初”目标集合没有记录，程序误以为是错误照片。<br>
-      </div>
-      <div v-if="evaluating" class="eval-loading">
-        <NSpin size="large" />
-        <p>正在运行 {{ items.length }} 条黄金用例评估...</p>
-      </div>
-
-      <div v-else-if="evalResult" class="eval-result">
-        <div class="eval-summary">
-          <div class="eval-metric">
-            <span class="eval-metric-value">{{ (evalResult.precision_at_k * 100).toFixed(1) }}%</span>
-            <span class="eval-metric-label">P@{{ evalResult.precision_k }}</span>
-          </div>
-          <div class="eval-metric">
-            <span class="eval-metric-value">{{ (evalResult.recall_at_k * 100).toFixed(1) }}%</span>
-            <span class="eval-metric-label">Recall</span>
-          </div>
-          <div class="eval-metric">
-            <span class="eval-metric-value">{{ (evalResult.mrr * 100).toFixed(1) }}%</span>
-            <span class="eval-metric-label">MRR</span>
-          </div>
-          <div class="eval-metric">
-            <span class="eval-metric-value">{{ evalResult.total }}</span>
-            <span class="eval-metric-label">用例数</span>
-          </div>
-        </div>
-
-        <div class="eval-table-hint">点击查询名称查看命中/遗漏详情</div>
-
-        <NDataTable
-          :columns="evalColumns"
-          :data="evalResult.details"
-          :row-key="(row: EvalDetail) => row.question"
-          :single-line="false"
-          size="small"
-          :max-height="400"
-          :row-props="(row: EvalDetail) => ({ style: 'cursor: pointer;', onClick: () => showEvalDetail(row) })"
-          style="margin-top: 8px;"
-        />
-      </div>
-    </NModal>
-
-    <!-- 评估明细弹窗 -->
-    <NModal
-      v-model:show="evalDetailVisible"
-      preset="card"
-      :title="evalDetailItem?.question || '评估明细'"
-      style="width: 720px; max-width: 95vw;"
-    >
-      <div v-if="evalDetailItem" class="eval-detail-body">
-        <!-- 指标 -->
-        <div class="eval-detail-metrics">
-          <span class="eval-detail-badge">
-            P@{{ evalDetailItem.effective_k || 10 }}: {{ (evalDetailItem.precision * 100).toFixed(0) }}%
-          </span>
-          <span class="eval-detail-badge">Recall: {{ (evalDetailItem.recall * 100).toFixed(0) }}%</span>
-          <span class="eval-detail-badge">MRR: {{ (evalDetailItem.mrr * 100).toFixed(0) }}%</span>
-          <span class="eval-detail-badge">检索 {{ evalDetailItem.retrieved }} / 相关 {{ evalDetailItem.relevant }}</span>
-        </div>
-
-        <!-- 命中 -->
-        <div class="eval-section">
-          <div class="eval-section-title">
-            ✅ 命中 ({{ evalDetailItem.hits }} 张)
-            <span class="eval-section-sub">检索结果中属于正确答案的照片</span>
-          </div>
-          <PhotoThumbList :photos="evalDetailItem.hit_ids" empty-text="无命中" @preview="openPreview" />
-        </div>
-
-        <!-- 遗漏 -->
-        <div class="eval-section">
-          <div class="eval-section-title">
-            ❌ 遗漏 ({{ evalDetailItem.remaining_ids.length }} 张)
-            <span class="eval-section-sub">标注为相关但未检索到的照片</span>
-          </div>
-          <PhotoThumbList :photos="evalDetailItem.remaining_ids" empty-text="无遗漏" @preview="openPreview" />
-        </div>
-
-        <!-- 未命中（多余命中）：确认后可加入当前用例 -->
-        <div class="eval-section">
-          <div class="eval-section-title">
-            ⬜ 未命中 ({{ evalDetailItem.miss_ids.length }} 张)
-            <span class="eval-section-sub">检索到了但用例未标注的照片，确认正确后可加入用例</span>
-          </div>
-          <PhotoThumbList
-            v-if="!evalDetailItem.golden_id || evalDetailItem.miss_ids.length === 0"
-            :photos="evalDetailItem.miss_ids"
-            empty-text="无多余"
-            @preview="openPreview"
-          />
-          <template v-else>
-            <div class="miss-grid">
-              <div
-                v-for="photo in evalDetailItem.miss_ids"
-                :key="photo.photo_id"
-                class="miss-item"
-                :class="{ selected: appendSelected.includes(photo.photo_id) }"
-                @click="toggleAppendPhoto(photo.photo_id)"
-              >
-                <img class="miss-thumb" :src="`${getApiBase()}/photos/${photo.uuid}/image`" />
-                <span
-                  class="miss-preview"
-                  title="查看大图"
-                  @click.stop="openPreview(photo.uuid)"
-                >
-                  <NIcon size="12"><EyeOutline /></NIcon>
-                </span>
-                <span v-if="appendSelected.includes(photo.photo_id)" class="miss-check">✓</span>
-                <div class="miss-label">{{ photo.filename }}</div>
-              </div>
-            </div>
-            <div class="miss-actions">
-              <NButton
-                size="small"
-                type="primary"
-                :loading="appending"
-                :disabled="appendSelected.length === 0"
-                @click="handleAppendPhotos"
-              >
-                加入用例（{{ appendSelected.length }}）
-              </NButton>
-              <span class="miss-hint">点击缩略图选择，加入后自动复评</span>
-            </div>
-          </template>
-        </div>
-      </div>
-    </NModal>
+    <GoldenQueryEvaluationModals
+      v-model:result-visible="evalModalVisible"
+      v-model:detail-visible="evalDetailVisible"
+      :evaluating="evaluating"
+      :result="evalResult"
+      :item-count="items.length"
+      :columns="evalColumns"
+      :detail="evalDetailItem"
+      :appending="appending"
+      :append-selected="appendSelected"
+      :image-base="getApiBase()"
+      @show-detail="showEvalDetail"
+      @preview="openPreview"
+      @toggle-append="toggleAppendPhoto"
+      @append="handleAppendPhotos"
+    />
 
     <!-- 图片预览弹窗 -->
     <PhotoPreviewModal v-model:show="previewShow" :image-url="previewImg" />
@@ -1180,118 +905,6 @@ const evalColumns = [
   font-size: 13px;
   color: var(--n-text-color-3);
 }
-.detail-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.detail-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.detail-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--n-text-color-3);
-  text-transform: uppercase;
-}
-.detail-value {
-  font-size: 14px;
-  color: var(--n-text-color);
-}
-.detail-photo-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-}
-.detail-group-title {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-}
-
-/* ── 新建用例 ── */
-.create-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-height: 68vh;
-  overflow-y: auto;
-}
-.create-row {
-  display: flex;
-  gap: 16px;
-}
-.create-row-item {
-  flex: 1;
-}
-.selected-photo-hint {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-}
-.picked-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.picked-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.picked-thumb {
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid var(--n-border-color);
-  cursor: pointer;
-}
-.picked-name {
-  flex: 1;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* ── 评估结果 ── */
-.eval-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 32px;
-  color: var(--n-text-color-3);
-}
-.eval-summary {
-  display: flex;
-  gap: 24px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--n-border-color);
-}
-.eval-metric {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.eval-metric-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--n-color-primary);
-}
-.eval-metric-label {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-}
-.eval-table-hint {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  margin-top: 12px;
-}
 .eval-question-link {
   color: var(--n-color-target);
   cursor: pointer;
@@ -1300,109 +913,4 @@ const evalColumns = [
   text-decoration: underline;
 }
 
-/* ── 评估明细 ── */
-.eval-detail-body {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.eval-detail-metrics {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.eval-detail-badge {
-  padding: 4px 12px;
-  border-radius: 4px;
-  background: var(--n-color-embedded);
-  font-size: 13px;
-  font-weight: 500;
-}
-.eval-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.eval-section-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-.eval-section-sub {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--n-text-color-3);
-  margin-left: 8px;
-}
-
-/* ── 多余命中选择 ── */
-.miss-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 8px;
-  max-height: 240px;
-  overflow-y: auto;
-}
-.miss-item {
-  position: relative;
-  cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  overflow: hidden;
-  transition: border-color 0.15s;
-}
-.miss-item.selected {
-  border-color: var(--n-color-target);
-}
-.miss-thumb {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  display: block;
-}
-.miss-preview {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.miss-check {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--n-color-target);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.miss-label {
-  font-size: 10px;
-  color: var(--n-text-color-3);
-  text-align: center;
-  padding: 2px 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.miss-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.miss-hint {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-}
 </style>
