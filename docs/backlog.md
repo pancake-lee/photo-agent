@@ -17,6 +17,7 @@
 | Done | 优化评估基建 | TF1-5 | 黄金用例评估与追加 API | |
 | Done | 优化评估基建 | TF1-6 | 黄金用例管理界面 | |
 | Done | 优化评估基建 | TF1-7 | 黄金用例选图复用图片管理（覆盖层） | |
+| Done | 优化评估基建 | TF1-8 | 黄金用例选图连拍组粒度保持 | |
 
 > v1.0.11 已归档：CL1、CL2、PS1–PS6，详见 [v1.0.11](archive/v1.0.11.md)。
 > 其余 6 项待规划任务经审阅后迁至 [docs/design/2026-08-22-future-requirements.md](design/2026-08-22-future-requirements.md)。
@@ -151,6 +152,20 @@
   - [x] vue-tsc 与 vite build 通过
   - [ ] 用户手工验证：覆盖层交互完整性、草稿恢复、粒度保留、图片管理自身行为不变（见设计文档第 5 节）
 
+### TF1-8 黄金用例选图连拍组粒度保持
+
+- **状态**：Done
+- **背景**：选图覆盖层复用图片管理后，折叠视图下勾选连拍组封面卡片，回传结果只带封面且默认单张粒度，黄金用例把「连拍组」存成单张 photo，与选择时不一致，评估也退化为查全量集合而非 fine/coarse 组集合。
+- **方案**：选图覆盖层回传照片时按展示级别推导粒度（折叠视图勾选的连拍组封面给 fine/coarse，普通照片 photo）；预选照片保留发起方已设粒度；新建弹窗合并时以回传粒度优先。
+- **分析**：根因在选图回传丢失粒度 + 弹窗对新照片默认 photo 两处；连拍组的黄金用例语义本就是「封面 + 粒度」单条 ref，无需展开组内全部成员。
+- **实现**：
+  - `photoPickSession.ts`：PickedPhoto 增加可选 granularity（photo/fine/coarse）
+  - `PhotoPickOverlay.vue`：handleConfirm 按展示级别推导粒度，initFromPreselected 记录预选照片原粒度
+  - `GoldenQueryManagement.vue`：onPickConfirm 以回传粒度优先，preselected 透传粒度
+- **验收**：
+  - [x] vue-tsc 通过
+  - [ ] 用户手工验证：折叠视图勾选连拍组封面，返回后粒度自动为 fine/coarse
+
 ### TF1-6 黄金用例管理界面
 
 - **状态**：Done
@@ -174,6 +189,7 @@
 ## 决策历史
 
 - **2026-08-26**：TF1-7 立项。黄金用例选图不再用内嵌简化列表，改为覆盖层复用图片管理完整交互；sessionStorage 持久化会话、预填充已选。方案：[docs/design/2026-08-26-1-photo-pick-overlay.md](design/2026-08-26-1-photo-pick-overlay.md)
+- **2026-08-26**：TF1-8 完成。选图覆盖层回传时推导连拍组粒度（折叠视图封面 → fine/coarse），修复「选择时是连拍组、返回后是单张 photo」的不一致。同时将 harness 方案确认规则改为：仅在存在多选或成本/后果较大时才询问用户。
 
 - **2026-08-22**：v1.0.10 归档，完成连拍分组与照片列表浏览；6 项暂缓需求迁移至未来需求文档。
 - **2026-08-23**：CL1 评估通过（8.4），CL2 修复 VLM HTTP 客户端 60 秒超时。

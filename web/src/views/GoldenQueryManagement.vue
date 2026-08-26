@@ -326,7 +326,8 @@ function onPickConfirm(picked: PickedPhoto[]) {
     photo_id: p.photo_id,
     filename: p.filename,
     uuid: p.uuid,
-    granularity: oldMap.get(p.photo_id) || 'photo',
+    // 覆盖层回传粒度（连拍组封面按展示级别推导）优先，其次旧照片原粒度
+    granularity: p.granularity || oldMap.get(p.photo_id) || 'photo',
   }))
 }
 
@@ -1021,7 +1022,7 @@ const evalColumns = [
     <!-- 选图覆盖层：复用图片管理完整交互 -->
     <PhotoPickOverlay
       :show="pickVisible"
-      :preselected="createPhotos.map((p) => ({ photo_id: p.photo_id, filename: p.filename, uuid: p.uuid }))"
+      :preselected="createPhotos.map((p) => ({ photo_id: p.photo_id, filename: p.filename, uuid: p.uuid, granularity: p.granularity }))"
       @confirm="onPickConfirm"
       @cancel="onPickCancel"
     />

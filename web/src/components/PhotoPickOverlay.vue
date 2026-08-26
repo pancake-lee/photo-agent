@@ -17,7 +17,7 @@ import { CheckmarkOutline, CloseOutline, InformationCircleOutline, SearchOutline
 import PhotoListBrowser from './PhotoListBrowser.vue'
 import { usePhotos } from '../composables/usePhotos'
 import { settings } from '../stores/settings'
-import type { BurstViewLevel } from '../types/photo'
+import type { BurstViewLevel, PhotoListItem } from '../types/photo'
 import type { SegmentMode } from '../utils/segment'
 import { completePickSession, type PickedPhoto } from '../utils/photoPickSession'
 
@@ -47,6 +47,8 @@ const {
 const selectedIds = ref<Set<string>>(new Set())
 // 窗口外/未加载的旧已选（预填充进来的，PhotoListBrowser 看不到，完成时原样带回）
 const offlinePicked = ref<PickedPhoto[]>([])
+// 预填充照片的原始粒度（photo_id → granularity），回传时保留发起方已设置的粒度
+const initialGranularity = ref<Map<string, 'photo' | 'fine' | 'coarse'>>(new Map())
 const selectedCount = computed(() => selectedIds.value.size + offlinePicked.value.length)
 
 const visiblePhotoIds = computed(() => {
@@ -99,13 +101,16 @@ function initFromPreselected() {
   const byPhotoId = new Map(photos.value.map((p) => [p.id, p]))
   const ids = new Set<string>()
   const offline: PickedPhoto[] = []
+  const granularityMap = new Map<string, 'photo' | 'fine' | 'coarse'>()
   for (const picked of props.preselected) {
+    if (picked.granularity) granularityMap.set(picked.photo_id, picked.granularity)
     const inWindow = byPhotoId.get(picked.uuid) || photos.value.find((p) => p.filename.replace(/\.[^.]+$/, '') === picked.photo_id)
     if (inWindow) ids.add(inWindow.id)
     else offline.push(picked)
   }
   selectedIds.value = ids
   offlinePicked.value = offline
+  initialGranularity.value = granularityMap
 }
 
 let inited = false
@@ -140,6 +145,14 @@ function stripExt(name: string): string {
   return name.replace(/\.[^.]+$/, '')
 }
 
+/** 新勾选照片的默认粒度：折叠视图下勾选的连拍组封面按当前展示级别给组粒度，否则单张 */
+function defaultGranularity(p: PhotoListItem): 'photo' | 'fine' | 'coarse' {
+  if (settings.burstViewLevel !== 'all' && p.burst_cover && p.burst_count > 1) {
+    return settings.burstViewLevel
+  }
+  return 'photo'
+}
+
 function handleConfirm() {
   const picked: PickedPhoto[] = []
   // 窗口内已勾选：按当前窗口顺序（拍摄时间排序）解析完整信息
@@ -154,7 +167,13 @@ function handleConfirm() {
     const photoId = stripExt(p.filename)
     if (!pickedIds.has(photoId)) {
       pickedIds.add(photoId)
-      picked.push({ photo_id: photoId, filename: photoId, uuid: p.id })
+      // 预选照片保留原粒度，新勾选按展示级别推导
+      picked.push({
+        photo_id: photoId,
+        filename: photoId,
+        uuid: p.id,
+        granularity: initialGranularity.value.get(photoId) || defaultGranularity(p),
+      })
     }
   }
   // 窗口外旧已选追加在末尾（去重：可能已被滚动加载进窗口并勾选）

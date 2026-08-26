@@ -13,6 +13,8 @@ export interface PickedPhoto {
   photo_id: string
   filename: string
   uuid: string
+  /** 检索粒度 photo/fine/coarse；折叠视图下勾选的连拍组封面会带上组粒度，供发起方保留 */
+  granularity?: 'photo' | 'fine' | 'coarse'
 }
 
 /** 会话里的已选照片：发起方可带扩展字段（如 granularity） */
