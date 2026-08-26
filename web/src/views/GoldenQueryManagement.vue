@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { computed, ref, onMounted, h } from 'vue'
 import { formatDate } from '../utils/format'
 import {
   NLayout,
@@ -99,6 +99,12 @@ const importing = ref(false)
 // 详情弹窗
 const detailVisible = ref(false)
 const detailItem = ref<GoldenQuery | null>(null)
+const detailEditing = ref(false)
+const detailSaving = ref(false)
+const detailQuery = ref('')
+const detailCategory = ref('')
+const detailNotes = ref('')
+const detailPhotos = ref<GoldenPhotoRef[]>([])
 
 // 评估状态
 const evaluating = ref(false)
@@ -120,6 +126,20 @@ const createPhotos = ref<GoldenPhotoRef[]>([])
 // 选图覆盖层：打开时隐藏新建弹窗（草稿留在 ref 里），完成后恢复
 const pickVisible = ref(false)
 const PICK_SOURCE = 'golden-create'
+const DETAIL_PICK_SOURCE = 'golden-detail-edit'
+const pickMode = ref<'create' | 'detail' | null>(null)
+
+const pickerPreselected = computed(() => {
+  const photos = pickMode.value === 'detail' ? detailPhotos.value : createPhotos.value
+  return photos.map((photo) => ({
+    photo_id: photo.photo_id,
+    filename: photo.filename,
+    uuid: photo.uuid,
+    granularity: photo.granularity,
+    burst_group_id: photo.burst_group_id,
+    burst_count: photo.burst_count,
+  }))
+})
 
 /** 新建弹窗表单草稿（存进选图会话，F5 刷新后可恢复） */
 interface CreateDraft {
@@ -200,7 +220,81 @@ async function handleDelete(id: string) {
 
 function showDetail(item: GoldenQuery) {
   detailItem.value = item
+  detailQuery.value = item.query_text
+  detailCategory.value = item.category
+  detailNotes.value = item.notes
+  detailPhotos.value = item.relevant_photos.map((photo) => ({ ...photo }))
+  detailEditing.value = true
   detailVisible.value = true
+}
+
+function cancelDetailEdit() {
+  detailEditing.value = false
+  detailPhotos.value = []
+  detailVisible.value = false
+}
+
+function removeDetailPhoto(photoId: string) {
+  detailPhotos.value = detailPhotos.value.filter((photo) => photo.photo_id !== photoId)
+}
+
+function openDetailPhotoPicker() {
+  createPickSession({
+    source: DETAIL_PICK_SOURCE,
+    selected: detailPhotos.value.map((photo) => ({
+      photo_id: photo.photo_id,
+      filename: photo.filename,
+      uuid: photo.uuid,
+      granularity: 'photo',
+    })),
+  })
+  pickMode.value = 'detail'
+  detailVisible.value = false
+  pickVisible.value = true
+}
+
+async function saveDetailEdit() {
+  if (!detailItem.value) return
+  if (!detailQuery.value.trim()) {
+    message.warning('请填写查询文本')
+    return
+  }
+  if (detailPhotos.value.length === 0) {
+    message.warning('请至少保留一张关联照片')
+    return
+  }
+
+  detailSaving.value = true
+  try {
+    const resp = await fetch(`${getAgentBase()}/golden-queries/${detailItem.value.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query_text: detailQuery.value.trim(),
+        category: detailCategory.value.trim(),
+        notes: detailNotes.value.trim(),
+        relevant_photos: detailPhotos.value.map(({ photo_id, filename, uuid }) => ({
+          photo_id,
+          filename,
+          uuid,
+        })),
+      }),
+    })
+    if (!resp.ok) {
+      message.error(await errText(resp, '保存失败'))
+      return
+    }
+    const updated: GoldenQuery = await resp.json()
+    const index = items.value.findIndex((item) => item.id === updated.id)
+    if (index >= 0) items.value[index] = updated
+    detailItem.value = updated
+    detailPhotos.value = updated.relevant_photos.map((photo) => ({ ...photo }))
+    message.success('已保存')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '保存失败')
+  } finally {
+    detailSaving.value = false
+  }
 }
 
 // ── 导出 ──
@@ -299,6 +393,7 @@ function openPickOverlay() {
       notes: createNotes.value,
     } satisfies CreateDraft,
   })
+  pickMode.value = 'create'
   createVisible.value = false
   pickVisible.value = true
 }
@@ -307,7 +402,18 @@ function openPickOverlay() {
 function onPickConfirm(picked: PickedPhoto[]) {
   clearPickSession()
   pickVisible.value = false
+  if (pickMode.value === 'detail') {
+    detailPhotos.value = picked.map((p) => ({
+      photo_id: p.photo_id,
+      filename: p.filename,
+      uuid: p.uuid,
+    }))
+    detailVisible.value = true
+    pickMode.value = null
+    return
+  }
   createVisible.value = true
+  pickMode.value = null
   createPhotos.value = picked.map((p) => ({
     photo_id: p.photo_id,
     filename: p.filename,
@@ -352,7 +458,13 @@ async function expandCreatePhotos(): Promise<GoldenPhotoRef[]> {
 function onPickCancel() {
   clearPickSession()
   pickVisible.value = false
+  if (pickMode.value === 'detail') {
+    detailVisible.value = true
+    pickMode.value = null
+    return
+  }
   createVisible.value = true
+  pickMode.value = null
 }
 
 
@@ -788,15 +900,18 @@ const evalColumns = [
       <div v-if="detailItem" class="detail-body">
         <div class="detail-field">
           <span class="detail-label">查询文本</span>
-          <span class="detail-value">{{ detailItem.query_text }}</span>
+          <NInput v-if="detailEditing" v-model:value="detailQuery" placeholder="请输入查询文本" />
+          <span v-else class="detail-value">{{ detailItem.query_text }}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">分类</span>
-          <span class="detail-value">{{ detailItem.category || '未分类' }}</span>
+          <NInput v-if="detailEditing" v-model:value="detailCategory" placeholder="可留空" />
+          <span v-else class="detail-value">{{ detailItem.category || '未分类' }}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">备注</span>
-          <span class="detail-value">{{ detailItem.notes || '无' }}</span>
+          <NInput v-if="detailEditing" v-model:value="detailNotes" type="textarea" placeholder="可留空" />
+          <span v-else class="detail-value">{{ detailItem.notes || '无' }}</span>
         </div>
         <div class="detail-field">
           <span class="detail-label">创建时间</span>
@@ -805,15 +920,24 @@ const evalColumns = [
           </span>
         </div>
         <div class="detail-field">
-          <span class="detail-label">关联照片 ({{ detailItem.relevant_photos.length }})</span>
+          <span class="detail-label">关联照片 ({{ detailEditing ? detailPhotos.length : detailItem.relevant_photos.length }})</span>
           <PhotoThumbList
-            :photos="detailItem.relevant_photos"
+            :photos="detailPhotos"
+            editable
             auto-fit
-            empty-text="无关联照片"
+            empty-text="暂无关联照片，请增加照片"
             @preview="openPreview"
+            @remove="removeDetailPhoto"
+            @add="openDetailPhotoPicker"
           />
         </div>
       </div>
+      <template v-if="detailEditing" #footer>
+        <NSpace justify="end">
+          <NButton size="small" :disabled="detailSaving" @click="cancelDetailEdit">取消</NButton>
+          <NButton size="small" type="primary" :loading="detailSaving" @click="saveDetailEdit">保存</NButton>
+        </NSpace>
+      </template>
     </NModal>
 
     <!-- 新建用例弹窗 -->
@@ -1013,7 +1137,7 @@ const evalColumns = [
     <!-- 选图覆盖层：复用图片管理完整交互 -->
     <PhotoPickOverlay
       :show="pickVisible"
-      :preselected="createPhotos.map((p) => ({ photo_id: p.photo_id, filename: p.filename, uuid: p.uuid, granularity: p.granularity, burst_group_id: p.burst_group_id, burst_count: p.burst_count }))"
+      :preselected="pickerPreselected"
       @confirm="onPickConfirm"
       @cancel="onPickCancel"
     />

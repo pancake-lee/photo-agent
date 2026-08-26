@@ -174,7 +174,13 @@ watch(
 marked.setOptions({ breaks: true, gfm: true })
 
 function renderMarkdown(text: string): string {
-  const result = marked.parse(text)
+  // Agent 服务运行在服务端，返回的 127.0.0.1 图片地址对远程浏览器不可达。
+  // 统一替换为当前运行环境的图片地址，兼容已持久化的历史消息。
+  const normalizedText = text.replace(
+    /https?:\/\/[^)\s]+\/api\/v1\/photos\/([^/?\s)]+)\/image(?:\?[^)\s]*)?/g,
+    (_match, photoId: string) => `${getApiBase()}/photos/${photoId}/image`,
+  )
+  const result = marked.parse(normalizedText)
   return typeof result === 'string' ? result : ''
 }
 
@@ -182,6 +188,10 @@ function renderMarkdown(text: string): string {
 
 const previewVisible = ref(false)
 const previewUrl = ref('')
+
+function getPhotoImageUrl(photo: PhotoRef): string {
+  return `${getApiBase()}/photos/${photo.photo_id}/image`
+}
 
 // ── 保存为黄金用例 ──
 
@@ -247,12 +257,12 @@ async function handleGoldenSave() {
 }
 
 function previewPhoto(photo: PhotoRef) {
-  previewUrl.value = photo.image_url
+  previewUrl.value = getPhotoImageUrl(photo)
   previewVisible.value = true
 }
 
 function downloadPhoto(photo: PhotoRef) {
-  downloadImageUrl(photo.image_url, photo.filename || photo.photo_id)
+  downloadImageUrl(getPhotoImageUrl(photo), photo.filename || photo.photo_id)
 }
 
 function downloadImageUrl(url: string, filename: string) {
@@ -448,7 +458,7 @@ const hasMessages = computed(() => messages.value.length > 0)
                     :title="photo.filename"
                     @click="isGroupRef(photo) ? openGroupModal(photo) : previewPhoto(photo)"
                   >
-                    <img :src="photo.image_url" :alt="photo.filename" class="group-card-img" />
+                    <img :src="getPhotoImageUrl(photo)" :alt="photo.filename" class="group-card-img" />
                     <div class="group-card-caption">
                       共 {{ photo.burst_count || 1 }} 张
                     </div>
@@ -461,11 +471,19 @@ const hasMessages = computed(() => messages.value.length > 0)
                     :key="photo.photo_id"
                     class="attachment-item"
                   >
-                    <span class="attachment-icon">
-                      <NIcon size="16"><ImageOutline /></NIcon>
-                    </span>
-                    <span class="attachment-name" @click="previewPhoto(photo)">
-                      {{ photo.filename }}
+                    <img
+                      :src="getPhotoImageUrl(photo)"
+                      :alt="photo.filename"
+                      class="attachment-thumb"
+                      @click="previewPhoto(photo)"
+                    />
+                    <span class="attachment-content">
+                      <span class="attachment-icon">
+                        <NIcon size="16"><ImageOutline /></NIcon>
+                      </span>
+                      <span class="attachment-name" @click="previewPhoto(photo)">
+                        {{ photo.filename }}
+                      </span>
                     </span>
                     <NButton
                       size="tiny"
@@ -775,8 +793,23 @@ const hasMessages = computed(() => messages.value.length > 0)
 .attachment-item:hover {
   background: var(--n-color-hover);
 }
-.attachment-name {
+.attachment-thumb {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.attachment-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   flex: 1;
+}
+.attachment-name {
   font-size: 13px;
   color: var(--n-color-target);
   cursor: pointer;

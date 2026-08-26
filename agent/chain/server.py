@@ -174,6 +174,52 @@ def _append_photos_to_case(
     return target, added
 
 
+def _update_golden_query(
+    items: list[dict],
+    golden_id: str,
+    query_text: str,
+    photos: list["GoldenPhotoRef"],
+    category: str,
+    notes: str,
+    fname_to_uuid: dict[str, str],
+) -> dict:
+    """完整更新黄金用例，原地修改 items 并返回更新后的用例。"""
+    if not query_text.strip():
+        raise fastapi.HTTPException(status_code=400, detail="查询文本不能为空")
+    if not photos:
+        raise fastapi.HTTPException(status_code=400, detail="关联照片不能为空")
+
+    target = next((it for it in items if it.get("id") == golden_id), None)
+    if target is None:
+        raise fastapi.HTTPException(status_code=404, detail="用例不存在")
+
+    relevant_photos = []
+    existing_keys: set[str] = set()
+    for photo in photos:
+        photo_id = _normalize_ext(photo.photo_id)
+        if not photo_id:
+            raise fastapi.HTTPException(status_code=400, detail="照片信息不完整：photo_id 为空")
+        if photo_id in existing_keys:
+            continue
+        filename = _normalize_ext(photo.filename) or photo_id
+        photo_uuid = fname_to_uuid.get(photo_id) or fname_to_uuid.get(filename) or photo.uuid
+        if not photo_uuid:
+            raise fastapi.HTTPException(status_code=400, detail=f"照片不在图库中：{filename}")
+        existing_keys.add(photo_id)
+        relevant_photos.append({
+            "photo_id": photo_id,
+            "filename": filename,
+            "uuid": photo_uuid,
+        })
+
+    target["query_text"] = query_text.strip()
+    target["relevant_photos"] = relevant_photos
+    target["category"] = category.strip()
+    target["notes"] = notes.strip()
+    target["updated_at"] = datetime.datetime.now().isoformat()
+    return target
+
+
 # ── 选题历史 JSON 存储 ─────────────────────────────────────
 # v2（suggest_history_v2.json）是唯一数据源。
 # suggest_history.json 自 B13 起不再写入，仅保留文件供回退读取。
@@ -407,6 +453,13 @@ class GoldenPhotoAppendRequest(pydantic.BaseModel):
     """向已有用例追加期望照片。黄金用例始终按单张照片去重。"""
 
     photos: list[GoldenPhotoRef]
+
+
+class GoldenQueryUpdateRequest(pydantic.BaseModel):
+    query_text: str
+    relevant_photos: list[GoldenPhotoRef]
+    category: str = ""
+    notes: str = ""
 
 
 class EvalPhotoItem(pydantic.BaseModel):
@@ -788,6 +841,32 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         items.append(item)
         _save_golden_queries(items, gq_dir)
         return item
+
+    @app.put("/api/golden-queries/{golden_id}", response_model=GoldenQueryItem)
+    async def update_golden_query(
+        golden_id: str,
+        body: GoldenQueryUpdateRequest,
+        req: fastapi.Request,
+    ):
+        """完整更新一条黄金查询用例。"""
+        if not body.query_text.strip():
+            raise fastapi.HTTPException(status_code=400, detail="查询文本不能为空")
+        if not body.relevant_photos:
+            raise fastapi.HTTPException(status_code=400, detail="关联照片不能为空")
+        gq_dir = req.app.state.golden_queries_dir
+        items = _load_golden_queries(gq_dir)
+        fname_to_uuid = _build_filename_to_uuid(req.app.state.cfg.go_backend_url)
+        target = _update_golden_query(
+            items,
+            golden_id,
+            body.query_text,
+            body.relevant_photos,
+            body.category,
+            body.notes,
+            fname_to_uuid,
+        )
+        _save_golden_queries(items, gq_dir)
+        return target
 
     @app.delete("/api/golden-queries/{golden_id}", response_model=dict)
     async def delete_golden_query(golden_id: str, req: fastapi.Request):

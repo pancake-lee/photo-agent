@@ -231,6 +231,7 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 
 - `GET /api/golden-queries` — 用例列表
 - `POST /api/golden-queries` — 创建用例
+- `PUT /api/golden-queries/:id` — 全量更新用例文本、分类、备注和关联照片
 - `POST /api/golden-queries/import` — 批量导入
 - `DELETE /api/golden-queries/:id` — 删除用例
 - `POST /api/golden-queries/:id/photos` — 追加单张期望照片，已存在的照片跳过

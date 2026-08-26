@@ -165,3 +165,60 @@ class TestAppendGoldenPhotos(unittest.TestCase):
       ], {})
     self.assertEqual(ctx.exception.status_code, 400)
     self.assertIn("不在图库", ctx.exception.detail)
+
+
+class TestUpdateGoldenQuery(unittest.TestCase):
+  def _case(self) -> dict:
+    return {
+        "id": "case-1",
+        "query_text": "旧查询",
+        "relevant_photos": [{"photo_id": "DSC_1", "filename": "DSC_1", "uuid": "u1"}],
+        "category": "旧分类",
+        "notes": "旧备注",
+        "created_at": "2026-08-25T00:00:00",
+        "updated_at": "2026-08-25T00:00:00",
+    }
+
+  def test_update_replaces_fields_and_deduplicates_photos(self):
+    items = [self._case()]
+    target = server._update_golden_query(
+        items,
+        "case-1",
+        "  新查询  ",
+        [
+            server.GoldenPhotoRef(photo_id="DSC_2.jpg", filename="DSC_2.jpg", uuid="u2"),
+            server.GoldenPhotoRef(photo_id="DSC_2", filename="DSC_2", uuid="u2"),
+        ],
+        " 新分类 ",
+        " 新备注 ",
+        {},
+    )
+
+    self.assertEqual(target["query_text"], "新查询")
+    self.assertEqual(target["category"], "新分类")
+    self.assertEqual(target["notes"], "新备注")
+    self.assertEqual(target["relevant_photos"], [{
+        "photo_id": "DSC_2",
+        "filename": "DSC_2",
+        "uuid": "u2",
+    }])
+    self.assertNotEqual(target["updated_at"], "2026-08-25T00:00:00")
+
+  def test_update_rejects_invalid_input(self):
+    for query_text, photos, status_code in [("  ", ["photo"], 400), ("有效", [], 400)]:
+      with self.subTest(query_text=query_text, photos=photos):
+        with self.assertRaises(server.fastapi.HTTPException) as ctx:
+          server._update_golden_query(
+              [self._case()], "case-1", query_text,
+              [server.GoldenPhotoRef(photo_id=p, filename=p, uuid=p) for p in photos],
+              "", "", {},
+          )
+        self.assertEqual(ctx.exception.status_code, status_code)
+
+    with self.assertRaises(server.fastapi.HTTPException) as ctx:
+      server._update_golden_query(
+          [self._case()], "missing", "有效",
+          [server.GoldenPhotoRef(photo_id="DSC_2", filename="DSC_2", uuid="u2")],
+          "", "", {},
+      )
+    self.assertEqual(ctx.exception.status_code, 404)

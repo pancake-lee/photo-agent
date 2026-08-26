@@ -10,8 +10,8 @@
  * 自动调整实际展示数量。maxPreview 仅作为测量前的初始兜底值。
  */
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
-import { NIcon } from 'naive-ui'
-import { ImageOutline } from '@vicons/ionicons5'
+import { NButton, NIcon } from 'naive-ui'
+import { AddOutline, CloseOutline, ImageOutline } from '@vicons/ionicons5'
 import { getApiBase } from '../config'
 
 // ── 通用照片引用类型 ──
@@ -27,15 +27,19 @@ const props = withDefaults(defineProps<{
   maxPreview?: number
   /** 开启后自动测量容器宽度，计算一行能容纳的缩略图数量 */
   autoFit?: boolean
+  editable?: boolean
   emptyText?: string
 }>(), {
   maxPreview: 3,
   autoFit: false,
+  editable: false,
   emptyText: '无照片',
 })
 
 const emit = defineEmits<{
   preview: [uuid: string]
+  remove: [photoId: string]
+  add: []
 }>()
 
 function imageUrl(uuid: string): string {
@@ -98,11 +102,20 @@ const restPhotos = computed(() => {
 </script>
 
 <template>
-  <span
-    v-if="!photos || photos.length === 0"
-    class="photo-thumb-empty"
-  >{{ emptyText }}</span>
+  <div v-if="!photos || photos.length === 0" class="photo-thumb-empty-state">
+    <span class="photo-thumb-empty">{{ emptyText }}</span>
+    <NButton v-if="editable" size="tiny" secondary @click="emit('add')">
+      <template #icon><NIcon><AddOutline /></NIcon></template>
+      增加照片
+    </NButton>
+  </div>
   <div v-else ref="containerRef" class="photo-thumb-list">
+    <div v-if="editable" class="photo-thumb-toolbar">
+      <NButton size="tiny" secondary @click="emit('add')">
+        <template #icon><NIcon><AddOutline /></NIcon></template>
+        增加照片
+      </NButton>
+    </div>
     <!-- 缩略图行 -->
     <div
       v-if="previewPhotos.length"
@@ -124,6 +137,17 @@ const restPhotos = computed(() => {
           :src="imageUrl(getUuid(p))"
         />
         <NIcon v-else size="24"><ImageOutline /></NIcon>
+        <NButton
+          v-if="editable"
+          class="photo-remove-button"
+          quaternary
+          circle
+          size="tiny"
+          title="删除照片"
+          @click.stop="emit('remove', p.photo_id)"
+        >
+          <template #icon><NIcon><CloseOutline /></NIcon></template>
+        </NButton>
       </span>
     </div>
     <!-- 文件名标签行（超过 maxPreview 的部分） -->
@@ -131,10 +155,21 @@ const restPhotos = computed(() => {
       <span
         v-for="p in restPhotos"
         :key="p.photo_id"
-        class="photo-name-tag"
+        class="photo-name-item"
         :class="{ 'photo-name-clickable': !!getUuid(p) }"
-        @click="getUuid(p) && emit('preview', getUuid(p))"
-      >{{ p.filename }}</span>
+      >
+        <span @click="getUuid(p) && emit('preview', getUuid(p))">{{ p.filename }}</span>
+        <NButton
+          v-if="editable"
+          quaternary
+          circle
+          size="tiny"
+          title="删除照片"
+          @click.stop="emit('remove', p.photo_id)"
+        >
+          <template #icon><NIcon><CloseOutline /></NIcon></template>
+        </NButton>
+      </span>
     </div>
   </div>
 </template>
@@ -144,16 +179,26 @@ const restPhotos = computed(() => {
   color: var(--n-text-color-3);
   font-size: 13px;
 }
+.photo-thumb-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .photo-thumb-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+.photo-thumb-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
 .photo-thumb-row {
   display: grid;
-  grid-template-columns: repeat(var(--photo-thumb-columns), minmax(64px, 1fr));
+  grid-template-columns: repeat(var(--photo-thumb-columns), 64px);
   gap: 8px;
   align-items: center;
+  justify-content: start;
 }
 .photo-thumb-row-expanded {
   display: flex;
@@ -167,8 +212,15 @@ const restPhotos = computed(() => {
   align-items: center;
 }
 .photo-thumb-wrap {
+  position: relative;
   display: inline-block;
   min-width: 0;
+}
+.photo-remove-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--n-color-modal);
 }
 .photo-thumb-row-expanded .photo-thumb-wrap {
   flex: 0 0 64px;
@@ -185,8 +237,9 @@ const restPhotos = computed(() => {
 .photo-thumb:hover {
   transform: scale(1.08);
 }
-.photo-name-tag {
-  display: inline-block;
+.photo-name-item {
+  display: inline-flex;
+  align-items: center;
   padding: 2px 8px;
   font-size: 12px;
   color: var(--n-color-target);
