@@ -110,7 +110,10 @@ def _load_golden_queries(dir_path: pathlib.Path) -> list[dict]:
             migrated = True
         for photo in it.get("relevant_photos", []):
             if isinstance(photo, dict):
-                photo.setdefault("granularity", "photo")
+                # 黄金用例底层只保存单张照片，兼容旧文件时丢弃历史粒度字段。
+                if "granularity" in photo:
+                    photo.pop("granularity")
+                    migrated = True
     if migrated:
         _save_golden_queries(items, dir_path)
     return items
@@ -135,7 +138,7 @@ def _append_photos_to_case(
     """把期望照片追加到指定用例，原地修改 items，返回 (用例, 新增数量)。
 
     照片以文件名（去后缀）为准，UUID 优先按文件名从图库解析；
-    同一（照片, 粒度）组合已存在时跳过，不视为错误。
+    同一照片已存在时跳过，不视为错误。
     """
     if not photos:
         raise fastapi.HTTPException(status_code=400, detail="追加照片不能为空")
@@ -145,9 +148,7 @@ def _append_photos_to_case(
         raise fastapi.HTTPException(status_code=404, detail="用例不存在")
 
     existing_photos = target.setdefault("relevant_photos", [])
-    existing_keys = {
-        (p.get("photo_id", ""), p.get("granularity", "photo")) for p in existing_photos
-    }
+    existing_keys = {p.get("photo_id", "") for p in existing_photos}
     added = 0
     for p in photos:
         pid = _normalize_ext(p.photo_id)
@@ -157,7 +158,7 @@ def _append_photos_to_case(
         photo_uuid = fname_to_uuid.get(pid) or fname_to_uuid.get(fname) or p.uuid
         if not photo_uuid:
             raise fastapi.HTTPException(status_code=400, detail=f"照片不在图库中：{fname}")
-        key = (pid, p.granularity)
+        key = pid
         if key in existing_keys:
             continue
         existing_keys.add(key)
@@ -165,7 +166,6 @@ def _append_photos_to_case(
             "photo_id": pid,
             "filename": fname,
             "uuid": photo_uuid,
-            "granularity": p.granularity,
         })
         added += 1
 
@@ -404,7 +404,7 @@ class GoldenQueryEvaluateRequest(pydantic.BaseModel):
 
 
 class GoldenPhotoAppendRequest(pydantic.BaseModel):
-    """向已有用例追加期望照片。已存在的（照片, 粒度）组合会被跳过。"""
+    """向已有用例追加期望照片。黄金用例始终按单张照片去重。"""
 
     photos: list[GoldenPhotoRef]
 
@@ -776,7 +776,6 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     "filename": _normalize_ext(p.filename),
                     # 显式传 uuid 时以其为准（管理页新建）；ChatView 未传 uuid，其 photo_id 即 UUID
                     "uuid": p.uuid or _normalize_ext(p.photo_id),
-                    "granularity": p.granularity,
                 }
                 for p in body.relevant_photos
             ],
@@ -830,7 +829,6 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     "photo_id": pid,
                     "filename": fname,
                     "uuid": fname_to_uuid.get(pid, ""),
-                    "granularity": p.granularity,
                 })
             items.append({
                 "id": uuid.uuid4().hex[:12],

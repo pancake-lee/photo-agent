@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, onMounted, h } from 'vue'
 import { formatDate } from '../utils/format'
 import {
   NLayout,
@@ -15,7 +15,6 @@ import {
   NPopconfirm,
   NModal,
   NInput,
-  NSelect,
   useMessage,
 } from 'naive-ui'
 import {
@@ -32,6 +31,7 @@ import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 import PhotoPickOverlay from '../components/PhotoPickOverlay.vue'
 import SelectedPhotoList, { type SelectedPhotoItem } from '../components/SelectedPhotoList.vue'
+import { photoApi } from '../backend-sdk-client'
 import {
   createPickSession,
   readPickSession,
@@ -40,12 +40,6 @@ import {
 } from '../utils/photoPickSession'
 
 type Granularity = 'photo' | 'fine' | 'coarse'
-
-const GRANULARITY_OPTIONS: { label: string; value: Granularity }[] = [
-  { label: '单张 photo', value: 'photo' },
-  { label: '连拍细组 fine', value: 'fine' },
-  { label: '连拍粗组 coarse', value: 'coarse' },
-]
 
 interface GoldenPhotoRef {
   photo_id: string
@@ -139,7 +133,6 @@ const rowEvaluatingId = ref('')
 
 // 评估明细中追加多余命中
 const appendSelected = ref<string[]>([])
-const appendGranularity = ref<Granularity>('photo')
 const appending = ref(false)
 
 /** FastAPI 错误既可能是 detail 字符串，也可能是校验错误数组，统一转成一行文本 */
@@ -210,26 +203,15 @@ function showDetail(item: GoldenQuery) {
   detailVisible.value = true
 }
 
-/** 详情按粒度分组展示，旧用例没有粒度字段时按单张处理 */
-const detailPhotoGroups = computed(() => {
-  const item = detailItem.value
-  if (!item) return []
-  return GRANULARITY_OPTIONS.map((opt) => ({
-    label: opt.label,
-    photos: item.relevant_photos.filter((p) => (p.granularity || 'photo') === opt.value),
-  })).filter((group) => group.photos.length > 0)
-})
-
 // ── 导出 ──
 
 function handleExport() {
   const exportData = items.value.map(({ query_text, relevant_photos, category, notes }) => ({
     query_text,
-    // 导出时剥掉 uuid（UUID 是环境数据，迁移后可能变化），保留粒度
-    relevant_photos: relevant_photos.map(({ photo_id, filename, granularity }) => ({
+    // 导出时剥掉 uuid（UUID 是环境数据，迁移后可能变化）
+    relevant_photos: relevant_photos.map(({ photo_id, filename }) => ({
       photo_id,
       filename,
-      granularity: granularity || 'photo',
     })),
     category,
     notes,
@@ -321,21 +303,49 @@ function openPickOverlay() {
   pickVisible.value = true
 }
 
-/** 完成选择：恢复弹窗并合并新选择，旧照片保留原粒度 */
+/** 完成选择：恢复弹窗并合并新选择，连拍信息仅用于已选区展示 */
 function onPickConfirm(picked: PickedPhoto[]) {
   clearPickSession()
   pickVisible.value = false
   createVisible.value = true
-  const oldMap = new Map(createPhotos.value.map((p) => [p.photo_id, p.granularity]))
   createPhotos.value = picked.map((p) => ({
     photo_id: p.photo_id,
     filename: p.filename,
     uuid: p.uuid,
-    // 覆盖层回传粒度（连拍组封面按展示级别推导）优先，其次旧照片原粒度
-    granularity: p.granularity || oldMap.get(p.photo_id) || 'photo',
+    granularity: p.granularity || 'photo',
     burst_group_id: p.burst_group_id,
     burst_count: p.burst_count,
   }))
+}
+
+/** 保存前展开仍以连拍组形式存在的条目；连拍精选后的条目已经是单张。 */
+async function expandCreatePhotos(): Promise<GoldenPhotoRef[]> {
+  const expanded: GoldenPhotoRef[] = []
+  for (const photo of createPhotos.value) {
+    const isUncuratedGroup = Boolean(
+      photo.burst_group_id && (photo.burst_count || 0) > 1 && photo.granularity !== 'photo',
+    )
+    if (!isUncuratedGroup) {
+      expanded.push({ photo_id: photo.photo_id, filename: photo.filename, uuid: photo.uuid })
+      continue
+    }
+    const response = await photoApi.photoServiceSearchPhotos(
+      1, 100, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, 'shot_at', 'asc',
+      photo.burst_group_id, photo.granularity,
+    )
+    for (const member of response.items || []) {
+      if (member.id) {
+        const filename = member.filename || member.id
+        expanded.push({
+          photo_id: filename.replace(/\.[^.]+$/, ''),
+          filename,
+          uuid: member.id,
+        })
+      }
+    }
+  }
+  return expanded
 }
 
 /** 取消：恢复弹窗与原选择，覆盖层结果丢弃 */
@@ -358,16 +368,20 @@ async function handleCreate() {
   }
   creating.value = true
   try {
+    const expandedPhotos = await expandCreatePhotos()
+    if (expandedPhotos.length === 0) {
+      message.error('已选连拍组没有可加入的照片')
+      return
+    }
     const resp = await fetch(`${getAgentBase()}/golden-queries`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query_text: createQuery.value.trim(),
-        relevant_photos: createPhotos.value.map((p) => ({
+        relevant_photos: expandedPhotos.map((p) => ({
           photo_id: p.photo_id,
           filename: p.filename,
           uuid: p.uuid,
-          granularity: p.granularity || 'photo',
         })),
         category: createCategory.value.trim(),
         notes: createNotes.value.trim(),
@@ -448,7 +462,6 @@ async function handleEvaluateRow(row: GoldenQuery) {
 function showEvalDetail(row: EvalDetail) {
   evalDetailItem.value = row
   appendSelected.value = []
-  appendGranularity.value = 'photo'
   evalDetailVisible.value = true
 }
 
@@ -484,7 +497,6 @@ async function handleAppendPhotos() {
       photo_id: p.photo_id,
       filename: p.filename,
       uuid: p.uuid,
-      granularity: appendGranularity.value,
     }))
 
   appending.value = true
@@ -557,11 +569,8 @@ const columns = [
     key: 'relevant_photos',
     width: 120,
     render(row: GoldenQuery) {
-      const grouped = row.relevant_photos.filter(
-        (p) => (p.granularity || 'photo') !== 'photo',
-      ).length
       const base = `${row.relevant_photos.length} 张`
-      return grouped > 0 ? `${base}（组 ${grouped}）` : base
+      return base
     },
   },
   {
@@ -797,15 +806,7 @@ const evalColumns = [
         </div>
         <div class="detail-field">
           <span class="detail-label">关联照片 ({{ detailItem.relevant_photos.length }})</span>
-          <PhotoThumbList
-            v-if="detailPhotoGroups.length === 0"
-            :photos="[]"
-            empty-text="无关联照片"
-          />
-          <div v-for="group in detailPhotoGroups" :key="group.label" class="detail-photo-group">
-            <span class="detail-group-title">{{ group.label }} · {{ group.photos.length }} 张</span>
-            <PhotoThumbList :photos="group.photos" @preview="openPreview" />
-          </div>
+          <PhotoThumbList :photos="detailItem.relevant_photos" empty-text="无关联照片" @preview="openPreview" />
         </div>
       </div>
     </NModal>
@@ -842,6 +843,7 @@ const evalColumns = [
 
         <div v-if="createPhotos.length" class="detail-field">
           <span class="detail-label">已选照片 ({{ createPhotos.length }})</span>
+          <span class="selected-photo-hint">连拍集合会把所有子图加入黄金用例；如需精选，请进入连拍组操作。</span>
           <SelectedPhotoList
             :items="createPhotos as SelectedPhotoItem[]"
             @update:items="createPhotos = $event"
@@ -984,12 +986,6 @@ const evalColumns = [
               </div>
             </div>
             <div class="miss-actions">
-              <NSelect
-                v-model:value="appendGranularity"
-                size="small"
-                style="width: 160px"
-                :options="GRANULARITY_OPTIONS"
-              />
               <NButton
                 size="small"
                 type="primary"
@@ -1100,6 +1096,10 @@ const evalColumns = [
 }
 .create-row-item {
   flex: 1;
+}
+.selected-photo-hint {
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 .picked-list {
   display: flex;

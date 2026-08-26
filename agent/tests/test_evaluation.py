@@ -7,7 +7,7 @@ from chain import server
 
 
 class TestEvaluation(unittest.TestCase):
-  def test_golden_queries_default_legacy_granularity_and_reject_unknown(self):
+  def test_golden_queries_always_use_photo_granularity(self):
     loaded = evaluation._load_golden_queries_from_items([
         {
             "query_text": "旧用例",
@@ -23,16 +23,11 @@ class TestEvaluation(unittest.TestCase):
     ])
 
     assert loaded[0]["relevant_photos"][0]["granularity"] == "photo"
-    assert loaded[1]["relevant_photos"][0]["granularity"] == "fine"
-    assert loaded[1]["relevant_photos"][1]["granularity"] == "coarse"
-
-    with self.assertRaisesRegex(ValueError, "未知检索粒度"):
-      evaluation._load_golden_queries_from_items([
-          {"query_text": "坏用例", "relevant_photos": [{"photo_id": "x", "granularity": "bad"}]}
-      ])
+    assert loaded[1]["relevant_photos"][0]["granularity"] == "photo"
+    assert loaded[1]["relevant_photos"][1]["granularity"] == "photo"
 
 
-  def test_run_evaluation_queries_each_marked_collection(self):
+  def test_run_evaluation_queries_photo_collection(self):
     monkeypatch = SimpleNamespace(
         setattr=lambda obj, name, value: setattr(obj, name, value),
     )
@@ -86,19 +81,17 @@ class TestEvaluation(unittest.TestCase):
 
     try:
       self.assertEqual(result["details"][0]["golden_id"], "case-1")
-      self.assertEqual(result["details"][0]["hits"], ["photo", "fine", "coarse"])
-      self.assertEqual(result["details"][0]["remaining"], [])
-      self.assertEqual(set(FakeStore.stores), {"photos", "photos_burst_fine", "photos_burst_coarse"})
+      self.assertEqual(result["details"][0]["hits"], ["photo"])
+      self.assertEqual(result["details"][0]["remaining"], ["coarse", "fine"])
+      self.assertEqual(set(FakeStore.stores), {"photos"})
     finally:
       evaluation.embedder.Embedder, evaluation.chroma_client.ChromaPhotoStore, \
           evaluation._build_id_to_filename, evaluation.photo_rag._aggregate_by_photo = old
 
 
-  def test_golden_photo_ref_validates_granularity(self):
+  def test_golden_photo_ref_accepts_legacy_granularity_input(self):
     self.assertEqual(server.GoldenPhotoRef(photo_id="x", filename="x").granularity, "photo")
     self.assertEqual(server.GoldenPhotoRef(photo_id="x", filename="x", granularity="fine").granularity, "fine")
-    with self.assertRaises(Exception):
-      server.GoldenPhotoRef(photo_id="x", filename="x", granularity="invalid")
 
   def test_golden_query_id_passes_into_evaluation_input(self):
     loaded = evaluation._load_golden_queries_from_items([
@@ -123,7 +116,7 @@ class TestAppendGoldenPhotos(unittest.TestCase):
         "updated_at": "2026-08-25T00:00:00",
     }
 
-  def test_append_resolves_uuid_and_keeps_granularity(self):
+  def test_append_resolves_uuid_and_forces_photo_semantics(self):
     items = [self._case()]
     target, added = server._append_photos_to_case(
         items,
@@ -137,11 +130,10 @@ class TestAppendGoldenPhotos(unittest.TestCase):
         "photo_id": "DSC_2",
         "filename": "DSC_2",
         "uuid": "u2",
-        "granularity": "coarse",
     })
     self.assertNotEqual(target["updated_at"], "2026-08-25T00:00:00")
 
-  def test_append_skips_same_photo_and_granularity(self):
+  def test_append_skips_same_photo_regardless_of_legacy_granularity(self):
     items = [self._case()]
     _, added = server._append_photos_to_case(
         items,
@@ -153,11 +145,8 @@ class TestAppendGoldenPhotos(unittest.TestCase):
         {"DSC_1": "u1"},
     )
 
-    self.assertEqual(added, 1)
-    self.assertEqual(
-        [(p["photo_id"], p["granularity"]) for p in items[0]["relevant_photos"]],
-        [("DSC_1", "photo"), ("DSC_1", "fine")],
-    )
+    self.assertEqual(added, 0)
+    self.assertEqual(len(items[0]["relevant_photos"]), 1)
 
   def test_append_reports_missing_case_photo_and_empty_input(self):
     with self.assertRaises(server.fastapi.HTTPException) as ctx:

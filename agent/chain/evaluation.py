@@ -80,12 +80,10 @@ def _load_golden_queries_from_items(items: list[dict]) -> list[dict]:
         refs = []
         for photo in raw:
             if isinstance(photo, dict):
-                granularity = photo.get("granularity", "photo")
-                if granularity not in GRANULARITIES:
-                    raise ValueError(f"未知检索粒度: {granularity}")
+                # 黄金用例只记录单张照片；旧数据中的粒度字段忽略，统一按 photo 集合评估。
                 refs.append({
                     "photo_id": _normalize_id(photo.get("photo_id", "")),
-                    "granularity": granularity,
+                    "granularity": "photo",
                 })
             else:
                 refs.append({"photo_id": _normalize_id(photo), "granularity": "photo"})
@@ -180,11 +178,10 @@ def run_evaluation(
         tracker=tracker,
     )
     stores = {
-        granularity: chroma_client.ChromaPhotoStore(
+        "photo": chroma_client.ChromaPhotoStore(
             persist_dir=str(cfg.resolve_path("./data/chroma")),
-            collection_name=photo_rag.GRANULARITY_COLLECTIONS[granularity],
-        )
-        for granularity in GRANULARITIES
+            collection_name=photo_rag.GRANULARITY_COLLECTIONS["photo"],
+        ),
     }
 
     # 构建 UUID ↔ 文件名 双向映射（ChromaDB 存 UUID，黄金用例标文件名）
@@ -204,18 +201,14 @@ def run_evaluation(
     for i, q in enumerate(queries):
         question = q["question"]
         raw_relevant = q.get("relevant_photos", [])
-        relevant_by_granularity: dict[str, set[str]] = {g: set() for g in GRANULARITIES}
+        relevant_by_granularity: dict[str, set[str]] = {"photo": set()}
         for ref in raw_relevant:
             if isinstance(ref, dict):
-                granularity = ref.get("granularity", "photo")
                 photo_id = ref.get("photo_id", "")
             else:
-                granularity = "photo"
                 photo_id = ref
-            if granularity not in GRANULARITIES:
-                raise ValueError(f"未知检索粒度: {granularity}")
             if photo_id:
-                relevant_by_granularity[granularity].add(_normalize_id(photo_id))
+                relevant_by_granularity["photo"].add(_normalize_id(photo_id))
         relevant_ids = set().union(*relevant_by_granularity.values())
         recall_k = len(relevant_ids)
         fetch_k = max(precision_k, recall_k, 10)
