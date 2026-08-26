@@ -16,6 +16,7 @@
 | Done | 优化评估基建 | TF1-4 | 检索与连拍粒度种子用例 | |
 | Done | 优化评估基建 | TF1-5 | 黄金用例评估与追加 API | |
 | Done | 优化评估基建 | TF1-6 | 黄金用例管理界面 | |
+| Done | 优化评估基建 | TF1-7 | 黄金用例选图复用图片管理（覆盖层） | |
 
 > v1.0.11 已归档：CL1、CL2、PS1–PS6，详见 [v1.0.11](archive/v1.0.11.md)。
 > 其余 6 项待规划任务经审阅后迁至 [docs/design/2026-08-22-future-requirements.md](design/2026-08-22-future-requirements.md)。
@@ -135,6 +136,21 @@
   - [x] 追加后再次评估立即生效
   - [x] 不存在用例（404）、无效粒度（422）和不在图库的照片（400）有清晰错误
 
+### TF1-7 黄金用例选图复用图片管理（覆盖层）
+
+- **状态**：Done
+- **方案**：[docs/design/2026-08-26-1-photo-pick-overlay.md](design/2026-08-26-1-photo-pick-overlay.md)
+- **背景**：新建黄金用例选期望照片用的是内嵌简化列表（GoldenPhotoPicker），缺三档连拍折叠、分段、全选、区间选择等图片管理已有能力；继续堆功能等于造第三套重复图片列表。
+- **方案**：需要选图时打开全屏覆盖层复用 PhotoListBrowser + usePhotos 完整交互，顶栏改写（隐藏 VLM/Embed/图文工坊等按钮，只留搜索/展示/筛选与「完成选择/取消」）；左侧菜单不切换；选中结果经 sessionStorage 会话回传，弹窗草稿留在父组件不丢；已选预填充、粒度保留。
+- **实现**：
+  - 新增 `web/src/utils/photoPickSession.ts`（sessionStorage 会话协议：create/read/complete/clear，draft 由发起方自定义）
+  - 新增 `web/src/components/PhotoPickOverlay.vue`（Teleport 全屏覆盖层，复用 PhotoListBrowser + usePhotos，顶栏含展示级别/分段/排序/搜索筛选/全选/清空/区间选择/完成选择/取消）
+  - `GoldenQueryManagement.vue` 新建弹窗「选择照片」按钮替换原内嵌选图器；打开覆盖层时弹窗隐藏、草稿入会话，完成恢复弹窗并按 photo_id 保留旧粒度；onMounted 检测残留会话恢复（F5 刷新场景）
+  - 删除 `web/src/components/GoldenPhotoPicker.vue`
+- **验收**：
+  - [x] vue-tsc 与 vite build 通过
+  - [ ] 用户手工验证：覆盖层交互完整性、草稿恢复、粒度保留、图片管理自身行为不变（见设计文档第 5 节）
+
 ### TF1-6 黄金用例管理界面
 
 - **状态**：Done
@@ -156,6 +172,8 @@
   - [x] 旧用例查看、导入导出和全量评估继续可用
 
 ## 决策历史
+
+- **2026-08-26**：TF1-7 立项。黄金用例选图不再用内嵌简化列表，改为覆盖层复用图片管理完整交互；sessionStorage 持久化会话、预填充已选。方案：[docs/design/2026-08-26-1-photo-pick-overlay.md](design/2026-08-26-1-photo-pick-overlay.md)
 
 - **2026-08-22**：v1.0.10 归档，完成连拍分组与照片列表浏览；6 项暂缓需求迁移至未来需求文档。
 - **2026-08-23**：CL1 评估通过（8.4），CL2 修复 VLM HTTP 客户端 60 秒超时。

@@ -30,7 +30,13 @@ import {
 import { getAgentBase, getApiBase } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
-import GoldenPhotoPicker from '../components/GoldenPhotoPicker.vue'
+import PhotoPickOverlay from '../components/PhotoPickOverlay.vue'
+import {
+  createPickSession,
+  readPickSession,
+  clearPickSession,
+  type PickedPhoto,
+} from '../utils/photoPickSession'
 
 type Granularity = 'photo' | 'fine' | 'coarse'
 
@@ -113,6 +119,17 @@ const createQuery = ref('')
 const createCategory = ref('')
 const createNotes = ref('')
 const createPhotos = ref<GoldenPhotoRef[]>([])
+
+// 选图覆盖层：打开时隐藏新建弹窗（草稿留在 ref 里），完成后恢复
+const pickVisible = ref(false)
+const PICK_SOURCE = 'golden-create'
+
+/** 新建弹窗表单草稿（存进选图会话，F5 刷新后可恢复） */
+interface CreateDraft {
+  query: string
+  category: string
+  notes: string
+}
 
 // 行级单条评估：正在评估的用例 ID
 const rowEvaluatingId = ref('')
@@ -277,13 +294,47 @@ function openCreate() {
   createVisible.value = true
 }
 
-/** 选择器只回传照片本身，粒度在已选列表里逐张指定，默认单张 */
-function onPickerChange(picked: { photo_id: string; filename: string; uuid: string }[]) {
+// ── 选图覆盖层（复用图片管理完整交互）──
+
+/** 打开覆盖层：草稿与已选写入会话（防刷新丢失），新建弹窗先隐藏 */
+function openPickOverlay() {
+  createPickSession({
+    source: PICK_SOURCE,
+    selected: createPhotos.value.map((p) => ({
+      photo_id: p.photo_id,
+      filename: p.filename,
+      uuid: p.uuid,
+      granularity: p.granularity || 'photo',
+    })),
+    draft: {
+      query: createQuery.value,
+      category: createCategory.value,
+      notes: createNotes.value,
+    } satisfies CreateDraft,
+  })
+  createVisible.value = false
+  pickVisible.value = true
+}
+
+/** 完成选择：恢复弹窗并合并新选择，旧照片保留原粒度 */
+function onPickConfirm(picked: PickedPhoto[]) {
+  clearPickSession()
+  pickVisible.value = false
+  createVisible.value = true
   const oldMap = new Map(createPhotos.value.map((p) => [p.photo_id, p.granularity]))
   createPhotos.value = picked.map((p) => ({
-    ...p,
+    photo_id: p.photo_id,
+    filename: p.filename,
+    uuid: p.uuid,
     granularity: oldMap.get(p.photo_id) || 'photo',
   }))
+}
+
+/** 取消：恢复弹窗与原选择，覆盖层结果丢弃 */
+function onPickCancel() {
+  clearPickSession()
+  pickVisible.value = false
+  createVisible.value = true
 }
 
 function removeCreatePhoto(photoId: string) {
@@ -470,7 +521,21 @@ async function handleAppendPhotos() {
 
 // ── 初始化 ──
 
-onMounted(() => fetchItems())
+onMounted(() => {
+  fetchItems()
+  // 刷新恢复：选图过程中 F5 后会话仍在，恢复草稿与已选，重开覆盖层继续选
+  const session = readPickSession<CreateDraft>(PICK_SOURCE)
+  if (session && !session.done) {
+    const draft = session.draft
+    if (draft) {
+      createQuery.value = draft.query
+      createCategory.value = draft.category
+      createNotes.value = draft.notes
+    }
+    createPhotos.value = session.selected as GoldenPhotoRef[]
+    pickVisible.value = true
+  }
+})
 
 // ── 表格列定义 ──
 
@@ -764,7 +829,9 @@ const evalColumns = [
 
         <div class="detail-field">
           <span class="detail-label">选择期望照片</span>
-          <GoldenPhotoPicker :selected="createPhotos" @update:selected="onPickerChange" />
+          <NButton size="small" @click="openPickOverlay">
+            选择照片（进入图片管理选图）
+          </NButton>
         </div>
 
         <div v-if="createPhotos.length" class="detail-field">
@@ -950,6 +1017,14 @@ const evalColumns = [
 
     <!-- 图片预览弹窗 -->
     <PhotoPreviewModal v-model:show="previewShow" :image-url="previewImg" />
+
+    <!-- 选图覆盖层：复用图片管理完整交互 -->
+    <PhotoPickOverlay
+      :show="pickVisible"
+      :preselected="createPhotos.map((p) => ({ photo_id: p.photo_id, filename: p.filename, uuid: p.uuid }))"
+      @confirm="onPickConfirm"
+      @cancel="onPickCancel"
+    />
   </NLayout>
 </template>
 
