@@ -16,7 +16,8 @@ import {
   CheckmarkOutline,
 } from '@vicons/ionicons5'
 import { useSuggestDetail } from '../composables/useSuggestDetail'
-import SuggestPhotoSelector from './SuggestPhotoSelector.vue'
+import SuggestPhotoPicker, { type SuggestPickedPhoto } from './SuggestPhotoPicker.vue'
+import SelectedPhotoList, { type SelectedPhotoItem } from './SelectedPhotoList.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -28,17 +29,24 @@ const emit = defineEmits<{
 }>()
 
 const message = useMessage()
-const { manualRun, manualLoading } = useSuggestDetail()
+const { manualRun, manualLoading, randomSample } = useSuggestDetail()
 
 // 向导步骤
 const currentStep = ref(1)
 
 // Step 1: 选照片
-interface PhotoItem {
-  photo_id: string
-  description?: string
-}
-const selectedPhotos = ref<PhotoItem[]>([])
+const selectedPhotos = ref<SuggestPickedPhoto[]>([])
+
+const selectedPhotoItems = computed<SelectedPhotoItem[]>(() =>
+  selectedPhotos.value.map((photo) => ({
+    photo_id: photo.photo_id,
+    filename: photo.filename || photo.photo_id,
+    uuid: photo.uuid || photo.photo_id,
+    burst_group_id: photo.burst_group_id,
+    burst_count: photo.burst_count,
+    granularity: photo.granularity,
+  })),
+)
 
 // Step 2: 填直觉（可选）
 const intuitionTitle = ref('')
@@ -48,6 +56,16 @@ const intuitionRationale = ref('')
 const hasIntuition = computed(() =>
   intuitionTitle.value.trim() || intuitionAngle.value.trim()
 )
+
+const photoPickerActive = ref(false)
+
+function hideForPhotoPicker() {
+  photoPickerActive.value = true
+}
+
+function restoreAfterPhotoPicker() {
+  photoPickerActive.value = false
+}
 
 function handleClose() {
   emit('update:visible', false)
@@ -98,7 +116,8 @@ async function handleSubmit() {
 
 <template>
   <NModal
-    :show="visible"
+    :show="visible && !photoPickerActive"
+    display-directive="show"
     preset="card"
     title="手动生成选题建议"
     style="width: 85vw; max-width: 1100px;"
@@ -113,9 +132,26 @@ async function handleSubmit() {
     <div class="manual-body">
       <!-- Step 1: 选照片 -->
       <div v-if="currentStep === 1" class="step-content">
-        <SuggestPhotoSelector
+        <SuggestPhotoPicker
           v-model:selected-ids="selectedPhotos"
+          source="suggest-manual"
+          :random-sample="async () => {
+            const result = await randomSample()
+            return result?.photos.map((p) => ({ photo_id: p.photo_id, description: p.description })) || null
+          }"
+          @open="hideForPhotoPicker"
+          @close="restoreAfterPhotoPicker"
         />
+        <p class="photo-selection-hint">
+          所选照片将作为候选素材，后续流程会从中挑选一张挖掘主题，不会全部使用。
+        </p>
+        <div v-if="selectedPhotos.length > 0" class="selected-photos">
+          <div class="selected-photos-title">已选照片（{{ selectedPhotos.length }}）</div>
+          <SelectedPhotoList
+            :items="selectedPhotoItems"
+            @update:items="selectedPhotos = $event"
+          />
+        </div>
       </div>
 
       <!-- Step 2: 填写直觉（可选） -->
@@ -214,6 +250,21 @@ async function handleSubmit() {
 }
 .step-content {
   padding: 8px 0;
+}
+.selected-photos {
+  margin-top: 20px;
+}
+.selected-photos-title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+}
+.photo-selection-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  line-height: 1.5;
 }
 .intuition-form {
   display: flex;

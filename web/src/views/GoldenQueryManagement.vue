@@ -31,6 +31,7 @@ import { getAgentBase, getApiBase } from '../config'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 import PhotoPickOverlay from '../components/PhotoPickOverlay.vue'
+import SelectedPhotoList, { type SelectedPhotoItem } from '../components/SelectedPhotoList.vue'
 import {
   createPickSession,
   readPickSession,
@@ -51,6 +52,8 @@ interface GoldenPhotoRef {
   filename: string
   uuid: string
   granularity?: Granularity
+  burst_group_id?: string
+  burst_count?: number
 }
 
 interface GoldenQuery {
@@ -305,6 +308,8 @@ function openPickOverlay() {
       filename: p.filename,
       uuid: p.uuid,
       granularity: p.granularity || 'photo',
+      burst_group_id: p.burst_group_id,
+      burst_count: p.burst_count,
     })),
     draft: {
       query: createQuery.value,
@@ -328,6 +333,8 @@ function onPickConfirm(picked: PickedPhoto[]) {
     uuid: p.uuid,
     // 覆盖层回传粒度（连拍组封面按展示级别推导）优先，其次旧照片原粒度
     granularity: p.granularity || oldMap.get(p.photo_id) || 'photo',
+    burst_group_id: p.burst_group_id,
+    burst_count: p.burst_count,
   }))
 }
 
@@ -338,9 +345,7 @@ function onPickCancel() {
   createVisible.value = true
 }
 
-function removeCreatePhoto(photoId: string) {
-  createPhotos.value = createPhotos.value.filter((p) => p.photo_id !== photoId)
-}
+
 
 async function handleCreate() {
   if (!createQuery.value.trim()) {
@@ -836,27 +841,12 @@ const evalColumns = [
         </div>
 
         <div v-if="createPhotos.length" class="detail-field">
-          <span class="detail-label">已选照片与粒度 ({{ createPhotos.length }})</span>
-          <div class="picked-list">
-            <div v-for="photo in createPhotos" :key="photo.photo_id" class="picked-row">
-              <img
-                v-if="photo.uuid"
-                class="picked-thumb"
-                :src="`${getApiBase()}/photos/${photo.uuid}/image`"
-                @click="openPreview(photo.uuid)"
-              />
-              <span class="picked-name">{{ photo.filename }}</span>
-              <NSelect
-                v-model:value="photo.granularity"
-                size="small"
-                style="width: 160px"
-                :options="GRANULARITY_OPTIONS"
-              />
-              <NButton size="tiny" quaternary @click="removeCreatePhoto(photo.photo_id)">
-                <NIcon><TrashOutline /></NIcon>
-              </NButton>
-            </div>
-          </div>
+          <span class="detail-label">已选照片 ({{ createPhotos.length }})</span>
+          <SelectedPhotoList
+            :items="createPhotos as SelectedPhotoItem[]"
+            @update:items="createPhotos = $event"
+            @preview="openPreview"
+          />
         </div>
       </div>
 
@@ -1022,7 +1012,7 @@ const evalColumns = [
     <!-- 选图覆盖层：复用图片管理完整交互 -->
     <PhotoPickOverlay
       :show="pickVisible"
-      :preselected="createPhotos.map((p) => ({ photo_id: p.photo_id, filename: p.filename, uuid: p.uuid, granularity: p.granularity }))"
+      :preselected="createPhotos.map((p) => ({ photo_id: p.photo_id, filename: p.filename, uuid: p.uuid, granularity: p.granularity, burst_group_id: p.burst_group_id, burst_count: p.burst_count }))"
       @confirm="onPickConfirm"
       @cancel="onPickCancel"
     />

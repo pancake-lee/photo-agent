@@ -173,6 +173,8 @@ function handleConfirm() {
         filename: photoId,
         uuid: p.id,
         granularity: initialGranularity.value.get(photoId) || defaultGranularity(p),
+        burst_group_id: p.burst_group_id || undefined,
+        burst_count: p.burst_count || undefined,
       })
     }
   }

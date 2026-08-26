@@ -10,7 +10,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import type { PipelineStep } from '../types/suggest'
-import SuggestPhotoSelector from './SuggestPhotoSelector.vue'
+import SuggestPhotoPicker, { type SuggestPickedPhoto } from './SuggestPhotoPicker.vue'
 
 const props = defineProps<{
   step: PipelineStep | null
@@ -25,10 +25,7 @@ const emit = defineEmits<{
 const message = useMessage()
 
 // 根据步骤类型渲染不同的编辑器
-interface PhotoItem {
-  photo_id: string
-  description?: string
-}
+type PhotoItem = SuggestPickedPhoto
 
 const editedPhotos = ref<PhotoItem[]>([])
 const editedText = ref('')
@@ -41,6 +38,16 @@ const formAngle = ref('')
 const formRationale = ref('')
 const formInspiredPhotos = ref<PhotoItem[]>([])
 const formPhotoSequence = ref<Array<{ photo_id: string; role_in_narrative: string }>>([])
+
+const photoPickerActive = ref(false)
+
+function hideForPhotoPicker() {
+  photoPickerActive.value = true
+}
+
+function restoreAfterPhotoPicker() {
+  photoPickerActive.value = false
+}
 
 watch(() => props.step, (step) => {
   if (!step) return
@@ -179,7 +186,8 @@ function handleClose() {
 
 <template>
   <NModal
-    :show="visible"
+    :show="visible && !photoPickerActive"
+    display-directive="show"
     preset="card"
     title="编辑步骤数据"
     style="width: 85vw; max-width: 1000px;"
@@ -189,10 +197,7 @@ function handleClose() {
       <!-- 照片选择器模式 -->
       <div v-if="editingMode === 'photos'" class="editor-photos">
         <span class="editor-hint">已选 {{ editedPhotos.length }} 张照片</span>
-        <SuggestPhotoSelector
-          v-model:selected-ids="editedPhotos"
-          :compact="true"
-        />
+        <SuggestPhotoPicker v-model:selected-ids="editedPhotos" source="suggest-step-editor" @open="hideForPhotoPicker" @close="restoreAfterPhotoPicker" />
       </div>
 
       <!-- 文本编辑器模式 -->
@@ -229,10 +234,7 @@ function handleClose() {
             />
           </NFormItem>
           <NFormItem label="启发照片">
-            <SuggestPhotoSelector
-              v-model:selected-ids="formInspiredPhotos"
-              :compact="true"
-            />
+            <SuggestPhotoPicker v-model:selected-ids="formInspiredPhotos" source="suggest-step-intuition" @open="hideForPhotoPicker" @close="restoreAfterPhotoPicker" />
           </NFormItem>
         </NForm>
         <span class="editor-hint">
