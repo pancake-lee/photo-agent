@@ -58,7 +58,7 @@
 ### 关联代码现状
 
 - 已落地：`PhotoPickOverlay.vue`（控件1 载体）、`photoPickSession.ts`（会话协议）、`PhotoCard/BurstGroupModal/PhotoListBrowser`（底层共享组件）
-- 已落地：`SelectedPhotoList.vue`，黄金用例新建已接入；主题发现统一通过 `PhotoPickOverlay.vue` 选图，旧 `SuggestPhotoSelector.vue` 已删除
+- 已落地：`SelectedPhotoList.vue`，黄金用例新建已接入；主题发现统一通过 `PhotoPickOverlay.vue` 选图，旧 `SuggestPhotoSelector.vue` 和 `GoldenPhotoPicker.vue` 均已删除
 
 ## 5. 时间线
 
@@ -66,6 +66,7 @@
 - 2026-08-26：本专题立项。用户拍板「粒度完全自动推导」「主题发现迁移到覆盖层」；控件2 功能设计留档 + 中枢建立 + backlog 立项（PS7-PS9）
 - 2026-08-26：完成 PS7-PS9，新增 SelectedPhotoList 与主题发现覆盖层入口，清理旧 SuggestPhotoSelector
 - 2026-08-26：PS7-PS9 纳入本轮 Done 开发评估，综合 8.1/10，通过
+- 2026-08-26：D1 清理无引用的 GoldenPhotoPicker，并修正文档中「新增」与「已删除」并存的记录
 
 ## 6. 当前状态：各项完成度
 
@@ -74,7 +75,7 @@
 - 黄金用例已选区改造：✅ 已完成（PS8）
 - 主题发现选图迁移：✅ 已完成（PS9，主题管线使用后端 UUID）
 - 图文工坊回迁：⬜ 未决策（可选，完成度满足后评估）
-- 死代码清理：✅ `SuggestPhotoSelector.vue` 已删除
+- 死代码清理：✅ `SuggestPhotoSelector.vue`、`GoldenPhotoPicker.vue` 均已删除（D1）
 
 ## 7. 下一轮建议
 

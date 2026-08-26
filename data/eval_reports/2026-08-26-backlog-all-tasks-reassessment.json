@@ -1,0 +1,60 @@
+{
+  "report_id": "2026-08-26-backlog-all-tasks-reassessment",
+  "backlog_id": "W12,PS7-PS9,GR1,CH1,TF1-1-TF1-10,QA1,M1",
+  "created_at": "2026-08-26T14:00:00Z",
+  "target": "当前 backlog 全部 18 个 Done 任务（优化后的复评）",
+  "overall": 8.4,
+  "per_task": {
+    "W12": 8.6,
+    "PS7": 8.3,
+    "PS8": 8.3,
+    "PS9": 8.2,
+    "GR1": 8.6,
+    "CH1": 8.2,
+    "TF1-1": 8.4,
+    "TF1-2": 8.4,
+    "TF1-3": 8.6,
+    "TF1-4": 8.6,
+    "TF1-5": 8.5,
+    "TF1-6": 8.5,
+    "TF1-7": 8.4,
+    "TF1-8": 8.2,
+    "TF1-9": 8.5,
+    "TF1-10": 8.4,
+    "QA1": 8.7,
+    "M1": 8.7
+  },
+  "dimension_scores": {
+    "正确性": 8.6,
+    "健壮性": 8.1,
+    "可维护性": 8.2,
+    "简洁性": 8.0,
+    "准确性": 8.6,
+    "完整性": 8.4,
+    "一致性": 8.0,
+    "惊喜度": 7.7,
+    "可用性": 8.7,
+    "交互体验": 8.3,
+    "AI增量": 7.8
+  },
+  "findings_for_backlog": [
+    "P2：黄金用例旧选图组件 GoldenPhotoPicker.vue 仍保留在仓库且无入口引用；backlog 与设计文档对该组件同时存在“已删除”和“新增”的相互矛盾描述，当前实现与文档记录不一致。"
+  ],
+  "verification_runtime": [
+    "三服务健康接口：127.0.0.1:10004/api/v1/health、10005/api/chat/health、10006 均返回 HTTP 200",
+    "GOTOOLCHAIN=local go test ./...：PASS",
+    "agent/.venv/bin/python -m unittest tests.test_evaluation tests.test_eval_regression chain.test_post_studio_smoke：12/12 PASS",
+    "agent/.venv/bin/python scripts/eval_regression.py -c ../.local/pancake.yaml --level all：L0/L1/L2 各 2 条真实种子用例 PASS",
+    "web/pnpm build && pnpm test：类型检查、生产构建通过；Vitest 2/2 PASS",
+    "node tools/golden_query_ui_regression.mjs：覆盖层打开、取消和草稿恢复 PASS"
+  ],
+  "verification_commits": {
+    "W12": "当前工作树优化",
+    "PS7-PS9": "02da7d9, 46113cc",
+    "GR1": "66975f3, 4b7155b",
+    "CH1": "当前工作树代码审查",
+    "TF1": "f159eee, b040b1c, 3c7be83, c9d3708, 4fcdcff, e36d2c2, 46113cc",
+    "QA1": "当前工作树优化",
+    "M1": "当前工作树优化"
+  }
+}
