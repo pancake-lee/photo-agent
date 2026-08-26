@@ -806,7 +806,12 @@ const evalColumns = [
         </div>
         <div class="detail-field">
           <span class="detail-label">关联照片 ({{ detailItem.relevant_photos.length }})</span>
-          <PhotoThumbList :photos="detailItem.relevant_photos" empty-text="无关联照片" @preview="openPreview" />
+          <PhotoThumbList
+            :photos="detailItem.relevant_photos"
+            auto-fit
+            empty-text="无关联照片"
+            @preview="openPreview"
+          />
         </div>
       </div>
     </NModal>

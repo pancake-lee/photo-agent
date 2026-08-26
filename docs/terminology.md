@@ -16,6 +16,7 @@
 
 ## 选图与连拍
 
+- **照片缩略预览列表 / `PhotoThumbList`**：只读照片展示控件。默认展示首批照片缩略图，剩余照片以文件名列表展示；开启 `autoFit` 后按所在容器宽度动态计算首行缩略图数量。实现文件为 `web/src/components/PhotoThumbList.vue`。
 - **图片选择器 / `PhotoPicker`**：通用选图控件。当前以全屏覆盖层实现，负责浏览照片、筛选和多选；实现文件为 `PhotoPickOverlay.vue`。
 - **已选照片列表 / `SelectedPhotoList`**：通用已选照片控件，负责展示、移除、预览和连拍精选；实现文件为 `SelectedPhotoList.vue`。
 - **选图覆盖层 / `PhotoPickOverlay`**：`PhotoPicker` 的当前实现载体，不作为跨页面的功能名称使用。

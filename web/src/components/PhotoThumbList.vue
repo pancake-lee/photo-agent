@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * PhotoThumbList — 照片缩略图列表组件
+ * PhotoThumbList — 照片缩略预览列表
  *
  * 统一 GoldenQueryManagement / ClusterView 中重复的照片缩略图渲染逻辑。
  * 默认展示前 maxPreview 张缩略图，超出部分以文件名标签展示。
@@ -9,7 +9,7 @@
  * autoFit 模式：开启后通过 ResizeObserver 动态计算容器一行能容纳多少张缩略图，
  * 自动调整实际展示数量。maxPreview 仅作为测量前的初始兜底值。
  */
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { NIcon } from 'naive-ui'
 import { ImageOutline } from '@vicons/ionicons5'
 import { getApiBase } from '../config'
@@ -59,7 +59,8 @@ let observer: ResizeObserver | null = null
 function recalcFit() {
   if (!containerRef.value) return
   const w = containerRef.value.clientWidth
-  fittedCount.value = Math.max(1, Math.floor((w + THUMB_GAP) / (THUMB_WIDTH + THUMB_GAP)) - 1)
+  const capacity = Math.max(1, Math.floor((w + THUMB_GAP) / (THUMB_WIDTH + THUMB_GAP)))
+  fittedCount.value = Math.min(capacity, props.photos.length)
 }
 
 onMounted(() => {
@@ -73,6 +74,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   observer?.disconnect()
+})
+
+watch(() => props.photos.length, () => {
+  if (props.autoFit) recalcFit()
 })
 
 const effectiveMax = computed(() => {
@@ -99,7 +104,12 @@ const restPhotos = computed(() => {
   >{{ emptyText }}</span>
   <div v-else ref="containerRef" class="photo-thumb-list">
     <!-- 缩略图行 -->
-    <div v-if="previewPhotos.length" class="photo-thumb-row">
+    <div
+      v-if="previewPhotos.length"
+      class="photo-thumb-row"
+      :class="{ 'photo-thumb-row-expanded': maxPreview === 0 }"
+      :style="{ '--photo-thumb-columns': previewPhotos.length }"
+    >
       <span
         v-for="p in previewPhotos"
         :key="p.photo_id"
@@ -140,10 +150,14 @@ const restPhotos = computed(() => {
   gap: 8px;
 }
 .photo-thumb-row {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(var(--photo-thumb-columns), minmax(64px, 1fr));
   gap: 8px;
   align-items: center;
+}
+.photo-thumb-row-expanded {
+  display: flex;
+  flex-wrap: nowrap;
   overflow-x: auto;
 }
 .photo-name-row {
@@ -154,11 +168,15 @@ const restPhotos = computed(() => {
 }
 .photo-thumb-wrap {
   display: inline-block;
-  flex-shrink: 0;
+  min-width: 0;
+}
+.photo-thumb-row-expanded .photo-thumb-wrap {
+  flex: 0 0 64px;
 }
 .photo-thumb {
-  width: 64px;
-  height: 64px;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--n-border-color);
