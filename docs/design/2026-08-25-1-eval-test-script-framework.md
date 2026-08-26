@@ -2,7 +2,7 @@
 
 > Backlog 总览：[docs/backlog.md](../backlog.md#评估基建)
 > 关联背景：GR1 三 Collection 向量库改造、[评估基线](../eval/baseline.md)
-> 状态：TF1-1 至 TF1-6 全部完成
+> 状态：TF1-1 至 TF1-10 全部完成
 
 ## 一、背景与目标
 

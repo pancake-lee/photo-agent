@@ -20,7 +20,7 @@
 ### 控件2 已选照片列表（SelectedPhotoList）
 
 - 功能：已选照片的统一展示与编辑——卡片网格（与图片管理视觉一致）、连拍组 ×N 展示、点开精选、移除、可选拖拽排序、预览
-- 设计已留档，组件待实现
+- 已实现，黄金用例新建页已接入
 - 详见 [2026-08-26-2-selected-photo-list-control.md](2026-08-26-2-selected-photo-list-control.md)
 
 ### 两控件的衔接
@@ -41,7 +41,11 @@
 | 文档 | 内容 | 状态 |
 | ---- | ---- | ---- |
 | [2026-08-26-1-photo-pick-overlay.md](2026-08-26-1-photo-pick-overlay.md) | 控件1 选图覆盖层功能设计 | 已落地 |
-| [2026-08-26-2-selected-photo-list-control.md](2026-08-26-2-selected-photo-list-control.md) | 控件2 已选照片列表功能设计 | 已留档，待实现 |
+| [2026-08-26-2-selected-photo-list-control.md](2026-08-26-2-selected-photo-list-control.md) | 控件2 已选照片列表功能设计 | 已实现 |
+
+### 评估报告
+
+- [2026-08-26-current-done-round.md](../../data/eval_reports/2026-08-26-current-done-round.md) — PS7-PS9 评分 8.1/10，通过；关键浏览器交互仍缺可重复回归
 
 ### Backlog 条目
 
@@ -61,6 +65,7 @@
 - 2026-08-26：控件1 设计 + 落地（黄金用例新建率先接入，TF1-7/TF1-8）
 - 2026-08-26：本专题立项。用户拍板「粒度完全自动推导」「主题发现迁移到覆盖层」；控件2 功能设计留档 + 中枢建立 + backlog 立项（PS7-PS9）
 - 2026-08-26：完成 PS7-PS9，新增 SelectedPhotoList 与主题发现覆盖层入口，清理旧 SuggestPhotoSelector
+- 2026-08-26：PS7-PS9 纳入本轮 Done 开发评估，综合 8.1/10，通过
 
 ## 6. 当前状态：各项完成度
 
