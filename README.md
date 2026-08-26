@@ -146,6 +146,7 @@ photo-agent/
 - [docs/prd.md](docs/prd.md) — 产品需求、用户故事、验收标准
 - [docs/tech.md](docs/tech.md) — 架构设计、API 契约、数据模型
 - [docs/backlog.md](docs/backlog.md) — 需求池、演进路线图、拒绝清单
+- [docs/terminology.md](docs/terminology.md) — 项目专用名词和中英文命名
 - [docs/deploy.md](docs/deploy.md) — 部署指南
 - [docs/harness.md](docs/harness.md) — Harness 工程架构概览
 - [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录

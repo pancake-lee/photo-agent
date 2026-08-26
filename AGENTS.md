@@ -25,6 +25,7 @@
 - **代码提交信息**：产出代码后给简短中文 commit 信息，一行/一句话，符合 commitlint 规范
 - **Go 工具链**：始终设 `GOTOOLCHAIN=local`，不使用 Go 自动 toolchain 下载
 - **主动沟通**：发现阻塞性问题时，积极向用户说明情况并给出选择（如"方案 A：我加容错自动降级；方案 B：你补充配置，我给你具体指引"）。不要把问题默默记入 backlog 等用户自己发现
+- **协作规则双文件同步**：`CLAUDE.md` 与 `AGENTS.md` 是 Codex 和 Claude 工作流共同使用的全局规则，内容必须始终保持一致。任一文件发生修改时，必须在同一轮同步修改另一文件；新增规则、索引和流程说明也必须同时维护两份文件
 - **专题中枢文档**：当一个需求及其衍生需求跨越了多个提交、多次修改、多个文档记录时，应编写一份中枢文档（`docs/design/YYYY-MM-DD-<序号>-<topic>-hub.md`）集中串联所有关联产物。中枢文档包含：关联文档索引（设计/评估/backlog/提交）、完整时间线、各项完成度、下一轮建议。所有被关联的文档应在顶部反向链接到中枢文档，形成有顺序的链条。每次经过一轮评估/规划/生成后更新中枢文档
 
 ---
@@ -60,7 +61,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 
 冲突时，优先以高层文档为准。修改时间更新者优先。
 
-- **L1** `AGENTS.md` — 全局协作规则、文档索引、工作模式触发。禁区：产品需求、技术细节、任务进度
+- **L1** `AGENTS.md` — 全局协作规则、文档索引、工作模式触发。与 `CLAUDE.md` 保持一致。禁区：产品需求、技术细节、任务进度
 - **L1.5** `docs/handbook/work-modes.md` — 四种模式的完整流程、路由规则、handoff 协议
 - **L1.5** `docs/handbook/eval-guide.md` — AI 评估模式操作指南（工具使用、检查流程）
 - **L1.5** `docs/handbook/coding-conventions.md` — 各语言编码规范（Go/Python/Web/Markdown）
@@ -92,6 +93,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - [docs/prd.md](docs/prd.md) — 产品需求、用户故事、验收标准
 - [docs/tech.md](docs/tech.md) — 架构设计、API 契约、数据模型
 - [docs/backlog.md](docs/backlog.md) — 需求池、演进路线图、拒绝清单
+- [docs/terminology.md](docs/terminology.md) — 项目专用名词和中英文命名
 - [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录
 - [docs/deploy.md](docs/deploy.md) — 部署指南
 - [docs/ui-rules.md](docs/ui-rules.md) — 前端 UI 美学规则

@@ -28,6 +28,8 @@ flowchart TD
 
 AI 根据用户在对话中使用的触发词自动切换工作模式。四种模式形成 `评估 → 规划 → 生成 → 评估` 闭环。
 
+协作规则的双文件同步是 Harness 的强制原则：`CLAUDE.md` 与 `AGENTS.md` 分别服务 Claude 和 Codex 工作流，但承载同一套全局规则。任一文件发生修改时，必须在同一轮同步修改另一文件，确保两个工作流读取到的规则、文档索引和流程说明始终一致。
+
 - **评估模式**：对代码/功能产出做质量评分，产出评估报告 + backlog 条目（只描述问题，不写方案）
 - **规划模式**：分析需求并产出方案文档，更新 backlog
 - **生成模式**：按方案实现代码，同步更新文档
@@ -57,6 +59,8 @@ Go（plogger）和 Python（自建）统一输出结构化 JSON 日志，`trace_
 - [docs/handbook/doc-review.md](handbook/doc-review.md) — 文档审阅规范
 - [CLAUDE.md](../CLAUDE.md) — 全局协作规则 + 触发词路由
 - [AGENTS.md](../AGENTS.md) — 全局协作规则 + 触发词路由
+
+> 维护约束：`CLAUDE.md` 与 `AGENTS.md` 必须成对修改、成对审阅，不能只更新其中一个文件。
 
 ### 设计与方案
 
