@@ -1410,6 +1410,12 @@ export interface ApiPhotoItem {
      * @memberof ApiPhotoItem
      */
     burstCount?: number;
+    aiHealthStatus?: string;
+    aiHealthReason?: string;
+    vlmStatus?: string;
+    vlmReason?: string;
+    embeddingStatus?: string;
+    embeddingDescriptionTime?: string;
 }
 /**
  * 

@@ -28,6 +28,47 @@ type PhotoServer struct {
 	api.UnimplementedPhotoServiceServer
 }
 
+// ListAIIssuesHandler 返回当前不可安全参与 AI 的照片，供问题工作区使用。
+func (s *PhotoServer) ListAIIssuesHandler(ctx khttp.Context) error {
+	q := db.GetQuery().Photo
+	photos, err := q.WithContext(ctx).Where(
+		q.AiHealthStatus.Neq(aiStatusHealthy), q.FileType.Neq("nef"),
+	).Order(q.ImportedAt.Desc()).Find()
+	if err != nil {
+		return ctx.Result(500, map[string]string{"error": err.Error()})
+	}
+	items := make([]map[string]any, 0, len(photos))
+	for _, photo := range photos {
+		items = append(items, map[string]any{
+			"id": photo.ID, "filename": photo.Filename,
+			"status": photo.AiHealthStatus, "reason": photo.AiHealthReason,
+			"vlm_status": photo.VlmStatus, "embedding_status": photo.EmbeddingStatus,
+		})
+	}
+	return ctx.Result(200, map[string]any{"total": len(items), "items": items})
+}
+
+// AIAuditHandler 返回只读的 AI 资产审计摘要，不修改照片或原始文件。
+func (s *PhotoServer) AIAuditHandler(ctx khttp.Context) error {
+	q := db.GetQuery().Photo
+	photos, err := q.WithContext(ctx).Where(q.FileType.Neq("nef")).Find()
+	if err != nil {
+		return ctx.Result(500, map[string]string{"error": err.Error()})
+	}
+	counts := map[string]int{"healthy": 0, "review": 0, "failed": 0, "stale": 0, "pending": 0, "excluded": 0}
+	for _, photo := range photos {
+		status := photo.AiHealthStatus
+		if _, ok := counts[status]; !ok {
+			status = "pending"
+		}
+		counts[status]++
+	}
+	return ctx.Result(200, map[string]any{
+		"total": len(photos), "counts": counts, "read_only": true,
+		"message": "审计预览仅统计当前状态，未修改原始照片",
+	})
+}
+
 // Reg 向 Kratos gRPC/HTTP 服务器注册本服务。
 // HTTP 路由在生成的 RegisterPhotoServiceHTTPServer 基础上，额外注册文件上传和图片 serving。
 func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
@@ -35,13 +76,17 @@ func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 		api.RegisterPhotoServiceServer(grpcSrv, s)
 	}
 	if httpSrv != nil {
-		api.RegisterPhotoServiceHTTPServer(httpSrv, s)
-
 		// 额外注册非 proto 映射的原始 HTTP 路由
-		// 手动注册的上传/图片路由
 		r := httpSrv.Route("/")
+		// 静态路由必须在生成的 /photos/{id} 之前注册，否则会被当成照片 ID。
+		r.GET("/api/v1/photos/ai-issues", s.ListAIIssuesHandler)
+		r.GET("/api/v1/photos/ai-audit", s.AIAuditHandler)
+		// 手动注册的上传/图片路由
 		r.GET("/api/v1/photos/{id}/image", s.GetPhotoImageHandler)
 		r.POST("/api/v1/photos/upload", s.UploadPhotoHandler)
+		r.POST("/api/v1/photos/{id}/ai-health", s.UpdateAIHealthHandler)
+
+		api.RegisterPhotoServiceHTTPServer(httpSrv, s)
 	}
 }
 
@@ -231,6 +276,36 @@ func (s *PhotoServer) GetPhotoDetail(
 		DescriptionModel: photo.DescriptionModel,
 		DescriptionTime:  photo.DescriptionTime,
 	}, nil
+}
+
+// UpdateAIHealthHandler 由 Embedding 服务回写照片的向量处理结论。
+func (s *PhotoServer) UpdateAIHealthHandler(ctx khttp.Context) error {
+	var req struct {
+		Status          string `json:"status"`
+		Reason          string `json:"reason"`
+		DescriptionTime string `json:"description_time"`
+	}
+	if err := ctx.Bind(&req); err != nil {
+		return ctx.Result(400, map[string]string{"error": "invalid request body"})
+	}
+	if req.Status != aiStatusHealthy && req.Status != aiStatusFailed && req.Status != aiStatusStale {
+		return ctx.Result(400, map[string]string{"error": "invalid AI health status"})
+	}
+	id := ctx.Vars().Get("id")
+	updates := map[string]any{
+		"ai_health_status": req.Status,
+		"ai_health_reason": req.Reason,
+		"embedding_status": req.Status,
+	}
+	if req.DescriptionTime != "" {
+		updates["embedding_description_time"] = req.DescriptionTime
+	}
+	q := db.GetQuery().Photo
+	if _, err := q.WithContext(ctx).Where(q.ID.Eq(id)).Updates(updates); err != nil {
+		return ctx.Result(500, map[string]string{"error": err.Error()})
+	}
+	recordAIHistory(id, "", "embedding", req.Status, req.Reason)
+	return ctx.Result(200, map[string]string{"status": req.Status})
 }
 
 // UpdatePhotoTags 更新照片标签
@@ -538,36 +613,43 @@ func burstGroupIDsOf(photos []*data.PhotoDO, profile string) []string {
 	return idList
 }
 
-func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {	if do == nil {
+func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
+	if do == nil {
 		return nil
 	}
 	item := &api.PhotoItem{
-		Id:             do.ID,
-		Filename:       do.Filename,
-		FilePath:       do.FilePath,
-		Timeline:       do.Timeline,
-		Tags:           do.Tags,
-		Description:    do.Description,
-		Objects:        do.Objects,
-		Colors:         do.Colors,
-		Scene:          do.Scene,
-		Lighting:       do.Lighting,
-		Mood:           do.Mood,
-		Composition:    do.Composition,
-		Width:          do.Width,
-		Height:         do.Height,
-		Brand:          do.Brand,
-		Model:          do.Model,
-		Lens:           do.Lens,
-		FocalLength:    do.FocalLength,
-		Aperture:       do.Aperture,
-		Iso:            do.Iso,
-		ExposureTime:   do.ExposureTime,
-		Latitude:       do.Latitude,
-		Longitude:      do.Longitude,
-		Altitude:       do.Altitude,
-		HasDescription: do.Description != "",
-		ThumbnailUrl:   fmt.Sprintf("/api/v1/photos/%s/image", do.ID),
+		Id:                       do.ID,
+		Filename:                 do.Filename,
+		FilePath:                 do.FilePath,
+		Timeline:                 do.Timeline,
+		Tags:                     do.Tags,
+		Description:              do.Description,
+		Objects:                  do.Objects,
+		Colors:                   do.Colors,
+		Scene:                    do.Scene,
+		Lighting:                 do.Lighting,
+		Mood:                     do.Mood,
+		Composition:              do.Composition,
+		Width:                    do.Width,
+		Height:                   do.Height,
+		Brand:                    do.Brand,
+		Model:                    do.Model,
+		Lens:                     do.Lens,
+		FocalLength:              do.FocalLength,
+		Aperture:                 do.Aperture,
+		Iso:                      do.Iso,
+		ExposureTime:             do.ExposureTime,
+		Latitude:                 do.Latitude,
+		Longitude:                do.Longitude,
+		Altitude:                 do.Altitude,
+		HasDescription:           do.Description != "",
+		ThumbnailUrl:             fmt.Sprintf("/api/v1/photos/%s/image", do.ID),
+		AiHealthStatus:           do.AiHealthStatus,
+		AiHealthReason:           do.AiHealthReason,
+		VlmStatus:                do.VlmStatus,
+		VlmReason:                do.VlmReason,
+		EmbeddingStatus:          do.EmbeddingStatus,
+		EmbeddingDescriptionTime: do.EmbeddingDescriptionTime,
 	}
 	if !do.ShotAt.IsZero() {
 		item.ShotAt = do.ShotAt.Unix()

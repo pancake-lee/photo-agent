@@ -40,7 +40,7 @@ func (*appSettingDAO) GetAll(ctx *papp.AppCtx,
 }
 
 func (*appSettingDAO) GetByIndex(ctx *papp.AppCtx,
-keyList []string,
+	keyList []string,
 ) ([]*AppSettingDO, error) {
 	q := db.GetQuery().AppSetting
 	do := q.WithContext(ctx)
@@ -125,4 +125,3 @@ func (*appSettingDAO) GetByKeyList(ctx *papp.AppCtx, idx1List []string,
 	}
 	return appSettingMap, nil
 }
-

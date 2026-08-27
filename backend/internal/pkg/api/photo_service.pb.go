@@ -195,41 +195,47 @@ func (x *SearchPhotosRequest) GetBurstProfile() string {
 }
 
 type PhotoItem struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Filename       string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
-	FilePath       string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
-	Timeline       string                 `protobuf:"bytes,4,opt,name=timeline,proto3" json:"timeline,omitempty"`
-	Tags           string                 `protobuf:"bytes,5,opt,name=tags,proto3" json:"tags,omitempty"`
-	Description    string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
-	Objects        string                 `protobuf:"bytes,7,opt,name=objects,proto3" json:"objects,omitempty"`
-	Colors         string                 `protobuf:"bytes,8,opt,name=colors,proto3" json:"colors,omitempty"`
-	Scene          string                 `protobuf:"bytes,9,opt,name=scene,proto3" json:"scene,omitempty"`
-	Lighting       string                 `protobuf:"bytes,10,opt,name=lighting,proto3" json:"lighting,omitempty"`
-	Mood           string                 `protobuf:"bytes,11,opt,name=mood,proto3" json:"mood,omitempty"`
-	Composition    string                 `protobuf:"bytes,12,opt,name=composition,proto3" json:"composition,omitempty"`
-	ShotAt         int64                  `protobuf:"varint,13,opt,name=shot_at,json=shotAt,proto3" json:"shot_at,omitempty"`
-	Width          int32                  `protobuf:"varint,14,opt,name=width,proto3" json:"width,omitempty"`
-	Height         int32                  `protobuf:"varint,15,opt,name=height,proto3" json:"height,omitempty"`
-	Brand          string                 `protobuf:"bytes,16,opt,name=brand,proto3" json:"brand,omitempty"`
-	Model          string                 `protobuf:"bytes,17,opt,name=model,proto3" json:"model,omitempty"`
-	Lens           string                 `protobuf:"bytes,18,opt,name=lens,proto3" json:"lens,omitempty"`
-	FocalLength    string                 `protobuf:"bytes,19,opt,name=focal_length,json=focalLength,proto3" json:"focal_length,omitempty"`
-	Aperture       string                 `protobuf:"bytes,20,opt,name=aperture,proto3" json:"aperture,omitempty"`
-	Iso            int32                  `protobuf:"varint,21,opt,name=iso,proto3" json:"iso,omitempty"`
-	ExposureTime   string                 `protobuf:"bytes,22,opt,name=exposure_time,json=exposureTime,proto3" json:"exposure_time,omitempty"`
-	Latitude       float64                `protobuf:"fixed64,23,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	Longitude      float64                `protobuf:"fixed64,24,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	Altitude       float64                `protobuf:"fixed64,25,opt,name=altitude,proto3" json:"altitude,omitempty"`
-	ImportedAt     int64                  `protobuf:"varint,26,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
-	HasDescription bool                   `protobuf:"varint,27,opt,name=has_description,json=hasDescription,proto3" json:"has_description,omitempty"`
-	ThumbnailUrl   string                 `protobuf:"bytes,28,opt,name=thumbnail_url,json=thumbnailUrl,proto3" json:"thumbnail_url,omitempty"`
-	HasNef         bool                   `protobuf:"varint,29,opt,name=has_nef,json=hasNef,proto3" json:"has_nef,omitempty"`
-	BurstGroupId   string                 `protobuf:"bytes,30,opt,name=burst_group_id,json=burstGroupId,proto3" json:"burst_group_id,omitempty"`
-	BurstCover     bool                   `protobuf:"varint,31,opt,name=burst_cover,json=burstCover,proto3" json:"burst_cover,omitempty"` // 是否为连拍组封面（组内 shot_at 最早一张）
-	BurstCount     int32                  `protobuf:"varint,32,opt,name=burst_count,json=burstCount,proto3" json:"burst_count,omitempty"` // 连拍组内照片数（非组内照片为 0）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	Id                       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Filename                 string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
+	FilePath                 string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	Timeline                 string                 `protobuf:"bytes,4,opt,name=timeline,proto3" json:"timeline,omitempty"`
+	Tags                     string                 `protobuf:"bytes,5,opt,name=tags,proto3" json:"tags,omitempty"`
+	Description              string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	Objects                  string                 `protobuf:"bytes,7,opt,name=objects,proto3" json:"objects,omitempty"`
+	Colors                   string                 `protobuf:"bytes,8,opt,name=colors,proto3" json:"colors,omitempty"`
+	Scene                    string                 `protobuf:"bytes,9,opt,name=scene,proto3" json:"scene,omitempty"`
+	Lighting                 string                 `protobuf:"bytes,10,opt,name=lighting,proto3" json:"lighting,omitempty"`
+	Mood                     string                 `protobuf:"bytes,11,opt,name=mood,proto3" json:"mood,omitempty"`
+	Composition              string                 `protobuf:"bytes,12,opt,name=composition,proto3" json:"composition,omitempty"`
+	ShotAt                   int64                  `protobuf:"varint,13,opt,name=shot_at,json=shotAt,proto3" json:"shot_at,omitempty"`
+	Width                    int32                  `protobuf:"varint,14,opt,name=width,proto3" json:"width,omitempty"`
+	Height                   int32                  `protobuf:"varint,15,opt,name=height,proto3" json:"height,omitempty"`
+	Brand                    string                 `protobuf:"bytes,16,opt,name=brand,proto3" json:"brand,omitempty"`
+	Model                    string                 `protobuf:"bytes,17,opt,name=model,proto3" json:"model,omitempty"`
+	Lens                     string                 `protobuf:"bytes,18,opt,name=lens,proto3" json:"lens,omitempty"`
+	FocalLength              string                 `protobuf:"bytes,19,opt,name=focal_length,json=focalLength,proto3" json:"focal_length,omitempty"`
+	Aperture                 string                 `protobuf:"bytes,20,opt,name=aperture,proto3" json:"aperture,omitempty"`
+	Iso                      int32                  `protobuf:"varint,21,opt,name=iso,proto3" json:"iso,omitempty"`
+	ExposureTime             string                 `protobuf:"bytes,22,opt,name=exposure_time,json=exposureTime,proto3" json:"exposure_time,omitempty"`
+	Latitude                 float64                `protobuf:"fixed64,23,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	Longitude                float64                `protobuf:"fixed64,24,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Altitude                 float64                `protobuf:"fixed64,25,opt,name=altitude,proto3" json:"altitude,omitempty"`
+	ImportedAt               int64                  `protobuf:"varint,26,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
+	HasDescription           bool                   `protobuf:"varint,27,opt,name=has_description,json=hasDescription,proto3" json:"has_description,omitempty"`
+	ThumbnailUrl             string                 `protobuf:"bytes,28,opt,name=thumbnail_url,json=thumbnailUrl,proto3" json:"thumbnail_url,omitempty"`
+	HasNef                   bool                   `protobuf:"varint,29,opt,name=has_nef,json=hasNef,proto3" json:"has_nef,omitempty"`
+	BurstGroupId             string                 `protobuf:"bytes,30,opt,name=burst_group_id,json=burstGroupId,proto3" json:"burst_group_id,omitempty"`
+	BurstCover               bool                   `protobuf:"varint,31,opt,name=burst_cover,json=burstCover,proto3" json:"burst_cover,omitempty"` // 是否为连拍组封面（组内 shot_at 最早一张）
+	BurstCount               int32                  `protobuf:"varint,32,opt,name=burst_count,json=burstCount,proto3" json:"burst_count,omitempty"` // 连拍组内照片数（非组内照片为 0）
+	AiHealthStatus           string                 `protobuf:"bytes,33,opt,name=ai_health_status,json=aiHealthStatus,proto3" json:"ai_health_status,omitempty"`
+	AiHealthReason           string                 `protobuf:"bytes,34,opt,name=ai_health_reason,json=aiHealthReason,proto3" json:"ai_health_reason,omitempty"`
+	VlmStatus                string                 `protobuf:"bytes,35,opt,name=vlm_status,json=vlmStatus,proto3" json:"vlm_status,omitempty"`
+	VlmReason                string                 `protobuf:"bytes,36,opt,name=vlm_reason,json=vlmReason,proto3" json:"vlm_reason,omitempty"`
+	EmbeddingStatus          string                 `protobuf:"bytes,37,opt,name=embedding_status,json=embeddingStatus,proto3" json:"embedding_status,omitempty"`
+	EmbeddingDescriptionTime string                 `protobuf:"bytes,38,opt,name=embedding_description_time,json=embeddingDescriptionTime,proto3" json:"embedding_description_time,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PhotoItem) Reset() {
@@ -484,6 +490,48 @@ func (x *PhotoItem) GetBurstCount() int32 {
 		return x.BurstCount
 	}
 	return 0
+}
+
+func (x *PhotoItem) GetAiHealthStatus() string {
+	if x != nil {
+		return x.AiHealthStatus
+	}
+	return ""
+}
+
+func (x *PhotoItem) GetAiHealthReason() string {
+	if x != nil {
+		return x.AiHealthReason
+	}
+	return ""
+}
+
+func (x *PhotoItem) GetVlmStatus() string {
+	if x != nil {
+		return x.VlmStatus
+	}
+	return ""
+}
+
+func (x *PhotoItem) GetVlmReason() string {
+	if x != nil {
+		return x.VlmReason
+	}
+	return ""
+}
+
+func (x *PhotoItem) GetEmbeddingStatus() string {
+	if x != nil {
+		return x.EmbeddingStatus
+	}
+	return ""
+}
+
+func (x *PhotoItem) GetEmbeddingDescriptionTime() string {
+	if x != nil {
+		return x.EmbeddingDescriptionTime
+	}
+	return ""
 }
 
 type SearchPhotosResponse struct {
@@ -1912,7 +1960,7 @@ const file_photo_service_proto_rawDesc = "" +
 	"\n" +
 	"sort_order\x18\x0f \x01(\tR\tsortOrder\x12$\n" +
 	"\x0eburst_group_id\x18\x10 \x01(\tR\fburstGroupId\x12#\n" +
-	"\rburst_profile\x18\x11 \x01(\tR\fburstProfile\"\x83\a\n" +
+	"\rburst_profile\x18\x11 \x01(\tR\fburstProfile\"\xfe\b\n" +
 	"\tPhotoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
@@ -1949,7 +1997,15 @@ const file_photo_service_proto_rawDesc = "" +
 	"\vburst_cover\x18\x1f \x01(\bR\n" +
 	"burstCover\x12\x1f\n" +
 	"\vburst_count\x18  \x01(\x05R\n" +
-	"burstCount\"\xa4\x01\n" +
+	"burstCount\x12(\n" +
+	"\x10ai_health_status\x18! \x01(\tR\x0eaiHealthStatus\x12(\n" +
+	"\x10ai_health_reason\x18\" \x01(\tR\x0eaiHealthReason\x12\x1d\n" +
+	"\n" +
+	"vlm_status\x18# \x01(\tR\tvlmStatus\x12\x1d\n" +
+	"\n" +
+	"vlm_reason\x18$ \x01(\tR\tvlmReason\x12)\n" +
+	"\x10embedding_status\x18% \x01(\tR\x0fembeddingStatus\x12<\n" +
+	"\x1aembedding_description_time\x18& \x01(\tR\x18embeddingDescriptionTime\"\xa4\x01\n" +
 	"\x14SearchPhotosResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x12\n" +

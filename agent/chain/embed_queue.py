@@ -321,6 +321,16 @@ class EmbedQueue:
             resp = photo_api.photo_service_get_photo_detail(photo_id)
             photo = resp.photo
 
+            health = bksdk.get_photo_health(self._go_url, photo_id)
+            vlm_status = health.get("vlmStatus") or health.get("vlm_status")
+            if vlm_status != "healthy":
+                self._store.delete(where={"photo_id": photo_id})
+                for group_store in self._group_stores.values():
+                    group_store.delete(where={"photo_id": photo_id})
+                logger.info("EmbedQueue: photo %s skipped, VLM status=%s", photo_id, vlm_status)
+                self._inc_failed()
+                return
+
             description = (photo and photo.description) or ""
             if not description.strip():
                 logger.warning("EmbedQueue: photo %s has no description, skip", photo_id)
@@ -360,11 +370,22 @@ class EmbedQueue:
             # 7. 封面照片：同一组向量写入对应连拍组集合（无需二次 Embedding）
             self._write_group_covers(photo_id, chunks, vectors)
 
+            bksdk.update_photo_health(
+                self._go_url,
+                photo_id,
+                "healthy",
+                description_time=health.get("descriptionTime") or health.get("description_time") or "",
+            )
+
             self._inc_completed()
             logger.info("EmbedQueue done: photo=%s, chunks=%d", photo_id, len(chunks))
 
         except Exception as e:
             logger.warning("EmbedQueue failed: photo=%s, err=%s", photo_id, e)
+            try:
+                bksdk.update_photo_health(self._go_url, photo_id, "failed", str(e))
+            except Exception as update_error:
+                logger.warning("EmbedQueue: 写回失败状态失败: photo=%s, err=%s", photo_id, update_error)
             self._inc_failed()
         finally:
             self._set_current("")
@@ -575,14 +596,26 @@ class EmbedQueue:
         result = []
         for p in photos:
             desc = p.description or ""
-            if desc.strip() and p.id not in embedded_ids:
+            if desc.strip() and p.id not in embedded_ids and self._is_vlm_healthy(p.id):
                 result.append(p.id)
         return result
 
     def _fetch_embeddable_ids(self) -> list[str]:
         """获取所有有描述的照片 ID 列表（force 模式使用）。"""
         photos = self._fetch_all_photos()
-        return [p.id for p in photos if (p.description or "").strip()]
+        return [
+            p.id for p in photos
+            if (p.description or "").strip() and self._is_vlm_healthy(p.id)
+        ]
+
+    def _is_vlm_healthy(self, photo_id: str) -> bool:
+        """Embedding 只接收通过 VLM 质量闸门的照片。"""
+        try:
+            health = bksdk.get_photo_health(self._go_url, photo_id)
+            return (health.get("vlmStatus") or health.get("vlm_status")) == "healthy"
+        except Exception as e:
+            logger.warning("EmbedQueue: 获取照片健康状态失败: photo=%s, err=%s", photo_id, e)
+            return False
 
     # ------------------------------------------------------------------ #
     # 内部辅助

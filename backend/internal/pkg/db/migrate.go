@@ -79,6 +79,43 @@ func Migrate() error {
 		}
 		plogger.Info("DB migrate: added description_time column to photos")
 	}
+	for _, column := range []struct {
+		name string
+		sql  string
+	}{
+		{"description_raw", "TEXT NOT NULL DEFAULT ''"},
+		{"ai_health_status", "TEXT NOT NULL DEFAULT 'pending'"},
+		{"ai_health_reason", "TEXT NOT NULL DEFAULT ''"},
+		{"vlm_status", "TEXT NOT NULL DEFAULT 'pending'"},
+		{"vlm_reason", "TEXT NOT NULL DEFAULT ''"},
+		{"embedding_status", "TEXT NOT NULL DEFAULT 'pending'"},
+		{"embedding_description_time", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		if !g.Migrator().HasColumn(&model.Photo{}, column.name) {
+			if err := g.Exec("ALTER TABLE photos ADD COLUMN " + column.name + " " + column.sql).Error; err != nil {
+				return err
+			}
+			plogger.Infof("DB migrate: added %s column to photos", column.name)
+		}
+	}
+	// 存量描述没有经过本轮质量闸门，统一标记为待复核，避免继续伪装成健康资产。
+	if err := g.Exec(`UPDATE photos SET ai_health_status = 'review', ai_health_reason = '历史描述待复核', vlm_status = 'review', vlm_reason = '历史描述未经过质量闸门', embedding_status = 'stale' WHERE description <> '' AND ai_health_status = 'pending'`).Error; err != nil {
+		return err
+	}
+	if !g.Migrator().HasTable("ai_processing_history") {
+		if err := g.Exec(`CREATE TABLE ai_processing_history (
+			id TEXT NOT NULL PRIMARY KEY,
+			photo_id TEXT NOT NULL DEFAULT '',
+			task_id TEXT NOT NULL DEFAULT '',
+			stage TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT '',
+			reason TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`).Error; err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: created ai_processing_history table")
+	}
 
 	// timeline_events 表按需补建（时间线事件，从 timeline.json 迁移）
 	if !g.Migrator().HasTable(&model.TimelineEvent{}) {

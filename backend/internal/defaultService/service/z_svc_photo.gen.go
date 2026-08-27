@@ -18,36 +18,36 @@ func DO2DTO_Photo(do *data.PhotoDO) *api.PhotoInfo {
 		return nil
 	}
 	return &api.PhotoInfo{
-        ID: do.ID,
-        Filename: do.Filename,
-        FilePath: do.FilePath,
-        FileType: do.FileType,
-        Timeline: do.Timeline,
-        TimelineManual: do.TimelineManual,
-        Tags: do.Tags,
-        Description: do.Description,
-        Objects: do.Objects,
-        Colors: do.Colors,
-        Scene: do.Scene,
-        Lighting: do.Lighting,
-        Mood: do.Mood,
-        Composition: do.Composition,
-        ShotAt: do.ShotAt.Unix(),
-        Width: do.Width,
-        Height: do.Height,
-        Brand: do.Brand,
-        Model: do.Model,
-        Lens: do.Lens,
-        FocalLength: do.FocalLength,
-        Aperture: do.Aperture,
-        Iso: do.Iso,
-        ExposureTime: do.ExposureTime,
-        Latitude: do.Latitude,
-        Longitude: do.Longitude,
-        Altitude: do.Altitude,
-        BurstGroupID: do.BurstGroupID,
-        BurstGroupCoarseID: do.BurstGroupCoarseID,
-        ImportedAt: do.ImportedAt.Unix(),
+		ID:                 do.ID,
+		Filename:           do.Filename,
+		FilePath:           do.FilePath,
+		FileType:           do.FileType,
+		Timeline:           do.Timeline,
+		TimelineManual:     do.TimelineManual,
+		Tags:               do.Tags,
+		Description:        do.Description,
+		Objects:            do.Objects,
+		Colors:             do.Colors,
+		Scene:              do.Scene,
+		Lighting:           do.Lighting,
+		Mood:               do.Mood,
+		Composition:        do.Composition,
+		ShotAt:             do.ShotAt.Unix(),
+		Width:              do.Width,
+		Height:             do.Height,
+		Brand:              do.Brand,
+		Model:              do.Model,
+		Lens:               do.Lens,
+		FocalLength:        do.FocalLength,
+		Aperture:           do.Aperture,
+		Iso:                do.Iso,
+		ExposureTime:       do.ExposureTime,
+		Latitude:           do.Latitude,
+		Longitude:          do.Longitude,
+		Altitude:           do.Altitude,
+		BurstGroupID:       do.BurstGroupID,
+		BurstGroupCoarseID: do.BurstGroupCoarseID,
+		ImportedAt:         do.ImportedAt.Unix(),
 	}
 }
 func DTO2DO_Photo(dto *api.PhotoInfo) *data.PhotoDO {
@@ -55,36 +55,36 @@ func DTO2DO_Photo(dto *api.PhotoInfo) *data.PhotoDO {
 		return nil
 	}
 	return &data.PhotoDO{
-        ID: dto.ID,
-        Filename: dto.Filename,
-        FilePath: dto.FilePath,
-        FileType: dto.FileType,
-        Timeline: dto.Timeline,
-        TimelineManual: dto.TimelineManual,
-        Tags: dto.Tags,
-        Description: dto.Description,
-        Objects: dto.Objects,
-        Colors: dto.Colors,
-        Scene: dto.Scene,
-        Lighting: dto.Lighting,
-        Mood: dto.Mood,
-        Composition: dto.Composition,
-        ShotAt: time.Unix(dto.ShotAt, 0),
-        Width: dto.Width,
-        Height: dto.Height,
-        Brand: dto.Brand,
-        Model: dto.Model,
-        Lens: dto.Lens,
-        FocalLength: dto.FocalLength,
-        Aperture: dto.Aperture,
-        Iso: dto.Iso,
-        ExposureTime: dto.ExposureTime,
-        Latitude: dto.Latitude,
-        Longitude: dto.Longitude,
-        Altitude: dto.Altitude,
-        BurstGroupID: dto.BurstGroupID,
-        BurstGroupCoarseID: dto.BurstGroupCoarseID,
-        ImportedAt: time.Unix(dto.ImportedAt, 0),
+		ID:                 dto.ID,
+		Filename:           dto.Filename,
+		FilePath:           dto.FilePath,
+		FileType:           dto.FileType,
+		Timeline:           dto.Timeline,
+		TimelineManual:     dto.TimelineManual,
+		Tags:               dto.Tags,
+		Description:        dto.Description,
+		Objects:            dto.Objects,
+		Colors:             dto.Colors,
+		Scene:              dto.Scene,
+		Lighting:           dto.Lighting,
+		Mood:               dto.Mood,
+		Composition:        dto.Composition,
+		ShotAt:             time.Unix(dto.ShotAt, 0),
+		Width:              dto.Width,
+		Height:             dto.Height,
+		Brand:              dto.Brand,
+		Model:              dto.Model,
+		Lens:               dto.Lens,
+		FocalLength:        dto.FocalLength,
+		Aperture:           dto.Aperture,
+		Iso:                dto.Iso,
+		ExposureTime:       dto.ExposureTime,
+		Latitude:           dto.Latitude,
+		Longitude:          dto.Longitude,
+		Altitude:           dto.Altitude,
+		BurstGroupID:       dto.BurstGroupID,
+		BurstGroupCoarseID: dto.BurstGroupCoarseID,
+		ImportedAt:         time.Unix(dto.ImportedAt, 0),
 	}
 }
 
@@ -121,7 +121,7 @@ func (s *DefaultCURDServer) GetPhotoList(
 		ctx.Log.Debugf("GetPhotoList: %v", req.IDList)
 
 		dataList, err = data.PhotoDAO.GetByIndex(ctx,
-            req.IDList,
+			req.IDList,
 		)
 		if err != nil {
 			return nil, ctx.Log.LogErr(err)
@@ -144,7 +144,6 @@ func (s *DefaultCURDServer) GetPhotoList(
 	}
 	return resp, nil
 }
-
 
 func (s *DefaultCURDServer) UpdatePhoto(
 	_ctx context.Context, req *api.UpdatePhotoRequest,
@@ -186,4 +185,3 @@ func (s *DefaultCURDServer) DelPhotoByIDList(
 	ctx.Log.Debugf("DelPhotoByIDList %v", req.IDList)
 	return nil, nil
 }
-

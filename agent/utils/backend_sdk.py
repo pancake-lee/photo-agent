@@ -8,6 +8,7 @@
 from __future__ import absolute_import
 
 import swagger_client as sdk
+import requests
 
 
 # 缓存: base_url -> Configuration
@@ -66,3 +67,36 @@ def sdk_to_dict(obj) -> dict:
     if isinstance(obj, list):
         return [sdk_to_dict(item) for item in obj]
     return obj
+
+
+def get_photo_health(base_url: str, photo_id: str) -> dict:
+    """读取照片 AI 状态，使用原始 JSON 保留新增字段的兼容性。"""
+    response = requests.get(
+        f"{base_url.rstrip('/')}/api/v1/photos/{photo_id}", timeout=10,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    photo = payload.get("photo") or {}
+    if "descriptionTime" in payload:
+        photo["descriptionTime"] = payload["descriptionTime"]
+    return photo
+
+
+def update_photo_health(
+    base_url: str,
+    photo_id: str,
+    status: str,
+    reason: str = "",
+    description_time: str = "",
+) -> None:
+    """回写 Embedding 处理结论。"""
+    response = requests.post(
+        f"{base_url.rstrip('/')}/api/v1/photos/{photo_id}/ai-health",
+        json={
+            "status": status,
+            "reason": reason,
+            "description_time": description_time,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()

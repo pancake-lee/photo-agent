@@ -40,7 +40,7 @@ func (*photoDAO) GetAll(ctx *papp.AppCtx,
 }
 
 func (*photoDAO) GetByIndex(ctx *papp.AppCtx,
-IDList []string,
+	IDList []string,
 ) ([]*PhotoDO, error) {
 	q := db.GetQuery().Photo
 	do := q.WithContext(ctx)
@@ -125,4 +125,3 @@ func (*photoDAO) GetByIDList(ctx *papp.AppCtx, idx1List []string,
 	}
 	return photoMap, nil
 }
-

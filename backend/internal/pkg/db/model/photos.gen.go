@@ -12,38 +12,45 @@ const TableNamePhoto = "photos"
 
 // Photo mapped from table <photos>
 type Photo struct {
-	ID                 string    `gorm:"column:id;primaryKey" json:"id"`
-	Filename           string    `gorm:"column:filename;not null" json:"filename"`
-	FilePath           string    `gorm:"column:file_path;not null" json:"file_path"`
-	FileType           string    `gorm:"column:file_type;not null;default:'jpg'" json:"file_type"`
-	Timeline           string    `gorm:"column:timeline;not null" json:"timeline"`
-	TimelineManual     int32     `gorm:"column:timeline_manual;not null" json:"timeline_manual"`
-	Tags               string    `gorm:"column:tags;type:TEXT" json:"tags"`
-	Description        string    `gorm:"column:description;not null" json:"description"`
-	DescriptionModel   string    `gorm:"column:description_model;not null" json:"description_model"`
-	DescriptionTime    string    `gorm:"column:description_time;not null" json:"description_time"`
-	Objects            string    `gorm:"column:objects;not null" json:"objects"`
-	Colors             string    `gorm:"column:colors;not null" json:"colors"`
-	Scene              string    `gorm:"column:scene;not null" json:"scene"`
-	Lighting           string    `gorm:"column:lighting;not null" json:"lighting"`
-	Mood               string    `gorm:"column:mood;not null" json:"mood"`
-	Composition        string    `gorm:"column:composition;not null" json:"composition"`
-	ShotAt             time.Time `gorm:"column:shot_at" json:"shot_at"`
-	Width              int32     `gorm:"column:width;not null" json:"width"`
-	Height             int32     `gorm:"column:height;not null" json:"height"`
-	Brand              string    `gorm:"column:brand;not null" json:"brand"`
-	Model              string    `gorm:"column:model;not null" json:"model"`
-	Lens               string    `gorm:"column:lens;not null" json:"lens"`
-	FocalLength        string    `gorm:"column:focal_length;not null" json:"focal_length"`
-	Aperture           string    `gorm:"column:aperture;not null" json:"aperture"`
-	Iso                int32     `gorm:"column:iso;not null" json:"iso"`
-	ExposureTime       string    `gorm:"column:exposure_time;not null" json:"exposure_time"`
-	Latitude           float64   `gorm:"column:latitude" json:"latitude"`
-	Longitude          float64   `gorm:"column:longitude" json:"longitude"`
-	Altitude           float64   `gorm:"column:altitude" json:"altitude"`
-	BurstGroupID       string    `gorm:"column:burst_group_id;not null" json:"burst_group_id"`
-	BurstGroupCoarseID string    `gorm:"column:burst_group_coarse_id;not null" json:"burst_group_coarse_id"`
-	ImportedAt         time.Time `gorm:"column:imported_at;not null;default:CURRENT_TIMESTAMP" json:"imported_at"`
+	ID                       string    `gorm:"column:id;primaryKey" json:"id"`
+	Filename                 string    `gorm:"column:filename;not null" json:"filename"`
+	FilePath                 string    `gorm:"column:file_path;not null" json:"file_path"`
+	FileType                 string    `gorm:"column:file_type;not null;default:'jpg'" json:"file_type"`
+	Timeline                 string    `gorm:"column:timeline;not null" json:"timeline"`
+	TimelineManual           int32     `gorm:"column:timeline_manual;not null" json:"timeline_manual"`
+	Tags                     string    `gorm:"column:tags;type:TEXT" json:"tags"`
+	Description              string    `gorm:"column:description;not null" json:"description"`
+	DescriptionModel         string    `gorm:"column:description_model;not null" json:"description_model"`
+	DescriptionTime          string    `gorm:"column:description_time;not null" json:"description_time"`
+	DescriptionRaw           string    `gorm:"column:description_raw;not null" json:"description_raw"`
+	AiHealthStatus           string    `gorm:"column:ai_health_status;not null;default:'pending'" json:"ai_health_status"`
+	AiHealthReason           string    `gorm:"column:ai_health_reason;not null" json:"ai_health_reason"`
+	VlmStatus                string    `gorm:"column:vlm_status;not null;default:'pending'" json:"vlm_status"`
+	VlmReason                string    `gorm:"column:vlm_reason;not null" json:"vlm_reason"`
+	EmbeddingStatus          string    `gorm:"column:embedding_status;not null;default:'pending'" json:"embedding_status"`
+	EmbeddingDescriptionTime string    `gorm:"column:embedding_description_time;not null" json:"embedding_description_time"`
+	Objects                  string    `gorm:"column:objects;not null" json:"objects"`
+	Colors                   string    `gorm:"column:colors;not null" json:"colors"`
+	Scene                    string    `gorm:"column:scene;not null" json:"scene"`
+	Lighting                 string    `gorm:"column:lighting;not null" json:"lighting"`
+	Mood                     string    `gorm:"column:mood;not null" json:"mood"`
+	Composition              string    `gorm:"column:composition;not null" json:"composition"`
+	ShotAt                   time.Time `gorm:"column:shot_at" json:"shot_at"`
+	Width                    int32     `gorm:"column:width;not null" json:"width"`
+	Height                   int32     `gorm:"column:height;not null" json:"height"`
+	Brand                    string    `gorm:"column:brand;not null" json:"brand"`
+	Model                    string    `gorm:"column:model;not null" json:"model"`
+	Lens                     string    `gorm:"column:lens;not null" json:"lens"`
+	FocalLength              string    `gorm:"column:focal_length;not null" json:"focal_length"`
+	Aperture                 string    `gorm:"column:aperture;not null" json:"aperture"`
+	Iso                      int32     `gorm:"column:iso;not null" json:"iso"`
+	ExposureTime             string    `gorm:"column:exposure_time;not null" json:"exposure_time"`
+	Latitude                 float64   `gorm:"column:latitude" json:"latitude"`
+	Longitude                float64   `gorm:"column:longitude" json:"longitude"`
+	Altitude                 float64   `gorm:"column:altitude" json:"altitude"`
+	BurstGroupID             string    `gorm:"column:burst_group_id;not null" json:"burst_group_id"`
+	BurstGroupCoarseID       string    `gorm:"column:burst_group_coarse_id;not null" json:"burst_group_coarse_id"`
+	ImportedAt               time.Time `gorm:"column:imported_at;not null;default:CURRENT_TIMESTAMP" json:"imported_at"`
 }
 
 // TableName Photo's table name

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { NLayout, NLayoutContent, NLayoutHeader, useMessage } from 'naive-ui'
+import { NLayout, NLayoutContent, NLayoutHeader, NModal, NButton, NTag, NEmpty, NSpin, NAlert, NSpace, useMessage } from 'naive-ui'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
 import UploadModal from '../components/UploadModal.vue'
@@ -19,6 +19,7 @@ import { settings } from '../stores/settings'
 import type { PhotoDetail as PhotoDetailType } from '../types/photo'
 import type { SegmentMode } from '../utils/segment'
 import type { ConflictResolution } from '../types/upload'
+import { getApiBase } from '../config'
 
 const message = useMessage()
 const router = useRouter()
@@ -48,6 +49,39 @@ const photoNavList = computed(() => photos.value.map((p) => ({ id: p.id, label: 
 
 // ── 选择模式（路径 B：自选图片进入图文工坊）──
 const selectionMode = ref(false)
+const showIssues = ref(false)
+const issuesLoading = ref(false)
+const issues = ref<Array<{ id: string; filename: string; status: string; reason: string; vlm_status: string; embedding_status: string }>>([])
+const audit = ref<{ total: number; counts: Record<string, number>; message: string } | null>(null)
+
+async function openIssues() {
+  showIssues.value = true
+  issuesLoading.value = true
+  try {
+    const response = await fetch(`${getApiBase()}/photos/ai-issues`)
+    if (!response.ok) throw new Error('问题列表加载失败')
+    issues.value = (await response.json()).items || []
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '问题列表加载失败')
+  } finally {
+    issuesLoading.value = false
+  }
+}
+
+function openIssuePhoto(id: string) {
+  showIssues.value = false
+  fetchPhotoDetail(id)
+}
+
+async function loadAudit() {
+  try {
+    const response = await fetch(`${getApiBase()}/photos/ai-audit`)
+    if (!response.ok) throw new Error('审计预览加载失败')
+    audit.value = await response.json()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '审计预览加载失败')
+  }
+}
 const selectedIds = ref<Set<string>>(new Set())
 const selectedCount = computed(() => selectedIds.value.size)
 // 恰好选中 2 张时显示「区间选择」按钮
@@ -150,6 +184,7 @@ watch(describeProcessingIds, (newIds, oldIds) => {
   for (const id of oldIds) {
     if (!newIds.has(id)) {
       refreshPhoto(id)
+      if (selectedPhoto.value?.id === id) fetchPhotoDetail(id)
       message.success('VLM 描述已生成')
     }
   }
@@ -188,6 +223,7 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect"
         @apply-filters="applyFilters" @reset-filters="resetFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
         @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @go-to-post-studio="goToPostStudio"
+        @open-issues="openIssues"
       />
     </NLayoutHeader>
     <NLayoutContent><div class="content-wrapper">
@@ -199,6 +235,22 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
     </div></NLayoutContent>
   </NLayout>
   <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :nav-list="photoNavList" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" @close="closeDetail" @navigate="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
+  <NModal v-model:show="showIssues" preset="card" title="AI 资产问题" style="width: 640px">
+    <NSpace justify="end" style="margin-bottom: 16px"><NButton size="small" @click="loadAudit">审计预览</NButton></NSpace>
+    <NAlert v-if="audit" type="info" :show-icon="false" style="margin-bottom: 16px">
+      共 {{ audit.total }} 张：健康 {{ audit.counts.healthy || 0 }}，待复核 {{ audit.counts.review || 0 }}，失败 {{ audit.counts.failed || 0 }}，过期 {{ audit.counts.stale || 0 }}。{{ audit.message }}
+    </NAlert>
+    <NSpin :show="issuesLoading">
+      <NEmpty v-if="!issues.length && !issuesLoading" description="暂无待处理问题" />
+      <div v-else class="issue-list">
+        <button v-for="issue in issues" :key="issue.id" class="issue-item" @click="openIssuePhoto(issue.id)">
+          <span class="issue-name">{{ issue.filename }}</span>
+          <NTag size="small" type="warning">{{ issue.status }}</NTag>
+          <span class="issue-reason">{{ issue.reason || '需要检查 AI 资产链路' }}</span>
+        </button>
+      </div>
+    </NSpin>
+  </NModal>
   <BurstGroupModal :show="burstModalGroup !== ''" :group-id="burstModalGroup" :members="burstModalMembers" :cover-id="burstModalCoverId" :loading="burstModalLoading" @close="closeBurstGroup" @view-detail="fetchPhotoDetail" @set-cover="handleBurstSetCover" />
   <DescriptionModal :show="showDescModal" :filename="descPhoto?.filename || ''" :description="descPhoto?.description || ''" :model="descPhoto?.description_model || ''" :processed-at="descPhoto?.description_time || ''" @close="showDescModal = false" @regenerate="handleRegenerateDescription" />
   <UploadModal :show="showUploadModal" :files="files" :uploading="uploading" @close="closeUploadModal" @add-files="addFiles" @remove-file="removeFile" @start-upload="handleUploadStart" />
@@ -210,4 +262,9 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
 .page-layout :deep(.n-layout-header) { flex-shrink: 0; }
 .page-layout :deep(.n-layout-content) { flex: 1; min-height: 0; }
 .content-wrapper { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 20px 24px; overflow: hidden; }
+.issue-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.issue-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px; border: 1px solid var(--n-border-color); border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.issue-item:hover { background: var(--n-hover-color); }
+.issue-name { font-weight: 600; }
+.issue-reason { grid-column: 1 / -1; color: var(--n-text-color-3); font-size: 12px; }
 </style>

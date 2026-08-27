@@ -40,6 +40,12 @@ export interface PhotoDetail extends Photo {
   image_url: string
   description_model: string
   description_time: string
+  ai_health_status: string
+  ai_health_reason: string
+  vlm_status: string
+  vlm_reason: string
+  embedding_status: string
+  embedding_description_time: string
 }
 
 // 列表响应

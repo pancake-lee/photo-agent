@@ -18,12 +18,12 @@ func DO2DTO_TimelineEvent(do *data.TimelineEventDO) *api.TimelineEventInfo {
 		return nil
 	}
 	return &api.TimelineEventInfo{
-        ID: do.ID,
-        EventDate: do.EventDate.Unix(),
-        Event: do.Event,
-        Note: do.Note,
-        CreatedAt: do.CreatedAt.Unix(),
-        UpdatedAt: do.UpdatedAt.Unix(),
+		ID:        do.ID,
+		EventDate: do.EventDate.Unix(),
+		Event:     do.Event,
+		Note:      do.Note,
+		CreatedAt: do.CreatedAt.Unix(),
+		UpdatedAt: do.UpdatedAt.Unix(),
 	}
 }
 func DTO2DO_TimelineEvent(dto *api.TimelineEventInfo) *data.TimelineEventDO {
@@ -31,12 +31,12 @@ func DTO2DO_TimelineEvent(dto *api.TimelineEventInfo) *data.TimelineEventDO {
 		return nil
 	}
 	return &data.TimelineEventDO{
-        ID: dto.ID,
-        EventDate: time.Unix(dto.EventDate, 0),
-        Event: dto.Event,
-        Note: dto.Note,
-        CreatedAt: time.Unix(dto.CreatedAt, 0),
-        UpdatedAt: time.Unix(dto.UpdatedAt, 0),
+		ID:        dto.ID,
+		EventDate: time.Unix(dto.EventDate, 0),
+		Event:     dto.Event,
+		Note:      dto.Note,
+		CreatedAt: time.Unix(dto.CreatedAt, 0),
+		UpdatedAt: time.Unix(dto.UpdatedAt, 0),
 	}
 }
 
@@ -73,7 +73,7 @@ func (s *DefaultCURDServer) GetTimelineEventList(
 		ctx.Log.Debugf("GetTimelineEventList: %v", req.IDList)
 
 		dataList, err = data.TimelineEventDAO.GetByIndex(ctx,
-            req.IDList,
+			req.IDList,
 		)
 		if err != nil {
 			return nil, ctx.Log.LogErr(err)
@@ -96,7 +96,6 @@ func (s *DefaultCURDServer) GetTimelineEventList(
 	}
 	return resp, nil
 }
-
 
 func (s *DefaultCURDServer) UpdateTimelineEvent(
 	_ctx context.Context, req *api.UpdateTimelineEventRequest,
@@ -138,4 +137,3 @@ func (s *DefaultCURDServer) DelTimelineEventByIDList(
 	ctx.Log.Debugf("DelTimelineEventByIDList %v", req.IDList)
 	return nil, nil
 }
-

@@ -11,7 +11,7 @@ import (
 func (*photoDAO) GetPhotosWithoutDescription(ctx *papp.AppCtx) ([]*model.Photo, error) {
 	q := db.GetQuery().Photo
 	photos, err := q.WithContext(ctx).
-		Where(q.Description.Eq("")).
+		Where(q.Description.Eq(""), q.FileType.Neq("nef")).
 		Order(q.ImportedAt.Desc()).
 		Find()
 	if err != nil {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NLayout, NLayoutContent, NLayoutHeader,
@@ -16,6 +16,8 @@ import PhotoCard from '../components/PhotoCard.vue'
 import BurstGroupModal from '../components/BurstGroupModal.vue'
 import type { ApiPhotoItem, ApiGetPhotoDetailResponse, ApiSearchPhotosResponse } from '../../backend-sdk/api'
 import type { PhotoDetail as PhotoDetailType, PhotoListItem } from '../types/photo'
+import { useVlmQueue } from '../composables/useVlmQueue'
+import { useEmbedQueue } from '../composables/useEmbedQueue'
 
 const route = useRoute()
 const message = useMessage()
@@ -68,6 +70,28 @@ const isPickerLoading = ref(false)
 const showDetail = ref(false)
 const detailLoading = ref(false)
 const selectedDetail = ref<PhotoDetailType | null>(null)
+const { enqueuePhoto: enqueueVlmPhoto, describeProcessingIds } = useVlmQueue()
+const { enqueuePhoto: enqueueEmbedPhoto, embedProcessingIds } = useEmbedQueue()
+const detailDescribeProcessing = computed(() => !!selectedDetail.value && describeProcessingIds.value.has(selectedDetail.value.id))
+const detailEmbedProcessing = computed(() => !!selectedDetail.value && embedProcessingIds.value.has(selectedDetail.value.id))
+
+async function handleDetailDescribe(photoId: string) {
+  try {
+    await enqueueVlmPhoto(photoId)
+    message.info('已开始重新生成描述')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '重新生成描述失败')
+  }
+}
+
+async function handleDetailEmbed(photoId: string) {
+  try {
+    await enqueueEmbedPhoto(photoId)
+    message.info('已开始重新生成 Embedding')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '重新生成 Embedding 失败')
+  }
+}
 
 // 连拍组浏览弹窗（复用图片管理 BurstGroupModal 的 curate 模式）
 const showGroupModal = ref(false)
@@ -180,6 +204,12 @@ function toPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetailType {
     image_url: id ? imageUrl(id) : '',
     description_model: resp.descriptionModel ?? '',
     description_time: resp.descriptionTime ?? '',
+    ai_health_status: p?.aiHealthStatus ?? 'pending',
+    ai_health_reason: p?.aiHealthReason ?? '',
+    vlm_status: p?.vlmStatus ?? 'pending',
+    vlm_reason: p?.vlmReason ?? '',
+    embedding_status: p?.embeddingStatus ?? 'pending',
+    embedding_description_time: p?.embeddingDescriptionTime ?? '',
   }
 }
 
@@ -294,6 +324,17 @@ async function openPhotoDetail(id: string) {
     detailLoading.value = false
   }
 }
+
+watch(describeProcessingIds, (next, previous) => {
+  if (selectedDetail.value && previous.has(selectedDetail.value.id) && !next.has(selectedDetail.value.id)) {
+    openPhotoDetail(selectedDetail.value.id)
+  }
+})
+watch(embedProcessingIds, (next, previous) => {
+  if (selectedDetail.value && previous.has(selectedDetail.value.id) && !next.has(selectedDetail.value.id)) {
+    openPhotoDetail(selectedDetail.value.id)
+  }
+})
 
 onMounted(async () => {
   const qDraftId = route.query.draft_id as string
@@ -779,11 +820,12 @@ async function confirmPickerSelection() {
     :photo="selectedDetail"
     :loading="detailLoading"
     :nav-list="photoNavList"
-    :describe-processing="false"
-    :embed-processing="false"
-    :show-vlm-actions="false"
+    :describe-processing="detailDescribeProcessing"
+    :embed-processing="detailEmbedProcessing"
     @close="showDetail = false"
     @navigate="openPhotoDetail"
+    @trigger-describe="handleDetailDescribe"
+    @trigger-embed="handleDetailEmbed"
   />
 
   <!-- 连拍组浏览弹窗（复用图片管理样式，curate 模式：复选 + 连拍精选） -->

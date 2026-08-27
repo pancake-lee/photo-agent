@@ -92,6 +92,12 @@ function adaptPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetail {
     image_url: photo?.id ? `${getApiBase()}/photos/${photo.id}/image` : '',
     description_model: resp.descriptionModel ?? '',
     description_time: resp.descriptionTime ?? '',
+    ai_health_status: photo?.aiHealthStatus ?? 'pending',
+    ai_health_reason: photo?.aiHealthReason ?? '',
+    vlm_status: photo?.vlmStatus ?? 'pending',
+    vlm_reason: photo?.vlmReason ?? '',
+    embedding_status: photo?.embeddingStatus ?? 'pending',
+    embedding_description_time: photo?.embeddingDescriptionTime ?? '',
   }
 }
 

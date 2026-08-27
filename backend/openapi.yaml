@@ -1656,6 +1656,18 @@ components:
                 burstCount:
                     type: integer
                     format: int32
+                aiHealthStatus:
+                    type: string
+                aiHealthReason:
+                    type: string
+                vlmStatus:
+                    type: string
+                vlmReason:
+                    type: string
+                embeddingStatus:
+                    type: string
+                embeddingDescriptionTime:
+                    type: string
         api.PhotoSegment:
             type: object
             properties:

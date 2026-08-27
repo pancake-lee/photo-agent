@@ -16,6 +16,4 @@ type Draft struct {
 	UpdatedAt time.Time `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (*Draft) TableName() string {
-	return TableNameDraft
-}
+func (*Draft) TableName() string { return TableNameDraft }

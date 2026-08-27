@@ -30,6 +30,22 @@ func TestParseVlmAttrs_Success(t *testing.T) {
 	}
 }
 
+func TestValidateVlmDescription(t *testing.T) {
+	valid := "场景描述\n```json\n{\"subject\": {\"main_objects\": [\"人物\"]}}\n```"
+	if err := validateVlmDescription(valid); err != nil {
+		t.Fatalf("valid description rejected: %v", err)
+	}
+	for _, description := range []string{
+		"",
+		"只有文本没有结构化结果",
+		"故障彩条画面\n```json\n{}\n```",
+	} {
+		if err := validateVlmDescription(description); err == nil {
+			t.Fatalf("invalid description accepted: %q", description)
+		}
+	}
+}
+
 func TestParseVlmAttrs_NoJSONBlock(t *testing.T) {
 	// 无 ```json 围栏的纯文本 -> extractJSONBlock 返回空 -> warning 日志
 	desc := "这是一段没有 JSON 的纯文本描述"

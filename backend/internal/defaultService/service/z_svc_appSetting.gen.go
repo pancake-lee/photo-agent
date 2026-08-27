@@ -18,9 +18,9 @@ func DO2DTO_AppSetting(do *data.AppSettingDO) *api.AppSettingInfo {
 		return nil
 	}
 	return &api.AppSettingInfo{
-        Key: do.Key,
-        Value: do.Value,
-        UpdatedAt: do.UpdatedAt.Unix(),
+		Key:       do.Key,
+		Value:     do.Value,
+		UpdatedAt: do.UpdatedAt.Unix(),
 	}
 }
 func DTO2DO_AppSetting(dto *api.AppSettingInfo) *data.AppSettingDO {
@@ -28,9 +28,9 @@ func DTO2DO_AppSetting(dto *api.AppSettingInfo) *data.AppSettingDO {
 		return nil
 	}
 	return &data.AppSettingDO{
-        Key: dto.Key,
-        Value: dto.Value,
-        UpdatedAt: time.Unix(dto.UpdatedAt, 0),
+		Key:       dto.Key,
+		Value:     dto.Value,
+		UpdatedAt: time.Unix(dto.UpdatedAt, 0),
 	}
 }
 
@@ -67,7 +67,7 @@ func (s *DefaultCURDServer) GetAppSettingList(
 		ctx.Log.Debugf("GetAppSettingList: %v", req.KeyList)
 
 		dataList, err = data.AppSettingDAO.GetByIndex(ctx,
-            req.KeyList,
+			req.KeyList,
 		)
 		if err != nil {
 			return nil, ctx.Log.LogErr(err)
@@ -90,7 +90,6 @@ func (s *DefaultCURDServer) GetAppSettingList(
 	}
 	return resp, nil
 }
-
 
 func (s *DefaultCURDServer) UpdateAppSetting(
 	_ctx context.Context, req *api.UpdateAppSettingRequest,
@@ -132,4 +131,3 @@ func (s *DefaultCURDServer) DelAppSettingByKeyList(
 	ctx.Log.Debugf("DelAppSettingByKeyList %v", req.KeyList)
 	return nil, nil
 }
-

@@ -302,9 +302,12 @@ func (s *VlmServer) DescribePhoto(_ctx context.Context, req *api.DescribePhotoRe
 		defer describeProgress.remove(req.Id)
 
 		bgCtx := papp.NewAppCtx(context.Background())
+		_ = updateAIState(bgCtx, photo.ID, aiStatusWorking, "", aiStatusWorking, "", aiStatusPending)
 		imagePath := photoFilePath(photo)
 		description, modelUsed, err := describeImage(imagePath)
 		if err != nil {
+			_ = updateAIState(bgCtx, photo.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
+			recordAIHistory(photo.ID, "", "vlm", aiStatusFailed, err.Error())
 			plogger.Errorf("VLM describe %s failed: %v", photo.Filename, err)
 			return
 		}
@@ -315,6 +318,7 @@ func (s *VlmServer) DescribePhoto(_ctx context.Context, req *api.DescribePhotoRe
 			Time:        nowTimeString(),
 		}
 		if err := applyDescriptionToPhoto(bgCtx, photo.ID, entry); err != nil {
+			_ = updateAIState(bgCtx, photo.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
 			plogger.Errorf("VLM save %s failed: %v", photo.Filename, err)
 		}
 	}()
@@ -380,8 +384,12 @@ func runVlmQueue(taskID string, photos []*data.PhotoDO) {
 				}
 
 				imagePath := photoFilePath(p)
+				appCtx := papp.NewAppCtx(context.Background())
+				_ = updateAIState(appCtx, p.ID, aiStatusWorking, "", aiStatusWorking, "", aiStatusPending)
 				description, modelUsed, err := describeImage(imagePath)
 				if err != nil {
+					_ = updateAIState(appCtx, p.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
+					recordAIHistory(p.ID, taskID, "vlm", aiStatusFailed, err.Error())
 					vlmQueue.removeBatchPending(p.ID)
 					vlmQueue.incrFailed(p.Filename)
 					plogger.Warnf("VLM queue %s: worker-%d VLM failed for %s: %v", taskID, workerID, p.Filename, err)
@@ -398,8 +406,8 @@ func runVlmQueue(taskID string, photos []*data.PhotoDO) {
 					Time:        nowTimeString(),
 				}
 
-				appCtx := papp.NewAppCtx(context.Background())
 				if err := applyDescriptionToPhoto(appCtx, p.ID, entry); err != nil {
+					_ = updateAIState(appCtx, p.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
 					vlmQueue.removeBatchPending(p.ID)
 					vlmQueue.incrFailed(p.Filename)
 					plogger.Warnf("VLM queue %s: worker-%d failed to update %s: %v", taskID, workerID, p.Filename, err)
@@ -444,10 +452,33 @@ type vlmDescriptionEntry struct {
 
 // applyDescriptionToPhoto 将描述记录写入 photo 数据库行。
 func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *vlmDescriptionEntry) error {
+	if err := validateVlmDescription(entry.Description); err != nil {
+		q := db.GetQuery().Photo
+		if _, saveErr := q.WithContext(ctx).Where(q.ID.Eq(photoID)).Updates(map[string]any{
+			"description_raw":   entry.Description,
+			"description_model": entry.Model,
+			"description_time":  entry.Time,
+		}); saveErr != nil {
+			return saveErr
+		}
+		if updateErr := updateAIState(ctx, photoID, aiStatusReview, err.Error(), aiStatusReview, err.Error(), aiStatusStale); updateErr != nil {
+			return updateErr
+		}
+		recordAIHistory(photoID, "", "vlm", aiStatusReview, err.Error())
+		return nil
+	}
+
 	updates := map[string]any{
-		"description":       entry.Description,
-		"description_model": entry.Model,
-		"description_time":  entry.Time,
+		"description":                entry.Description,
+		"description_raw":            entry.Description,
+		"description_model":          entry.Model,
+		"description_time":           entry.Time,
+		"ai_health_status":           aiStatusPending,
+		"ai_health_reason":           "等待 Embedding",
+		"vlm_status":                 aiStatusHealthy,
+		"vlm_reason":                 "",
+		"embedding_status":           aiStatusPending,
+		"embedding_description_time": entry.Time,
 	}
 	if entry.Description != "" {
 		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(photoID, entry.Description)
@@ -464,6 +495,7 @@ func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *vlmDescrip
 	if err != nil {
 		return ctx.Log.LogErr(err)
 	}
+	recordAIHistory(photoID, "", "vlm", aiStatusHealthy, "")
 	return nil
 }
 

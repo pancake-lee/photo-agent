@@ -9,6 +9,7 @@
 
 import sys
 import pathlib
+import requests
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -251,9 +252,36 @@ def _retrieve(
         query_embeddings=[query_embedding],
         n_results=n_results,
     )
+    results = _filter_healthy_results(results, cfg)
     logger.info("[检索] 原始返回 %d 条（chunk 级）", len(results))
 
     return results
+
+
+def _filter_healthy_results(results: list[dict], cfg: config.Config) -> list[dict]:
+    """统一排除未达到 AI 健康准入条件的照片及组封面。"""
+    if not results:
+        return []
+    cache: dict[str, bool] = {}
+    filtered: list[dict] = []
+    for result in results:
+        photo_id = (result.get("metadata") or {}).get("photo_id", "")
+        if not photo_id:
+            continue
+        if photo_id not in cache:
+            try:
+                payload = requests.get(
+                    f"{cfg.go_backend_url.rstrip('/')}/api/v1/photos/{photo_id}",
+                    timeout=10,
+                ).json().get("photo") or {}
+                health = payload.get("aiHealthStatus") or payload.get("ai_health_status")
+                embedding = payload.get("embeddingStatus") or payload.get("embedding_status")
+                cache[photo_id] = health == "healthy" and embedding == "healthy"
+            except requests.RequestException:
+                cache[photo_id] = False
+        if cache[photo_id]:
+            filtered.append(result)
+    return filtered
 
 
 def _build_rag_chain(cfg: config.Config):
@@ -465,5 +493,4 @@ def answer_question(
     response = chain.invoke({"context": context, "question": question})
 
     return str(response.content), photo_refs
-
 

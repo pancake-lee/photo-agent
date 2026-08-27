@@ -142,6 +142,12 @@ message PhotoItem {
     string burst_group_id = 30;
     bool burst_cover = 31;  // 是否为连拍组封面（组内 shot_at 最早一张）
     int32 burst_count = 32; // 连拍组内照片数（非组内照片为 0）
+    string ai_health_status = 33;
+    string ai_health_reason = 34;
+    string vlm_status = 35;
+    string vlm_reason = 36;
+    string embedding_status = 37;
+    string embedding_description_time = 38;
 }
 
 message SearchPhotosResponse {

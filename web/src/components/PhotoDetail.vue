@@ -9,6 +9,7 @@ import {
   NDivider,
   NEmpty,
   NTag,
+  NAlert,
   NDatePicker,
   NIcon,
   useMessage,
@@ -52,6 +53,22 @@ const emit = defineEmits<{
 }>()
 
 const showActions = computed(() => props.showVlmActions !== false)
+
+const healthLabel = computed(() => ({
+  healthy: '健康，可参与检索',
+  review: '待复核，暂不参与检索',
+  failed: '处理失败',
+  stale: '向量已过期',
+  processing: '处理中',
+  pending: '等待处理',
+  excluded: '已排除',
+}[props.photo?.ai_health_status || 'pending'] || '等待处理'))
+const healthTagType = computed(() => {
+  if (props.photo?.ai_health_status === 'healthy') return 'success'
+  if (props.photo?.ai_health_status === 'failed') return 'error'
+  if (props.photo?.ai_health_status === 'review') return 'warning'
+  return 'info'
+})
 
 // embed 详情（按 photo 变化自动拉取）
 const embedInfo = ref<EmbedInfo | null>(null)
@@ -99,7 +116,7 @@ watch(
     shotAtEditing.value = false
     if (!photoId) return
     // 无描述的照片不可能有 embedding，直接跳过
-    if (!props.photo?.has_description) return
+    if (!props.photo?.has_description || props.photo.embedding_status !== 'healthy') return
     embedLoading.value = true
     embedInfo.value = await fetchEmbedInfo(photoId)
     embedLoading.value = false
@@ -283,10 +300,39 @@ async function saveShotAt() {
 
               <NDivider />
 
+              <!-- AI 资产状态 -->
+              <div class="ai-health-section">
+                <div class="ai-health-title">
+                  <h4>AI 资产状态</h4>
+                  <NTag size="small" :type="healthTagType">{{ healthLabel }}</NTag>
+                </div>
+                <NAlert
+                  v-if="photo.ai_health_reason"
+                  :type="photo.ai_health_status === 'healthy' ? 'success' : 'warning'"
+                  :show-icon="false"
+                  class="ai-health-alert"
+                >
+                  {{ photo.ai_health_reason }}
+                </NAlert>
+                <div class="ai-health-meta">
+                  VLM：{{ photo.vlm_status || '未处理' }} · Embedding：{{ photo.embedding_status || '未处理' }}
+                </div>
+              </div>
+
+              <NDivider />
+
               <!-- VLM 描述 -->
               <div class="desc-section">
                 <h4>AI 描述</h4>
                 <template v-if="photo.has_description">
+                  <NAlert
+                    v-if="photo.ai_health_status !== 'healthy'"
+                    type="warning"
+                    :show-icon="false"
+                    class="description-warning"
+                  >
+                    当前描述未通过 AI 资产校验，不会参与检索。请重新生成描述进行修复。
+                  </NAlert>
                   <p class="desc-text">{{ photo.description }}</p>
                   <NSpace v-if="showActions">
                     <NButton
@@ -351,7 +397,7 @@ async function saveShotAt() {
                     v-if="showActions"
                     size="small"
                     :loading="embedProcessing"
-                    :disabled="embedBatchRunning"
+                    :disabled="embedBatchRunning || photo.vlm_status !== 'healthy'"
                     style="margin-top: 8px"
                     @click="$emit('triggerEmbed', photo.id)"
                   >
@@ -359,7 +405,10 @@ async function saveShotAt() {
                   </NButton>
                 </template>
                 <template v-else-if="photo.has_description">
-                  <NEmpty description="暂无 Embedding 数据" size="small" />
+                  <NEmpty
+                    :description="photo.embedding_status === 'healthy' ? '暂无 Embedding 数据' : 'Embedding 已隔离，需先完成描述修复'"
+                    size="small"
+                  />
                   <NButton
                     v-if="showActions"
                     size="small"
@@ -514,6 +563,12 @@ async function saveShotAt() {
 .desc-section {
   margin-top: 8px;
 }
+.ai-health-section { margin-top: 8px; }
+.ai-health-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-health-title h4 { margin: 0; font-size: 14px; color: rgba(255, 255, 255, 0.82); }
+.ai-health-alert { margin-top: 8px; }
+.ai-health-meta { margin-top: 8px; font-size: 12px; color: rgba(255, 255, 255, 0.56); }
+.description-warning { margin-bottom: 12px; }
 .desc-section h4 {
   margin: 0 0 8px 0;
   font-size: 14px;

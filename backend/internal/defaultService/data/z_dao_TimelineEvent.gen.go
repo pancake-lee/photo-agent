@@ -40,7 +40,7 @@ func (*timelineEventDAO) GetAll(ctx *papp.AppCtx,
 }
 
 func (*timelineEventDAO) GetByIndex(ctx *papp.AppCtx,
-IDList []string,
+	IDList []string,
 ) ([]*TimelineEventDO, error) {
 	q := db.GetQuery().TimelineEvent
 	do := q.WithContext(ctx)
@@ -125,4 +125,3 @@ func (*timelineEventDAO) GetByIDList(ctx *papp.AppCtx, idx1List []string,
 	}
 	return timelineEventMap, nil
 }
-

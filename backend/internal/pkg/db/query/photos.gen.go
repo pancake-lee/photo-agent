@@ -35,6 +35,15 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 	_photo.TimelineManual = field.NewInt32(tableName, "timeline_manual")
 	_photo.Tags = field.NewString(tableName, "tags")
 	_photo.Description = field.NewString(tableName, "description")
+	_photo.DescriptionModel = field.NewString(tableName, "description_model")
+	_photo.DescriptionTime = field.NewString(tableName, "description_time")
+	_photo.DescriptionRaw = field.NewString(tableName, "description_raw")
+	_photo.AiHealthStatus = field.NewString(tableName, "ai_health_status")
+	_photo.AiHealthReason = field.NewString(tableName, "ai_health_reason")
+	_photo.VlmStatus = field.NewString(tableName, "vlm_status")
+	_photo.VlmReason = field.NewString(tableName, "vlm_reason")
+	_photo.EmbeddingStatus = field.NewString(tableName, "embedding_status")
+	_photo.EmbeddingDescriptionTime = field.NewString(tableName, "embedding_description_time")
 	_photo.Objects = field.NewString(tableName, "objects")
 	_photo.Colors = field.NewString(tableName, "colors")
 	_photo.Scene = field.NewString(tableName, "scene")
@@ -66,37 +75,46 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 type photo struct {
 	photoDo photoDo
 
-	ALL                field.Asterisk
-	ID                 field.String
-	Filename           field.String
-	FilePath           field.String
-	FileType           field.String
-	Timeline           field.String
-	TimelineManual     field.Int32
-	Tags               field.String
-	Description        field.String
-	Objects            field.String
-	Colors             field.String
-	Scene              field.String
-	Lighting           field.String
-	Mood               field.String
-	Composition        field.String
-	ShotAt             field.Time
-	Width              field.Int32
-	Height             field.Int32
-	Brand              field.String
-	Model              field.String
-	Lens               field.String
-	FocalLength        field.String
-	Aperture           field.String
-	Iso                field.Int32
-	ExposureTime       field.String
-	Latitude           field.Float64
-	Longitude          field.Float64
-	Altitude           field.Float64
-	BurstGroupID       field.String
-	BurstGroupCoarseID field.String
-	ImportedAt         field.Time
+	ALL                      field.Asterisk
+	ID                       field.String
+	Filename                 field.String
+	FilePath                 field.String
+	FileType                 field.String
+	Timeline                 field.String
+	TimelineManual           field.Int32
+	Tags                     field.String
+	Description              field.String
+	DescriptionModel         field.String
+	DescriptionTime          field.String
+	DescriptionRaw           field.String
+	AiHealthStatus           field.String
+	AiHealthReason           field.String
+	VlmStatus                field.String
+	VlmReason                field.String
+	EmbeddingStatus          field.String
+	EmbeddingDescriptionTime field.String
+	Objects                  field.String
+	Colors                   field.String
+	Scene                    field.String
+	Lighting                 field.String
+	Mood                     field.String
+	Composition              field.String
+	ShotAt                   field.Time
+	Width                    field.Int32
+	Height                   field.Int32
+	Brand                    field.String
+	Model                    field.String
+	Lens                     field.String
+	FocalLength              field.String
+	Aperture                 field.String
+	Iso                      field.Int32
+	ExposureTime             field.String
+	Latitude                 field.Float64
+	Longitude                field.Float64
+	Altitude                 field.Float64
+	BurstGroupID             field.String
+	BurstGroupCoarseID       field.String
+	ImportedAt               field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -121,6 +139,15 @@ func (p *photo) updateTableName(table string) *photo {
 	p.TimelineManual = field.NewInt32(table, "timeline_manual")
 	p.Tags = field.NewString(table, "tags")
 	p.Description = field.NewString(table, "description")
+	p.DescriptionModel = field.NewString(table, "description_model")
+	p.DescriptionTime = field.NewString(table, "description_time")
+	p.DescriptionRaw = field.NewString(table, "description_raw")
+	p.AiHealthStatus = field.NewString(table, "ai_health_status")
+	p.AiHealthReason = field.NewString(table, "ai_health_reason")
+	p.VlmStatus = field.NewString(table, "vlm_status")
+	p.VlmReason = field.NewString(table, "vlm_reason")
+	p.EmbeddingStatus = field.NewString(table, "embedding_status")
+	p.EmbeddingDescriptionTime = field.NewString(table, "embedding_description_time")
 	p.Objects = field.NewString(table, "objects")
 	p.Colors = field.NewString(table, "colors")
 	p.Scene = field.NewString(table, "scene")
@@ -167,7 +194,7 @@ func (p *photo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *photo) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 30)
+	p.fieldMap = make(map[string]field.Expr, 39)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["filename"] = p.Filename
 	p.fieldMap["file_path"] = p.FilePath
@@ -176,6 +203,15 @@ func (p *photo) fillFieldMap() {
 	p.fieldMap["timeline_manual"] = p.TimelineManual
 	p.fieldMap["tags"] = p.Tags
 	p.fieldMap["description"] = p.Description
+	p.fieldMap["description_model"] = p.DescriptionModel
+	p.fieldMap["description_time"] = p.DescriptionTime
+	p.fieldMap["description_raw"] = p.DescriptionRaw
+	p.fieldMap["ai_health_status"] = p.AiHealthStatus
+	p.fieldMap["ai_health_reason"] = p.AiHealthReason
+	p.fieldMap["vlm_status"] = p.VlmStatus
+	p.fieldMap["vlm_reason"] = p.VlmReason
+	p.fieldMap["embedding_status"] = p.EmbeddingStatus
+	p.fieldMap["embedding_description_time"] = p.EmbeddingDescriptionTime
 	p.fieldMap["objects"] = p.Objects
 	p.fieldMap["colors"] = p.Colors
 	p.fieldMap["scene"] = p.Scene

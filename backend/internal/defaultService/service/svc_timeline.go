@@ -187,9 +187,9 @@ func (s *TimelineServer) ListEvents(_ctx context.Context, _ *api.Empty) (*api.Li
 	sort.Sort(sort.Reverse(sort.StringSlice(scatterNames))) // YYYY-MM-散片N 字典序即时间序，倒序=新的在前
 	for _, name := range scatterNames {
 		resp.Scattered = append(resp.Scattered, &api.TimelineEventDetail{
-			Date:       name[:7],
-			Event:      name,
-			PhotoCount: countMap[name],
+			Date:        name[:7],
+			Event:       name,
+			PhotoCount:  countMap[name],
 			IsScattered: true,
 		})
 	}

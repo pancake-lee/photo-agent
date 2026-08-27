@@ -18,14 +18,14 @@ func DO2DTO_PhotoGroup(do *data.PhotoGroupDO) *api.PhotoGroupInfo {
 		return nil
 	}
 	return &api.PhotoGroupInfo{
-        ID: do.ID,
-        CoverPhotoID: do.CoverPhotoID,
-        Profile: do.Profile,
-        PhotoCount: do.PhotoCount,
-        TimeStart: do.TimeStart.Unix(),
-        TimeEnd: do.TimeEnd.Unix(),
-        HashMax: do.HashMax,
-        CreatedAt: do.CreatedAt.Unix(),
+		ID:           do.ID,
+		CoverPhotoID: do.CoverPhotoID,
+		Profile:      do.Profile,
+		PhotoCount:   do.PhotoCount,
+		TimeStart:    do.TimeStart.Unix(),
+		TimeEnd:      do.TimeEnd.Unix(),
+		HashMax:      do.HashMax,
+		CreatedAt:    do.CreatedAt.Unix(),
 	}
 }
 func DTO2DO_PhotoGroup(dto *api.PhotoGroupInfo) *data.PhotoGroupDO {
@@ -33,14 +33,14 @@ func DTO2DO_PhotoGroup(dto *api.PhotoGroupInfo) *data.PhotoGroupDO {
 		return nil
 	}
 	return &data.PhotoGroupDO{
-        ID: dto.ID,
-        CoverPhotoID: dto.CoverPhotoID,
-        Profile: dto.Profile,
-        PhotoCount: dto.PhotoCount,
-        TimeStart: time.Unix(dto.TimeStart, 0),
-        TimeEnd: time.Unix(dto.TimeEnd, 0),
-        HashMax: dto.HashMax,
-        CreatedAt: time.Unix(dto.CreatedAt, 0),
+		ID:           dto.ID,
+		CoverPhotoID: dto.CoverPhotoID,
+		Profile:      dto.Profile,
+		PhotoCount:   dto.PhotoCount,
+		TimeStart:    time.Unix(dto.TimeStart, 0),
+		TimeEnd:      time.Unix(dto.TimeEnd, 0),
+		HashMax:      dto.HashMax,
+		CreatedAt:    time.Unix(dto.CreatedAt, 0),
 	}
 }
 
@@ -77,7 +77,7 @@ func (s *DefaultCURDServer) GetPhotoGroupList(
 		ctx.Log.Debugf("GetPhotoGroupList: %v", req.IDList)
 
 		dataList, err = data.PhotoGroupDAO.GetByIndex(ctx,
-            req.IDList,
+			req.IDList,
 		)
 		if err != nil {
 			return nil, ctx.Log.LogErr(err)
@@ -100,7 +100,6 @@ func (s *DefaultCURDServer) GetPhotoGroupList(
 	}
 	return resp, nil
 }
-
 
 func (s *DefaultCURDServer) UpdatePhotoGroup(
 	_ctx context.Context, req *api.UpdatePhotoGroupRequest,
@@ -142,4 +141,3 @@ func (s *DefaultCURDServer) DelPhotoGroupByIDList(
 	ctx.Log.Debugf("DelPhotoGroupByIDList %v", req.IDList)
 	return nil, nil
 }
-
