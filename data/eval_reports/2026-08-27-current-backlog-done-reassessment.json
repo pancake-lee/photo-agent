@@ -1,0 +1,45 @@
+{
+  "report_id": "2026-08-27-current-backlog-done-reassessment",
+  "backlog_id": "AQL1-1-AQL1-8,CH2,HW1",
+  "created_at": "2026-08-27T00:00:00Z",
+  "target": "当前 backlog 中原有的 10 个 Done 任务",
+  "overall": 8.4,
+  "per_task": {
+    "AQL1-1": 8.6,
+    "AQL1-2": 7.4,
+    "AQL1-3": 8.5,
+    "AQL1-4": 8.8,
+    "AQL1-5": 8.3,
+    "AQL1-6": 8.7,
+    "AQL1-7": 8.5,
+    "AQL1-8": 8.7,
+    "CH2": 8.4,
+    "HW1": 8.4
+  },
+  "dimension_scores": {
+    "正确性": 8.5,
+    "健壮性": 8.4,
+    "可维护性": 8.3,
+    "简洁性": 8.2,
+    "准确性": 8.6,
+    "完整性": 8.5,
+    "一致性": 8.4,
+    "惊喜度": 7.9,
+    "可用性": 8.5,
+    "交互体验": 8.4,
+    "AI增量": 8.2
+  },
+  "findings_for_backlog": [
+    "P2：Agent 全量单元测试 86 项中 3 项失败；Text-to-SQL 的 schema 格式化输入类型与 few-shot 数量测试契约与当前实现不一致。",
+    "P2：AQL 三份设计文档仍标记为待运行时或 Web 验收，与 backlog 和已留存的黄金快照、对话 Trace、用户验收结论冲突。"
+  ],
+  "verification_runtime": [
+    "GOTOOLCHAIN=local go test ./...：PASS",
+    "GOTOOLCHAIN=local go vet ./...：PASS",
+    "agent/.venv/bin/python -m unittest tests.test_session_store tests.test_embed_queue_health tests.test_evaluation tests.test_eval_regression：20/20 PASS",
+    "agent/.venv/bin/python -m unittest discover -s agent/tests：86 项中 83 PASS、3 FAIL（QA2）",
+    "web/pnpm build：PASS",
+    "两份黄金快照均为 P@10=0.714、R@10=0.714、MRR=1.0，DSC_1813 资产可信且健康",
+    "AQL1-8 留存的 fine/coarse 对话 Trace 均返回 DSC_1813，用户浏览器验收已确认"
+  ]
+}

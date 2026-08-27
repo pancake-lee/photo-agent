@@ -5,7 +5,7 @@
 
     架构:
         1. Schema 提示: 定义 photos 表结构、字段类型、可查询维度
-        2. Few-shot 示例: 3~5 个典型 NL→SQL 样例，引导 LLM 生成正确 SQL
+        2. Few-shot 示例: 基础与结构化属性查询样例，引导 LLM 生成正确 SQL
         3. LLM 生成: ChatPromptTemplate (System + Few-shot Human/AI + 用户问题)
         4. SQL 安全校验: validate_select_only 确保仅 SELECT（客户端双重保险）
         5. 执行查询: 通过 Go 后端 /api/v1/query/sql 接口执行（Python 不直连 SQLite）
@@ -540,4 +540,3 @@ def answer_with_sql(
         "results": results,
         "answer": answer,
     }
-

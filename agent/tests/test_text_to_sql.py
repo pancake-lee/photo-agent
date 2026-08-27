@@ -14,6 +14,7 @@ import db.sqlite_client as sqlite_client
 import chain.text_to_sql as text_to_sql
 import chain.photo_rag as photo_rag
 import langchain_core.prompts as lc_prompts
+import swagger_client as sdk
 
 
 # --------------------------------------------------------------------------- #
@@ -151,30 +152,23 @@ class TestFormatSchema(unittest.TestCase):
     """Schema 格式化测试。"""
 
     def test_basic_formatting(self):
-        schema_data = {
-            "table_name": "photos",
-            "fields": [
-                {"name": "id", "sql_type": "TEXT", "json_tag": "id", "nullable": False},
-                {"name": "brand", "sql_type": "TEXT", "json_tag": "brand", "nullable": False},
-                {"name": "latitude", "sql_type": "REAL", "json_tag": "latitude", "nullable": True},
+        schema_data = sdk.ApiGetPhotoSchemaResponse(
+            table_name="photos",
+            fields=[
+                sdk.ApiSchemaField(name="id", sql_type="TEXT", json_tag="id", nullable=False),
+                sdk.ApiSchemaField(name="brand", sql_type="TEXT", json_tag="brand", nullable=False),
+                sdk.ApiSchemaField(name="latitude", sql_type="REAL", json_tag="latitude", nullable=True),
             ],
-            "notes": ["brand 字段可能为空字符串", "经纬度为 NULL 表示无 GPS 信息"],
-        }
+        )
         text = text_to_sql._format_schema(schema_data)
         self.assertIn("表名: photos", text)
         self.assertIn("id (TEXT): JSON tag = id", text)
         self.assertIn("latitude (REAL): JSON tag = latitude，可能为 NULL", text)
-        self.assertIn("注意事项:", text)
-        self.assertIn("brand 字段可能为空字符串", text)
 
-    def test_empty_notes(self):
-        schema_data = {
-            "table_name": "photos",
-            "fields": [{"name": "id", "sql_type": "TEXT", "json_tag": "id", "nullable": False}],
-            "notes": [],
-        }
+    def test_empty_fields(self):
+        schema_data = sdk.ApiGetPhotoSchemaResponse(table_name="photos", fields=[])
         text = text_to_sql._format_schema(schema_data)
-        self.assertNotIn("注意事项:", text)
+        self.assertEqual(text, "表名: photos\n\n字段说明:")
 
 
 # --------------------------------------------------------------------------- #
@@ -316,9 +310,10 @@ class TestBuildFewShotPrompt(unittest.TestCase):
 
     def test_contains_examples(self):
         prompt = text_to_sql._build_few_shot_prompt()
-        self.assertEqual(len(prompt.examples), 6)
+        self.assertEqual(len(prompt.examples), 12)
         self.assertEqual(prompt.examples[0]["question"], "我有多少张照片？")
         self.assertEqual(prompt.examples[0]["sql"], "SELECT COUNT(*) AS photo_count FROM photos")
+        self.assertEqual(prompt.examples[-1]["question"], "有哪些街拍照片？")
 
 
 # --------------------------------------------------------------------------- #

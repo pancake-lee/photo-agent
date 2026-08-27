@@ -9,16 +9,18 @@
 
 | 状态 | 分组 | 序号 | 任务 | 评估 |
 | ---- | ---- | ---- | ---- | ---- |
-| Done | AI照片资产质量闭环 | AQL1-1 | VLM 请求缩略图身份与预检 | 自动验证通过 |
-| Done | AI照片资产质量闭环 | AQL1-2 | 状态、任务与处理履历底座 | 已完成，后续方案已收敛 |
-| Done | AI照片资产质量闭环 | AQL1-3 | VLM 质量闸门与失效传播 | 自动验证通过 |
-| Done | AI照片资产质量闭环 | AQL1-4 | Embedding 一致性与检索准入 | 自动验证通过 |
-| Done | AI照片资产质量闭环 | AQL1-5 | 既有界面的异常提示与原地修复 | 自动验证通过 |
-| Done | AI照片资产质量闭环 | AQL1-6 | 批量 VLM/Embedding 审查与确认 | 用户 Web 验收与自动验证均通过 |
-| Done | AI照片资产质量闭环 | AQL1-7 | 黄金用例和对话质量回归 | 用户运行时验收、黄金快照与对话 Trace 均通过 |
-| Done | AI照片资产质量闭环 | AQL1-8 | 连拍粒度检索召回与对话回归 | 用户浏览器验收与 fine/coarse 对话 Trace 均通过 |
-| Done | 对话与图片列表体验 | CH2 | 对话布局、检索粒度标识与图片列表统一 | 用户界面验收、前端构建与会话测试均通过 |
-| Done | Harness 工作流 | HW1 | 任务闭环与用户验收交接 | 文档规则、模板与现有待验收条目已同步 |
+| Done | AI照片资产质量闭环 | AQL1-1 | VLM 请求缩略图身份与预检 | 8.6/10 |
+| Done | AI照片资产质量闭环 | AQL1-2 | 状态、任务与处理履历底座 | 7.4/10 |
+| Done | AI照片资产质量闭环 | AQL1-3 | VLM 质量闸门与失效传播 | 8.5/10 |
+| Done | AI照片资产质量闭环 | AQL1-4 | Embedding 一致性与检索准入 | 8.8/10 |
+| Done | AI照片资产质量闭环 | AQL1-5 | 既有界面的异常提示与原地修复 | 8.3/10 |
+| Done | AI照片资产质量闭环 | AQL1-6 | 批量 VLM/Embedding 审查与确认 | 8.7/10 |
+| Done | AI照片资产质量闭环 | AQL1-7 | 黄金用例和对话质量回归 | 8.5/10 |
+| Done | AI照片资产质量闭环 | AQL1-8 | 连拍粒度检索召回与对话回归 | 8.7/10 |
+| Done | 对话与图片列表体验 | CH2 | 对话布局、检索粒度标识与图片列表统一 | 8.4/10 |
+| Done | Harness 工作流 | HW1 | 任务闭环与用户验收交接 | 8.4/10 |
+| Done | 质量回归 | QA2 | Text-to-SQL 全量测试契约失效 | 全量测试 86/86 通过 |
+| Done | 文档一致性 | DOC1 | AQL 设计验收状态与 backlog 冲突 | 设计、中枢与 backlog 已同步 |
 
 > v1.0.12 已归档：W12、GR1、CH1、TF1-1–TF1-10、PS7–PS9、QA1、M1、D1，详见 [v1.0.12](archive/v1.0.12.md)。
 > v1.0.11 已归档：CL1、CL2、PS1–PS6，详见 [v1.0.11](archive/v1.0.11.md)。
@@ -39,6 +41,7 @@
   - ✅ 同步更新 Harness 概览、`AGENTS.md` 与 `CLAUDE.md`，并清理现有条目中状态与验收叙述不一致的问题。
 - **已验证**：`AGENTS.md` 与 `CLAUDE.md` 除文件身份标题和互指名称外内容一致；`docs/handbook/work-modes.md`、`docs/harness.md` 和 backlog 已包含同一状态语义与用户验收交接规则；AQL1-6、AQL1-7、CH2 已由错误的 Done 状态改为 `待用户验收`，并补齐用户操作和 AI 关单证据。
 - **验收**：任一需要浏览器/部署验证的已开发任务都会以 `待用户验收` 显示，backlog 可独立说明用户做什么、预期什么和 AI 将如何关单；生成任务的最终回复会主动提出该验收。用户确认后，存在 Trace/日志时 AI 无需用户导出文件即可核验并改 Done；纯自动任务不会停在 WIP。`AGENTS.md` 与 `CLAUDE.md` 保持一致。
+- **评估**：8.4/10（正确性 8.5、健壮性 8.4、可维护性 8.6、简洁性 8.3），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ## AI照片资产质量闭环
 
@@ -61,6 +64,7 @@
 - **验收**：`DSC_1813.jpg` 的 VLM 请求缩略图可追溯到正确 JPG 原图；同名 JPG/NEF、跨目录同名、源图更新、材料损坏、视觉错配和正常复用均有测试。NEF 不得进入 VLM/Embedding，任一预检失败不得产生 VLM API 请求。
 - **本阶段已实现**：VLM 输入仅接受可解码 JPG/JPEG；超限压缩产物改为每次请求独立临时文件，不再按基础文件名复用；已覆盖正常 JPG、NEF、损坏 JPG、同名跨目录临时文件隔离测试。
 - **阶段验收命令**：`cd backend && GOTOOLCHAIN=local go test ./internal/defaultService/service`
+- **评估**：8.6/10（正确性 8.8、健壮性 8.7、可维护性 8.4、简洁性 8.5），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-2 状态、任务与处理履历底座
 
@@ -70,6 +74,7 @@
 - **方案**：每张照片维护预览图、VLM 请求缩略图、VLM、Embedding、总体健康、排除标记和版本关联；另记录批量/单张任务与阶段履历。统一待处理、处理中、健康、失败、待复核、过期、已排除的转移规则，运行时计数从任务结果派生。旧照片迁移后统一进入待审计，不误标健康。
 - **验收**：单张 VLM 失败、批量 Embedding 失败和质量拒绝在照片详情、问题查询、任务摘要中结论一致，服务重启后仍可读取；无数据库外键。
 - **本阶段已实现**：新增照片 AI 健康、VLM、Embedding 状态及原因字段；新增无外键 `ai_processing_history` 履历表；VLM 与 Embedding 处理结果写入状态和履历，并通过照片详情返回。
+- **评估**：7.4/10（正确性 7.2、健壮性 7.8、可维护性 7.6、简洁性 7.1），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-3 VLM 质量闸门与失效传播
 
@@ -79,6 +84,7 @@
 - **方案**：仅接收已通过零 Token 输入预检的请求缩略图，再校验 VLM 输出非空和结构可解析；仅将明确故障画面/测试图，以及“条纹组 + 色块”等组合设为首批待复核规则，普通颜色、条纹和色块描述不单独判异常；描述重生成、质量拒绝或请求缩略图失效时统一使旧向量过期。支持重新校验和从描述开始完整修复。
 - **验收**：命中故障彩条规则的调用计为待复核而非成功，可见原因且不可检索；重新生成有效描述后才可进入向量阶段。
 - **本阶段已实现**：VLM 返回空文本、缺失结构化 JSON、明确故障画面/测试图及高风险组合进入待复核；普通颜色和条纹描述不再因关键词单独命中；质量拒绝会使 Embedding 状态失效，历史记录保留原因。
+- **评估**：8.5/10（正确性 8.7、健壮性 8.5、可维护性 8.4、简洁性 8.3），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-4 Embedding 一致性与检索准入
 
@@ -88,6 +94,7 @@
 - **方案**：Embedding 只领取健康描述并记录来源版本；待复核、失败、过期、已排除或版本不一致时清理全量和组图旧向量。查询、集合维护、黄金用例评估与对话 Trace 共用准入语义，评估先报告期望照片健康摘要。
 - **验收**：已嵌入照片变为待复核/过期后，photo/fine/coarse 与对话都不再命中；恢复健康并重嵌入后才重新出现。
 - **本阶段已实现**：Embedding 队列仅领取通过 VLM 闸门的照片；成功后回写健康状态；照片检索在结果组装前统一读取健康状态，过滤异常照片和组封面，覆盖 RAG 与对话上下文。
+- **评估**：8.8/10（正确性 9.0、健壮性 8.8、可维护性 8.7、简洁性 8.6），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-5 既有界面的异常提示与原地修复
 
@@ -101,6 +108,7 @@
   - ✅ AQL1-5c：仅向量异常时提供“重新生成 Embedding”，并移除旧问题弹窗及接口入口。
   - ✅ AQL1-5d：增加“重新校验”入口，只执行本地描述质量校验，不强迫用户重跑 VLM。
 - **验收**：用户打开 `DSC_1813.jpg`，能从现有状态图标和详情原因看出异常；点击一次“重新生成 AI 描述”后无需再点向量按钮，最终显示“健康，可参与检索”。
+- **评估**：8.3/10（正确性 8.5、健壮性 8.3、可维护性 8.2、交互体验 8.3），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-6 批量 VLM/Embedding 审查与确认
 
@@ -115,6 +123,7 @@
   - ✅ AQL1-6d：已按[AI 资产实时状态设计](design/2026-08-27-3-realtime-ai-state-design.md)完成重做。Go 仅即时推导描述质量，SQLite 健康字段不再迁移、读取或回写；Agent 通过当前 Chroma 向量及其描述版本实时计算向量可用性，批量审查、列表、详情、队列与检索均改用该结论。Go 全量测试、Python 定向测试、静态编译、前端生产构建和用户 Web 验收均通过。
 - **验收**：用户点击顶部“批量 VLM”后，先看到未描述与疑似异常的数量及一行缩略图；确认后自动完成描述和对应 Embedding。点击“批量 Embedding”后，先看到仅需重建向量的数量及预览；确认后只重建向量。`DSC_0054.jpg` 等仅有历史标记的正常描述不再被阻断。全过程原始 JPG 不变。
 - **验收证据**：用户已确认 Web 交互通过；Go 全量测试、Python 定向测试、静态编译和前端生产构建结果已在本任务记录中通过。
+- **评估**：8.7/10（正确性 8.9、健壮性 8.7、完整性 8.8、交互体验 8.5），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-7 黄金用例和对话质量回归
 
@@ -125,6 +134,7 @@
 - **验收**：`DSC_1813.jpg` 健康后重新参与该黄金用例，评估/对话可追溯呈现修复前后差异，剩余低分可归因到数据、检索或回答生成。
 - **本阶段已实现**：每次黄金评估自动保存到 `data/eval_reports/golden/`，先判断期望照片的实时描述质量和 Chroma 描述版本一致性，再计算检索指标；资产异常时明确标为“数据不可信”。每次对话将命中照片及其当时描述、向量版本写入结构化 Trace。
 - **验收证据**：用户已确认通过。`data/eval_reports/golden/2026-08-27-6407e7ab8ef5.json` 与 `2026-08-27-f4a17f839edf.json` 均包含健康、可信的 `DSC_1813`，并记录其描述和向量版本；对话 Trace `eebeb3ee6bfb`（fine）与 `aac9250f098a`（coarse）均返回该照片，资产快照为 `eligible: true`。
+- **评估**：8.5/10（准确性 8.6、完整性 8.7、一致性 8.5、AI 增量 8.2），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ### AQL1-8 连拍粒度检索召回与对话回归
 
@@ -139,6 +149,7 @@
   - ✅ 同步两个连拍集合时批量写入未分组照片，组封面也带描述版本；增量嵌入、健康清理、删图和组重建均按档位更新单张与封面记录。
 - **已验证**：17 项 Python 单元测试通过；`sync_group_collections()` 已在当前图库完成一次无模型同步（fine 1,038、coarse 825 条文档）；L1 种子回归通过；以新进程直接执行完整 `PhotoAgent.route`，fine/coarse 均返回 `DSC_1813.jpg` 和 `DSC_2167.jpg`。用户已完成浏览器交互验收；Trace `eebeb3ee6bfb`（fine）和 `aac9250f098a`（coarse）均返回 `DSC_1813.jpg`，HTTP L2 通过。
 - **验收**：真实对话请求“佛像和人的合照”在用户确认的连拍粒度语义下返回 `DSC_1813.jpg`；回归在该照片因数据、索引或过滤被排除时明确失败；`[过滤-输入]` 记录文件名而非 UUID，且不改变检索排序和过滤结果。
+- **评估**：8.7/10（正确性 8.9、健壮性 8.7、完整性 8.7、可用性 8.5），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
 
 ## 对话与图片列表体验
 
@@ -160,6 +171,40 @@
 - **已验证**：`agent/.venv/bin/python -m unittest agent/tests/test_session_store.py` 通过（含旧 sessions/messages 表加列迁移、回复粒度与会话最近选择持久化）；`cd web && pnpm build` 通过；`agent/.venv/bin/python -m unittest discover -s agent/tests` 共 85 项，其中本次无关的 `test_text_to_sql` 既有 3 项失败，其余 82 项通过。
 - **验收**：对话右侧在常规窗口、空会话、长消息和输入框多行时均不出现外层垂直滚动条，标题和输入栏分别贴合上下边缘，只有消息区可滚动。新产生的每条 AI 回复均显示与实际请求一致的三种粒度之一，重载会话后不丢失；旧消息不错误标注。正文图片完整显示且尺寸接近图片管理卡片。相关照片通过公共图片列表呈现，单张预览、连拍组展开均可用。所有 `PhotoThumbList` 调用位置的实际图片均有悬浮下载按钮，下载为对应原图且不误触发预览、选择或删除。
 - **验收证据**：用户已确认界面通过；本轮 `cd web && pnpm build` 通过，`agent/.venv/bin/python -m unittest agent/tests/test_session_store.py` 通过（3 项）。
+- **评估**：8.4/10（正确性 8.5、完整性 8.4、一致性 8.5、交互体验 8.3），详见 [2026-08-27-current-backlog-done-reassessment.md](../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md)。
+
+## 质量回归
+
+### QA2 Text-to-SQL 全量测试契约失效
+
+- **状态**：Done
+- **背景**：2026-08-27 执行 `agent/.venv/bin/python -m unittest discover -s agent/tests` 时，86 项中 3 项失败：`TestFormatSchema.test_basic_formatting` 与 `test_empty_notes` 将 dict 传给当前要求属性访问的 `_format_schema()`，`TestBuildFewShotPrompt.test_contains_examples` 预期 6 个示例而当前实现返回 12 个。
+- **严重程度**：P2。生产功能未在本轮直接失败，但 Agent 全量测试不能作为绿色回归门禁。
+- **分析**：`QueryClient.fetch_schema()` 已在 SDK 改造后稳定返回 `ApiGetPhotoSchemaResponse`，其字段也是 SDK `ApiSchemaField` 对象；生产代码的属性访问与实际接口一致。12 个 few-shot 示例由结构化属性过滤需求引入，测试沿用旧的 6 个示例预期。为测试输入增加 dict 兼容或缩减生产示例都会偏离当前接口和功能范围。
+- **方案**：仅同步 `agent/tests/test_text_to_sql.py` 的测试夹具和断言：以 SDK Schema 响应/字段模型构造格式化输入，删除已不属于接口响应的 notes 断言，并将 few-shot 数量和结构化示例预期对齐当前 12 项配置；同时校正模块说明中旧的“3~5 个”示例描述。生产调用、SQL 生成逻辑和 SDK 契约不改动。
+- **任务列表**：
+  - 使用 SDK 模型替换两项 schema 格式化测试中的 dict 输入，保持空字段与 nullable 覆盖。
+  - 以当前 `FEW_SHOT_EXAMPLES` 作为断言来源，覆盖基础和结构化属性示例，消除硬编码旧数量。
+  - 更新 Text-to-SQL 模块说明，说明示例集合包含基础与结构化属性查询。
+  - 运行 Text-to-SQL 定向测试和 Agent 全量测试，确认无失败。
+- **已完成**：
+  - ✅ 以 SDK Schema 模型替换 dict 测试夹具，覆盖 nullable 与空字段响应。
+  - ✅ 将 few-shot 断言同步到当前 12 个基础和结构化属性示例。
+  - ✅ 更新模块说明，并运行 Text-to-SQL 定向测试和 Agent 全量测试。
+- **验收**：`agent/.venv/bin/python -m unittest discover -s agent/tests` 86/86 通过，且 schema 格式化与 few-shot 示例数量的测试契约与当前实现一致。
+
+## 文档一致性
+
+### DOC1 AQL 设计验收状态与 backlog 冲突
+
+- **状态**：Done
+- **背景**：`2026-08-26-4-ai-asset-quality-loop-design.md` 仍写“待运行时验收”，`2026-08-27-1-ai-repair-interaction-design.md` 与 `2026-08-27-3-realtime-ai-state-design.md` 仍写“待 Web 验收”，但 backlog、黄金快照、对话 Trace 和用户确认均已记录 AQL1-6 至 AQL1-8 完成。
+- **严重程度**：P2。现行设计入口无法准确表达专题关闭状态，易造成后续重复验收或错误判断。
+- **方案**：将 AQL 原始闭环、轻量修复、状态去滞后、实时状态设计的顶部状态，以及专题中枢索引统一回写为已完成，并引用现有黄金快照、对话 Trace 与用户验收结论，不改写历史设计决策。
+- **已完成**：
+  - ✅ 更新 4 份 AQL 设计文档的顶部完成状态与验收证据。
+  - ✅ 更新专题中枢关联文档索引和时间线，保留本轮文档关单记录。
+- **验收**：AQL 专题设计、中枢与 backlog 的完成状态和验收证据互相一致。
 
 ## 产品定位决策
 
