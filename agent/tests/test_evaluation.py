@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+import tempfile
 import unittest
 
 from chain import evaluation
@@ -55,12 +56,15 @@ class TestEvaluation(unittest.TestCase):
             }
             return [{"metadata": {"photo_id": ids[self.collection_name]}, "distance": 0.1}]
 
+        def get_photo_embedding_versions(self):
+            return {"photo-uuid": {""}}
+
     old = (evaluation.embedder.Embedder, evaluation.chroma_client.ChromaPhotoStore,
-           evaluation._build_id_to_filename, evaluation.photo_rag._aggregate_by_photo)
+           evaluation._build_photo_records, evaluation.photo_rag._aggregate_by_photo)
     monkeypatch.setattr(evaluation.embedder, "Embedder", FakeEmbedder)
     monkeypatch.setattr(evaluation.chroma_client, "ChromaPhotoStore", FakeStore)
-    monkeypatch.setattr(evaluation, "_build_id_to_filename", lambda _: {
-        "photo-uuid": "photo", "fine-uuid": "fine", "coarse-uuid": "coarse",
+    monkeypatch.setattr(evaluation, "_build_photo_records", lambda _: {
+        "photo-uuid": {"id": "photo-uuid", "filename": "photo", "description": "可信描述", "vlm_status": "healthy"},
     })
     monkeypatch.setattr(evaluation.photo_rag, "_aggregate_by_photo", lambda results, top_n: results)
 
@@ -84,9 +88,36 @@ class TestEvaluation(unittest.TestCase):
       self.assertEqual(result["details"][0]["hits"], ["photo"])
       self.assertEqual(result["details"][0]["remaining"], ["coarse", "fine"])
       self.assertEqual(set(FakeStore.stores), {"photos"})
+      self.assertFalse(result["data_trusted"])
     finally:
       evaluation.embedder.Embedder, evaluation.chroma_client.ChromaPhotoStore, \
-          evaluation._build_id_to_filename, evaluation.photo_rag._aggregate_by_photo = old
+          evaluation._build_photo_records, evaluation.photo_rag._aggregate_by_photo = old
+
+  def test_asset_health_requires_healthy_description_and_current_vector(self):
+    healthy, asset = evaluation._photo_is_healthy(
+        {"id": "p1", "filename": "DSC_1813.jpg", "description": "可信描述", "vlm_status": "healthy"},
+        {"p1": {evaluation.hashlib.sha256("可信描述".encode()).hexdigest()}},
+    )
+    self.assertTrue(healthy)
+    self.assertTrue(asset["healthy"])
+
+    healthy, asset = evaluation._photo_is_healthy(
+        {"id": "p1", "filename": "DSC_1813.jpg", "description": "可信描述", "vlm_status": "review", "vlm_reason": "命中质量规则"},
+        {"p1": {evaluation.hashlib.sha256("可信描述".encode()).hexdigest()}},
+    )
+    self.assertFalse(healthy)
+    self.assertEqual(asset["reason"], "命中质量规则")
+
+  def test_save_evaluation_snapshot_writes_report_id(self):
+    with tempfile.TemporaryDirectory() as temp_dir:
+      cfg = SimpleNamespace(resolve_path=lambda _: Path(temp_dir))
+      path = evaluation.save_evaluation_snapshot(cfg, {
+          "report_id": "beforefix123", "generated_at": "2026-08-27T12:00:00+00:00",
+          "details": [],
+      })
+      self.assertTrue(path.exists())
+      report = evaluation.json.loads(path.read_text(encoding="utf-8"))
+      self.assertEqual(report["report_id"], "beforefix123")
 
 
   def test_golden_photo_ref_accepts_legacy_granularity_input(self):

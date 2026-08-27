@@ -60,3 +60,4 @@ client/frontend/dist/*
 client/go.sum
 client/photo-agent-client
 data/eval_reports/*.png
+data/eval_reports/golden

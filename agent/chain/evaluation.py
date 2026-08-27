@@ -19,8 +19,12 @@
         },
 """
 
-import os
+import datetime
+import hashlib
 import json
+import os
+import pathlib
+import uuid
 
 import utils.http_client as http_utils
 
@@ -68,6 +72,84 @@ def _build_id_to_filename(go_backend_url: str) -> dict[str, str]:
     finally:
         client.close()
     return mapping
+
+
+def _build_photo_records(go_backend_url: str) -> dict[str, dict]:
+    """读取当前图库，用于评估时的实时资产准入和证据快照。"""
+    records: dict[str, dict] = {}
+    client = http_utils.create_client(timeout=30.0)
+    page = 1
+    try:
+        while True:
+            resp = client.get(f"{go_backend_url}/api/v1/photos", params={"page": page, "page_size": 500})
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("items", data if isinstance(data, list) else [])
+            if not items:
+                break
+            for photo in items:
+                if photo.get("id"):
+                    records[photo["id"]] = photo
+            page += 1
+    finally:
+        client.close()
+    return records
+
+
+def _photo_is_healthy(photo: dict, version_map: dict[str, set[str]]) -> tuple[bool, dict]:
+    """按当前描述和 Chroma 版本生成可解释的资产健康结论。"""
+    photo_id = photo.get("id", "")
+    description = photo.get("description") or ""
+    vlm_status = photo.get("vlmStatus") or photo.get("vlm_status") or "pending"
+    current_version = hashlib.sha256(description.encode("utf-8")).hexdigest() if description else ""
+    vector_versions = version_map.get(photo_id, set())
+    vector_current = bool(current_version) and (current_version in vector_versions or "" in vector_versions)
+    healthy = vlm_status == "healthy" and vector_current
+    if vlm_status != "healthy":
+        reason = photo.get("vlmReason") or photo.get("vlm_reason") or "AI 描述不可用"
+    elif not vector_current:
+        reason = "当前描述没有一致的 Embedding"
+    else:
+        reason = ""
+    return healthy, {
+        "photo_id": photo_id, "filename": _normalize_id(photo.get("filename", "")),
+        "vlm_status": vlm_status, "description_version": current_version,
+        "vector_versions": sorted(vector_versions), "healthy": healthy, "reason": reason,
+    }
+
+
+def _build_asset_health(queries: list[dict], photo_records: dict[str, dict], version_map: dict[str, set[str]]) -> tuple[dict[str, dict], dict]:
+    """返回每条黄金用例的期望资产快照和全局健康汇总。"""
+    filename_to_photo = {_normalize_id(photo.get("filename", "")): photo for photo in photo_records.values()}
+    by_golden_id: dict[str, dict] = {}
+    summary = {"total": 0, "healthy": 0, "unhealthy": 0, "missing": 0}
+    for query in queries:
+        assets: list[dict] = []
+        for ref in query.get("relevant_photos", []):
+            ref_id = ref.get("photo_id", "") if isinstance(ref, dict) else ref
+            photo = filename_to_photo.get(_normalize_id(ref_id))
+            if photo is None:
+                asset = {"photo_id": _normalize_id(ref_id), "filename": _normalize_id(ref_id), "healthy": False, "reason": "期望照片不在当前图库", "vlm_status": "missing", "description_version": "", "vector_versions": []}
+                summary["missing"] += 1
+            else:
+                _, asset = _photo_is_healthy(photo, version_map)
+            summary["total"] += 1
+            if asset["healthy"]:
+                summary["healthy"] += 1
+            else:
+                summary["unhealthy"] += 1
+            assets.append(asset)
+        by_golden_id[query.get("id", "")] = {"trusted": all(asset["healthy"] for asset in assets), "assets": assets}
+    return by_golden_id, summary
+
+
+def save_evaluation_snapshot(cfg: config.Config, result: dict) -> pathlib.Path:
+    """持久化每次黄金评估，便于直接比较修复前后的数据和检索证据。"""
+    directory = cfg.resolve_path("./data/eval_reports/golden")
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{result['generated_at'][:10]}-{result['report_id']}.json"
+    path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
 
 
 def _load_golden_queries_from_items(items: list[dict]) -> list[dict]:
@@ -184,12 +266,15 @@ def run_evaluation(
         ),
     }
 
-    # 构建 UUID ↔ 文件名 双向映射（ChromaDB 存 UUID，黄金用例标文件名）
-    id_to_file = _build_id_to_filename(cfg.go_backend_url)
+    # 构建 UUID ↔ 文件名双向映射，并在同一份图库快照上判断资产健康。
+    photo_records = _build_photo_records(cfg.go_backend_url)
+    id_to_file = {photo_id: _normalize_id(photo.get("filename", "")) for photo_id, photo in photo_records.items()}
     file_to_id: dict[str, str] = {}
     for uid, fname in id_to_file.items():
         # 多个 UUID 可能映射到同一文件名（chunk 分块），取第一个即可
         file_to_id.setdefault(fname, uid)
+    version_map = stores["photo"].get_photo_embedding_versions()
+    asset_health_by_golden, asset_health_summary = _build_asset_health(queries, photo_records, version_map)
     if verbose:
         print(f"已加载 {len(id_to_file)} 条 UUID→文件名 映射")
 
@@ -227,6 +312,11 @@ def run_evaluation(
                 aggregated.extend(
                     photo_rag._aggregate_by_photo(results, top_n=fetch_k)
                 )
+            aggregated = [
+                item for item in aggregated
+                if (item.get("metadata") or {}).get("photo_id") in photo_records
+                and _photo_is_healthy(photo_records[(item.get("metadata") or {}).get("photo_id")], version_map)[0]
+            ]
             aggregated.sort(key=lambda item: item.get("distance", float("inf")))
             retrieved_ids = [
                 (r.get("metadata") or {}).get("photo_id", "") for r in aggregated
@@ -296,6 +386,7 @@ def run_evaluation(
             "recall": r,
             "mrr": m,
             "effective_k": effective_k,
+            "asset_health": asset_health_by_golden.get(q.get("id", ""), {}),
         })
 
         if verbose:
@@ -307,12 +398,16 @@ def run_evaluation(
 
     total = len(queries)
     result = {
+        "report_id": uuid.uuid4().hex[:12],
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "precision@k": sum(precisions) / total if total else 0.0,
         "recall@k": sum(recalls) / total if total else 0.0,
         "mrr": sum(mrrs) / total if total else 0.0,
         "total": total,
         "precision_k": precision_k,
         "details": details,
+        "asset_health": asset_health_summary,
+        "data_trusted": asset_health_summary["unhealthy"] == 0,
     }
 
     if verbose:

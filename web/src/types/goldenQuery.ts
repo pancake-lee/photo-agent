@@ -35,6 +35,16 @@ export interface EvalDetail {
   hit_ids: EvalPhotoItem[]
   miss_ids: EvalPhotoItem[]
   remaining_ids: EvalPhotoItem[]
+  asset_health: AssetHealth
+}
+
+export interface AssetHealth {
+  total?: number
+  healthy?: number
+  unhealthy?: number
+  missing?: number
+  trusted?: boolean
+  assets?: Array<{ photo_id: string; filename: string; healthy: boolean; reason: string }>
 }
 
 export interface EvalResult {
@@ -44,4 +54,8 @@ export interface EvalResult {
   total: number
   precision_k: number
   details: EvalDetail[]
+  report_id: string
+  generated_at: string
+  data_trusted: boolean
+  asset_health: AssetHealth
 }

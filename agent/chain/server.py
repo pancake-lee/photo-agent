@@ -80,6 +80,38 @@ def _build_filename_to_uuid(go_backend_url: str) -> dict[str, str]:
     return mapping
 
 
+def _build_chat_asset_snapshot(cfg: config_mod.Config, store: chroma_client.ChromaPhotoStore, photos: list[dict]) -> list[dict]:
+    """为一次对话保存命中照片在回答当时的描述和向量版本证据。"""
+    version_map = store.get_photo_embedding_versions()
+    snapshots: list[dict] = []
+    for ref in photos:
+        photo_id = ref.get("photo_id", "")
+        if not photo_id:
+            continue
+        try:
+            payload = requests.get(
+                f"{cfg.go_backend_url.rstrip('/')}/api/v1/photos/{photo_id}", timeout=10,
+            ).json().get("photo") or {}
+        except requests.RequestException:
+            snapshots.append({"photo_id": photo_id, "eligible": False, "reason": "无法读取当前资产状态"})
+            continue
+        description = payload.get("description") or ""
+        description_version = chroma_client.description_version(description) if description else ""
+        vector_versions = version_map.get(photo_id, set())
+        vlm_status = payload.get("vlmStatus") or payload.get("vlm_status") or "pending"
+        eligible = vlm_status == "healthy" and bool(description_version) and (
+            description_version in vector_versions or "" in vector_versions
+        )
+        snapshots.append({
+            "photo_id": photo_id,
+            "description_version": description_version,
+            "vector_versions": sorted(vector_versions),
+            "vlm_status": vlm_status,
+            "eligible": eligible,
+        })
+    return snapshots
+
+
 
 def _golden_queries_path(dir_path: pathlib.Path) -> pathlib.Path:
     """返回 golden_queries.json 的路径。"""
@@ -413,6 +445,7 @@ class MessageResponse(pydantic.BaseModel):
     answer: str
     query_type: str
     photos: list[PhotoRef] = []
+    trace_id: str = ""
 
 
 class HealthResponse(pydantic.BaseModel):
@@ -482,12 +515,17 @@ class EvalDetailItem(pydantic.BaseModel):
     hit_ids: list[EvalPhotoItem] = []
     miss_ids: list[EvalPhotoItem] = []
     remaining_ids: list[EvalPhotoItem] = []
+    asset_health: dict = {}
 
 
 class EvalResultResponse(pydantic.BaseModel):
     precision_at_k: float
     recall_at_k: float
     mrr: float
+    report_id: str = ""
+    generated_at: str = ""
+    data_trusted: bool = False
+    asset_health: dict = {}
     total: int
     precision_k: int
     details: list[EvalDetailItem]
@@ -703,6 +741,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         answer = result.get("answer", "") or "未能获取回答。"
         query_type = result.get("query_type", "")
         photos_raw = result.get("photos", [])
+        asset_snapshot = _build_chat_asset_snapshot(req.app.state.cfg, req.app.state.chroma_store, photos_raw)
+        tracer = tracer_mod.Tracer(req.app.state.cfg.project_root)
+        tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
+        tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
 
         # 序列化照片引用
         import json
@@ -729,6 +771,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "answer": answer,
             "query_type": query_type,
             "photos": photos_raw,
+            "trace_id": tracer.trace_id,
         }
 
     # ── Embedding API ─────────────────────────────────────
@@ -988,6 +1031,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 precision_k=10,
                 verbose=True,
             )
+            evaluation_mod.save_evaluation_snapshot(cfg, raw)
         except Exception:
             logger.exception("评估执行失败")
             raise fastapi.HTTPException(status_code=500, detail="评估执行失败，请稍后重试")
@@ -1011,6 +1055,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 hit_ids=_to_items("hit_ids"),
                 miss_ids=_to_items("miss_ids"),
                 remaining_ids=_to_items("remaining_ids"),
+                asset_health=d.get("asset_health", {}),
             ))
 
         return {
@@ -1020,6 +1065,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "total": raw["total"],
             "precision_k": raw["precision_k"],
             "details": flat_details,
+            "report_id": raw["report_id"],
+            "generated_at": raw["generated_at"],
+            "data_trusted": raw["data_trusted"],
+            "asset_health": raw["asset_health"],
         }
 
     # ── 聚类任务后台状态 ───────────────────────────────────
