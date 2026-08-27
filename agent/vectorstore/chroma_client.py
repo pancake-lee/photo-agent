@@ -298,6 +298,7 @@ class ChromaPhotoStore:
         documents: list[str],
         embeddings: list[list[float]],
         model: str = "",
+        description_version: str = "",
     ) -> None:
         """
         写入/覆盖一个连拍组的封面描述文档（组集合专用）。
@@ -324,6 +325,7 @@ class ChromaPhotoStore:
                 "photo_count": photo_count,
                 "model": model,
                 "embedded_at": datetime.now(timezone.utc).isoformat(),
+                "description_version": description_version,
             }
             for i in range(len(documents))
         ]
@@ -338,6 +340,33 @@ class ChromaPhotoStore:
     def delete_group(self, group_id: str) -> None:
         """删除组集合中指定组的全部文档。"""
         self.collection.delete(where={"group_id": group_id})
+
+    def add_single_photo(
+        self,
+        photo_id: str,
+        documents: list[str],
+        embeddings: list[list[float]],
+        source_metadatas: list[dict],
+    ) -> None:
+        """将未分组照片写入连拍粒度集合，复用全量集合的向量。"""
+        self.delete(where={"photo_id": photo_id})
+        metadatas = [
+            {
+                "photo_id": photo_id,
+                "chunk_index": index,
+                "record_type": "single",
+                "model": source_meta.get("model", ""),
+                "embedded_at": source_meta.get("embedded_at", ""),
+                "description_version": source_meta.get("description_version", ""),
+            }
+            for index, source_meta in enumerate(source_metadatas)
+        ]
+        self.collection.add(
+            ids=[f"{photo_id}#{index}" for index in range(len(documents))],
+            documents=documents,
+            metadatas=metadatas,  # type: ignore[arg-type]
+            embeddings=embeddings,  # type: ignore[arg-type]
+        )
 
     def get_embedded_group_ids(self) -> set[str]:
         """返回组集合中已嵌入的 group_id 集合（从 metadata 提取去重）。"""
@@ -373,6 +402,51 @@ class ChromaPhotoStore:
         for gid in orphan_ids:
             self.delete_group(gid)
         return len(orphan_ids)
+
+    def clear_single_photos(self) -> int:
+        """清理集合中不属于连拍组的单张记录。"""
+        result = self.collection.get(include=["metadatas"])
+        photo_ids = {
+            meta.get("photo_id", "")
+            for meta in (result.get("metadatas") or [])
+            if meta and not meta.get("group_id") and meta.get("photo_id")
+        }
+        for photo_id in photo_ids:
+            self.delete(where={"photo_id": photo_id})
+        return len(photo_ids)
+
+    def replace_single_photos(
+        self,
+        entries: list[tuple[str, list[str], list[list[float]], list[dict]]],
+    ) -> None:
+        """批量重建未分组单张记录，避免按照片逐条写入造成启动阻塞。"""
+        self.clear_single_photos()
+        ids: list[str] = []
+        documents: list[str] = []
+        metadatas: list[dict] = []
+        embeddings: list[list[float]] = []
+        for photo_id, photo_documents, photo_embeddings, source_metas in entries:
+            for index, document in enumerate(photo_documents):
+                source_meta = source_metas[index] if index < len(source_metas) else {}
+                ids.append(f"{photo_id}#{index}")
+                documents.append(document)
+                metadatas.append({
+                    "photo_id": photo_id,
+                    "chunk_index": index,
+                    "record_type": "single",
+                    "model": source_meta.get("model", ""),
+                    "embedded_at": source_meta.get("embedded_at", ""),
+                    "description_version": source_meta.get("description_version", ""),
+                })
+                embeddings.append(photo_embeddings[index])
+        if not ids:
+            return
+        self.collection.add(
+            ids=ids,
+            documents=documents,
+            metadatas=metadatas,  # type: ignore[arg-type]
+            embeddings=embeddings,  # type: ignore[arg-type]
+        )
 
     # ------------------------------------------------------------------ #
     # 内部格式化

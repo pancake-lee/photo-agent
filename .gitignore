@@ -43,6 +43,7 @@ backend/init_dify
 # Data
 backend/data/
 data/*
+!data/eval_seed_cases.json
 !data/eval_reports
 
 # anything

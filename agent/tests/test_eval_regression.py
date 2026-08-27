@@ -16,8 +16,12 @@ class TestEvalRegressionSeeds(unittest.TestCase):
         })
         burst = next(case for case in cases if case["id"] == "burst-buddha-person")
         self.assertEqual(
-            set(burst["levels"]["L1"]["expected_top_photo_ids"]),
-            {"photo", "fine", "coarse"},
+            burst["levels"]["L1"]["expected_photo_ids"]["fine"],
+            ["DSC_1813", "DSC_2167"],
+        )
+        self.assertEqual(
+            burst["levels"]["L2"]["expected_chat_filenames"]["coarse"],
+            ["DSC_1813"],
         )
 
     def test_seed_cases_are_json_serializable(self):

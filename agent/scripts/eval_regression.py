@@ -158,11 +158,20 @@ def _run_l1(cfg: config.Config, cases: list[dict[str, Any]]) -> list[Failure]:
             expected = expected_ids[0]
             if not ids or ids[0] != expected:
                 failures.append(Failure("L1", name, f"{granularity} 首位命中", f"expected={expected}, actual={ids[:5]}"))
-            group_id = data.get("expected_group_ids", {}).get(granularity)
-            if group_id:
-                meta = (results[0].get("metadata") or {}) if results else {}
-                if meta.get("group_id") != group_id:
-                    failures.append(Failure("L1", name, f"{granularity} 结果属于目标连拍组", f"expected={group_id}, actual={meta.get('group_id')}"))
+        for granularity, expected_ids in data.get("expected_photo_ids", {}).items():
+            results = photo_rag._retrieve(cfg, case["question"], 10, granularity)
+            ids = [_normalize_filename(id_to_filename.get(str(_get(r.get("metadata") or {}, "photo_id")), "")) for r in results]
+            for expected in expected_ids:
+                if expected not in ids:
+                    failures.append(Failure("L1", name, f"{granularity} 召回未分组照片", f"expected={expected}, actual={ids[:10]}"))
+        for granularity, group_id in data.get("expected_group_ids", {}).items():
+            results = photo_rag._retrieve(cfg, case["question"], 10, granularity)
+            actual_group_ids = [
+                (result.get("metadata") or {}).get("group_id", "")
+                for result in results
+            ]
+            if group_id not in actual_group_ids:
+                failures.append(Failure("L1", name, f"{granularity} 结果包含目标连拍组", f"expected={group_id}, actual={actual_group_ids}"))
     return failures
 
 
@@ -179,6 +188,37 @@ def _run_l2(agent_url: str, cases: list[dict[str, Any]]) -> list[Failure]:
             golden.raise_for_status()
             if not isinstance(golden.json(), list):
                 raise RuntimeError("/api/golden-queries 返回值不是数组")
+
+            for case in cases:
+                expected_by_granularity = case["levels"]["L2"].get("expected_chat_filenames", {})
+                if not expected_by_granularity:
+                    continue
+                session = client.post("/api/chat/sessions", json={"title": "评估回归临时会话"})
+                session.raise_for_status()
+                session_id = session.json().get("session_id", "")
+                if not session_id:
+                    raise RuntimeError("创建临时会话未返回 session_id")
+                try:
+                    for granularity, expected_names in expected_by_granularity.items():
+                        response = client.post(
+                            f"/api/chat/sessions/{session_id}/messages",
+                            json={"question": case["question"], "granularity": granularity},
+                            timeout=120.0,
+                        )
+                        response.raise_for_status()
+                        payload = response.json()
+                        actual_names = [
+                            _normalize_filename(photo.get("filename", ""))
+                            for photo in payload.get("photos", [])
+                        ]
+                        for expected_name in expected_names:
+                            if expected_name not in actual_names:
+                                failures.append(Failure(
+                                    "L2", case["name"], f"{granularity} 对话召回未分组照片",
+                                    f"expected={expected_name}, actual={actual_names}, trace_id={payload.get('trace_id', '')}",
+                                ))
+                finally:
+                    client.delete(f"/api/chat/sessions/{session_id}")
     except (httpx.HTTPError, ValueError, RuntimeError) as exc:
         for case in cases:
             failures.append(Failure("L2", case["name"], "HTTP 服务契约可用", str(exc)))

@@ -50,7 +50,7 @@ class EmbedQueue:
             model=cfg.embedding_model,
         )
 
-        # 连拍组封面集合（精细/模糊两档），封面描述与全量集合共用向量
+        # 连拍粒度集合：每组仅保留封面，同时保留未分组单张。
         chroma_dir = str(cfg.resolve_path("./data/chroma"))
         self._group_stores = {
             "fine": chroma_client.ChromaPhotoStore(
@@ -64,6 +64,8 @@ class EmbedQueue:
         }
         # 封面照片 ID -> [(profile, group_id, photo_count)]，启动批量嵌入时刷新
         self._cover_groups: dict[str, list[tuple[str, str, int]]] = {}
+        # 未分组照片 ID -> 所属检索档位，启动批量嵌入时刷新。
+        self._single_profiles: dict[str, set[str]] = {}
 
         self._running = False
         self._total = 0
@@ -366,8 +368,8 @@ class EmbedQueue:
                 embeddings=vectors,
             )
 
-            # 7. 封面照片：同一组向量写入对应连拍组集合（无需二次 Embedding）
-            self._write_group_covers(photo_id, chunks, vectors)
+            # 7. 组封面或未分组单张复用向量写入连拍粒度集合。
+            self._write_group_records(photo_id, chunks, vectors, metas)
 
             self._inc_completed()
             logger.info("EmbedQueue done: photo=%s, chunks=%d", photo_id, len(chunks))
@@ -385,15 +387,13 @@ class EmbedQueue:
     # ------------------------------------------------------------------ #
 
     def sync_group_collections(self) -> dict:
-        """对齐两个连拍组集合与 Go 库内当前分组结构，返回各档已入库组数。
+        """对齐两个连拍粒度集合，返回各档文档数。
 
-        连拍组重建后调用即可更新组集合，无需重跑全量 Embedding：
-        封面向量直接从全量集合复用。封面照片尚未嵌入的组会被跳过，
-        待该照片嵌入时由 _write_group_covers 自动补上。
+        每档集合包含组封面和该档位未分组照片，均复用全量集合已有向量。
         """
         self._sync_group_collections()
         return {
-            profile: len(store.get_embedded_group_ids())
+            profile: store.count()
             for profile, store in self._group_stores.items()
         }
 
@@ -422,52 +422,66 @@ class EmbedQueue:
         """同步两个连拍组集合与 Go 库内当前分组结构。
 
         - 清理组集合中已不存在的组（连拍组重建后旧组 ID 残留）
-        - 构建封面映射 cover_photo_id -> [(profile, group_id, photo_count)]
+        - 每个组只保留封面，同时将未分组照片作为单张保留
+        - 构建封面与未分组单张的路由映射，供增量 embedding 双写
         - 差量补嵌：组集合缺失或封面已变更的组，从全量集合取封面向量写入；
           全量集合也没有的（封面照片未嵌入），留给本次批量嵌入的照片处理流程补上
         """
         # Go 库内当前有效组，按档位收集 {group_id: (cover_photo_id, photo_count)}
         current_groups = self._fetch_burst_groups()
 
-        # 清理组集合孤立数据 + 收集集合内现有组的封面
-        embedded_covers: dict[str, dict[str, str]] = {}
+        # 清理组集合中在当前分组结构里已失效的记录。
         for profile, store in self._group_stores.items():
             valid_ids = set(current_groups[profile].keys())
             removed = store.cleanup_group_orphans(valid_ids)
             if removed > 0:
                 logger.info("EmbedQueue: %s 组集合清理了 %d 个孤立组", profile, removed)
-            embedded_covers[profile] = store.get_group_cover_photo_ids()
 
-        # 差量补嵌：组在 Go 中存在但组集合缺失，或封面照片已更换
+        # 刷新所有组封面，保证旧集合也补齐当前描述版本元数据。
         for profile, store in self._group_stores.items():
             for gid, (cover_id, count) in current_groups[profile].items():
-                if embedded_covers[profile].get(gid) == cover_id:
-                    continue
-                vectors, chunks = self._load_cover_vectors(cover_id)
+                vectors, chunks, source_metas = self._load_photo_vectors(cover_id)
                 if vectors is None:
                     continue  # 封面照片未嵌入，批量嵌入该照片时自动写入
                 store.add_group_cover(
                     gid, cover_id, count, chunks, vectors,
                     model=self._cfg.embedding_model,
+                    description_version=(source_metas[0].get("description_version", "") if source_metas else ""),
                 )
 
-        # 重建封面映射（含本轮新补嵌的组），供照片嵌入流程双写组集合
-        self._rebuild_cover_map(current_groups)
+        single_profiles: dict[str, set[str]] = {}
+        for profile, store in self._group_stores.items():
+            single_entries = []
+            for photo in self._fetch_all_photos(burst_profile=profile):
+                photo_id = photo.id or ""
+                if not photo_id or getattr(photo, "burst_group_id", ""):
+                    continue
+                single_profiles.setdefault(photo_id, set()).add(profile)
+                vectors, chunks, source_metas = self._load_photo_vectors(photo_id)
+                if vectors is None:
+                    continue
+                single_entries.append((photo_id, chunks, vectors, source_metas))
+            store.replace_single_photos(single_entries)
 
-    def _rebuild_cover_map(
-        self, current_groups: dict[str, dict[str, tuple[str, int]]],
+        self._rebuild_collection_routes(current_groups, single_profiles)
+
+    def _rebuild_collection_routes(
+        self,
+        current_groups: dict[str, dict[str, tuple[str, int]]],
+        single_profiles: dict[str, set[str]],
     ) -> None:
-        """重建 cover_photo_id -> [(profile, group_id, photo_count)] 映射。"""
+        """重建组封面与未分组单张的连拍集合写入路由。"""
         cover_map: dict[str, list[tuple[str, str, int]]] = {}
         for profile, groups in current_groups.items():
             for gid, (cover_id, count) in groups.items():
                 cover_map.setdefault(cover_id, []).append((profile, gid, count))
         self._cover_groups = cover_map
+        self._single_profiles = single_profiles
 
-    def _load_cover_vectors(
+    def _load_photo_vectors(
         self, photo_id: str,
-    ) -> tuple[list[list[float]] | None, list[str]]:
-        """从全量集合读取某照片的全部 chunk 向量与文本（按 chunk_index 排序）。
+    ) -> tuple[list[list[float]] | None, list[str], list[dict]]:
+        """从全量集合读取某照片的 chunk 向量、文本和元数据（按 chunk_index 排序）。
 
         照片未被嵌入时返回 (None, [])。
         """
@@ -480,7 +494,7 @@ class EmbedQueue:
         # embeddings 是 numpy 二维数组，不能用 `or []` 兜底（数组真值判断会抛异常）
         embs = raw.get("embeddings")
         if embs is None or len(embs) == 0 or not metas:
-            return None, []
+            return None, [], []
         order = sorted(
             range(len(metas)),
             key=lambda i: (metas[i] or {}).get("chunk_index", 0),
@@ -488,14 +502,19 @@ class EmbedQueue:
         # numpy float32 转回 Python float，与新生成向量的类型保持一致
         vectors = [[float(v) for v in embs[i]] for i in order]
         chunks = [docs[i] for i in order]
+        source_metas = [metas[i] or {} for i in order]
         if not vectors:
-            return None, []
-        return vectors, chunks
+            return None, [], []
+        return vectors, chunks, source_metas
 
-    def _write_group_covers(
-        self, photo_id: str, chunks: list[str], vectors: list[list[float]],
+    def _write_group_records(
+        self,
+        photo_id: str,
+        chunks: list[str],
+        vectors: list[list[float]],
+        source_metas: list[dict],
     ) -> None:
-        """照片嵌入完成后，若它是组封面则把向量写入对应组集合。"""
+        """照片嵌入完成后，更新组封面或未分组单张的连拍集合记录。"""
         for profile, gid, count in self._cover_groups.get(photo_id, []):
             store = self._group_stores.get(profile)
             if store is None:
@@ -503,10 +522,17 @@ class EmbedQueue:
             store.add_group_cover(
                 gid, photo_id, count, chunks, vectors,
                 model=self._cfg.embedding_model,
+                description_version=(source_metas[0].get("description_version", "") if source_metas else ""),
             )
             logger.info(
                 "EmbedQueue: 封面 %s 写入 %s 组集合 group=%s", photo_id, profile, gid,
             )
+        for profile in self._single_profiles.get(photo_id, set()):
+            store = self._group_stores.get(profile)
+            if store is None:
+                continue
+            store.add_single_photo(photo_id, chunks, vectors, source_metas)
+            logger.info("EmbedQueue: 未分组照片 %s 写入 %s 连拍集合", photo_id, profile)
 
     # ------------------------------------------------------------------ #
     # 分块辅助
@@ -563,13 +589,16 @@ class EmbedQueue:
     # Go API 交互
     # ------------------------------------------------------------------ #
 
-    def _fetch_all_photos(self):
+    def _fetch_all_photos(self, burst_profile: str = ""):
         """分页获取 Go 后端全部照片数据（通过 SDK），返回 ApiPhotoItem 列表。"""
         photo_api = bksdk.get_photo_api(self._go_url)
         all_photos = []
         page = 1
         while True:
-            resp = photo_api.photo_service_search_photos(page=page, page_size=100)
+            params = {"page": page, "page_size": 100}
+            if burst_profile:
+                params["burst_profile"] = burst_profile
+            resp = photo_api.photo_service_search_photos(**params)
             items = resp.items or []
             all_photos.extend(items)
             total_pages = resp.total_pages or 0

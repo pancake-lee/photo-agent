@@ -59,7 +59,9 @@ def resolve_collection(granularity: str) -> str:
     )
 
 
-def _build_context(results: list[dict], cfg: config.Config) -> tuple[str, list[dict]]:
+def _build_context(
+    results: list[dict], cfg: config.Config, filename_map: dict[str, str] | None = None,
+) -> tuple[str, list[dict]]:
     """
     将 Chroma 检索结果格式化为上下文文本，并提取结构化照片引用。
 
@@ -87,11 +89,39 @@ def _build_context(results: list[dict], cfg: config.Config) -> tuple[str, list[d
             f"图片: ![{doc[:30] if doc else photo_id}]({image_url})"
         )
 
-    photo_refs = _extract_photo_refs(results, cfg)
+    photo_refs = _extract_photo_refs(results, cfg, filename_map)
     return "\n\n".join(lines), photo_refs
 
 
-def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
+def _fetch_filename_map(photo_ids: list[str], cfg: config.Config) -> dict[str, str]:
+    """并行读取原始文件名，失败时由调用方回退 photo_id。"""
+    if not photo_ids:
+        return {}
+
+    import utils.backend_sdk as bksdk
+    photo_api = bksdk.get_photo_api(cfg.go_backend_url)
+    filename_map: dict[str, str] = {}
+
+    def _fetch_filename(photo_id: str) -> tuple[str, str]:
+        try:
+            response = photo_api.photo_service_get_photo_detail(photo_id)
+            photo = response.photo
+            return photo_id, photo.filename if photo and photo.filename else photo_id
+        except Exception:
+            logger.debug("获取照片文件名失败: %s", photo_id)
+            return photo_id, photo_id
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(_fetch_filename, photo_id) for photo_id in photo_ids]
+        for future in as_completed(futures):
+            photo_id, filename = future.result()
+            filename_map[photo_id] = filename
+    return filename_map
+
+
+def _extract_photo_refs(
+    results: list[dict], cfg: config.Config, filename_map: dict[str, str] | None = None,
+) -> list[dict]:
     """
     从检索结果提取去重的结构化照片引用，并行获取原始文件名。
 
@@ -122,33 +152,8 @@ def _extract_photo_refs(results: list[dict], cfg: config.Config) -> list[dict]:
             if gid:
                 group_info[pid] = (gid, int(meta.get("photo_count") or 0))
 
-    import utils.backend_sdk as bksdk
-    photo_api = bksdk.get_photo_api(cfg.go_backend_url)
-
-    # 并行获取原始文件名
-    filename_map: dict[str, str] = {}
-
-    def _fetch_filename(pid: str) -> tuple[str, str]:
-        try:
-            resp = photo_api.photo_service_get_photo_detail(pid)
-            photo = resp.photo
-            filename = photo.filename if photo and photo.filename else pid
-            return pid, filename
-        except Exception:
-            logger.debug("获取照片文件名失败: %s", pid)
-            return pid, pid
-
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {
-            executor.submit(_fetch_filename, pid): pid
-            for pid in photo_ids
-        }
-        for future in as_completed(futures):
-            try:
-                pid, filename = future.result()
-                filename_map[pid] = filename
-            except Exception:
-                pass
+    if filename_map is None:
+        filename_map = _fetch_filename_map(photo_ids, cfg)
 
     # 构建引用列表（保持去重顺序）
     refs: list[dict] = []
@@ -459,10 +464,13 @@ def answer_question(
         results = _aggregate_by_photo(results, top_n=n_results)
 
     # 打印聚合后的原始结果（诊断用）
+    filename_map: dict[str, str] | None = None
     if results:
         dists = [f"{r.get('distance', '?'):.4f}" if r.get('distance') is not None else "?" for r in results]
-        pids = [(r.get("metadata") or {}).get("photo_id", "?") for r in results]
-        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s, photo_ids=%s", len(results), dists, pids)
+        raw_photo_ids = [(r.get("metadata") or {}).get("photo_id", "?") for r in results]
+        filename_map = _fetch_filename_map(raw_photo_ids, cfg)
+        photo_ids = [filename_map.get(photo_id, photo_id) for photo_id in raw_photo_ids]
+        logger.info("[过滤-输入] 聚合后 %d 条: distances=%s, photo_ids=%s", len(results), dists, photo_ids)
     else:
         logger.info("[过滤-输入] 聚合后 0 条（检索阶段即无结果，回答将提示未找到）")
 
@@ -489,7 +497,7 @@ def answer_question(
                 distance_threshold, before, len(results),
             )
 
-    context, photo_refs = _build_context(results, cfg)
+    context, photo_refs = _build_context(results, cfg, filename_map)
 
     chain = _build_rag_chain(cfg)
     response = chain.invoke({"context": context, "question": question})
