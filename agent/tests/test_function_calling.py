@@ -151,7 +151,7 @@ def test_build_request_path_param():
     method, path, spec = client._tool_map["get_photos_id"]
     url, qp, body = client._build_request(path, spec, {"id": "abc-123"})
     assert method == "GET"
-    assert url == "http://localhost:10000/api/v1/photos/abc-123"
+    assert url == "http://localhost:10000/photos/abc-123"
     assert qp == {}
     assert body is None
 
@@ -160,7 +160,7 @@ def test_build_request_query_params():
     client = _make_client()
     method, path, spec = client._tool_map["get_photos"]
     url, qp, body = client._build_request(path, spec, {"keyword": "风景", "brand": "Nikon"})
-    assert url == "http://localhost:10000/api/v1/photos"
+    assert url == "http://localhost:10000/photos"
     assert qp == {"keyword": "风景", "brand": "Nikon"}
     assert body is None
 
@@ -170,7 +170,7 @@ def test_build_request_body():
     method, path, spec = client._tool_map["post_query_sql"]
     url, qp, body = client._build_request(path, spec, {"sql": "SELECT * FROM photos", "limit": 10})
     assert method == "POST"
-    assert url == "http://localhost:10000/api/v1/query/sql"
+    assert url == "http://localhost:10000/query/sql"
     assert qp == {}
     assert body == {"sql": "SELECT * FROM photos", "limit": 10}
 

@@ -23,6 +23,7 @@ import argparse
 import logging
 import pathlib
 import sys
+import time
 import typing
 
 
@@ -114,16 +115,23 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     else:
         query_type = "rag"
     logging.getLogger(__name__).info(
-        "[路由] 「%s」 → %s", state["question"], query_type,
+        "[路由] 「%s」 → %s（模型原始分类=%r）", state["question"], query_type, raw,
     )
     return {"query_type": query_type}
 
 
 def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
+    _log = logging.getLogger(__name__)
     try:
         result = text_to_sql.answer_with_sql(cfg, state["question"])
+        _log.info(
+            "[sql] 查询完成: rows=%d, answer_chars=%d",
+            len(result.get("results") or []),
+            len(result.get("answer") or ""),
+        )
     except Exception as exc:
+        _log.exception("[sql] 查询异常")
         result = {
             "question": state["question"],
             "sql": "",
@@ -152,17 +160,36 @@ def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     return {"rag_answer": answer_text, "photos": photo_refs}
 
 
+# 单次工具结果的截断长度，避免超出上下文
+_TOOL_RESULT_MAX_LEN = 4000
+
+
 def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
-    """工具调用节点：使用 llm.bind_tools() 让 LLM 自主调用 Go API。"""
+    """工具调用节点：使用 llm.bind_tools() 让 LLM 自主调用 Go API。
+
+    支持多轮工具调用：模型每轮返回 tool_calls 就全部执行并继续下一轮，
+    返回纯文本则作为最终答案；达到配置的最大轮数（llm.tool_max_rounds）后
+    以不带工具的调用强制模型基于已收集信息做总结，避免任务静默中断。
+    """
     cfg = _get_cfg(config)
+    max_rounds = cfg.tool_max_rounds
+    _log = logging.getLogger(__name__)
 
     try:
         # 获取或创建工具客户端（可能因 Go 后端不可达而失败）
         tool_client = _get_tool_client(cfg.go_backend_url)
         tools = tool_client.get_tools()
+        tool_names = [tool.get("function", {}).get("name", "") for tool in tools]
+        _log.info(
+            "[tool] 工具已加载: count=%d, names=%s", len(tools), tool_names,
+        )
 
         llm_with_tools = llm_factory.create_llm(
             cfg, temperature=0.3, callbacks=_get_callbacks(), tools=tools
+        )
+        # 兜底总结用：不绑定工具，模型只能输出文本
+        llm_plain = llm_factory.create_llm(
+            cfg, temperature=0.3, callbacks=_get_callbacks()
         )
 
         messages: list[lc_messages.BaseMessage] = [
@@ -170,39 +197,82 @@ def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
             lc_messages.HumanMessage(content=state["question"]),
         ]
 
-        response = llm_with_tools.invoke(messages)
+        for round_no in range(1, max_rounds + 1):
+            _log.info("[tool] 第 %d/%d 轮模型调用开始", round_no, max_rounds)
+            started_at = time.perf_counter()
+            response = llm_with_tools.invoke(messages)
+            elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+            tool_calls = getattr(response, "tool_calls", None) or []
+            _log.info(
+                "[tool] 第 %d/%d 轮模型调用完成: duration_ms=%d, tool_call_count=%d, content_chars=%d",
+                round_no, max_rounds, elapsed_ms,
+                len(tool_calls), len(str(response.content)),
+            )
 
-        # 处理工具调用
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            tool_messages: list[lc_messages.BaseMessage] = []
-            for tc in response.tool_calls:
-                result = tool_client.execute(
-                    tc.get("name", ""), tc.get("args", {})
+            if not tool_calls:
+                if round_no == 1:
+                    _log.warning(
+                        "[tool] 第 1 轮模型未发起工具调用，直接返回文本: content=%r",
+                        str(response.content)[:500],
+                    )
+                return {"tool_answer": str(response.content)}
+
+            # 执行本轮全部工具调用，结果以 ToolMessage 追加到对话后继续下一轮
+            messages.append(response)
+            for index, tc in enumerate(tool_calls, 1):
+                tool_name = tc.get("name", "")
+                tool_args = tc.get("args", {})
+                _log.info(
+                    "[tool] 执行调用 %d/%d: name=%s, arg_keys=%s",
+                    index, len(tool_calls), tool_name, sorted(tool_args.keys()),
                 )
-                # 截断过长结果，避免超出上下文
-                max_len = 4000
-                if len(result) > max_len:
-                    result = result[:max_len] + f"\n...（结果已截断，原始长度 {len(result)}）"
-                tool_messages.append(
+                started_at = time.perf_counter()
+                result = tool_client.execute(tool_name, tool_args)
+                _log.info(
+                    "[tool] 调用完成 %d/%d: name=%s, duration_ms=%d, result_chars=%d",
+                    index, len(tool_calls), tool_name,
+                    round((time.perf_counter() - started_at) * 1000), len(result),
+                )
+                if len(result) > _TOOL_RESULT_MAX_LEN:
+                    result = (
+                        result[:_TOOL_RESULT_MAX_LEN]
+                        + f"\n...（结果已截断，原始长度 {len(result)}）"
+                    )
+                messages.append(
                     lc_messages.ToolMessage(
                         content=result,
                         tool_call_id=tc.get("id", ""),
                     )
                 )
 
-            # 将工具结果再次传给 LLM 生成最终回答
-            final_response = llm_with_tools.invoke(messages + [response] + tool_messages)
-            return {"tool_answer": str(final_response.content)}
-
-        return {"tool_answer": str(response.content)}
+        # 达到最大轮数仍在发起工具调用：强制总结，避免静默截断
+        _log.warning(
+            "[tool] 达到最大轮数 %d 仍未收敛，追加无工具调用强制总结",
+            max_rounds,
+        )
+        started_at = time.perf_counter()
+        final_response = llm_plain.invoke(
+            messages + [lc_messages.HumanMessage(
+                content="已达到工具调用轮数上限，不要再调用工具。"
+                "请基于以上已收集的信息，直接给出对用户问题的总结性回答。"
+            )]
+        )
+        _log.info(
+            "[tool] 兜底总结调用完成: duration_ms=%d, content_chars=%d",
+            round((time.perf_counter() - started_at) * 1000),
+            len(str(final_response.content)),
+        )
+        return {"tool_answer": str(final_response.content)}
     except Exception as exc:
         logging.getLogger(__name__).exception("_tool_node 执行失败")
         return {"tool_answer": f"工具调用失败: {exc}"}
 
 
 _TOOL_SYSTEM_PROMPT = (
-    "你是一位摄影档案助手，可以调用后端 API 帮助用户管理照片库。"
-    "根据用户的需求选择合适的工具，回答简洁，控制在 150 字以内。"
+    "你是一位摄影档案助手，可以调用后端 API 帮助用户管理照片库。\n"
+    "你可以分多轮调用工具：先规划步骤，逐步收集信息，信息不完整时继续调用工具，"
+    "不要输出“我来查看”“接下来我会”这类中断性的中间表态。\n"
+    "收集到足够信息后，一次性给出完整结果。回答简洁，控制在 300 字以内。"
 )
 
 

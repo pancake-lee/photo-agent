@@ -17,6 +17,7 @@ import logging
 import pathlib
 import re
 import sys
+import time
 import typing
 
 import langchain_core.prompts as lc_prompts
@@ -86,6 +87,15 @@ FEW_SHOT_EXAMPLES = [
     {
         "question": "有哪些街拍照片？",
         "sql": "SELECT id, filename, description, scene FROM photos WHERE scene LIKE '%street%' OR scene LIKE '%urban%' ORDER BY shot_at DESC LIMIT 20",
+    },
+    # === 时间线查询（timeline 列存时间线活动名，值来自用户时间线文件，SQL 已在真实库验证） ===
+    {
+        "question": "山西时间线的照片有哪些？",
+        "sql": "SELECT id, filename, description, shot_at FROM photos WHERE timeline = '山西' ORDER BY shot_at ASC LIMIT 20",
+    },
+    {
+        "question": "山西旅游第一天拍的照片",
+        "sql": "SELECT id, filename, description, shot_at FROM photos WHERE timeline = '山西' AND DATE(shot_at) = (SELECT MIN(DATE(shot_at)) FROM photos WHERE timeline = '山西') ORDER BY shot_at ASC LIMIT 20",
     },
 ]
 
@@ -176,10 +186,11 @@ def _fetch_attribute_values(base_url: str) -> dict:
         import utils.backend_sdk as bksdk
         query_api = bksdk.get_query_api(base_url)
         resp = query_api.query_service_get_attribute_values()
-        values = resp.values or {}
+        # SDK 返回类型化模型 ApiAttributeValues，统一转为 dict 供后续按字段读取
+        values = bksdk.sdk_to_dict(resp.values)
         _attr_cache[base_url] = values
         logger.info(
-            "获取属性值: objects=%d colors=%d scene=%d lighting=%d mood=%d composition=%d",
+            "[sql] 属性值已获取: objects=%d colors=%d scene=%d lighting=%d mood=%d composition=%d",
             len(values.get("objects") or []),
             len(values.get("colors") or []),
             len(values.get("scene") or []),
@@ -189,7 +200,7 @@ def _fetch_attribute_values(base_url: str) -> dict:
         )
         return values
     except Exception:
-        logger.warning("获取属性值失败，将使用空值列表", exc_info=True)
+        logger.warning("[sql] 获取属性值失败，将使用空值列表", exc_info=True)
         return {}
 
 
@@ -228,6 +239,43 @@ def _format_attribute_values(attr: dict) -> str:
 # Schema 获取与格式化
 # --------------------------------------------------------------------------- #
 
+# 关键字段的中文语义说明（键为 SQL 列名，即 schema 的 json_tag）。
+# schema API 返回的 name 是 Go 字段名（PascalCase，直接用于 SQL 会报错），
+# 真实 SQLite 列名是 json_tag（snake_case）。语义说明帮助 LLM 理解字段含义
+# 与取值形式，尤其是 timeline 这类业务字段（CQ6）。
+FIELD_DESCRIPTIONS: dict[str, str] = {
+    "id": "照片唯一 ID（UUID）",
+    "filename": "照片文件名",
+    "file_type": "文件类型（jpg/nef 等，同一画面常有 raw+jpg 两个文件）",
+    "timeline": "时间线活动名称（来自用户时间线文件，如 '山西'），空字符串表示未归入任何活动",
+    "timeline_manual": "是否用户手动指定时间线（1/0）",
+    "tags": "AI 生成的照片标签，JSON 数组文本，用 LIKE 匹配",
+    "description": "AI 生成的照片内容描述（中文）",
+    "objects": "画面主体类型（英文枚举，见属性值列表）",
+    "colors": "主色调（英文枚举，见属性值列表）",
+    "scene": "场景类型（英文枚举，见属性值列表）",
+    "lighting": "光线类型（英文枚举，见属性值列表）",
+    "mood": "情绪氛围（英文枚举，见属性值列表）",
+    "composition": "构图特点（英文枚举，见属性值列表）",
+    "shot_at": "拍摄时间，ISO8601 格式（如 2026-08-02T08:31:28+08:00），日期比较用 DATE(shot_at)",
+    "width": "图片宽度（像素）",
+    "height": "图片高度（像素）",
+    "brand": "相机品牌（如 NIKON）",
+    "model": "相机型号",
+    "lens": "镜头型号",
+    "focal_length": "焦距（文本带 mm，数值比较需 CAST 去掉单位）",
+    "aperture": "光圈值（文本，如 f/2.8）",
+    "iso": "感光度（整数）",
+    "exposure_time": "快门速度",
+    "latitude": "纬度（无 GPS 时为 NULL）",
+    "longitude": "经度（无 GPS 时为 NULL）",
+    "altitude": "海拔",
+    "burst_group_id": "精细档连拍分组 ID（同组为一次连拍）",
+    "burst_group_coarse_id": "粗略档连拍分组 ID",
+    "imported_at": "入库时间",
+}
+
+
 def _fetch_schema(base_url: str) -> dict:
     """
     从 Go 后端获取 photos 表结构。
@@ -242,7 +290,9 @@ def _fetch_schema(base_url: str) -> dict:
         httpx.HTTPError: HTTP 请求失败
     """
     client = sqlite_client.QueryClient(base_url)
-    return client.fetch_schema()
+    schema_data = client.fetch_schema()
+    logger.info("[sql] Schema 已获取: fields=%d", len(schema_data.fields or []))
+    return schema_data
 
 
 def _format_schema(schema_data) -> str:
@@ -257,6 +307,7 @@ def _format_schema(schema_data) -> str:
     """
     lines: list[str] = []
     lines.append(f"表名: {schema_data.table_name or 'photos'}")
+    lines.append("注意: SQL 中使用「列名」（snake_case）作为字段名，不要使用 name 的 Go 字段名。")
     lines.append("")
     lines.append("字段说明:")
 
@@ -266,7 +317,9 @@ def _format_schema(schema_data) -> str:
         json_tag = field.json_tag or ""
         nullable = field.nullable or False
         null_str = "，可能为 NULL" if nullable else ""
-        lines.append(f"- {name} ({sql_type}): JSON tag = {json_tag}{null_str}")
+        desc = FIELD_DESCRIPTIONS.get(json_tag, "")
+        desc_str = f"，{desc}" if desc else ""
+        lines.append(f"- {name} ({sql_type}): 列名 = {json_tag}{null_str}{desc_str}")
 
     return "\n".join(lines)
 
@@ -312,6 +365,23 @@ def _validate_sql_safe(sql: str) -> None:
         raise ValueError(f"生成的 SQL 未通过安全校验（仅允许 SELECT）: {sql[:200]}")
 
 
+def _log_generated_sql(question: str, raw_text: str, sql: str, elapsed_ms: int) -> None:
+    """
+    记录 SQL 生成阶段日志（沿用 CQ1 阶段日志约定）。
+
+    包括 LLM 原始输出（截断）、提取后的 SQL，以及无法回答哨兵的显式告警。
+    """
+    logger.info(
+        "[sql] LLM 原始输出: duration_ms=%d, raw=%r", elapsed_ms, raw_text[:300],
+    )
+    logger.info("[sql] 生成 SQL: %s", sql[:500])
+    if "无法回答" in sql:
+        logger.warning(
+            "[sql] 模型判定该问题无法由表数据回答（规则 7），返回无法回答哨兵: question=%r",
+            question[:100],
+        )
+
+
 # --------------------------------------------------------------------------- #
 # LLM 调用
 # --------------------------------------------------------------------------- #
@@ -349,11 +419,14 @@ def generate_sql(
     prompt = _build_sql_prompt()
 
     chain = prompt | llm
+    logger.info("[sql] SQL 生成开始: question=%r", question[:100])
+    started_at = time.perf_counter()
     response = chain.invoke({
         "schema": schema_text,
         "attr_values": attr_text,
         "question": question,
     })
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000)
 
     raw_text = str(response.content)
     sql = _extract_sql_from_response(raw_text)
@@ -361,6 +434,7 @@ def generate_sql(
     if not sql:
         raise ValueError("LLM 未生成有效的 SQL")
 
+    _log_generated_sql(question, raw_text, sql, elapsed_ms)
     _validate_sql_safe(sql)
 
     return sql
@@ -387,7 +461,9 @@ def execute_sql(
         查询结果列表（result["rows"]）
     """
     result = sqlite_client.safe_execute(base_url, sql, limit=limit)
-    return result.rows or []
+    rows = result.rows or []
+    logger.info("[sql] 执行完成: rows=%d", len(rows))
+    return rows
 
 
 def execute_sql_for_ids(
@@ -452,11 +528,14 @@ def generate_filter_sql(
     )
 
     chain = prompt | llm
+    logger.info("[sql] 过滤 SQL 生成开始: question=%r", question[:100])
+    started_at = time.perf_counter()
     response = chain.invoke({
         "schema": schema_text,
         "attr_values": attr_text,
         "question": guided_question,
     })
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000)
 
     raw_text = str(response.content)
     sql = _extract_sql_from_response(raw_text)
@@ -464,6 +543,7 @@ def generate_filter_sql(
     if not sql:
         raise ValueError("LLM 未生成有效的过滤 SQL")
 
+    _log_generated_sql(question, raw_text, sql, elapsed_ms)
     _validate_sql_safe(sql)
 
     return sql
@@ -531,6 +611,23 @@ def answer_with_sql(
         }
     """
     sql = generate_sql(cfg, question)
+
+    # 无法回答哨兵（提示词规则 7）：不执行，改返回用户可理解的说明（CQ6）
+    if "无法回答" in sql:
+        logger.warning(
+            "[sql] 检测到无法回答哨兵，跳过执行，返回说明: question=%r", question[:100],
+        )
+        return {
+            "question": question,
+            "sql": sql,
+            "results": [],
+            "answer": (
+                "这个问题无法仅靠照片库的结构化数据回答（例如涉及文案创作或主观判断）。"
+                "可以换成明确的结构化条件再问，比如按时间线（如「山西时间线的照片」）、"
+                "日期、相机参数或场景筛选。"
+            ),
+        }
+
     results = execute_sql(cfg.go_backend_url, sql)
     answer = format_results(question, sql, results)
 

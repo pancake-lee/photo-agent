@@ -44,6 +44,7 @@ class Config:
         self.retry_enabled: bool = True
         self.retry_max_attempts: int = 3
         self.llm_request_timeout: float = 60.0
+        self.tool_max_rounds: int = 20
 
         self.project_root: pathlib.Path = pathlib.Path(".")
 
@@ -114,11 +115,12 @@ class Config:
         else:
             self.chunk_size = 500
 
-        # llm fallback 配置（可选）
+        # llm 可选配置（fallback / 重试 / 超时 / 工具循环轮数）
         self.llm_fallback_model = self._optional(data, "llm", "fallback_model", "")
         self.retry_enabled = self._optional(data, "llm", "retry_enabled", True)
         self.retry_max_attempts = self._optional(data, "llm", "retry_max_attempts", 3)
         self.llm_request_timeout = float(self._optional(data, "llm", "request_timeout", 60.0))
+        self.tool_max_rounds = int(self._optional(data, "llm", "tool_max_rounds", 20))
 
         # server 配置（必填）
         # server.addr 格式为 "host:port"（如 "0.0.0.0:10004" 或 ":10004"）

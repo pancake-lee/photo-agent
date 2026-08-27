@@ -74,6 +74,7 @@ llm:
   retry_enabled: true # 是否启用失败重试机制
   retry_max_attempts: 3 # 最大重试次数
   request_timeout: 60.0 # LLM 请求超时秒数
+  tool_max_rounds: 20 # 对话中工具调用循环的最大轮数
 
 vlm:
   base_url: "https://api.openai.com/v1"

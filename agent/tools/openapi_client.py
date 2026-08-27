@@ -9,6 +9,7 @@
 import json
 import logging
 import re
+import time
 import typing
 
 import httpx
@@ -143,10 +144,17 @@ class OpenAPIClient:
             HTTP 响应体文本
         """
         if tool_name not in self._tool_map:
+            _logger.warning("工具不存在: name=%s", tool_name)
             return f"未知工具: {tool_name}"
 
         method, path, spec = self._tool_map[tool_name]
         url, query_params, body = self._build_request(path, spec, arguments)
+        _logger.info(
+            "工具请求开始: name=%s, method=%s, path=%s, query_keys=%s, body_keys=%s",
+            tool_name, method, path, sorted(query_params.keys()),
+            sorted(body.keys()) if body else [],
+        )
+        started_at = time.perf_counter()
 
         try:
             with http_utils.create_client(timeout=15.0) as client:
@@ -155,10 +163,24 @@ class OpenAPIClient:
                 else:
                     resp = client.request(method, url, params=query_params, json=body)
                 resp.raise_for_status()
+                _logger.info(
+                    "工具请求完成: name=%s, status=%d, duration_ms=%d, response_chars=%d",
+                    tool_name, resp.status_code,
+                    round((time.perf_counter() - started_at) * 1000), len(resp.text),
+                )
                 return resp.text
         except httpx.HTTPStatusError as e:
+            _logger.warning(
+                "工具请求 HTTP 失败: name=%s, status=%d, duration_ms=%d",
+                tool_name, e.response.status_code,
+                round((time.perf_counter() - started_at) * 1000),
+            )
             return f"HTTP 错误 {e.response.status_code}: {e.response.text}"
         except Exception as e:
+            _logger.exception(
+                "工具请求异常: name=%s, duration_ms=%d",
+                tool_name, round((time.perf_counter() - started_at) * 1000),
+            )
             return f"请求失败: {e}"
 
     def _build_request(
@@ -170,7 +192,9 @@ class OpenAPIClient:
         返回:
             (完整 URL, query 参数字典, body 字典或 None)
         """
-        url = self.base_url + "/api/v1" + path
+        # OpenAPI 文档由 protoc-gen-openapi 从后端路由同源 proto 生成，
+        # 文档中的 path 即真实路由（部分含 /api/v1 前缀，部分无前缀），直接使用
+        url = self.base_url + path
         query_params: dict = {}
         body: dict | None = None
 

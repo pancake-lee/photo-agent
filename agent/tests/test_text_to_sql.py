@@ -162,13 +162,41 @@ class TestFormatSchema(unittest.TestCase):
         )
         text = text_to_sql._format_schema(schema_data)
         self.assertIn("表名: photos", text)
-        self.assertIn("id (TEXT): JSON tag = id", text)
-        self.assertIn("latitude (REAL): JSON tag = latitude，可能为 NULL", text)
+        self.assertIn("使用「列名」（snake_case）", text)
+        self.assertIn("id (TEXT): 列名 = id", text)
+        self.assertIn("latitude (REAL): 列名 = latitude，可能为 NULL", text)
+
+    def test_field_semantics_appended(self):
+        """关键字段（如 timeline）的中文语义说明会拼接到行尾（CQ6）。"""
+        schema_data = sdk.ApiGetPhotoSchemaResponse(
+            table_name="photos",
+            fields=[
+                sdk.ApiSchemaField(name="Timeline", sql_type="TEXT", json_tag="timeline", nullable=False),
+            ],
+        )
+        text = text_to_sql._format_schema(schema_data)
+        self.assertIn("Timeline (TEXT): 列名 = timeline，时间线活动名称", text)
+
+    def test_unknown_field_has_no_semantics(self):
+        schema_data = sdk.ApiGetPhotoSchemaResponse(
+            table_name="photos",
+            fields=[
+                sdk.ApiSchemaField(name="VlmStatus", sql_type="TEXT", json_tag="vlm_status", nullable=False),
+            ],
+        )
+        text = text_to_sql._format_schema(schema_data)
+        self.assertIn("VlmStatus (TEXT): 列名 = vlm_status", text)
 
     def test_empty_fields(self):
         schema_data = sdk.ApiGetPhotoSchemaResponse(table_name="photos", fields=[])
         text = text_to_sql._format_schema(schema_data)
-        self.assertEqual(text, "表名: photos\n\n字段说明:")
+        self.assertEqual(
+            text,
+            "表名: photos\n"
+            "注意: SQL 中使用「列名」（snake_case）作为字段名，不要使用 name 的 Go 字段名。\n"
+            "\n"
+            "字段说明:",
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -310,10 +338,11 @@ class TestBuildFewShotPrompt(unittest.TestCase):
 
     def test_contains_examples(self):
         prompt = text_to_sql._build_few_shot_prompt()
-        self.assertEqual(len(prompt.examples), 12)
+        self.assertEqual(len(prompt.examples), 14)
         self.assertEqual(prompt.examples[0]["question"], "我有多少张照片？")
         self.assertEqual(prompt.examples[0]["sql"], "SELECT COUNT(*) AS photo_count FROM photos")
-        self.assertEqual(prompt.examples[-1]["question"], "有哪些街拍照片？")
+        self.assertEqual(prompt.examples[-1]["question"], "山西旅游第一天拍的照片")
+        self.assertIn("timeline = '山西'", prompt.examples[-1]["sql"])
 
 
 # --------------------------------------------------------------------------- #
