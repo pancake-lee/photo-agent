@@ -1,6 +1,7 @@
 export interface Session {
   session_id: string
   title: string
+  last_granularity: Granularity
   message_count: number
   created_at: string
   updated_at: string
@@ -25,6 +26,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   query_type?: string
+  /** AI 回复实际使用的检索粒度；旧历史消息未记录时为空 */
+  granularity?: Granularity
   photos?: PhotoRef[]
   input_tokens?: number
   output_tokens?: number
@@ -40,5 +43,6 @@ export interface SendMessageResponse {
   message_id: number
   answer: string
   query_type: string
+  granularity: Granularity
   photos?: PhotoRef[]
 }

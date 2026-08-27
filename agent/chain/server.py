@@ -409,18 +409,20 @@ class CreateSessionRequest(pydantic.BaseModel):
 
 
 class UpdateSessionRequest(pydantic.BaseModel):
-    title: str
+    title: str | None = None
+    last_granularity: Literal["photo", "fine", "coarse"] | None = None
 
 
 class SendMessageRequest(pydantic.BaseModel):
     question: str
     # 检索粒度：photo（单张，默认）/ fine（精细连拍组）/ coarse（模糊连拍组）
-    granularity: str = "photo"
+    granularity: Literal["photo", "fine", "coarse"] = "photo"
 
 
 class SessionResponse(pydantic.BaseModel):
     session_id: str
     title: str
+    last_granularity: Literal["photo", "fine", "coarse"] = "photo"
     message_count: int = 0
     created_at: str
     updated_at: str
@@ -429,6 +431,7 @@ class SessionResponse(pydantic.BaseModel):
 class SessionDetailResponse(pydantic.BaseModel):
     session_id: str
     title: str
+    last_granularity: Literal["photo", "fine", "coarse"] = "photo"
     created_at: str
     updated_at: str
     messages: list[dict]
@@ -444,6 +447,7 @@ class MessageResponse(pydantic.BaseModel):
     message_id: int
     answer: str
     query_type: str
+    granularity: Literal["photo", "fine", "coarse"]
     photos: list[PhotoRef] = []
     trace_id: str = ""
 
@@ -693,10 +697,15 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     @app.patch("/api/chat/sessions/{session_id}", response_model=dict)
     async def update_session(session_id: str, body: UpdateSessionRequest, req: fastapi.Request):
         s = req.app.state.store
-        ok = s.update_title(session_id, body.title)
-        if not ok:
+        if body.title is None and body.last_granularity is None:
+            raise fastapi.HTTPException(status_code=400, detail="至少提供一个可更新字段")
+        if s.get_session(session_id) is None:
             raise fastapi.HTTPException(status_code=404, detail="会话不存在")
-        return {"session_id": session_id, "title": body.title}
+        if body.title is not None:
+            s.update_title(session_id, body.title)
+        if body.last_granularity is not None:
+            s.update_last_granularity(session_id, body.last_granularity)
+        return {"session_id": session_id, "title": body.title, "last_granularity": body.last_granularity}
 
     @app.delete("/api/chat/sessions/{session_id}", response_model=dict)
     async def delete_session(session_id: str, req: fastapi.Request):
@@ -728,6 +737,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         # 保存用户消息
         s.add_message(session_id, "user", question)
+        s.update_last_granularity(session_id, body.granularity)
 
         # 调用 Agent 路由
         try:
@@ -754,6 +764,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         msg_id = s.add_message(
             session_id, "assistant", answer,
             query_type=query_type,
+            granularity=body.granularity,
             photos_json=photos_json,
         )
 
@@ -770,6 +781,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "message_id": msg_id,
             "answer": answer,
             "query_type": query_type,
+            "granularity": body.granularity,
             "photos": photos_raw,
             "trace_id": tracer.trace_id,
         }

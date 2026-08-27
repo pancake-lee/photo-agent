@@ -11,7 +11,7 @@
  */
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { NButton, NIcon } from 'naive-ui'
-import { AddOutline, CloseOutline, ImageOutline } from '@vicons/ionicons5'
+import { AddOutline, CloseOutline, DownloadOutline, ImageOutline } from '@vicons/ionicons5'
 import { getApiBase } from '../config'
 
 // ── 通用照片引用类型 ──
@@ -20,6 +20,8 @@ interface PhotoRef {
   photo_id: string
   filename: string
   uuid?: string
+  burst_group_id?: string
+  burst_count?: number
 }
 
 const props = withDefaults(defineProps<{
@@ -38,6 +40,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   preview: [uuid: string]
+  openGroup: [photo: PhotoRef]
   remove: [photoId: string]
   add: []
 }>()
@@ -49,6 +52,26 @@ function imageUrl(uuid: string): string {
 /** 获取照片的 UUID（优先 uuid 字段，回退 photo_id） */
 function getUuid(p: PhotoRef): string {
   return p.uuid || p.photo_id
+}
+
+function downloadOriginal(p: PhotoRef) {
+  const uuid = getUuid(p)
+  if (!uuid) return
+  const anchor = document.createElement('a')
+  anchor.href = `${getApiBase()}/photos/${uuid}/image?size=original&download=1`
+  anchor.download = p.filename || uuid
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+}
+
+function handlePreview(p: PhotoRef) {
+  if (p.burst_group_id) {
+    emit('openGroup', p)
+    return
+  }
+  const uuid = getUuid(p)
+  if (uuid) emit('preview', uuid)
 }
 
 // ── autoFit：动态计算一行能容纳的缩略图数量 ──
@@ -129,7 +152,7 @@ const restPhotos = computed(() => {
         class="photo-thumb-wrap"
         :style="{ cursor: getUuid(p) ? 'pointer' : 'default' }"
         :title="p.filename"
-        @click="getUuid(p) && emit('preview', getUuid(p))"
+        @click="handlePreview(p)"
       >
         <img
           v-if="getUuid(p)"
@@ -137,6 +160,17 @@ const restPhotos = computed(() => {
           :src="imageUrl(getUuid(p))"
         />
         <NIcon v-else size="24"><ImageOutline /></NIcon>
+        <NButton
+          v-if="getUuid(p)"
+          class="photo-download-button"
+          quaternary
+          circle
+          size="tiny"
+          title="下载原图"
+          @click.stop="downloadOriginal(p)"
+        >
+          <template #icon><NIcon><DownloadOutline /></NIcon></template>
+        </NButton>
         <NButton
           v-if="editable"
           class="photo-remove-button"
@@ -158,7 +192,7 @@ const restPhotos = computed(() => {
         class="photo-name-item"
         :class="{ 'photo-name-clickable': !!getUuid(p) }"
       >
-        <span @click="getUuid(p) && emit('preview', getUuid(p))">{{ p.filename }}</span>
+        <span @click="handlePreview(p)">{{ p.filename }}</span>
         <NButton
           v-if="editable"
           quaternary
@@ -221,6 +255,22 @@ const restPhotos = computed(() => {
   top: 4px;
   right: 4px;
   background: var(--n-color-modal);
+}
+.photo-download-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--n-text-color-1);
+  background: var(--n-color-modal);
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+.photo-thumb-wrap:hover .photo-download-button,
+.photo-download-button:focus-visible {
+  opacity: 1;
+}
+.photo-thumb-wrap:has(.photo-remove-button) .photo-download-button {
+  right: 32px;
 }
 .photo-thumb-row-expanded .photo-thumb-wrap {
   flex: 0 0 64px;

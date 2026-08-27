@@ -54,6 +54,7 @@ async function loadSession(sessionId: string) {
     currentSession.value = {
       session_id: data.session_id,
       title: data.title,
+      last_granularity: data.last_granularity,
       message_count: data.messages.length,
       created_at: data.created_at,
       updated_at: data.updated_at,
@@ -106,6 +107,7 @@ async function sendMessage(
       role: 'assistant',
       content: data.answer,
       query_type: data.query_type,
+      granularity: data.granularity,
       photos: data.photos || [],
       created_at: new Date().toISOString(),
     }
@@ -123,6 +125,18 @@ async function sendMessage(
   } finally {
     isLoading.value = false
   }
+}
+
+async function updateLastGranularity(granularity: Granularity) {
+  if (!currentSession.value) return
+  const sessionId = currentSession.value.session_id
+  const resp = await fetch(`${getAgentBase()}/chat/sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ last_granularity: granularity }),
+  })
+  if (!resp.ok) throw new Error('保存检索粒度失败')
+  currentSession.value.last_granularity = granularity
 }
 
 async function deleteSession(sessionId: string) {
@@ -169,6 +183,7 @@ export function useChat() {
     createSession,
     loadSession,
     sendMessage,
+    updateLastGranularity,
     deleteSession,
     deleteSessions,
     resetChat,

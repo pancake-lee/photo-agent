@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   NLayout,
   NLayoutHeader,
-  NLayoutContent,
   NButton,
   NIcon,
   NInput,
@@ -17,13 +16,14 @@ import {
   NRadioButton,
   useMessage,
 } from 'naive-ui'
-import { TrashOutline, SendOutline, ImageOutline, DownloadOutline, BookmarkOutline } from '@vicons/ionicons5'
+import { TrashOutline, SendOutline, BookmarkOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
 import { getAgentBase, getApiBase } from '../config'
 import type { PhotoRef, Granularity } from '../types/chat'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 import BurstGroupModal from '../components/BurstGroupModal.vue'
+import PhotoThumbList from '../components/PhotoThumbList.vue'
 import { photoApi } from '../backend-sdk-client'
 import type { ApiSearchPhotosResponse } from '../../backend-sdk/api'
 
@@ -39,6 +39,7 @@ const {
   createSession,
   loadSession,
   sendMessage,
+  updateLastGranularity,
   deleteSession,
   resetChat,
 } = useChat()
@@ -63,6 +64,12 @@ const routeLabel: Record<string, string> = {
   error: '错误',
 }
 
+const granularityLabel: Record<Granularity, string> = {
+  photo: '精确检索',
+  fine: '精细连拍组',
+  coarse: '模糊连拍组',
+}
+
 // ── 路由监听 ──
 
 watch(
@@ -70,6 +77,7 @@ watch(
   async (newId) => {
     if (newId && typeof newId === 'string') {
       await loadSession(newId)
+      granularity.value = currentSession.value?.last_granularity || 'photo'
     } else {
       resetChat()
     }
@@ -94,6 +102,13 @@ async function handleNewChat() {
   } finally {
     isCreating.value = false
   }
+}
+
+function handleGranularityChange(value: Granularity) {
+  granularity.value = value
+  updateLastGranularity(value).catch((e) => {
+    message.warning(e instanceof Error ? e.message : '保存检索粒度失败')
+  })
 }
 
 // ── 发送消息 ──
@@ -189,10 +204,6 @@ function renderMarkdown(text: string): string {
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-function getPhotoImageUrl(photo: PhotoRef): string {
-  return `${getApiBase()}/photos/${photo.photo_id}/image`
-}
-
 // ── 保存为黄金用例 ──
 
 const goldenModalVisible = ref(false)
@@ -256,33 +267,9 @@ async function handleGoldenSave() {
   }
 }
 
-function previewPhoto(photo: PhotoRef) {
-  previewUrl.value = getPhotoImageUrl(photo)
+function previewPhotoById(photoId: string) {
+  previewUrl.value = `${getApiBase()}/photos/${photoId}/image`
   previewVisible.value = true
-}
-
-function downloadPhoto(photo: PhotoRef) {
-  downloadImageUrl(getPhotoImageUrl(photo), photo.filename || photo.photo_id)
-}
-
-function downloadImageUrl(url: string, filename: string) {
-  // 通过 fetch 下载为 blob，确保跨场景可靠触发下载
-  fetch(url)
-    .then(res => res.blob())
-    .then(blob => {
-      const objUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = objUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(objUrl)
-    })
-    .catch(() => {
-      // fallback: 直接打开图片
-      window.open(url, '_blank')
-    })
 }
 
 // ── 连拍组结果浏览 ──
@@ -293,12 +280,7 @@ const groupModalCoverId = ref('')
 const groupModalLoading = ref(false)
 const groupModalMembers = ref<{ id: string; thumbnail_url: string; filename: string }[]>([])
 
-// 组粒度检索的结果带 burst_group_id，用它区分组卡片与单张照片列表
-function isGroupRef(photo: PhotoRef): boolean {
-  return !!photo.burst_group_id
-}
-
-async function openGroupModal(photo: PhotoRef) {
+async function openGroupModal(photo: { photo_id: string; burst_group_id?: string }) {
   const groupId = photo.burst_group_id
   if (!groupId) return
   groupModalId.value = groupId
@@ -352,7 +334,7 @@ const hasMessages = computed(() => messages.value.length > 0)
 </script>
 
 <template>
-  <NLayout>
+  <NLayout class="chat-layout" :content-style="{ display: 'flex', flexDirection: 'column', height: '100%' }">
     <!-- 顶部栏 -->
     <NLayoutHeader bordered>
       <div class="chat-header">
@@ -380,7 +362,7 @@ const hasMessages = computed(() => messages.value.length > 0)
     </NLayoutHeader>
 
     <!-- 消息列表 -->
-    <NLayoutContent>
+    <div class="chat-body">
       <div class="chat-content">
         <!-- 空状态 -->
         <div v-if="!hasMessages && !isLoading" class="empty-state">
@@ -425,6 +407,9 @@ const hasMessages = computed(() => messages.value.length > 0)
                 <NTag :bordered="false" size="tiny">
                   {{ routeLabel[msg.query_type] || msg.query_type }}
                 </NTag>
+                <NTag :bordered="false" size="tiny" type="info">
+                  {{ msg.granularity ? granularityLabel[msg.granularity] : '粒度未记录' }}
+                </NTag>
                 <NButton
                   v-if="msg.photos && msg.photos.length"
                   size="tiny"
@@ -446,57 +431,12 @@ const hasMessages = computed(() => messages.value.length > 0)
               >
                 <div class="attachments-header">📎 相关照片 ({{ msg.photos.length }})</div>
 
-                <!-- 连拍组结果：封面缩略图 + 共 N 张，点击展开组内浏览 -->
-                <div
-                  v-if="msg.photos.some(isGroupRef)"
-                  class="group-cards"
-                >
-                  <div
-                    v-for="photo in msg.photos"
-                    :key="photo.photo_id"
-                    class="group-card"
-                    :title="photo.filename"
-                    @click="isGroupRef(photo) ? openGroupModal(photo) : previewPhoto(photo)"
-                  >
-                    <img :src="getPhotoImageUrl(photo)" :alt="photo.filename" class="group-card-img" />
-                    <div class="group-card-caption">
-                      共 {{ photo.burst_count || 1 }} 张
-                    </div>
-                  </div>
-                </div>
-
-                <div v-else class="attachments-list">
-                  <div
-                    v-for="photo in msg.photos"
-                    :key="photo.photo_id"
-                    class="attachment-item"
-                  >
-                    <img
-                      :src="getPhotoImageUrl(photo)"
-                      :alt="photo.filename"
-                      class="attachment-thumb"
-                      @click="previewPhoto(photo)"
-                    />
-                    <span class="attachment-content">
-                      <span class="attachment-icon">
-                        <NIcon size="16"><ImageOutline /></NIcon>
-                      </span>
-                      <span class="attachment-name" @click="previewPhoto(photo)">
-                        {{ photo.filename }}
-                      </span>
-                    </span>
-                    <NButton
-                      size="tiny"
-                      text
-                      @click="downloadPhoto(photo)"
-                      title="下载原图"
-                    >
-                      <template #icon>
-                        <NIcon size="14"><DownloadOutline /></NIcon>
-                      </template>
-                    </NButton>
-                  </div>
-                </div>
+                <PhotoThumbList
+                  :photos="msg.photos"
+                  :max-preview="0"
+                  @preview="previewPhotoById"
+                  @open-group="openGroupModal"
+                />
               </div>
             </div>
           </div>
@@ -509,13 +449,13 @@ const hasMessages = computed(() => messages.value.length > 0)
           </div>
         </div>
       </div>
-    </NLayoutContent>
+    </div>
 
     <!-- 底部输入区 -->
     <div class="chat-footer">
       <!-- 检索粒度：会话内保持，切换后对后续提问生效 -->
       <div class="granularity-bar">
-        <NRadioGroup v-model:value="granularity" size="small">
+        <NRadioGroup v-model:value="granularity" size="small" @update:value="handleGranularityChange">
           <NRadioButton
             v-for="opt in granularityOptions"
             :key="opt.value"
@@ -651,10 +591,31 @@ const hasMessages = computed(() => messages.value.length > 0)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.chat-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-layout :deep(.n-layout-scroll-container) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chat-layout :deep(.n-layout-header) {
+  flex: 0 0 auto;
+}
+.chat-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
 .chat-content {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px - 74px); /* header 56px + footer 74px */
+  height: 100%;
+  min-height: 0;
 }
 .empty-state {
   flex: 1;
@@ -703,6 +664,7 @@ const hasMessages = computed(() => messages.value.length > 0)
   gap: 8px;
 }
 .chat-footer {
+  flex: 0 0 auto;
   padding: 12px 24px;
   border-top: 1px solid var(--n-border-color);
   background: var(--n-color-body);
@@ -723,8 +685,11 @@ const hasMessages = computed(() => messages.value.length > 0)
 
 /* ── Markdown 渲染样式 ── */
 .markdown-body :deep(img) {
-  max-width: 100%;
-  height: auto;
+  display: block;
+  width: auto;
+  max-width: min(100%, 200px);
+  max-height: 280px;
+  object-fit: contain;
   border-radius: 8px;
   margin: 8px 0;
 }
@@ -747,84 +712,6 @@ const hasMessages = computed(() => messages.value.length > 0)
   font-size: 12px;
   color: var(--n-text-color-3);
   margin-bottom: 6px;
-}
-.attachments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-/* 连拍组结果卡片：封面缩略图 + 组内张数 */
-.group-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.group-card {
-  width: 96px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--n-color-embedded);
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-.group-card:hover {
-  transform: translateY(-2px);
-}
-.group-card-img {
-  display: block;
-  width: 96px;
-  height: 96px;
-  object-fit: cover;
-}
-.group-card-caption {
-  padding: 3px 6px;
-  font-size: 12px;
-  text-align: center;
-  color: var(--n-text-color-3);
-}
-.attachment-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
-}
-.attachment-item:hover {
-  background: var(--n-color-hover);
-}
-.attachment-thumb {
-  display: block;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  object-fit: cover;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.attachment-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-.attachment-name {
-  font-size: 13px;
-  color: var(--n-color-target);
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.attachment-name:hover {
-  text-decoration: underline;
-}
-.attachment-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--n-text-color-3);
 }
 
 /* ── 黄金用例保存表单 ── */
