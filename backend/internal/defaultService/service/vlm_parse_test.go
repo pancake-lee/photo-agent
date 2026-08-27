@@ -3,6 +3,8 @@ package service
 import (
 	"strings"
 	"testing"
+
+	"backend/internal/defaultService/data"
 )
 
 func TestParseVlmAttrs_Success(t *testing.T) {
@@ -43,6 +45,69 @@ func TestValidateVlmDescription(t *testing.T) {
 		if err := validateVlmDescription(description); err == nil {
 			t.Fatalf("invalid description accepted: %q", description)
 		}
+	}
+}
+
+func TestValidateVlmDescription_AllowsNormalVisualElements(t *testing.T) {
+	for _, description := range []string{
+		"画面中有纯白色墙面和纯黑色服装\n```json\n{}\n```",
+		"人物身后是水平条纹背景\n```json\n{}\n```",
+		"彩色条纹出现在建筑外墙\n```json\n{}\n```",
+	} {
+		if err := validateVlmDescription(description); err != nil {
+			t.Fatalf("normal visual element rejected: %q: %v", description, err)
+		}
+	}
+}
+
+func TestValidateVlmDescription_RejectsExplicitTestPattern(t *testing.T) {
+	for _, description := range []string{
+		"这是测试图\n```json\n{}\n```",
+		"color bars test pattern\n```json\n{}\n```",
+		"多色水平条纹组和底部纯黑色块\n```json\n{}\n```",
+	} {
+		if err := validateVlmDescription(description); err == nil {
+			t.Fatalf("test pattern accepted: %q", description)
+		}
+	}
+}
+
+func TestDerivePhotoAIStateUsesCurrentDescriptionInsteadOfLegacyReview(t *testing.T) {
+	description := "人物站在树下\n```json\n{\"subject\": {\"main_objects\": [\"人物\"]}}\n```"
+	photo := &data.PhotoDO{
+		Description:              description,
+		AiHealthStatus:           aiStatusReview,
+		AiHealthReason:           "历史描述待复核",
+		VlmStatus:                aiStatusReview,
+		VlmReason:                "历史描述未经过质量闸门",
+		EmbeddingStatus:          aiStatusStale,
+		EmbeddingDescriptionTime: "2026-08-27T00:00:00Z",
+	}
+
+	health, healthReason, vlmStatus, vlmReason, embeddingStatus, embeddingTime := derivePhotoAIState(photo)
+	if health != aiStatusHealthy || healthReason != "" {
+		t.Fatalf("health = (%q, %q), want healthy current description", health, healthReason)
+	}
+	if vlmStatus != aiStatusHealthy || vlmReason != "" {
+		t.Fatalf("VLM = (%q, %q), want healthy current description", vlmStatus, vlmReason)
+	}
+	if embeddingStatus != "unknown" || embeddingTime != "" {
+		t.Fatalf("embedding state = (%q, %q), want realtime Agent lookup", embeddingStatus, embeddingTime)
+	}
+}
+
+func TestDerivePhotoAIStateKeepsCurrentDescriptionReview(t *testing.T) {
+	photo := &data.PhotoDO{
+		Description:     "故障彩条画面\n```json\n{}\n```",
+		EmbeddingStatus: aiStatusHealthy,
+	}
+
+	health, healthReason, vlmStatus, vlmReason, embeddingStatus, _ := derivePhotoAIState(photo)
+	if health != aiStatusReview || vlmStatus != aiStatusReview || embeddingStatus != "unknown" {
+		t.Fatalf("derived state = health:%q vlm:%q embedding:%q, want review/review/unknown", health, vlmStatus, embeddingStatus)
+	}
+	if !strings.Contains(healthReason, "故障彩条") || healthReason != vlmReason {
+		t.Fatalf("review reason = health:%q vlm:%q, want current validation reason", healthReason, vlmReason)
 	}
 }
 

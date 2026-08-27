@@ -20,6 +20,19 @@ func (*photoDAO) GetPhotosWithoutDescription(ctx *papp.AppCtx) ([]*model.Photo, 
 	return photos, nil
 }
 
+// GetPhotosForVlmAudit 返回批量 VLM 本地审查所需的 JPG 照片。
+func (*photoDAO) GetPhotosForVlmAudit(ctx *papp.AppCtx) ([]*model.Photo, error) {
+	q := db.GetQuery().Photo
+	photos, err := q.WithContext(ctx).
+		Where(q.FileType.Neq("nef")).
+		Order(q.ImportedAt.Desc()).
+		Find()
+	if err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+	return photos, nil
+}
+
 // CountPhotosWithoutDescription 返回 description 为空的照片数量。
 func (*photoDAO) CountPhotosWithoutDescription(ctx *papp.AppCtx) (int64, error) {
 	q := db.GetQuery().Photo

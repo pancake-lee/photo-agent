@@ -98,10 +98,6 @@ func Migrate() error {
 			plogger.Infof("DB migrate: added %s column to photos", column.name)
 		}
 	}
-	// 存量描述没有经过本轮质量闸门，统一标记为待复核，避免继续伪装成健康资产。
-	if err := g.Exec(`UPDATE photos SET ai_health_status = 'review', ai_health_reason = '历史描述待复核', vlm_status = 'review', vlm_reason = '历史描述未经过质量闸门', embedding_status = 'stale' WHERE description <> '' AND ai_health_status = 'pending'`).Error; err != nil {
-		return err
-	}
 	if !g.Migrator().HasTable("ai_processing_history") {
 		if err := g.Exec(`CREATE TABLE ai_processing_history (
 			id TEXT NOT NULL PRIMARY KEY,

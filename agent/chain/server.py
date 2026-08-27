@@ -19,6 +19,7 @@ import threading
 import queue
 from typing import Literal
 
+import requests
 
 import fastapi
 import fastapi.middleware.cors
@@ -757,11 +758,22 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
     @app.post("/api/embed/photos/status")
     async def embed_photos_status(body: dict, req: fastapi.Request):
-        """批量查询照片是否已嵌入。body: {"ids": ["id1", "id2", ...]}。"""
-        photo_ids = body.get("ids", [])
+        """批量按当前描述查询 Chroma 向量是否可用。"""
+        photo_list = body.get("photos", [])
         cs = req.app.state.chroma_store
-        embedded_ids = cs.get_embedded_photo_ids()
-        return {pid: (pid in embedded_ids) for pid in photo_ids}
+        version_map = cs.get_photo_embedding_versions()
+        return {
+            photo.get("id", ""): cs.has_current_photo_embedding(
+                photo.get("id", ""), photo.get("description", ""), version_map,
+            )
+            for photo in photo_list if photo.get("id")
+        }
+
+    @app.get("/api/embed/audit")
+    async def embed_realtime_audit(req: fastapi.Request):
+        """按当前描述和当前 Chroma 内容生成只读批量审查。"""
+        q: embed_queue.EmbedQueue = req.app.state.embed_queue
+        return q.get_realtime_audit()
 
     @app.post("/api/embed/queue/start")
     async def embed_queue_start(body: dict, req: fastapi.Request):
@@ -801,6 +813,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         info = store.get_photo_embedding_info(photo_id)
         if info is None:
             raise fastapi.HTTPException(status_code=404, detail="该照片暂无 embedding 数据")
+        photo_payload = requests.get(
+            f"{req.app.state.cfg.go_backend_url.rstrip('/')}/api/v1/photos/{photo_id}", timeout=10,
+        ).json().get("photo") or {}
+        description = photo_payload.get("description") or ""
+        if not store.has_current_photo_embedding(photo_id, description):
+            raise fastapi.HTTPException(status_code=404, detail="当前描述没有对应的 embedding 数据")
         return info
 
     # ── 黄金用例 API ─────────────────────────────────────

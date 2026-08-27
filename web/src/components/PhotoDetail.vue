@@ -35,6 +35,7 @@ const props = defineProps<{
   photo: PhotoDetail | null
   loading: boolean
   describeProcessing: boolean
+  validateProcessing: boolean
   embedProcessing: boolean
   vlmBatchRunning?: boolean
   embedBatchRunning?: boolean
@@ -47,28 +48,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   triggerDescribe: [photoId: string]
+  validateDescription: [photoId: string]
   triggerEmbed: [photoId: string]
   viewDescription: []
   navigate: [photoId: string]
 }>()
 
 const showActions = computed(() => props.showVlmActions !== false)
-
-const healthLabel = computed(() => ({
-  healthy: '健康，可参与检索',
-  review: '待复核，暂不参与检索',
-  failed: '处理失败',
-  stale: '向量已过期',
-  processing: '处理中',
-  pending: '等待处理',
-  excluded: '已排除',
-}[props.photo?.ai_health_status || 'pending'] || '等待处理'))
-const healthTagType = computed(() => {
-  if (props.photo?.ai_health_status === 'healthy') return 'success'
-  if (props.photo?.ai_health_status === 'failed') return 'error'
-  if (props.photo?.ai_health_status === 'review') return 'warning'
-  return 'info'
-})
 
 // embed 详情（按 photo 变化自动拉取）
 const embedInfo = ref<EmbedInfo | null>(null)
@@ -115,8 +101,8 @@ watch(
     embedInfo.value = null
     shotAtEditing.value = false
     if (!photoId) return
-    // 无描述的照片不可能有 embedding，直接跳过
-    if (!props.photo?.has_description || props.photo.embedding_status !== 'healthy') return
+    // 当前 Chroma 向量由 Agent 实时查询，不读取 SQLite 中的历史状态。
+    if (!props.photo?.has_description) return
     embedLoading.value = true
     embedInfo.value = await fetchEmbedInfo(photoId)
     embedLoading.value = false
@@ -300,38 +286,25 @@ async function saveShotAt() {
 
               <NDivider />
 
-              <!-- AI 资产状态 -->
-              <div class="ai-health-section">
-                <div class="ai-health-title">
-                  <h4>AI 资产状态</h4>
-                  <NTag size="small" :type="healthTagType">{{ healthLabel }}</NTag>
-                </div>
-                <NAlert
-                  v-if="photo.ai_health_reason"
-                  :type="photo.ai_health_status === 'healthy' ? 'success' : 'warning'"
-                  :show-icon="false"
-                  class="ai-health-alert"
-                >
-                  {{ photo.ai_health_reason }}
-                </NAlert>
-                <div class="ai-health-meta">
-                  VLM：{{ photo.vlm_status || '未处理' }} · Embedding：{{ photo.embedding_status || '未处理' }}
-                </div>
-              </div>
-
-              <NDivider />
-
               <!-- VLM 描述 -->
               <div class="desc-section">
-                <h4>AI 描述</h4>
+                <div class="ai-section-title">
+                  <h4>AI 描述</h4>
+                  <NButton v-if="showActions" size="small" type="primary" :loading="describeProcessing" :disabled="vlmBatchRunning" @click="$emit('triggerDescribe', photo.id)">
+                    重新生成 AI 描述
+                  </NButton>
+                  <NButton v-if="showActions && photo.has_description && photo.vlm_status === 'review'" size="small" :loading="validateProcessing" :disabled="describeProcessing || vlmBatchRunning" @click="$emit('validateDescription', photo.id)">
+                    重新校验
+                  </NButton>
+                </div>
                 <template v-if="photo.has_description">
                   <NAlert
-                    v-if="photo.ai_health_status !== 'healthy'"
+                    v-if="photo.vlm_status !== 'healthy'"
                     type="warning"
                     :show-icon="false"
                     class="description-warning"
                   >
-                    当前描述未通过 AI 资产校验，不会参与检索。请重新生成描述进行修复。
+                    {{ photo.vlm_reason || '当前描述未通过 AI 资产校验，不会参与检索。请重新生成描述进行修复。' }}
                   </NAlert>
                   <p class="desc-text">{{ photo.description }}</p>
                   <NSpace v-if="showActions">
@@ -342,29 +315,10 @@ async function saveShotAt() {
                     >
                       查看详情
                     </NButton>
-                    <NButton
-                      size="small"
-                      :loading="describeProcessing"
-                      :disabled="vlmBatchRunning"
-                      @click="$emit('triggerDescribe', photo.id)"
-                    >
-                      重新生成
-                    </NButton>
                   </NSpace>
                 </template>
                 <template v-else>
                   <NEmpty description="暂无描述" size="small" />
-                  <NButton
-                    v-if="showActions"
-                    size="small"
-                    type="primary"
-                    :loading="describeProcessing"
-                    :disabled="vlmBatchRunning"
-                    style="margin-top: 8px"
-                    @click="$emit('triggerDescribe', photo.id)"
-                  >
-                    生成描述
-                  </NButton>
                 </template>
               </div>
 
@@ -372,7 +326,12 @@ async function saveShotAt() {
 
               <!-- Embedding 信息 -->
               <div class="desc-section">
-                <h4>Embedding 向量</h4>
+                <div class="ai-section-title">
+                  <h4>Embedding 向量</h4>
+                  <NButton v-if="showActions && photo.has_description && photo.vlm_status === 'healthy'" size="small" type="warning" :loading="embedProcessing" :disabled="embedBatchRunning" @click="$emit('triggerEmbed', photo.id)">
+                    重新生成 Embedding
+                  </NButton>
+                </div>
                 <div v-if="embedLoading" class="desc-loading">
                   <NSpin size="small" />
                 </div>
@@ -393,33 +352,12 @@ async function saveShotAt() {
                       </span>
                     </NDescriptionsItem>
                   </NDescriptions>
-                  <NButton
-                    v-if="showActions"
-                    size="small"
-                    :loading="embedProcessing"
-                    :disabled="embedBatchRunning || photo.vlm_status !== 'healthy'"
-                    style="margin-top: 8px"
-                    @click="$emit('triggerEmbed', photo.id)"
-                  >
-                    重新生成
-                  </NButton>
                 </template>
                 <template v-else-if="photo.has_description">
                   <NEmpty
-                    :description="photo.embedding_status === 'healthy' ? '暂无 Embedding 数据' : 'Embedding 已隔离，需先完成描述修复'"
+                    :description="photo.vlm_status === 'healthy' ? '当前没有可用 Embedding，请重新生成' : '需先完成描述修复'"
                     size="small"
                   />
-                  <NButton
-                    v-if="showActions"
-                    size="small"
-                    type="warning"
-                    :loading="embedProcessing"
-                    :disabled="embedBatchRunning"
-                    style="margin-top: 8px"
-                    @click="$emit('triggerEmbed', photo.id)"
-                  >
-                    生成 Embedding
-                  </NButton>
                 </template>
                 <template v-else>
                   <span class="desc-hint">需先生成 AI 描述</span>
@@ -563,11 +501,8 @@ async function saveShotAt() {
 .desc-section {
   margin-top: 8px;
 }
-.ai-health-section { margin-top: 8px; }
-.ai-health-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ai-health-title h4 { margin: 0; font-size: 14px; color: rgba(255, 255, 255, 0.82); }
-.ai-health-alert { margin-top: 8px; }
-.ai-health-meta { margin-top: 8px; font-size: 12px; color: rgba(255, 255, 255, 0.56); }
+.ai-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.ai-section-title h4 { margin: 0; }
 .description-warning { margin-bottom: 12px; }
 .desc-section h4 {
   margin: 0 0 8px 0;

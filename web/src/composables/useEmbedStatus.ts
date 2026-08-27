@@ -11,8 +11,8 @@ export function useEmbedStatus() {
    * 批量查询照片是否已嵌入。
    * 传入当前页的 photo ID 列表，返回一个 Set 表示哪些 ID 有 embedding。
    */
-  async function fetchEmbeddedIds(photoIds: string[]) {
-    if (!photoIds.length) {
+  async function fetchEmbeddedIds(photos: { id: string; description: string }[]) {
+    if (!photos.length) {
       embeddedIds.value = new Set()
       return
     }
@@ -20,7 +20,7 @@ export function useEmbedStatus() {
       const resp = await fetch(`${getAgentBase()}/embed/photos/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: photoIds }),
+        body: JSON.stringify({ photos }),
       })
       if (!resp.ok) return
       const data: Record<string, boolean> = await resp.json()

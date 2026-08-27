@@ -22,6 +22,7 @@
 
 import sys
 import pathlib
+import hashlib
 
 
 import typing
@@ -42,6 +43,11 @@ import chromadb.config as chroma_config
 COLLECTION_PHOTOS = "photos"
 COLLECTION_BURST_FINE = "photos_burst_fine"
 COLLECTION_BURST_COARSE = "photos_burst_coarse"
+
+
+def description_version(description: str) -> str:
+    """返回向量输入描述的稳定版本标识。"""
+    return hashlib.sha256(description.encode("utf-8")).hexdigest()
 
 
 class ChromaPhotoStore:
@@ -225,6 +231,7 @@ class ChromaPhotoStore:
             "chunks": len(ids),
             "model": first_meta.get("model"),
             "embedded_at": first_meta.get("embedded_at"),
+			"description_version": first_meta.get("description_version"),
             "chunk_info": chunk_info,
         }
 
@@ -244,6 +251,24 @@ class ChromaPhotoStore:
             if meta and "photo_id" in meta:
                 ids.add(meta["photo_id"])
         return ids
+
+    def get_photo_embedding_versions(self) -> dict[str, set[str]]:
+        """一次读取当前集合中每张照片向量所对应的描述版本。"""
+        raw = self.collection.get(include=["metadatas"])
+        photo_to_version_set: dict[str, set[str]] = {}
+        for meta in raw.get("metadatas") or []:
+            if not meta or not meta.get("photo_id"):
+                continue
+            photo_id = meta["photo_id"]
+            photo_to_version_set.setdefault(photo_id, set()).add(meta.get("description_version") or "")
+        return photo_to_version_set
+
+    def has_current_photo_embedding(self, photo_id: str, description: str, versions: dict[str, set[str]] | None = None) -> bool:
+        """按当前 Chroma 内容判断向量可用性，兼容没有版本标识的旧向量。"""
+        version_set = (versions or self.get_photo_embedding_versions()).get(photo_id, set())
+        if not version_set:
+            return False
+        return "" in version_set or description_version(description) in version_set
 
     def cleanup_orphans(self, valid_photo_ids: set[str]) -> int:
         """

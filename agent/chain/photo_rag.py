@@ -11,6 +11,7 @@ import sys
 import pathlib
 import requests
 import logging
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import langchain_core.prompts as lc_prompts
@@ -274,9 +275,10 @@ def _filter_healthy_results(results: list[dict], cfg: config.Config) -> list[dic
                     f"{cfg.go_backend_url.rstrip('/')}/api/v1/photos/{photo_id}",
                     timeout=10,
                 ).json().get("photo") or {}
-                health = payload.get("aiHealthStatus") or payload.get("ai_health_status")
-                embedding = payload.get("embeddingStatus") or payload.get("embedding_status")
-                cache[photo_id] = health == "healthy" and embedding == "healthy"
+                vlm_status = payload.get("vlmStatus") or payload.get("vlm_status")
+                current_version = hashlib.sha256((payload.get("description") or "").encode("utf-8")).hexdigest()
+                vector_version = (result.get("metadata") or {}).get("description_version") or ""
+                cache[photo_id] = vlm_status == "healthy" and (not vector_version or vector_version == current_version)
             except requests.RequestException:
                 cache[photo_id] = False
         if cache[photo_id]:
@@ -493,4 +495,3 @@ def answer_question(
     response = chain.invoke({"context": context, "question": question})
 
     return str(response.content), photo_refs
-

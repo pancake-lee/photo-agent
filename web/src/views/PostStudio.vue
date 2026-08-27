@@ -325,9 +325,13 @@ async function openPhotoDetail(id: string) {
   }
 }
 
-watch(describeProcessingIds, (next, previous) => {
+watch(describeProcessingIds, async (next, previous) => {
   if (selectedDetail.value && previous.has(selectedDetail.value.id) && !next.has(selectedDetail.value.id)) {
     openPhotoDetail(selectedDetail.value.id)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    if (selectedDetail.value?.vlm_status === 'healthy') {
+      await enqueueEmbedPhoto(selectedDetail.value.id)
+    }
   }
 })
 watch(embedProcessingIds, (next, previous) => {
@@ -821,7 +825,9 @@ async function confirmPickerSelection() {
     :loading="detailLoading"
     :nav-list="photoNavList"
     :describe-processing="detailDescribeProcessing"
+    :validate-processing="false"
     :embed-processing="detailEmbedProcessing"
+    :show-vlm-actions="false"
     @close="showDetail = false"
     @navigate="openPhotoDetail"
     @trigger-describe="handleDetailDescribe"

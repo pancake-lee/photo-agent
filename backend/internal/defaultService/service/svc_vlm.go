@@ -226,10 +226,17 @@ func (s *VlmServer) StartVlmQueue(_ctx context.Context, req *api.StartVlmQueueRe
 
 	// 先查询照片，再启动队列，避免空启动
 	appCtx := papp.NewAppCtx(context.Background())
-	photos, err := data.PhotoDAO.GetPhotosWithoutDescription(appCtx)
+	photos, err := data.PhotoDAO.GetPhotosForVlmAudit(appCtx)
 	if err != nil {
-		return nil, fmt.Errorf("query photos without description: %w", err)
+		return nil, fmt.Errorf("query VLM candidates: %w", err)
 	}
+	candidates := make([]*data.PhotoDO, 0, len(photos))
+	for _, p := range photos {
+		if strings.TrimSpace(p.Description) == "" || (req.Force && validateVlmDescription(p.Description) != nil) {
+			candidates = append(candidates, p)
+		}
+	}
+	photos = candidates
 
 	// 过滤掉正在被单张处理的照片，避免冲突
 	filtered := make([]*data.PhotoDO, 0, len(photos))
@@ -461,24 +468,15 @@ func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *vlmDescrip
 		}); saveErr != nil {
 			return saveErr
 		}
-		if updateErr := updateAIState(ctx, photoID, aiStatusReview, err.Error(), aiStatusReview, err.Error(), aiStatusStale); updateErr != nil {
-			return updateErr
-		}
 		recordAIHistory(photoID, "", "vlm", aiStatusReview, err.Error())
 		return nil
 	}
 
 	updates := map[string]any{
-		"description":                entry.Description,
-		"description_raw":            entry.Description,
-		"description_model":          entry.Model,
-		"description_time":           entry.Time,
-		"ai_health_status":           aiStatusPending,
-		"ai_health_reason":           "等待 Embedding",
-		"vlm_status":                 aiStatusHealthy,
-		"vlm_reason":                 "",
-		"embedding_status":           aiStatusPending,
-		"embedding_description_time": entry.Time,
+		"description":       entry.Description,
+		"description_raw":   entry.Description,
+		"description_model": entry.Model,
+		"description_time":  entry.Time,
 	}
 	if entry.Description != "" {
 		objects, colors, scene, lighting, mood, composition := parseVlmAttrs(photoID, entry.Description)

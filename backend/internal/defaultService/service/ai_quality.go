@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"backend/internal/pkg/db"
-
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/pdb"
 	"github.com/pancake-lee/pgo/pkg/putil"
@@ -32,27 +30,21 @@ func validateVlmDescription(description string) error {
 		return fmt.Errorf("VLM description has no valid structured JSON")
 	}
 	lower := strings.ToLower(text)
-	for _, marker := range []string{
-		"彩条", "条纹组", "故障画面", "测试图", "纯黑", "纯白",
-		"color bars", "test pattern", "vertical stripes", "horizontal stripes",
-	} {
-		if strings.Contains(lower, strings.ToLower(marker)) {
+	for _, marker := range []string{"故障画面", "故障彩条", "测试图", "color bars", "test pattern"} {
+		if strings.Contains(lower, marker) {
 			return fmt.Errorf("description matched review rule: %s", marker)
 		}
+	}
+	// 颜色、条纹和色块本身都是正常摄影内容，只有组合成典型故障画面时才拦截。
+	if strings.Contains(lower, "条纹组") && strings.Contains(lower, "色块") {
+		return fmt.Errorf("description matched review rule: 条纹组与色块组合")
 	}
 	return nil
 }
 
 func updateAIState(ctx *papp.AppCtx, photoID, health, healthReason, vlmStatus, vlmReason, embeddingStatus string) error {
-	q := db.GetQuery().Photo
-	_, err := q.WithContext(ctx).Where(q.ID.Eq(photoID)).Updates(map[string]any{
-		"ai_health_status": health,
-		"ai_health_reason": healthReason,
-		"vlm_status":       vlmStatus,
-		"vlm_reason":       vlmReason,
-		"embedding_status": embeddingStatus,
-	})
-	return err
+	// 健康结论全部在读取时实时推导，保留此函数仅兼容现有调用链。
+	return nil
 }
 
 func recordAIHistory(photoID, taskID, stage, status, reason string) {

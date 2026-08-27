@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { NLayout, NLayoutContent, NLayoutHeader, NModal, NButton, NTag, NEmpty, NSpin, NAlert, NSpace, useMessage } from 'naive-ui'
+import { NLayout, NLayoutContent, NLayoutHeader, NModal, NButton, NEmpty, NSpin, NAlert, NSpace, useMessage } from 'naive-ui'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
 import UploadModal from '../components/UploadModal.vue'
@@ -19,7 +19,7 @@ import { settings } from '../stores/settings'
 import type { PhotoDetail as PhotoDetailType } from '../types/photo'
 import type { SegmentMode } from '../utils/segment'
 import type { ConflictResolution } from '../types/upload'
-import { getApiBase } from '../config'
+import { getAgentBase, getApiBase } from '../config'
 
 const message = useMessage()
 const router = useRouter()
@@ -44,42 +44,53 @@ const showConflictModal = ref(false)
 const conflictResolver = ref<((resolution: ConflictResolution) => void) | null>(null)
 const detailDescribeProcessing = computed(() => !!selectedPhoto.value && describeProcessingIds.value.has(selectedPhoto.value.id))
 const detailEmbedProcessing = computed(() => !!selectedPhoto.value && embedProcessingIds.value.has(selectedPhoto.value.id))
+const detailValidateProcessing = ref(false)
 // 详情抽屉上/下一张导航：以当前加载的照片窗口为列表
 const photoNavList = computed(() => photos.value.map((p) => ({ id: p.id, label: p.filename })))
 
 // ── 选择模式（路径 B：自选图片进入图文工坊）──
 const selectionMode = ref(false)
-const showIssues = ref(false)
-const issuesLoading = ref(false)
-const issues = ref<Array<{ id: string; filename: string; status: string; reason: string; vlm_status: string; embedding_status: string }>>([])
-const audit = ref<{ total: number; counts: Record<string, number>; message: string } | null>(null)
+type AuditItem = { id: string; filename: string; thumbnail_url: string; reason: string }
+type AuditResult = { counts: Record<string, number>; items: Record<string, AuditItem[]>; message: string }
+const batchKind = ref<'vlm' | 'embed'>('vlm')
+const showBatchConfirm = ref(false)
+const batchAuditLoading = ref(false)
+const batchAudit = ref<AuditResult | null>(null)
 
-async function openIssues() {
-  showIssues.value = true
-  issuesLoading.value = true
+async function openBatchConfirm(kind: 'vlm' | 'embed') {
+  batchKind.value = kind
+  showBatchConfirm.value = true
+  batchAuditLoading.value = true
+  batchAudit.value = null
   try {
-    const response = await fetch(`${getApiBase()}/photos/ai-issues`)
-    if (!response.ok) throw new Error('问题列表加载失败')
-    issues.value = (await response.json()).items || []
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : '问题列表加载失败')
-  } finally {
-    issuesLoading.value = false
-  }
-}
-
-function openIssuePhoto(id: string) {
-  showIssues.value = false
-  fetchPhotoDetail(id)
-}
-
-async function loadAudit() {
-  try {
-    const response = await fetch(`${getApiBase()}/photos/ai-audit`)
+    const response = await fetch(`${getAgentBase()}/embed/audit`)
     if (!response.ok) throw new Error('审计预览加载失败')
-    audit.value = await response.json()
+    batchAudit.value = await response.json()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '审计预览加载失败')
+    showBatchConfirm.value = false
+  } finally {
+    batchAuditLoading.value = false
+  }
+}
+async function refreshBatchAudit() { await openBatchConfirm(batchKind.value) }
+
+const batchCandidates = computed(() => {
+  if (!batchAudit.value) return []
+  const keys = batchKind.value === 'vlm' ? ['vlm_missing', 'vlm_review'] : ['embedding_missing']
+  return keys.flatMap((key) => batchAudit.value?.items[key] || [])
+})
+const batchCount = computed(() => batchCandidates.value.length)
+const batchPreview = computed(() => batchCandidates.value.slice(0, 8))
+const batchRemaining = computed(() => Math.max(0, batchCount.value - batchPreview.value.length))
+async function confirmBatchRepair() {
+  showBatchConfirm.value = false
+  try {
+    const result = batchKind.value === 'vlm' ? await startQueue(true) : await startEmbedQueue()
+    const total = result.total ?? 0
+    message[total ? 'success' : 'info'](total ? `已开始处理 ${total} 张照片` : '当前没有需要处理的照片')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '启动失败')
   }
 }
 const selectedIds = ref<Set<string>>(new Set())
@@ -157,10 +168,19 @@ function goToPostStudio() {
   router.push({ path: '/post-studio', query: { photo_ids: tokens.join(',') } })
 }
 
-async function handleStartVlm() { try { const result = await startQueue(); message[result.total === 0 ? 'info' : 'success'](result.total === 0 ? '所有照片已有描述，无需处理' : `VLM 预处理已启动，共 ${result.total} 张`) } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
+async function handleStartVlm() { await openBatchConfirm('vlm') }
 async function handleStopVlm() { await stopQueue(); message.info('VLM 预处理已中止'); relocateToStart(); fetchStats() }
 async function handleTriggerDescribe(photoId: string) { try { await enqueuePhoto(photoId); await fetchDescribeProgress() } catch (e) { message.error(e instanceof Error ? e.message : 'VLM 处理失败') } }
-async function handleStartEmbed() { try { const result = await startEmbedQueue(); message[result.total === 0 ? 'info' : 'success'](result.total === 0 ? '所有照片已有嵌入，无需处理' : `Embed 已启动，共 ${result.total} 张`) } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
+async function handleValidateDescription(photoId: string) {
+  detailValidateProcessing.value = true
+  try {
+    const response = await fetch(`${getApiBase()}/photos/${photoId}/ai-validate`, { method: 'POST' })
+    if (!response.ok) { const body = await response.json(); throw new Error(body.error || '重新校验失败') }
+    await refreshPhoto(photoId)
+    message.success('AI 描述校验完成')
+  } catch (e) { message.error(e instanceof Error ? e.message : '重新校验失败') } finally { detailValidateProcessing.value = false }
+}
+async function handleStartEmbed() { await openBatchConfirm('embed') }
 async function handleStopEmbed() { await stopEmbedQueue(); message.info('Embed 已中止'); relocateToStart(); fetchStats(); fetchEmbedStats() }
 async function handleTriggerEmbed(photoId: string) { try { await enqueueEmbedPhoto(photoId); await fetchEmbedProgress() } catch (e) { message.error(e instanceof Error ? e.message : '入队失败') } }
 function handleViewDescription() { if (selectedPhoto.value) { descPhoto.value = selectedPhoto.value; showDescModal.value = true } }
@@ -178,21 +198,25 @@ function toggleSortOrder() { sortOrder.value = sortOrder.value === 'asc' ? 'desc
 function handleSegmentModeChange(mode: SegmentMode) { settings.segmentMode = mode; fetchSegments() }
 
 watch(showConflictModal, (visible) => { if (!visible && conflictResolver.value) { conflictResolver.value('skip'); conflictResolver.value = null } })
-watch(photos, (list) => fetchEmbeddedIds(list.map((photo) => photo.id)))
+watch(photos, (list) => fetchEmbeddedIds(list.map((photo) => ({ id: photo.id, description: photo.description }))))
 watch(auxiliaryError, (text) => { if (text) message.error(text) })
-watch(describeProcessingIds, (newIds, oldIds) => {
+watch(describeProcessingIds, async (newIds, oldIds) => {
   for (const id of oldIds) {
     if (!newIds.has(id)) {
-      refreshPhoto(id)
       if (selectedPhoto.value?.id === id) fetchPhotoDetail(id)
-      message.success('VLM 描述已生成')
+      await refreshPhoto(id)
+      const photo = selectedPhoto.value?.id === id ? selectedPhoto.value : await fetch(`${getApiBase()}/photos/${id}`).then((r) => r.json()).then((r) => r.photo)
+      if (photo?.vlmStatus === 'healthy' || photo?.vlm_status === 'healthy') {
+        await enqueueEmbedPhoto(id)
+      }
+      message.success('VLM 描述处理完成，已自动接续 Embedding')
     }
   }
 })
 watch(embedProcessingIds, (newIds, oldIds) => {
   for (const id of oldIds) {
     if (!newIds.has(id)) {
-      fetchEmbeddedIds(photos.value.map((p) => p.id))
+      fetchEmbeddedIds(photos.value.map((photo) => ({ id: photo.id, description: photo.description })))
       fetchEmbedStats()
     }
   }
@@ -223,7 +247,6 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect"
         @apply-filters="applyFilters" @reset-filters="resetFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
         @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @go-to-post-studio="goToPostStudio"
-        @open-issues="openIssues"
       />
     </NLayoutHeader>
     <NLayoutContent><div class="content-wrapper">
@@ -234,22 +257,30 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
       />
     </div></NLayoutContent>
   </NLayout>
-  <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :nav-list="photoNavList" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" @close="closeDetail" @navigate="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
-  <NModal v-model:show="showIssues" preset="card" title="AI 资产问题" style="width: 640px">
-    <NSpace justify="end" style="margin-bottom: 16px"><NButton size="small" @click="loadAudit">审计预览</NButton></NSpace>
-    <NAlert v-if="audit" type="info" :show-icon="false" style="margin-bottom: 16px">
-      共 {{ audit.total }} 张：健康 {{ audit.counts.healthy || 0 }}，待复核 {{ audit.counts.review || 0 }}，失败 {{ audit.counts.failed || 0 }}，过期 {{ audit.counts.stale || 0 }}。{{ audit.message }}
-    </NAlert>
-    <NSpin :show="issuesLoading">
-      <NEmpty v-if="!issues.length && !issuesLoading" description="暂无待处理问题" />
-      <div v-else class="issue-list">
-        <button v-for="issue in issues" :key="issue.id" class="issue-item" @click="openIssuePhoto(issue.id)">
-          <span class="issue-name">{{ issue.filename }}</span>
-          <NTag size="small" type="warning">{{ issue.status }}</NTag>
-          <span class="issue-reason">{{ issue.reason || '需要检查 AI 资产链路' }}</span>
-        </button>
-      </div>
+  <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :nav-list="photoNavList" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :validate-processing="detailValidateProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" :show-vlm-actions="true" @close="closeDetail" @navigate="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @validate-description="handleValidateDescription" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
+  <NModal v-model:show="showBatchConfirm" preset="card" :title="batchKind === 'vlm' ? '批量 VLM 审查' : '批量 Embedding 审查'" style="width: 640px">
+    <NSpin :show="batchAuditLoading">
+      <template v-if="batchAudit">
+        <NAlert type="info" :show-icon="false" style="margin-bottom: 16px">
+          <template v-if="batchKind === 'vlm'">没有 AI 描述 {{ batchAudit.counts.vlm_missing || 0 }} 张，描述疑似异常 {{ batchAudit.counts.vlm_review || 0 }} 张。</template>
+          <template v-else>描述可信，“没有向量”或“已过期向量”的照片 {{ batchAudit.counts.embedding_missing || 0 }} 张。</template>
+          {{ batchKind === 'vlm' ? '确认后重跑 VLM，并自动接续 Embedding。' : '确认后只重建向量，不调用 VLM。' }}
+        </NAlert>
+        <NEmpty v-if="!batchCount" description="暂无需要处理的照片" />
+        <div v-else class="batch-preview">
+          <div v-for="item in batchPreview" :key="item.id" class="batch-preview-item">
+            <img :src="item.thumbnail_url" :alt="item.filename" />
+            <span>{{ item.filename }}</span>
+          </div>
+          <div v-if="batchRemaining" class="batch-remaining">还有 {{ batchRemaining }} 张文件</div>
+        </div>
+      </template>
     </NSpin>
+    <NSpace justify="end" style="margin-top: 20px">
+      <NButton v-if="batchKind === 'vlm'" :loading="batchAuditLoading" @click="refreshBatchAudit">重新审查</NButton>
+      <NButton @click="showBatchConfirm = false">取消</NButton>
+      <NButton type="primary" :disabled="!batchCount || batchAuditLoading" @click="confirmBatchRepair">确认处理</NButton>
+    </NSpace>
   </NModal>
   <BurstGroupModal :show="burstModalGroup !== ''" :group-id="burstModalGroup" :members="burstModalMembers" :cover-id="burstModalCoverId" :loading="burstModalLoading" @close="closeBurstGroup" @view-detail="fetchPhotoDetail" @set-cover="handleBurstSetCover" />
   <DescriptionModal :show="showDescModal" :filename="descPhoto?.filename || ''" :description="descPhoto?.description || ''" :model="descPhoto?.description_model || ''" :processed-at="descPhoto?.description_time || ''" @close="showDescModal = false" @regenerate="handleRegenerateDescription" />
@@ -262,9 +293,9 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
 .page-layout :deep(.n-layout-header) { flex-shrink: 0; }
 .page-layout :deep(.n-layout-content) { flex: 1; min-height: 0; }
 .content-wrapper { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 20px 24px; overflow: hidden; }
-.issue-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
-.issue-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px; border: 1px solid var(--n-border-color); border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.issue-item:hover { background: var(--n-hover-color); }
-.issue-name { font-weight: 600; }
-.issue-reason { grid-column: 1 / -1; color: var(--n-text-color-3); font-size: 12px; }
+.batch-preview { display: flex; flex-wrap: wrap; gap: 10px; }
+.batch-preview-item { width: 72px; color: var(--n-text-color-2); font-size: 11px; overflow: hidden; }
+.batch-preview-item img { display: block; width: 72px; height: 52px; object-fit: cover; border-radius: 4px; margin-bottom: 4px; }
+.batch-preview-item span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batch-remaining { align-self: center; color: var(--n-text-color-3); font-size: 12px; }
 </style>

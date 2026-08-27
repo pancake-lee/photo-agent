@@ -322,12 +322,11 @@ class EmbedQueue:
             photo = resp.photo
 
             health = bksdk.get_photo_health(self._go_url, photo_id)
-            vlm_status = health.get("vlmStatus") or health.get("vlm_status")
-            if vlm_status != "healthy":
+            if not self._has_trusted_description(health):
                 self._store.delete(where={"photo_id": photo_id})
                 for group_store in self._group_stores.values():
                     group_store.delete(where={"photo_id": photo_id})
-                logger.info("EmbedQueue: photo %s skipped, VLM status=%s", photo_id, vlm_status)
+                logger.info("EmbedQueue: photo %s skipped, current description failed quality gate", photo_id)
                 self._inc_failed()
                 return
 
@@ -370,22 +369,11 @@ class EmbedQueue:
             # 7. 封面照片：同一组向量写入对应连拍组集合（无需二次 Embedding）
             self._write_group_covers(photo_id, chunks, vectors)
 
-            bksdk.update_photo_health(
-                self._go_url,
-                photo_id,
-                "healthy",
-                description_time=health.get("descriptionTime") or health.get("description_time") or "",
-            )
-
             self._inc_completed()
             logger.info("EmbedQueue done: photo=%s, chunks=%d", photo_id, len(chunks))
 
         except Exception as e:
             logger.warning("EmbedQueue failed: photo=%s, err=%s", photo_id, e)
-            try:
-                bksdk.update_photo_health(self._go_url, photo_id, "failed", str(e))
-            except Exception as update_error:
-                logger.warning("EmbedQueue: 写回失败状态失败: photo=%s, err=%s", photo_id, update_error)
             self._inc_failed()
         finally:
             self._set_current("")
@@ -566,6 +554,7 @@ class EmbedQueue:
                 "chunk_index": idx,
                 "model": model,
                 "embedded_at": embedded_at,
+				"description_version": chroma_client.description_version(description),
             })
 
         return chunks, metadatas
@@ -592,30 +581,69 @@ class EmbedQueue:
     def _fetch_unembedded_ids(self) -> list[str]:
         """获取有描述但未嵌入的照片 ID 列表。"""
         photos = self._fetch_all_photos()
-        embedded_ids = self._store.get_embedded_photo_ids()
+        version_map = self._store.get_photo_embedding_versions()
         result = []
         for p in photos:
             desc = p.description or ""
-            if desc.strip() and p.id not in embedded_ids and self._is_vlm_healthy(p.id):
+            if not desc.strip():
+                continue
+            if self._is_photo_description_trusted(p) and not self._store.has_current_photo_embedding(p.id, desc, version_map):
                 result.append(p.id)
         return result
+
+    def get_realtime_audit(self) -> dict:
+        """按当前描述和 Chroma 内容生成只读批量审查结果。"""
+        photos = self._fetch_all_photos()
+        version_map = self._store.get_photo_embedding_versions()
+        counts = {"vlm_missing": 0, "vlm_review": 0, "embedding_missing": 0}
+        items = {"vlm_missing": [], "vlm_review": [], "embedding_missing": []}
+        for photo in photos:
+            description = (photo.description or "").strip()
+            item = {
+                "id": photo.id,
+                "filename": photo.filename,
+                "thumbnail_url": f"/api/v1/photos/{photo.id}/image",
+            }
+            if not description:
+                item["reason"] = "没有 AI 描述"
+                counts["vlm_missing"] += 1
+                items["vlm_missing"].append(item)
+            elif not self._is_photo_description_trusted(photo):
+                item["reason"] = getattr(photo, "vlm_reason", "当前描述未通过质量校验")
+                counts["vlm_review"] += 1
+                items["vlm_review"].append(item)
+            elif not self._store.has_current_photo_embedding(photo.id, description, version_map):
+                item["reason"] = "当前 Chroma 中没有对应描述的向量"
+                counts["embedding_missing"] += 1
+                items["embedding_missing"].append(item)
+        return {"total": len(photos), "counts": counts, "items": items, "read_only": True}
 
     def _fetch_embeddable_ids(self) -> list[str]:
         """获取所有有描述的照片 ID 列表（force 模式使用）。"""
         photos = self._fetch_all_photos()
         return [
             p.id for p in photos
-            if (p.description or "").strip() and self._is_vlm_healthy(p.id)
+            if (p.description or "").strip() and self._is_photo_description_trusted(p)
         ]
 
-    def _is_vlm_healthy(self, photo_id: str) -> bool:
-        """Embedding 只接收通过 VLM 质量闸门的照片。"""
+    @staticmethod
+    def _has_trusted_description(health: dict) -> bool:
+        """Go 照片详情的 VLM 状态由当前描述即时派生。"""
+        return (health.get("vlmStatus") or health.get("vlm_status")) == "healthy"
+
+    def _is_description_trusted(self, photo_id: str) -> bool:
+        """Embedding 只接收当前描述通过质量闸门的照片。"""
         try:
             health = bksdk.get_photo_health(self._go_url, photo_id)
-            return (health.get("vlmStatus") or health.get("vlm_status")) == "healthy"
+            return self._has_trusted_description(health)
         except Exception as e:
             logger.warning("EmbedQueue: 获取照片健康状态失败: photo=%s, err=%s", photo_id, e)
             return False
+
+    @staticmethod
+    def _is_photo_description_trusted(photo) -> bool:
+        """列表接口的 VLM 状态由 Go 按当前描述即时推导。"""
+        return (getattr(photo, "vlm_status", "") or getattr(photo, "vlmStatus", "")) == "healthy"
 
     # ------------------------------------------------------------------ #
     # 内部辅助

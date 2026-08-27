@@ -70,7 +70,6 @@ const emit = defineEmits<{
   clearSelection: []
   intervalSelect: []
   goToPostStudio: []
-  openIssues: []
 }>()
 
 const segmentModeOptions = [
@@ -135,8 +134,6 @@ onBeforeUnmount(() => {
   <div ref="toolbarRef" class="toolbar">
     <div class="toolbar-left">
       <h3 class="toolbar-title">图片管理</h3>
-      <NButton size="small" type="warning" @click="$emit('openIssues')">AI 问题</NButton>
-
       <!-- 内联模式：宽度充足 -->
       <div v-show="!collapsed" class="toolbar-inline">
         <span class="total-count">共 {{ stats?.total ?? total }} 张</span>

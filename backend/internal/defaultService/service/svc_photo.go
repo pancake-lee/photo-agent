@@ -28,45 +28,55 @@ type PhotoServer struct {
 	api.UnimplementedPhotoServiceServer
 }
 
-// ListAIIssuesHandler 返回当前不可安全参与 AI 的照片，供问题工作区使用。
-func (s *PhotoServer) ListAIIssuesHandler(ctx khttp.Context) error {
-	q := db.GetQuery().Photo
-	photos, err := q.WithContext(ctx).Where(
-		q.AiHealthStatus.Neq(aiStatusHealthy), q.FileType.Neq("nef"),
-	).Order(q.ImportedAt.Desc()).Find()
-	if err != nil {
-		return ctx.Result(500, map[string]string{"error": err.Error()})
-	}
-	items := make([]map[string]any, 0, len(photos))
-	for _, photo := range photos {
-		items = append(items, map[string]any{
-			"id": photo.ID, "filename": photo.Filename,
-			"status": photo.AiHealthStatus, "reason": photo.AiHealthReason,
-			"vlm_status": photo.VlmStatus, "embedding_status": photo.EmbeddingStatus,
-		})
-	}
-	return ctx.Result(200, map[string]any{"total": len(items), "items": items})
-}
-
-// AIAuditHandler 返回只读的 AI 资产审计摘要，不修改照片或原始文件。
+// AIAuditHandler 返回批量修复前的只读候选摘要，不修改照片或原始文件。
 func (s *PhotoServer) AIAuditHandler(ctx khttp.Context) error {
 	q := db.GetQuery().Photo
 	photos, err := q.WithContext(ctx).Where(q.FileType.Neq("nef")).Find()
 	if err != nil {
 		return ctx.Result(500, map[string]string{"error": err.Error()})
 	}
-	counts := map[string]int{"healthy": 0, "review": 0, "failed": 0, "stale": 0, "pending": 0, "excluded": 0}
+	counts := map[string]int{"vlm_missing": 0, "vlm_review": 0, "embedding_missing": 0}
+	items := map[string][]map[string]any{"vlm_missing": {}, "vlm_review": {}, "embedding_missing": {}}
 	for _, photo := range photos {
-		status := photo.AiHealthStatus
-		if _, ok := counts[status]; !ok {
-			status = "pending"
+		if strings.TrimSpace(photo.Description) == "" {
+			counts["vlm_missing"]++
+			items["vlm_missing"] = append(items["vlm_missing"], auditPhotoItem(photo, "没有 AI 描述"))
+		} else if validationErr := validateVlmDescription(photo.Description); validationErr != nil {
+			counts["vlm_review"]++
+			items["vlm_review"] = append(items["vlm_review"], auditPhotoItem(photo, validationErr.Error()))
 		}
-		counts[status]++
 	}
 	return ctx.Result(200, map[string]any{
-		"total": len(photos), "counts": counts, "read_only": true,
-		"message": "审计预览仅统计当前状态，未修改原始照片",
+		"total": len(photos), "counts": counts, "items": items, "read_only": true,
+		"message": "本地审查未调用 VLM，确认后才会处理候选照片",
 	})
+}
+
+// ValidateAIHandler 重新执行当前描述的本地质量校验，不调用 VLM，也不写入派生质量结论。
+func (s *PhotoServer) ValidateAIHandler(ctx khttp.Context) error {
+	id := ctx.Vars().Get("id")
+	q := db.GetQuery().Photo
+	photo, err := q.WithContext(ctx).Where(q.ID.Eq(id)).First()
+	if err != nil {
+		return ctx.Result(404, map[string]string{"error": "照片不存在"})
+	}
+	if strings.TrimSpace(photo.Description) == "" {
+		return ctx.Result(400, map[string]string{"error": "当前没有可校验的 AI 描述"})
+	}
+	health, healthReason, vlmStatus, vlmReason, embeddingStatus, _ := derivePhotoAIState(photo)
+	return ctx.Result(200, map[string]any{
+		"status": health, "reason": healthReason,
+		"vlm_status": vlmStatus, "vlm_reason": vlmReason,
+		"embedding_status": embeddingStatus,
+	})
+}
+
+func auditPhotoItem(photo *data.PhotoDO, reason string) map[string]any {
+	return map[string]any{
+		"id": photo.ID, "filename": photo.Filename,
+		"thumbnail_url": fmt.Sprintf("/api/v1/photos/%s/image", photo.ID),
+		"reason":        reason,
+	}
 }
 
 // Reg 向 Kratos gRPC/HTTP 服务器注册本服务。
@@ -79,12 +89,12 @@ func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 		// 额外注册非 proto 映射的原始 HTTP 路由
 		r := httpSrv.Route("/")
 		// 静态路由必须在生成的 /photos/{id} 之前注册，否则会被当成照片 ID。
-		r.GET("/api/v1/photos/ai-issues", s.ListAIIssuesHandler)
 		r.GET("/api/v1/photos/ai-audit", s.AIAuditHandler)
 		// 手动注册的上传/图片路由
 		r.GET("/api/v1/photos/{id}/image", s.GetPhotoImageHandler)
 		r.POST("/api/v1/photos/upload", s.UploadPhotoHandler)
 		r.POST("/api/v1/photos/{id}/ai-health", s.UpdateAIHealthHandler)
+		r.POST("/api/v1/photos/{id}/ai-validate", s.ValidateAIHandler)
 
 		api.RegisterPhotoServiceHTTPServer(httpSrv, s)
 	}
@@ -291,21 +301,7 @@ func (s *PhotoServer) UpdateAIHealthHandler(ctx khttp.Context) error {
 	if req.Status != aiStatusHealthy && req.Status != aiStatusFailed && req.Status != aiStatusStale {
 		return ctx.Result(400, map[string]string{"error": "invalid AI health status"})
 	}
-	id := ctx.Vars().Get("id")
-	updates := map[string]any{
-		"ai_health_status": req.Status,
-		"ai_health_reason": req.Reason,
-		"embedding_status": req.Status,
-	}
-	if req.DescriptionTime != "" {
-		updates["embedding_description_time"] = req.DescriptionTime
-	}
-	q := db.GetQuery().Photo
-	if _, err := q.WithContext(ctx).Where(q.ID.Eq(id)).Updates(updates); err != nil {
-		return ctx.Result(500, map[string]string{"error": err.Error()})
-	}
-	recordAIHistory(id, "", "embedding", req.Status, req.Reason)
-	return ctx.Result(200, map[string]string{"status": req.Status})
+	return ctx.Result(410, map[string]string{"error": "AI 状态已改为实时计算，不再接受状态回写"})
 }
 
 // UpdatePhotoTags 更新照片标签
@@ -617,6 +613,7 @@ func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
 	if do == nil {
 		return nil
 	}
+	health, healthReason, vlmStatus, vlmReason, embeddingStatus, _ := derivePhotoAIState(do)
 	item := &api.PhotoItem{
 		Id:                       do.ID,
 		Filename:                 do.Filename,
@@ -644,11 +641,11 @@ func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
 		Altitude:                 do.Altitude,
 		HasDescription:           do.Description != "",
 		ThumbnailUrl:             fmt.Sprintf("/api/v1/photos/%s/image", do.ID),
-		AiHealthStatus:           do.AiHealthStatus,
-		AiHealthReason:           do.AiHealthReason,
-		VlmStatus:                do.VlmStatus,
-		VlmReason:                do.VlmReason,
-		EmbeddingStatus:          do.EmbeddingStatus,
+		AiHealthStatus:           health,
+		AiHealthReason:           healthReason,
+		VlmStatus:                vlmStatus,
+		VlmReason:                vlmReason,
+		EmbeddingStatus:          embeddingStatus,
 		EmbeddingDescriptionTime: do.EmbeddingDescriptionTime,
 	}
 	if !do.ShotAt.IsZero() {
@@ -658,6 +655,18 @@ func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
 		item.ImportedAt = do.ImportedAt.Unix()
 	}
 	return item
+}
+
+// derivePhotoAIState 将当前描述质量作为即时派生结论，避免历史质量状态成为准入依据。
+// Embedding 处理状态和描述版本仍来自持久化记录，因为它们描述实际处理结果。
+func derivePhotoAIState(photo *data.PhotoDO) (health, healthReason, vlmStatus, vlmReason, embeddingStatus, embeddingDescriptionTime string) {
+	if strings.TrimSpace(photo.Description) == "" {
+		return aiStatusPending, "没有 AI 描述", aiStatusPending, "", "unknown", ""
+	}
+	if validationErr := validateVlmDescription(photo.Description); validationErr != nil {
+		return aiStatusReview, validationErr.Error(), aiStatusReview, validationErr.Error(), "unknown", ""
+	}
+	return aiStatusHealthy, "", aiStatusHealthy, "", "unknown", ""
 }
 
 func parseTime(s string) *time.Time {
