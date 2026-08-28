@@ -11,70 +11,7 @@
 
 | 状态   | 分组     | 编号 | 任务                              |
 | ------ | -------- | ---- | --------------------------------- |
-| Done   | 对话查询 | CQ1  | 通用 Tool Calling 诊断日志        |
-| Done   | 对话查询 | CQ2  | Tool Calling 支持多轮工具调用循环 |
-| Done   | 对话查询 | CQ3  | 结构化属性值获取崩溃修复          |
 | 已规划 | 对话查询 | CQ4  | 创作型查询（Compose）专用管线     |
-| Done   | 对话查询 | CQ5  | SQL 路由诊断日志                  |
-| Done   | 对话查询 | CQ6  | SQL 时间线语义与无法回答体验      |
-| Done   | 资产质量闭环 | AQL2-1 | 批量 VLM 审查全量误报（SDK 字段缺失） |
-| Done   | 资产质量闭环 | AQL2-2 | 坏图描述审核漏判（关键词措辞绕过） |
-
-### CQ1 通用 Tool Calling 诊断日志
-
-- **状态**：Done
-- **背景**：原始山西请求两次均被路由到 `tool`，后一次在 376ms 内返回空照片列表和自然语言回复。现有日志只记录最终路由，无法判断模型响应、工具调用、HTTP 请求或二次生成分别发生了什么。
-- **分析**：前台使用同一配置的实际复现显示，模型会非确定性地选择不调用工具，或发起工具调用。后者的确定性失败根因已确认：OpenAPI 文档中的路径已经带 `/api/v1`，而 `OpenAPIClient._build_request()` 又无条件追加 `/api/v1`，请求最终成为 `/api/v1/api/v1/...` 并全部得到 404。本次不修改该行为，仅让线上日志能直接暴露这一事实。
-- **方案**：不改变现有路由或 Tool Calling 行为，只为分类、工具加载、首次模型响应、每次工具执行和最终模型响应添加安全的阶段日志。日志记录调用数量、工具名、参数字段名、HTTP 状态、响应长度和耗时；不记录密钥、完整提示词或工具响应正文。首次模型响应不含 tool call 时以 warning 明确标注，截断记录其文本，作为此次复现的直接诊断证据。
-- **实施任务**：
-  - 在 Python Agent 与 OpenAPI 工具客户端补充阶段日志及单元测试。
-  - 运行原始提问复现，读取 `logs/agent.log` 形成当前通用聊天的实际卡点结论。
-- **验收**：
-  - 单元测试覆盖“模型未调用工具”和“工具 HTTP 成功”两个日志路径。
-  - 用户复跑原始提问后，可从 `logs/agent.log` 判断当前卡在模型决策、工具执行还是最终生成。
-- **（用户）验收操作**：重启当前 Python Agent 服务后，重新发送原始山西提问一次。
-- **预期结果**：`logs/agent.log` 出现 `[tool]` 阶段日志；若模型调用工具，能看到请求路径和 HTTP 状态，当前根因会表现为 `/api/v1/api/v1/...` 的 404。
-- **最小回传**：回复“CQ1 已复现”。
-- **AI 关单证据**：用户复跑后，`logs/agent.log`（20:22:36 请求）完整记录了路由分类、工具加载、首次模型调用（3 个 tool call）、每次工具执行的耗时与结果长度、最终模型调用，阶段日志齐全。日志直接定位了两个后续事实：一是 404 根因（路径双重拼接 `/api/v1/api/v1/...`，已在 `agent/tools/openapi_client.py` 修复）；二是当前新卡点为单轮工具循环（见 CQ2）。
-
-### CQ2 Tool Calling 支持多轮工具调用循环
-
-- **状态**：Done
-- **背景**：用户发送「找山西旅游第一天的照片并生成社交媒体文案」，路由到 `tool` 节点后，模型第一轮正确调用 3 个工具（标签、时间线事件、照片统计），但 `_tool_node` 结构是"首次模型调用 → 执行一轮工具 → 最终模型调用"，只给模型一次工具调用机会。最终回复停在「找到了「山西」时间线（2026-08-01，共258张照片）。我来查看这些照片的拍摄日期，确定第一天是哪天。」，任务未完成就中断。
-- **分析**：该请求至少需要多轮：查时间线 → 取山西时间线照片 → 按拍摄日期筛第一天 → 生成文案。`_tool_node` 源自"支持 Function Calling 的聊天循环（单次工具调用）"的初版设计；且"最终模型调用"仍绑定工具，若模型在该轮继续发起 tool call，当前代码会直接丢弃。另外 `_TOOL_SYSTEM_PROMPT` 要求"回答控制在 150 字以内"，会诱导模型提前收尾，需随循环一并调整。
-- **方案**：方案 A，节点内有界循环（用户已选定，另一备选为 LangGraph 条件边循环，因项目不消费图级中间状态、改动面更大而未采用）。
-  1. `_tool_node` 改为循环结构：每轮调用模型，响应含 tool_calls 就全部执行并以 ToolMessage 追加到对话，继续下一轮；不含 tool_calls 则返回文本作为最终答案。设最大轮数上限（6 轮）防止失控，达到上限时以不绑定工具的方式追加一次调用，让模型基于已收集信息给出总结性回答，避免静默截断。
-  2. `_TOOL_SYSTEM_PROMPT` 同步调整：明确可以分多轮调用工具，信息收集完整前不要输出"我来查看""接下来我会"这类半截话；拿到足够信息后一次性给出完整结果。
-  3. 日志沿用 `[tool]` 阶段风格，但按轮次编号区分（轮次、工具名、耗时、结果长度），保持 CQ1 建立的诊断能力。
-- **实施任务**：
-  - 重构 `_tool_node` 为有界循环，新增最大轮数常量。
-  - 更新 `_TOOL_SYSTEM_PROMPT`。
-  - 单元测试：mock 模型"两轮工具调用后给出文本"的多轮场景；达到上限时不死循环、返回兜底总结。
-  - 更新 `tests/test_tool_diagnostics.py` 中依赖旧两段式结构的用例。
-- **验收**：
-  - 单元测试覆盖多轮循环与上限兜底两条路径。
-  - （用户）重启 Agent 服务后重发原始山西请求，回复包含第一天照片的判定依据和完整文案，`logs/agent.log` 的 `[tool]` 日志呈现多轮调用。
-- **实施记录**：
-  - `chain/photo_agent.py`：`_tool_node` 重构为有界循环，新增 `_TOOL_MAX_ROUNDS = 6` 与 `_TOOL_RESULT_MAX_LEN = 4000` 常量；日志由"首次/最终"改为"第 N/6 轮"；达到上限后以不带工具的 `llm_plain` 追加一次强制总结调用。
-  - `_TOOL_SYSTEM_PROMPT`：允许多轮收集信息，禁止中断性表态，字数上限放宽到 300 字（文案类回复需要空间）。
-  - 测试：新增 `tests/test_tool_loop.py`（多轮收敛 + 上限兜底）；`tests/test_tool_diagnostics.py` 原为 pytest 风格但项目 venv 不装 pytest（makefile 建环境只执行 `uv sync`，不含 dev extras），实际从未运行过，本次转为 unittest 风格，与项目有记录的测试命令 `python -m unittest discover` 对齐。
-  - 自动验证：全量测试 90/90 通过；直接调用 `_tool_node` 跑真实模型 + 真实后端的山西请求，模型发起 6 轮工具调用后由兜底总结产出完整回复，含第一天照片判定（8 月 1 日、DSC_9989 等 4 张及内容描述）和带话题标签的文案。
-  - 用户验收反馈（21:23 复测）：6 轮不够。日志显示模型第 6 轮刚拿到按日期筛选的照片数据（23650 字符）就被强制总结，兜底回复基于不完整信息，出现"第一天（2026-08-08）"与事件日期 2026-08-01 矛盾的猜测。`_TOOL_MAX_ROUNDS` 由 6 调整为 20，等待用户再次验收。
-  - 配置化（用户要求）：轮数上限从代码常量改为 `llm.tool_max_rounds` 配置项。`Config` 新增 `tool_max_rounds`（`_optional`，缺省 20），`_tool_node` 改从 `cfg.tool_max_rounds` 读取；`configs/config.yaml` 模板与用户本地配置均已加入该项；测试中的假配置补充该属性，兜底用例改用配置值断言。全量测试 90/90 通过。
-  - 用户 23:55 复测山西请求时，分类器将该请求路由到 `combined`（21:23 复测时为 `tool`），工具循环未被执行到；叠加 CQ3 的属性值崩溃，最终走了纯 RAG 降级。原始山西请求的端到端验收改由 CQ4 管线承接（该请求将由创作型节点处理）。
-- **（用户）验收操作**：重启 Agent 服务后，发送一个多步工具类请求一次（例如「先看看有哪些时间线，再看其中某个时间线的照片分布」）。
-- **预期结果**：回复完整；`logs/agent.log` 出现多轮 `[tool] 第 N/20 轮模型调用` 日志。
-- **最小回传**：回复“CQ2 已验收”，或附上实际回复内容。
-- **AI 关单证据**：用户确认验收通过（2026-08-28）。多轮循环行为已有开发期实测（实施记录：真实模型 6 轮工具调用 + 兜底总结产出完整回复，全量测试 90/90）。本次复核时 `agent.log` 已随 13:11 服务重启轮转覆盖，验收时段的多轮 `[tool]` 日志不可追溯，关单依据为用户确认与开发期实测记录。
-
-### CQ3 结构化属性值获取崩溃修复
-
-- **状态**：Done
-- **背景**：23:55 山西请求复测时，`logs/agent.log` 出现 `AttributeError: 'ApiAttributeValues' object has no attribute 'get'`，随后 SQL 侧生成 `SELECT '无法回答'`，combined 降级为纯 RAG。
-- **分析**：Go SDK 重新生成后，属性值接口返回类型化模型 `ApiAttributeValues`，而 `text_to_sql._fetch_attribute_values` 仍按 dict 使用（`values.get(...)`）。`backend_sdk.sdk_to_dict` 正是为这类模型转 dict 场景准备的工具函数，但该调用点一直未接入。属性值缺失导致 SQL 生成提示中没有可用枚举值，LLM 对结构化问题倾向回答"无法回答"。
-- **方案**：调用点改用 `sdk_to_dict` 转换，根因修复，不加容错分支。
-- **实施记录**：`chain/text_to_sql.py` 属性值获取处改为 `bksdk.sdk_to_dict(resp.values)`；活体验证转换结果含全部六个字段（objects 1377 个值）；全量测试 90/90 通过。
-- **AI 关单证据**：修复后直接从活体后端取属性值成功并正确格式化，`tests.test_text_to_sql` 36 项及全量 90 项测试通过。
 
 ### CQ4 创作型查询（Compose）专用管线
 
@@ -104,82 +41,10 @@
 - **（用户）验收操作**：CQ4 实现完成后，重启 Agent 服务，在对话页重发原始山西提问一次。
 - **预期结果**：路由到创作型节点；回复包含第一天照片（照片卡片）、标题和文案；日志出现 `[compose]` 阶段记录。
 - **最小回传**：回复“CQ4 已验收”，或附上实际回复内容。
-- **AI 关单证据**：AI 读取 `logs/agent.log` 确认 `[compose]` 阶段日志与回复内容后，将状态改为 Done。
+- **AI 自动验证**：单元测试覆盖连拍折叠、两级收缩与超限兜底分支，全量测试通过；`[compose]` 各阶段日志行为有测试断言。
+- **关单方式**：用户回复确认后，AI 在同一轮直接将任务改为 `Done` 并注明确认日期，不追加核验。
 
-### CQ5 SQL 路由诊断日志
-
-- **状态**：Done
-- **背景**：00:31 山西请求路由到 sql 后，`logs/agent.log` 只有一条属性值日志，最终回复「查询结果（共 1 条）: result=无法回答」。schema 获取、模型原始输出、生成 SQL、执行行数全程无记录，无法定位问题出在哪一步。
-- **分析**：text_to_sql 链路各阶段均无日志；`_sql_node` 成功与异常路径也无日志，异常只被拼进 answer 字符串、不带堆栈。补日志后活体复现确认：模型对山西原问题按提示词规则 7 输出无法回答哨兵（`SELECT '无法回答' AS result`），哨兵被执行后原样展示给用户，这一体验问题另立 CQ6 处理。
-- **方案**：沿用 CQ1 阶段日志约定补 `[sql]` 前缀日志，不改任何行为：schema 字段数、属性值计数（原日志统一加前缀）、生成开始、LLM 原始输出（截断 300 字）、生成 SQL（截断 500 字）、无法回答哨兵 warning、执行行数、节点级完成（rows/answer_chars）与异常（含堆栈）。
-- **实施记录**：
-  - `chain/text_to_sql.py`：新增 `_log_generated_sql` 辅助函数（原始输出 + SQL + 哨兵告警），`generate_sql` / `generate_filter_sql` / `execute_sql` / `_fetch_schema` 补阶段日志。
-  - `chain/photo_agent.py`：`_sql_node` 补完成与异常日志。
-  - 测试：新增 `tests/test_sql_diagnostics.py`（schema 日志、生成日志、哨兵告警、过滤 SQL、执行行数、节点完成、节点异常共 7 个用例）。
-  - 自动验证：全量测试 97/97 通过；真实配置活体验证两问，日志完整覆盖各阶段。
-- **AI 关单证据**：活体验证输出：简单计数问呈现 Schema fields=39 → 属性值计数 → 生成 SQL → 执行 rows=1（COUNT(*)=1436）全链路日志；山西原问题呈现 WARNING 哨兵日志（duration_ms=3473），与 00:31 线上现象一致，根因可直接从日志读出。
-
-### CQ6 SQL 生成不理解时间线字段与无法回答哨兵体验
-
-- **状态**：Done
-- **背景**：CQ5 日志补齐后活体复现确认两个独立缺陷：
-  - ① 「山西时间线的照片有哪些？」这类纯查询也返回无法回答；「找到山西旅游第一天的照片」虽生成了 SQL，但用 description/tags LIKE 匹配，没有用 timeline 列。schema 文本只列字段名/类型/JSON tag，few-shot 也没有时间线示例，模型不知道 timeline 列存的是时间线活动名。
-  - ② 无法回答哨兵被执行后原样回复「查询结果（共 1 条）: result=无法回答」，用户无从理解。
-- **分析**：字段语义缺失是 ① 的根因。探查进一步确认：schema API 的 `name` 是 Go 字段名（PascalCase，直接用于 SQL 会 500），真实 SQLite 列名是 `json_tag`（snake_case），此前模型只能从 few-shot 隐式学到这一点。分类器对多意图请求的路由抖动（三次复测 tool / combined / sql 各不同）由 CQ4 承接，不在本条范围。
-- **方案**：方案 A，提示词侧（用户已选定，另一备选为 Go schema API 返回字段说明，因需改 Go + SDK + Python 三层未采用）：
-  1. `_format_schema` 为关键字段拼接中文语义说明（新增 `FIELD_DESCRIPTIONS`，以 json_tag 为键），并在表头注明「SQL 使用列名 snake_case」。
-  2. few-shot 增加时间线查询与「第一天」首日子查询两个示例，SQL 先在真实库验证（山西 258 张、首日 2026-08-02 共 80 张）。
-  3. `answer_with_sql` 检测无法回答哨兵时跳过执行，返回可理解的说明与换问法建议。
-- **实施记录**：
-  - `chain/text_to_sql.py`：新增 `FIELD_DESCRIPTIONS`（28 个关键字段）；`_format_schema` 格式改为「列名 = json_tag，语义」；few-shot 12 → 14 条；`answer_with_sql` 哨兵短路。
-  - 测试：`tests/test_text_to_sql.py` 更新格式断言、新增语义拼接用例；`tests/test_sql_diagnostics.py` 新增哨兵短路由例（断言不执行 SQL）。
-  - 自动验证：全量测试 100/100 通过；真实配置活体验证三问。
-- **AI 关单证据**：活体验证输出：「山西时间线的照片有哪些？」生成 `timeline = '山西'` 并返回 20 条；「找到山西旅游第一天的照片」生成 timeline + `DATE(shot_at) = (SELECT MIN(DATE(shot_at)) ...)` 首日子查询；山西原问题（含文案意图）不再输出 `result=无法回答` 原始行，改为说明文案并建议按时间线等结构化条件换问法。
-
-### AQL2-1 批量 VLM 审查全量误报（SDK 字段缺失）
-
-- **状态**：Done
-- **背景**：AQL1 关闭后，照片管理页「批量 VLM 审查」仍将全库 1323 张照片判为「描述疑似异常」。此前几轮修复（关键词规则收紧、健康状态改为读取时实时推导）都在 Go 侧，实测未消除误报。
-- **分析**：
-  - 前端弹窗数据来自 agent 的 `/api/embed/audit`（`embed_queue.py` 的 `get_realtime_audit`），不是 Go 侧 `/api/v1/photos/ai-audit`；两接口实测结果分别是 `vlm_review: 1323` 与 `vlm_review: 0`，Go 侧校验规则本身已正确。
-  - agent 判定描述可信依赖照片列表项的 `vlmStatus` 字段，但 Python swagger SDK（`agent/backend-sdk`）的生成模型 `ApiPhotoItem` 停留在旧版 openapi：proto 在 8/27 AQL 轮新增了 `vlm_status` 等 6 个字段（33–38 号），SDK 从未重新生成，反序列化时丢弃这些未知字段。
-  - 于是 `_is_photo_description_trusted` 中 `getattr(photo, "vlm_status"/"vlmStatus")` 永远为空，全部照片判为不可信，reason 也走 getattr 默认值「当前描述未通过质量校验」。同一断点还使 `_fetch_unembedded_ids` 与 `_fetch_embeddable_ids` 恒为空，批量 Embedding 修复实际处于失效状态。
-  - 引入点为 AQL1-6 提交（593ceff）：批量审查从逐张详情健康接口（原始 JSON，字段保留）改为列表 SDK 字段判断时，未同步重新生成 SDK。
-- **方案**：方案 A（用户已选定），在 backend 下执行 `make api-cli` 按 openapi.yaml 重新生成 Python 与 TS SDK。openapi.yaml 与 proto 已核对一致（6 个 AI 状态字段均在），SDK 目录无手工改动，生成安全。
-- **实施记录**：
-  - 重新生成 `agent/backend-sdk`（`ApiPhotoItem` 补齐 `vlm_status` 等 6 字段）与 `web/backend-sdk`，共 3 个文件变更。
-  - 离线验证：用新 SDK 反序列化真实列表接口，`vlm_status='healthy'`、trusted=True；以真实 Chroma 存储完整执行 `get_realtime_audit`，1323 张全部通过，`vlm_review: 0`。
-  - 回归：agent 全量测试 100/100 通过。
-- **验收**：
-  - （用户）重启 agent 服务（`go run` 的 Go 后端无需动），打开照片管理页点击「批量 VLM 审查」，确认「描述疑似异常」显示 0 张。
-- **（用户）验收操作**：重启 agent 服务后在照片管理页打开批量 VLM 审查弹窗一次。
-- **预期结果**：弹窗显示「没有 AI 描述 0 张，描述疑似异常 0 张」。
-- **最小回传**：回复「AQL2-1 已验收」，或截图/转述弹窗数字。
-- **AI 关单证据**：用户确认验收通过（2026-08-28）。复核记录：agent 13:11 重启后日志出现两次 `GET /api/embed/audit`（13:14，即验收弹窗操作）；Go 侧 `/api/v1/photos/ai-audit` 实测 `total: 1323, vlm_review: 0`，SDK 字段缺失导致的全量误报未复现。
-
-### AQL2-2 坏图描述审核漏判（关键词措辞绕过）
-
-- **状态**：Done
-- **背景**：AQL2-1 修复后批量审查不再全量误报，但 DSC_9985.jpg 的存量描述仍是坏图内容（上半彩色条纹、下半浅蓝纯色块的故障画面），本地审核未命中。VLM 已在自由文本里写明「故障失真」「异常显示画面」，但关键词黑名单只有「故障画面/故障彩条/测试图/color bars/test pattern」5 个措辞，组合规则要求「条纹组」而描述写的是「水平条纹」「纯色色块」，全部未命中。
-- **分析**：
-  - `validateVlmDescription`（ai_quality.go）靠枚举 VLM 自由措辞拦截坏图，同一故障现象每次生成说法不同，属打地鼠模式；vlm_prompt.md 也没有结构化字段让模型直接给出「图像损坏」结论，只能借 mood/overall_summary 间接表达。
-  - 审核为读取时实时重算（AIAuditHandler / derivePhotoAIState / agent 侧列表 vlm_status），规则变更对存量描述立即生效，无需重跑 VLM。
-- **方案**：A+B 组合（用户已选定）：
-  1. 方案 A（存量检出）：关键词黑名单补充已证实措辞——故障失真、异常显示画面、显示异常、花屏、glitch、corrupted，DSC_9985 立即被标待复核。
-  2. 方案 B（新生成描述免疫措辞）：vlm_prompt.md 新增 `image_integrity` 字段（normal/corrupted/test_pattern），指引 VLM 遇显示损坏如实标记而非当作拍摄内容描述；审核解析该顶层字段，corrupted/test_pattern 拦截，存量描述无此字段则跳过、由关键词兜底。
-  3. 误报边界维持原设计：条纹、色块等视觉元素单独出现不判异常；曾考虑「无具象+条纹」组合规则，因纯抽象/建筑条纹摄影会被永久卡在待复核（重跑 VLM 仍产出同样描述），不采用。方案 C（源头图像统计预检）工程量大、误报难控，不纳入本轮。
-- **实施记录**：
-  - `backend/internal/defaultService/service/ai_quality.go`：关键词列表提取为 `reviewMarkers` 并扩充 6 个措辞；新增 `validateVlmImageIntegrity` 解析 JSON 顶层 `image_integrity`。
-  - `configs/vlm_prompt.md`：正文增加完整性判断指引，JSON 结构与输出示例均补 `image_integrity` 字段。
-  - 测试（vlm_parse_test.go）：新增 DSC_9985 真实描述回归用例（命中「故障失真」）、同族措辞 6 例、image_integrity 三态用例（corrupted/test_pattern 拦截，normal/缺字段放行）；原有条纹/色块误报守卫用例保持通过。
-  - 自动验证：service 包全量测试通过，`go build ./...` 通过。
-- **验收**：
-  - （用户）重启 Go 后端与 agent（prompt 文件两侧均读取），打开照片管理页点击「批量 VLM 审查」，确认「描述疑似异常」不再为 0，且候选列表包含 DSC_9985.jpg，原因为「description matched review rule: 故障失真」。
-- **（用户）验收操作**：重启服务后打开批量 VLM 审查弹窗一次。
-- **预期结果**：弹窗「描述疑似异常」≥1 张，候选含 DSC_9985.jpg。
-- **最小回传**：回复「AQL2-2 已验收」，或截图/转述弹窗数字与 DSC_9985 是否在列。
-- **AI 关单证据**：用户确认验收通过（2026-08-28），且验收中已完成原地修复。持久化证据：`photos` 表 DSC_9985.jpg（353f77ff）描述于 13:13 重新生成，含新 prompt 的 `image_integrity: "normal"`，主体为晋祠真实内容（旧坏描述已被替换）；`ai_processing_history` 记录 `vlm|healthy`；`agent.log` 留存验收时段两次 `/api/embed/audit` 与该照片详情访问。回归测试 `TestValidateVlmDescription_RejectsDsc9985` 固化旧坏描述命中「故障失真」的行为。
-
+> v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
 > v1.0.13 已归档：HW1、AQL1-1–AQL1-8、CH2、QA2、DOC1，详见 [v1.0.13](archive/v1.0.13.md)。
 > v1.0.12 已归档：W12、GR1、CH1、TF1-1–TF1-10、PS7–PS9、QA1、M1、D1，详见 [v1.0.12](archive/v1.0.12.md)。
 > v1.0.11 已归档：CL1、CL2、PS1–PS6，详见 [v1.0.11](archive/v1.0.11.md)。
@@ -205,6 +70,7 @@
 
 ## 决策历史
 
+- **2026-08-28**：v1.0.14 归档。完成对话查询链路诊断与修复（CQ1–CQ3、CQ5、CQ6）及资产审核收尾（AQL2-1、AQL2-2），共 7 项任务；同期确立验证流单向、人工验收即终态的关单规则。CQ4（创作型查询管线）已规划，留待下一版本。
 - **2026-08-27**：v1.0.13 归档。完成 AI 照片资产质量闭环、对话体验收敛、Harness 用户验收交接与 Agent 全量测试契约修复，共 12 项任务；全部自动验证与用户交互验收均已完成。
 - **2026-08-26**：v1.0.12 归档。完成检索评估闭环、统一选图与关键前端拆分共 19 项任务；全量复评 8.4/10，通过。两项部署后手工交互验收记录在版本归档中。
 - **2026-08-26**：选图控件统一立项并完成。确立两个标准控件：选图覆盖层与已选照片列表；黄金用例粒度完全自动推导，主题发现迁移到覆盖层。复用约定见 [专题中枢](design/2026-08-26-3-photo-selection-controls-hub.md)。
