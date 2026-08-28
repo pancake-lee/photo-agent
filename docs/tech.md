@@ -13,13 +13,13 @@ flowchart LR
     A -->|"/api/v1/*"| B["Go Backend<br>:10004"]
     A -->|"/api/chat/* 等"| C["Python Agent API<br>:10005"]
 
-    C -->|Text-to-SQL| D["Go /api/v1/query/sql"]
+    C -->|Text-to-SQL| D["Go /api/v1/sql/query"]
     C -->|Function Calling| E["Go /v1/openapi.json → 工具调用"]
     C -->|RAG| F["ChromaDB<br>本地向量库"]
     C -->|Embedding| G["Go /v1/embeddings<br>代理"]
     C -->|聚类分析| H["ChromaDB 向量聚类<br>HDBSCAN + UMAP"]
     C -->|选题建议| I["suggest.py<br>三阶段编辑视角提案"]
-    C -->|黄金用例| J["agent/data/golden_queries.json"]
+    C -->|黄金用例| J["data/golden_queries.json"]
 
     B --> K["照片 CRUD / 文件服务 / 统计 API"]
     B --> M["VLM: 实时调用 VLM API 生成描述"]
@@ -31,7 +31,7 @@ flowchart LR
 
 - **Go 后端**：照片元数据管理、文件服务、上传导入、VLM 实时描述生成、Embedding 代理、SQL 查询执行、OpenAPI 自描述。**不负责**：Agent 编排、向量检索、对话管理。
 - **Python AI 服务层**：LangGraph Agent 编排、Chroma 向量检索、Text-to-SQL（NL→LLM→SQL→Go执行）、Function Calling 工具调用、FastAPI 对话服务。**不负责**：直接访问数据库或文件系统（所有数据操作通过 Go API）。
-- **Web 前端**：照片管理（上传/浏览/筛选/删除）、AI 对话界面、VLM/Embedding 队列可视化。**不负责**：AI 推理、文件存储。
+- **Web 前端**：照片管理（上传/浏览/筛选/删除）、AI 对话界面、选题/聚类/图文工坊结果浏览、VLM/Embedding 队列可视化、导入工作流与设置。**不负责**：AI 推理、文件存储。
 
 ---
 
@@ -65,7 +65,7 @@ flowchart TD
 flowchart TD
     A["用户问题（自然语言）"] --> B["[classify] LLM 零样本分类<br>query_type: sql | rag | tool | combined"]
 
-    B -->|sql| C["[_sql_node]<br>NL → generate_sql() → LLM 生成 SQL<br>→ Go POST /api/v1/query/sql 执行<br>→ 结果格式化为自然语言"]
+    B -->|sql| C["[_sql_node]<br>NL → generate_sql() → LLM 生成 SQL<br>→ Go POST /api/v1/sql/query 执行<br>→ 结果格式化为自然语言"]
 
     B -->|rag| D["[_rag_node]<br>问题 → Embedding → ChromaDB 向量检索 Top-K<br>→ 按 photo_id 聚合去重 → 比值断层过滤<br>→ 拼接上下文 → LLM 生成回答"]
 
@@ -109,19 +109,19 @@ flowchart TD
     H --> I["5. LLM 生成回答"]
 ```
 
-**SQL 值动态获取**：每次 `generate_sql()` / `generate_filter_sql()` 调用前，先从 Go `GET /api/v1/photos/attribute-values` 获取数据库中实际存在的属性值，拼入 System Prompt。LLM 只能使用实际值构造 LIKE 模式，避免生成 `backlight` 而 DB 存的是 `backlit` 这类不匹配。
+**SQL 值动态获取**：每次 `generate_sql()` / `generate_filter_sql()` 调用前，先从 Go `GET /api/v1/sql/photos/attribute-values` 获取数据库中实际存在的属性值，拼入 System Prompt。LLM 只能使用实际值构造 LIKE 模式，避免生成数据库中不存在的值。结构化属性值是 VLM 输出的中文原文（如「逆光」「暖黄」「室内」），不再做中英映射。
 
 ### 3.4 Text-to-SQL 链路细节
 
 ```mermaid
 flowchart TD
-    A[用户问题] --> B["1. 获取 Schema<br>GET /api/v1/schema/photos<br>字段名/类型/可空性"]
-    B --> C["2. 获取属性值<br>GET /api/v1/photos/attribute-values<br>6 个字段的 distinct 值"]
-    C --> D["3. 构建 Prompt<br>System: 表结构 + 属性值 + 12 条规则<br>Few-shot: 12 个 NL→SQL 示例<br>Human: question"]
+    A[用户问题] --> B["1. 获取 Schema<br>GET /api/v1/sql/photos/schema<br>字段名/类型/可空性"]
+    B --> C["2. 获取属性值<br>GET /api/v1/sql/photos/attribute-values<br>6 个字段的 distinct 值"]
+    C --> D["3. 构建 Prompt<br>System: 表结构 + 属性值 + 生成规则<br>Few-shot: 若干 NL→SQL 示例<br>Human: question"]
     D --> E["4. LLM 生成 SQL<br>temperature=0"]
     E --> F["5. 提取 SQL<br>处理 Markdown 代码块包裹"]
     F --> G["6. 安全校验<br>仅允许 SELECT"]
-    G --> H["7. Go 执行<br>POST /api/v1/query/sql<br>返回 rows"]
+    G --> H["7. Go 执行<br>POST /api/v1/sql/query<br>返回 rows"]
 ```
 
 ### 3.5 VLM 预处理
@@ -137,7 +137,7 @@ flowchart TD
 **索引流程**：
 
 ```
-photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embedding(Go代理) → ChromaDB
+photos 表 description → 分块器（chunk_strategy 配置控制）→ Embedding(Go代理) → ChromaDB
 ```
 
 **检索流程**：
@@ -147,7 +147,7 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 → _filter_by_ratio_gap() → 构建上下文 → LLM 回答
 ```
 
-- 分块策略：RecursiveCharacterTextSplitter，chunk_size=500，chunk_overlap=100
+- 分块策略：由 `embedding.chunk_strategy` 配置控制，支持 none（不分块，默认）/ fixed_size（固定字数）/ markdown_heading（按标题）；fixed_size 时 chunk_size=500、chunk_overlap=50
 - 聚合：同一照片多 chunk 只保留距离最小的一条
 - 自动截断：相邻距离比值 ≥1.8 时截断（Max Ratio Gap），保留相关性高的结果
 
@@ -161,9 +161,15 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 
 - `GET /photos` — 照片列表（分页、timeline/tag/keyword/brand/lens/focal/iso 筛选、排序）
 - `GET /photos/stats` — 综合统计（total/brands/lens/focal/gps/monthly/hourly）
+- `GET /photos/segments` — 分段导航（当前筛选+排序下每个分段的 key/label/count/offset）
+- `GET /photos/ai-audit` — AI 描述质量审核（批量修复前的只读候选摘要）
 - `GET /photos/:id` — 单张详情（含 6 个结构化属性）
 - `GET /photos/:id/image` — 图片文件（?size=thumb 缩略图）
+- `POST /photos/:id/describe` — 单张 VLM 描述生成
+- `POST /photos/:id/ai-validate` — 重新执行当前描述的本地质量校验（不调用 VLM）
+- `POST /photos/:id/ai-health` — 回写照片的向量处理结论（由 Embedding 服务调用）
 - `PUT /photos/:id/tags` — 更新标签
+- `PUT /photos/:id/shot_at` — 修改拍摄时间（写 DB + 回写 EXIF）
 - `DELETE /photos/:id` — 删除照片（DB + 文件）
 - `POST /photos/upload` — 上传照片（冲突检测：overwrite/skip/keep_both）
 
@@ -172,23 +178,38 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `POST /vlm/queue/start` — 启动批量 VLM（支持 force 重新处理）
 - `POST /vlm/queue/stop` — 停止队列
 - `GET /vlm/queue/status` — 队列进度（total/completed/failed/current）
-- `POST /photos/:id/describe` — 单张入队
+- `GET /vlm/describe/progress` — 单张描述进度
 
 **查询 & Schema**：
 
-- `POST /query/sql` — 执行 SELECT SQL（双重安全校验）
-- `GET /schema/photos` — 表结构（反射自 model.Photo）
-- `GET /photos/attribute-values` — 6 个结构化字段的 distinct 值
+- `POST /sql/query` — 执行 SELECT SQL（安全校验，仅允许 SELECT）
+- `GET /sql/photos/schema` — 表结构（反射自 model.Photo）
+- `GET /sql/photos/attribute-values` — 6 个结构化字段的 distinct 值
 
-**其他**：
+**标签**：
+
+- `GET /tags` — 标签列表
+- `GET /tags/:name/photos` — 某标签下照片
+- `POST /tags/bind` — 批量绑定标签
+- `POST /tags/unbind` — 批量解绑标签
+
+**时间线**：
 
 - `GET /timelines` — 时间线列表
 - `GET /timelines/:name/photos` — 某时间线下照片
-- `GET /tags` — 标签列表
-- `GET /tags/:name/photos` — 某标签下照片
-- `POST /import/jobs` — 创建导入任务
-- `GET /import/jobs/:id` — 导入进度
-- `GET /health` — 健康检查
+- `GET /timeline-events` — 时间线事件列表
+- `POST /timeline-events` — 创建时间线事件
+- `POST /timeline-events/recompute` — 重算时间线归属
+- `GET /timeline-events/recompute/status` — 重算进度
+- `DELETE /timeline-events/:id` — 删除时间线事件
+
+**连拍分组**：
+
+- `GET /burst-groups/config` — 连拍分组阈值配置
+- `PUT /burst-groups/config` — 更新阈值配置
+- `POST /burst-groups/rebuild` — 重建连拍分组
+- `GET /burst-groups/status` — 分组状态
+- `PUT /burst-groups/:group_id/cover` — 设置组封面
 
 **图文工坊草稿**：
 
@@ -199,9 +220,19 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `GET /drafts/:id` — 单条草稿详情
 - `GET /drafts/:id/export` — 导出草稿 ZIP（原图 + Markdown）
 
+**存储**：
+
+- `POST /storage/conflicts` — 检查待上传文件名的重名情况
+- `GET /storage/info` — 存储根目录状态信息
+
+**其他**：
+
+- `GET /health` — 健康检查
+
 **独立路由**（非 `/api/v1` 前缀）：
 
 - `POST /v1/embeddings` — Embedding 代理（OpenAI 格式 → 火山引擎）
+- `GET /v1/embeddings/health` — Embedding 服务配置可用性检查
 - `GET /v1/openapi.json` — OpenAPI 3.0 自描述（Python Agent 工具解析）
 
 ### 4.2 Python Agent API（FastAPI, :10005）
@@ -211,7 +242,8 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 - `GET /api/chat/health` — 健康检查
 - `POST /api/chat/sessions` — 创建会话
 - `GET /api/chat/sessions` — 会话列表
-- `GET /api/chat/sessions/:id` — 会话详情 + 消息
+- `GET /api/chat/sessions/:id` — 会话详情
+- `GET /api/chat/sessions/:id/messages` — 会话消息列表
 - `PATCH /api/chat/sessions/:id` — 更新标题
 - `DELETE /api/chat/sessions/:id` — 删除会话
 - `POST /api/chat/sessions/:id/messages` — 发送消息 → AI 回复
@@ -219,7 +251,10 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 **Embedding 管理**：
 
 - `GET /api/embed/stats` — 嵌入统计（对比 Go DB 照片数）
+- `GET /api/embed/audit` — 嵌入一致性审计
+- `GET /api/embed/progress` — 嵌入进度
 - `POST /api/embed/cleanup` — 清理孤儿文档
+- `POST /api/embed/groups/sync` — 同步嵌入分组
 - `POST /api/embed/photos/status` — 批量查询嵌入状态
 - `POST /api/embed/queue/start` — 启动批量嵌入
 - `POST /api/embed/queue/stop` — 停止队列
@@ -254,6 +289,7 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 **聚类分析**：
 
 - `POST /api/cluster/run` — 执行聚类（参数：min_cluster_size 等）
+- `GET /api/cluster/status/:task_id` — 聚类任务状态
 - `GET /api/cluster/results` — 历史聚类结果列表
 - `GET /api/cluster/results/:id` — 聚类结果详情（含每个 cluster 的照片列表）
 - `DELETE /api/cluster/results/:id` — 删除聚类结果
@@ -272,16 +308,20 @@ photos 表 description → 分块器(RecursiveCharacterTextSplitter) → Embeddi
 ### 4.3 Web 前端路由
 
 - `#/photos` (PhotoManagement) — 照片管理主页（浏览/筛选/上传/删除）
+- `#/timelines` (TimelineManagement) — 时间线管理
 - `#/chat/:sessionId?` (ChatView) — AI 对话界面
+- `#/suggest` (SuggestView) — 选题建议（主题发现）
 - `#/golden-queries` (GoldenQueryManagement) — 黄金查询用例管理
 - `#/cluster` (ClusterView) — 聚类分析与组图发现
 - `#/post-studio` (PostStudio) — 图文工坊（创作工作台）
 - `#/drafts` (DraftManagement) — 草稿管理
+- `#/settings` (SettingsView) — 设置（连拍分组阈值等）
+- `#/import` (ImportWorkflow) — 导入工作流
 
 Vite 开发代理：
 
-- `/api/v1/*` → Go Backend (:10004)
-- `/api/chat/*`, `/api/embed/*` → Python Agent (:10005)
+- `/api/chat`, `/api/embed`, `/api/golden-queries`, `/api/cluster`, `/api/eval`, `/api/suggest`, `/api/post-studio` → Python Agent (:10005)
+- `/api`（其余前缀）→ Go Backend (:10004)
 
 ---
 
@@ -289,71 +329,30 @@ Vite 开发代理：
 
 ### 5.1 Go SQLite — Photo 表
 
-```go
-type Photo struct {
-    // 标识
-    ID          string    `gorm:"primaryKey" json:"id"`
-    Filename    string    `json:"filename"`
-    FilePath    string    `json:"file_path"`
-    // 组织
-    Timeline    string    `json:"timeline"`       // e.g. "2024-02-云南"
-    Tags        string    `json:"tags"`           // JSON array string
-    // AI 描述
-    Description string    `json:"description"`    // VLM 原始输出（含 ```json 结构化块）
-    // 结构化属性（VLM 提取，逗号分隔多值）
-    Objects     string    `json:"objects" gorm:"type:text"`     // 主体类型
-    Colors      string    `json:"colors" gorm:"type:text"`      // 主色调
-    Scene       string    `json:"scene"`                        // 场景类型
-    Lighting    string    `json:"lighting"`                     // 光线特征
-    Mood        string    `json:"mood"`                         // 情绪氛围
-    Composition string    `json:"composition" gorm:"type:text"` // 构图特点
-    // EXIF
-    ShotAt       *time.Time `json:"shot_at"`
-    Width        int        `json:"width"`
-    Height       int        `json:"height"`
-    Brand        string     `json:"brand"`
-    Model        string     `json:"model"`
-    Lens         string     `json:"lens"`
-    FocalLength  string     `json:"focal_length"`   // "35mm" 文本格式
-    Aperture     string     `json:"aperture"`
-    ISO          int        `json:"iso"`
-    ExposureTime string     `json:"exposure_time"`
-    // GPS
-    Latitude     *float64   `json:"latitude"`
-    Longitude    *float64   `json:"longitude"`
-    Altitude     *float64   `json:"altitude"`
-    // 时间戳
-    ImportedAt   time.Time  `json:"imported_at"`
-}
-```
+`photos` 表由 GORM 生成（`backend/internal/pkg/db/model/photos.gen.go`），字段按职责分组：
 
-**结构化属性值域（Go mapping 函数产出）**：
+- **标识**：`id`（主键）、`filename`、`file_path`、`file_type`
+- **组织**：`timeline`（时间线活动名）、`timeline_manual`（是否手动指定）、`tags`（JSON 数组字符串）、`burst_group_id` / `burst_group_coarse_id`（精细/粗略连拍组）
+- **AI 描述**：`description`（VLM 原始输出，含 ```json 结构化块）、`description_model`、`description_time`、`description_raw`、`embedding_status`、`embedding_description_time`
+- **结构化属性**（VLM 提取，文本类型）：`objects`、`colors`、`scene`、`lighting`、`mood`、`composition`
+- **EXIF**：`shot_at`、`width`、`height`、`brand`、`model`、`lens`、`focal_length`（文本格式如 "35mm"）、`aperture`、`iso`、`exposure_time`
+- **GPS**：`latitude`、`longitude`、`altitude`
+- **时间戳**：`imported_at`
 
-- **objects**：VLM `main_objects` 直出 — 原始值，逗号分隔
-- **colors**：VLM `dominant_colors` 直出 — 原始值，逗号分隔
-- **scene**：`mapScene()` 中文→英文 — indoor, night, street, mountain, water, nature, urban, outdoor
-- **lighting**：`mapLighting()` 中文→英文 — dim, harsh, artificial, backlit, soft, bright
-- **mood**：`mapMood()` 中文→英文 — warm, calm, dramatic, melancholy, joyful, serious, mysterious
-- **composition**：VLM 直出（focus/depth/symmetry）— 原始值，逗号分隔
+**结构化属性值域（VLM 中文原文直出）**：
+
+`parseVlmAttrs()` 从 VLM 输出的 ```json 块中解析 6 个属性，直接保留 VLM 的中文原文，不做中英映射：
+
+- **objects**：`main_objects` 直出，顿号分隔（如「猫、沙发」）
+- **colors**：`dominant_colors` 直出，顿号分隔（如「暖黄、深棕」）
+- **scene**：`environment` + `setting`，逗号分隔（如「室内，客厅」）
+- **lighting**：`source` + `time_of_day`，逗号分隔（如「侧逆光，清晨」）
+- **mood**：`mood` 直出（如「慵懒温馨」）
+- **composition**：`focus` / `depth` / `symmetry`，逗号分隔（如「中央，浅景深，不对称」）
 
 ### 5.2 ChromaDB 文档
 
-```python
-# 仅存最小元数据
-metadata = {
-    "photo_id": "uuid-string",
-    "chunk_index": 0,
-}
-# document = 分块后的描述文本片段
-# embedding = Go 代理返回的向量
-```
-
-### 5.3 photos 表 VLM 字段
-
-- `description` — VLM 生成的 Markdown 文本（含 ```json 结构化块）
-- `description_model` — 生成描述的模型名
-- `description_time` — 生成时间
-- `objects` / `colors` / `scene` / `lighting` / `mood` / `composition` — 从描述 JSON 块中解析的 6 个结构化属性
+仅存最小元数据：`photo_id`（照片标识）+ `chunk_index`（分块序号）。document 为分块后的描述文本片段，embedding 为 Go 代理返回的向量。结构化属性全部在 Go SQLite 中，ChromaDB 不冗余存储。
 
 ---
 
@@ -362,54 +361,44 @@ metadata = {
 ```
 photo-agent/
 ├── backend/                      # Go 业务后端
-│   ├── cmd/
-│   │   └── server/main.go        # HTTP 服务入口
 │   ├── internal/
-│   │   ├── defaultService/
-│   │   │   ├── service/          # 业务逻辑（photo/vlm/embedding/burst/...）
+│   │   ├── defaultService/       # 业务入口（defaultService.go 为 HTTP 入口）
+│   │   │   ├── service/          # 业务逻辑（photo/vlm/embedding/burst/tag/timeline/...）
 │   │   │   ├── data/             # DAO 层
 │   │   │   └── conf/             # 配置结构
-│   │   ├── pkg/
-│   │   │   ├── api/              # Proto 生成的 Go 代码
-│   │   │   ├── db/               # GORM 模型 + 迁移
-│   │   │   └── perr/             # 错误定义
-│   │   └── proto/                # Proto 定义文件
+│   │   └── pkg/                  # db（GORM 模型 + 迁移）、api（Proto 生成代码）等
+│   ├── cmd/fixsize/              # 工具：修正图片尺寸
 │   └── go.mod
 ├── agent/                        # Python AI 服务层
-│   ├── chain/
-│   │   ├── photo_agent.py        # LangGraph 主图（7 节点 + 路由）
+│   ├── chain/                    # LangGraph 编排 + FastAPI 服务
+│   │   ├── photo_agent.py        # LangGraph 主图（路由 + 各查询节点）
 │   │   ├── text_to_sql.py        # Text-to-SQL（Schema + Few-shot + 动态属性值）
-│   │   ├── photo_rag.py          # RAG 检索（ChromaDB 向量检索 + 聚合 + 断层过滤）
-│   │   ├── server.py             # FastAPI 对话 API（含会话管理）
+│   │   ├── photo_rag.py          # RAG 检索（向量检索 + 聚合 + 断层过滤）
+│   │   ├── server.py             # FastAPI API（对话/聚类/选题/嵌入/黄金用例/图文工坊）
+│   │   ├── cluster.py            # 聚类分析
 │   │   ├── suggest.py            # 选题建议（三阶段编辑视角提案）
+│   │   ├── post_studio.py        # 图文工坊文案生成
+│   │   ├── eval_engine.py        # 启发式规则评估引擎
 │   │   ├── session_store.py      # 会话持久化（SQLite）
 │   │   └── embed_queue.py        # 批量 Embedding 队列
 │   ├── embedding/                # 分块策略 + Embedding 客户端
 │   ├── vectorstore/              # ChromaDB 封装
 │   ├── db/                       # Go 后端 HTTP 客户端（schema/sql）
 │   ├── tools/                    # OpenAPI 工具解析（Go 自描述 → LLM Function）
-│   ├── scripts/                  # 索引脚本（index_photos.py → ChromaDB）
-│   └── demo/                     # 独立演示入口（text_to_sql / query_router）
+│   └── scripts/                  # 索引脚本
 ├── web/                          # Web 前端
-│   ├── src/
-│   │   ├── views/                # PhotoManagement + ChatView + PostStudio + DraftManagement
-│   │   ├── components/           # PhotoGrid/Card/Detail + Upload + Chat
-│   │   ├── composables/          # 状态管理（usePhotos/useUpload/useChat/useVlmQueue/...）
-│   │   ├── types/                # TypeScript 类型定义
-│   │   └── router/               # Vue Router 配置
-│   └── vite.config.ts            # 开发代理配置
+│   └── src/
+│       ├── views/                # 照片管理/时间线/对话/选题/聚类/图文工坊/草稿/设置/导入
+│       ├── components/           # 通用组件
+│       ├── composables/          # 状态管理（usePhotos/useUpload/useChat/useBurstGroups/...）
+│       ├── types/                # TypeScript 类型定义
+│       └── router/               # Vue Router 配置
+├── client/                       # Wails Windows 导入客户端（import/sync）
+├── tools/                        # Playwright 回归测试脚本
 ├── configs/                      # 公共配置模板
-├── data/                         # 运行时数据
-│   ├── photos/                   # 照片文件
-│   ├── sqlite/                   # SQLite 数据库（含 drafts 表）
-│   ├── chroma/                   # ChromaDB 向量库
-│   └── suggest_history.json      # 选题建议历史（持久化存储）
+├── data/                         # 运行时数据（photos/sqlite/chroma/clusters/选题历史/会话/评估报告）
+├── dify/                         # 早期 Dify 验证，保留参考（非核心方案）
 └── docs/                         # 项目文档
-    ├── tech.md                   # 本文档
-    ├── prd.md                    # 产品需求
-    ├── backlog.md                # 演进路线图
-    ├── note.md                   # 决策历史/踩坑记录
-    └── design/                   # 设计决策文档
 ```
 
 ---
@@ -418,7 +407,7 @@ photo-agent/
 
 - **Agent 编排** → LangGraph StateGraph：4 类查询灵活路由，节点可独立测试，支持条件边
 - **向量检索 vs 结构化过滤** → ChromaDB 仅做语义，结构化走 Text-to-SQL：职责边界清晰，避免 Chroma metadata 与 SQLite 冗余同步
-- **属性值提示词** → 动态从 DB 获取 distinct 值拼入：避免 LLM 生成不存在的值（backlight/baklit 不匹配）
+- **属性值提示词** → 动态从 DB 获取 distinct 值拼入：结构化属性为 VLM 中文原文直出，LLM 只能使用实际存在的值，避免生成数据库中不存在的值
 - **Combined 降级** → SQL 失败/过宽/交集空 → 纯 RAG：保证任何情况下都有结果返回
 - **Embedding 代理** → Go `/v1/embeddings` 转发至火山引擎：屏蔽火山多模态 URL 与 OpenAI 格式差异
 - **图片 URL 拼接** → Agent prompt 硬编码 URL 模板：确定性 URL，减少一次工具调用
@@ -438,7 +427,7 @@ photo-agent/
 
 ## 8. 部署
 
-详细部署步骤见 [docs/deploy.md](deploy.md)。三层共用 YAML 配置，主要段：`server`, `db`, `storage`, `llm`, `vlm`, `embedding`。模板位于 `configs/config.yaml`，个人配置放在 `.local/my-config.yaml`（gitignore）。
+详细部署步骤见 [docs/deploy.md](deploy.md)。三层共用 YAML 配置，核心段：server / db / storage / llm / vlm / embedding，另有 rag（检索阈值）、burst（连拍分组阈值）、dify（早期验证）、prices（计费）等。模板位于 `configs/config.yaml`，个人配置放在 `.local/my-config.yaml`（gitignore）。
 
 ---
 
@@ -449,7 +438,6 @@ photo-agent/
   - `internal/defaultService/service/timeline.go`：从用户提供的 Markdown 表格解析时间线事件
 - **Python**：
   - `chain/evaluation.py`：RAG 检索评估（黄金查询 + MRR/P@10 指标）
-  - `chain/function_agent.py` / `chain/react_agent.py`：早期 Agent 实验代码，已被 photo_agent.py 取代
-  - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag），用于单独测试各模块
-  - `scripts/index_photos.py`：批量将 photos 表描述分块嵌入 ChromaDB（早期脚本，现由 Python EmbedQueue 替代）
+  - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag/function_agent/react_agent），用于单独测试各模块
+  - `scripts/`：索引与回归脚本（index_photos.py 批量嵌入、batch_embed.py、eval_regression.py 等）
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护

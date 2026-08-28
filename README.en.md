@@ -35,22 +35,22 @@ cp ./configs/config.yaml .local/my-config.yaml
 # Edit .local/my-config.yaml, fill in your API Key and photo path
 ```
 
-### 2. Preprocess Photos (VLM Description Generation)
+### 2. Start Services
 
 ```bash
-make backend
-./bin/batch_vlm -c .local/my-config.yaml -input /path/to/your/photos
+# One-command start (Go Backend + Python Agent + Web Frontend)
+make start
+# Stop: make stop
 ```
 
-### 3. Start Services (Three Terminals)
+Or start manually in three terminals:
 
 ```bash
 # Terminal 1: Go Backend
-./bin/server -c .local/my-config.yaml
+cd backend && make build && ./bin/server -c ../.local/my-config.yaml
 
 # Terminal 2: Python AI Agent
-cd agent && source .venv/bin/activate
-python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+cd agent && source .venv/bin/activate && python chain/photo_agent.py -c ../.local/my-config.yaml --serve
 
 # Terminal 3: Web Frontend
 cd web && pnpm dev
@@ -130,17 +130,17 @@ See [`docs/tech.md`](docs/tech.md) for detailed architecture.
 
 ```
 photo-agent/
-├── backend/              # Go Business Backend
-│   ├── cmd/server/       # HTTP Service + AutoSync
-│   └── cmd/batch_vlm/    # Batch VLM Preprocessing CLI
+├── backend/              # Go Business Backend (HTTP entry in internal/defaultService)
 ├── agent/                # Python AI Service Layer
 │   ├── chain/            # LangGraph Orchestration + FastAPI Service
 │   ├── vectorstore/      # ChromaDB Wrapper
 │   ├── tools/            # OpenAPI Tool Parsing & Execution
 │   └── scripts/          # Indexing Scripts, Evaluation Scripts
 ├── web/                  # Vue 3 Frontend
+├── client/               # Wails Windows Import Client
+├── tools/                # Playwright Regression Test Scripts
 ├── configs/              # Configuration Templates
-├── data/                 # Runtime Data (Photos/SQLite/ChromaDB/descriptions.json)
+├── data/                 # Runtime Data (Photos/SQLite/ChromaDB)
 ├── dify/                 # Early Dify Validation, Reference Only (Non-Core)
 └── docs/                 # Project Documentation
 ```
@@ -167,10 +167,13 @@ photo-agent/
 - ✅ Natural Language Search (RAG + SQL)
 - ✅ Smart Albums (HDBSCAN + UMAP)
 - ✅ Topic Suggestions (AI-powered push + review & rating)
+- ✅ Post Studio (prompt generation + draft refinement)
+- ✅ Burst Grouping (fine/coarse tiers)
+- ✅ Import Workflow (Windows client)
 - ✅ Golden Case Evaluation
 - ✅ Web UI
 - ✅ Text-to-SQL Hybrid Routing
-- 🚧 Multi-turn Conversation Memory
+- 🚧 Multi-turn Context Awareness (coreference resolution, condition stacking)
 
 ---
 

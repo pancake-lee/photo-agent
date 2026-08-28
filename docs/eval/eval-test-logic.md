@@ -10,7 +10,7 @@
 - **「回归测试」**（regression）：指这套三层 CLI，即 `agent/scripts/eval_regression.py`。用 L0 数据态、L1 函数级检索、L2 HTTP 契约三层断言定位失败层级，无 LLM、无浏览器。对话中说「跑回归测试」即在本目录执行：
   ```bash
   cd agent
-  .venv/bin/python scripts/eval_regression.py -c ../.local/pancake.yaml --level all
+  .venv/bin/python scripts/eval_regression.py -c ../.local/my-config.yaml --level all
   ```
 - **「评估」**：指黄金用例打分链路（`agent/chain/evaluation.py` + `eval_engine.py`），产出维度评分与报告。
 - 两者共用 `data/eval_seed_cases.json` 与同一套检索模块，但评估评效果、回归验闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。
@@ -87,7 +87,7 @@
 ```bash
 cd agent
 .venv/bin/python scripts/eval_regression.py \
-  -c ../.local/pancake.yaml \
+  -c ../.local/my-config.yaml \
   --level all
 ```
 

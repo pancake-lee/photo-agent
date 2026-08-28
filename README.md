@@ -35,17 +35,22 @@ cp ./configs/config.yaml .local/my-config.yaml
 # 编辑 .local/my-config.yaml，填入你的 API Key 和照片路径
 ```
 
-### 2. 启动服务（三个终端）
+### 2. 启动服务
 
 ```bash
-make backend
+# 一键启动三个服务（Go 后端 + Python Agent + Web 前端）
+make start
+# 停止：make stop
+```
 
+也可手动分三个终端启动：
+
+```bash
 # 终端 1: Go 后端
-./bin/server -c .local/my-config.yaml
+cd backend && make build && ./bin/server -c ../.local/my-config.yaml
 
 # 终端 2: Python AI Agent
-cd agent && source .venv/bin/activate
-python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+cd agent && source .venv/bin/activate && python chain/photo_agent.py -c ../.local/my-config.yaml --serve
 
 # 终端 3: Web 前端
 cd web && pnpm dev
@@ -125,14 +130,15 @@ flowchart TD
 
 ```
 photo-agent/
-├── backend/              # Go 业务后端
-│   └── cmd/server/       # HTTP 服务入口
+├── backend/              # Go 业务后端（HTTP 入口在 internal/defaultService）
 ├── agent/                # Python AI 服务层
 │   ├── chain/            # LangGraph 编排 + FastAPI 服务
 │   ├── vectorstore/      # ChromaDB 封装
 │   ├── tools/            # OpenAPI 工具解析与执行
 │   └── scripts/          # 索引脚本、评估脚本
 ├── web/                  # Vue 3 前端
+├── client/               # Wails Windows 导入客户端
+├── tools/                # Playwright 回归测试脚本
 ├── configs/              # 配置模板
 ├── data/                 # 运行时数据（照片/SQLite/ChromaDB）
 ├── dify/                 # 早期 Dify 验证，保留参考（非核心方案）
@@ -162,10 +168,13 @@ photo-agent/
 - ✅ 自然语言检索（RAG + SQL）
 - ✅ 聚类相册（HDBSCAN + UMAP）
 - ✅ 选题建议（AI 主动推送 + 审阅打分）
+- ✅ 图文工坊（提示词生成 + 草稿润色）
+- ✅ 连拍分组（精细/模糊两档）
+- ✅ 导入工作流（Windows 客户端）
 - ✅ 黄金用例评估
 - ✅ Web 交互界面
 - ✅ Text-to-SQL 混合路由
-- 🚧 多轮对话记忆
+- 🚧 多轮对话上下文感知（指代消解、条件追加）
 
 ---
 

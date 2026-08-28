@@ -2,7 +2,7 @@
 //
 // 用法（在 backend 目录下）：
 //
-//	go run ./cmd/fixsize -c ../.local/pancake.yaml
+//	go run ./cmd/fixsize -c ../.local/my-config.yaml
 package main
 
 import (

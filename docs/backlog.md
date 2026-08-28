@@ -12,6 +12,7 @@
 | 状态   | 分组     | 编号 | 任务                              |
 | ------ | -------- | ---- | --------------------------------- |
 | 已规划 | 对话查询 | CQ4  | 创作型查询（Compose）专用管线     |
+| Done   | 文档治理 | DOC2 | 公共文档与代码实现对齐            |
 
 ### CQ4 创作型查询（Compose）专用管线
 
@@ -44,6 +45,20 @@
 - **AI 自动验证**：单元测试覆盖连拍折叠、两级收缩与超限兜底分支，全量测试通过；`[compose]` 各阶段日志行为有测试断言。
 - **关单方式**：用户回复确认后，AI 在同一轮直接将任务改为 `Done` 并注明确认日期，不追加核验。
 
+### DOC2 公共文档与代码实现对齐
+
+- **状态**：Done
+- **背景**：公共文档（README/tech/prd/deploy）落后于代码实现。v1.0.9-v1.0.14 引入连拍分组、AI 资产质量闭环、时间线事件、Windows 导入客户端等，但文档停留在早期结构；SQL 相关 API 路径、结构化属性值域、分块策略等核心声明与代码已不一致。
+- **方案**：按 doc-review 第二版核验，产出 L1/L2/L3 差异清单，用户裁决后全量对齐文档。要点：
+  1. SQL 路径：`/query/sql` → `/sql/query`，`/schema/photos`、`/photos/attribute-values` 收进 `/sql/photos/`。
+  2. 结构化属性值域：由「中文→英文映射」改为「保留 VLM 中文原文」，删除 mapScene/mapLighting/mapMood 的过时描述。
+  3. Photo 数据模型补齐字段、修正类型；§5.1 不再贴 Go struct 代码，改为高层字段描述。
+  4. 分块策略由「RecursiveCharacterTextSplitter」改为「chunk_strategy 三选一（none/fixed_size/markdown_heading）」。
+  5. 补齐 Go/Python/前端新增路由、client/tools 目录、config 段。
+  6. 删除 `POST /import/jobs`、`GET /import/jobs/:id` 过时端点声明。
+  7. doc-review.md 新增「内容分层与冗余控制」标准。
+- **验收**：tech/README（中英）/prd/deploy 四处文档与 backend/agent/web 实际代码声明一致；doc-review.md 含分层标准。
+
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
 > v1.0.13 已归档：HW1、AQL1-1–AQL1-8、CH2、QA2、DOC1，详见 [v1.0.13](archive/v1.0.13.md)。
 > v1.0.12 已归档：W12、GR1、CH1、TF1-1–TF1-10、PS7–PS9、QA1、M1、D1，详见 [v1.0.12](archive/v1.0.12.md)。
@@ -70,6 +85,7 @@
 
 ## 决策历史
 
+- **2026-08-28**：DOC2 完成。对公共文档（README/tech/prd/deploy）做一次与代码实现的系统性对齐，修复 SQL 路径、属性值域、数据模型、分块策略、路由清单等过时描述，删除 import/jobs 过时端点声明；并在 doc-review.md 新增「内容分层与冗余控制」标准。
 - **2026-08-28**：v1.0.14 归档。完成对话查询链路诊断与修复（CQ1–CQ3、CQ5、CQ6）及资产审核收尾（AQL2-1、AQL2-2），共 7 项任务；同期确立验证流单向、人工验收即终态的关单规则。CQ4（创作型查询管线）已规划，留待下一版本。
 - **2026-08-27**：v1.0.13 归档。完成 AI 照片资产质量闭环、对话体验收敛、Harness 用户验收交接与 Agent 全量测试契约修复，共 12 项任务；全部自动验证与用户交互验收均已完成。
 - **2026-08-26**：v1.0.12 归档。完成检索评估闭环、统一选图与关键前端拆分共 19 项任务；全量复评 8.4/10，通过。两项部署后手工交互验收记录在版本归档中。

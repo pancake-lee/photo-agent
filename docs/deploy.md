@@ -25,9 +25,9 @@ flowchart TD
 ```bash
 cd /root/code/photo-agent
 
-# 编译 Go 后端
-make backend
-# 产物: bin/server
+# 编译 Go 后端（产物: backend/bin/server）
+cd backend && make build
+cd ..
 
 # Python 环境
 cd agent
@@ -68,11 +68,11 @@ embedding:
   base_url: "https://api.openai.com/v1"
 
 storage:
-  photo_src: "./data/photos"        # 照片源目录
-  photo_path: "./data/photos"
+  photo_src: "./data/photos/src"        # 照片源目录
+  photo_path: "./data/photos/compressed"  # 压缩后图片存储路径
 ```
 
-> Go 和 Python 共用此配置文件。Dify 配置段无需填写，保持默认即可。
+> Go 和 Python 共用此配置文件。Dify 配置段无需填写，保持默认即可。另有 `rag`（检索阈值）、`burst`（连拍分组阈值）等段，缺省时使用代码内置默认值。
 
 ---
 
@@ -82,7 +82,7 @@ storage:
 
 ```bash
 # 终端 1: Go 后端（:10004）
-./bin/server -c .local/my-config.yaml
+cd backend && ./bin/server -c ../.local/my-config.yaml
 
 # 终端 2: Python Agent（:10005）
 cd agent && source .venv/bin/activate
@@ -98,9 +98,9 @@ cd web && pnpm dev
 
 ## 4. 验证清单
 
-- [ ] `make backend` 编译通过
+- [ ] `cd backend && make build` 编译通过
 - [ ] `.local/my-config.yaml` 中 API Key 有效
-- [ ] `./bin/server -c .local/my-config.yaml` 启动，`/api/v1/health` 返回 OK
+- [ ] `cd backend && ./bin/server -c ../.local/my-config.yaml` 启动，`/api/v1/health` 返回 OK
 - [ ] Python Agent `--serve` 启动，`/api/chat/health` 返回 `{"status":"ok"}`
 - [ ] Web 前端 `pnpm dev` 正常启动，页面可访问
 - [ ] 照片管理页可见已导入的照片

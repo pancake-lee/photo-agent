@@ -122,7 +122,7 @@ build:
 .PHONY: dev
 # run dev server
 dev:
-	go run ./internal/defaultService/defaultService.go -c ../.local/pancake.yaml -l
+	go run ./internal/defaultService/defaultService.go -c ../.local/my-config.yaml -l
 
 .PHONY: precommit
 # 提交生成的代码[*.pb.go, ./cmd/pgo/swagger/*, *.gen.go, *.gen.proto]

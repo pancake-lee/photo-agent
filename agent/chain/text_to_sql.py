@@ -62,31 +62,31 @@ FEW_SHOT_EXAMPLES = [
         "sql": "SELECT filename, focal_length, description FROM photos WHERE CAST(REPLACE(REPLACE(focal_length, 'mm', ''), ' ', '') AS REAL) BETWEEN 24 AND 70 LIMIT 20",
     },
     # === 结构化属性过滤 (objects / colors / scene / lighting / mood / composition) ===
-    # 注意: 属性值必须匹配数据库中实际存储的值（由 Go mapping 函数产出），
+    # 注意: 属性值必须匹配数据库中实际存储的值（由 parseVlmAttrs 从 VLM 输出解析，保留中文原文），
     # 系统提示中会列出当前数据库的可用值，LLM 生成 SQL 时应参照系统提示而非硬编码示例值。
     {
         "question": "逆光的风景照",
-        "sql": "SELECT id, filename, description, lighting, scene FROM photos WHERE lighting LIKE '%backlit%' AND scene IN ('nature', 'mountain', 'water') ORDER BY shot_at DESC LIMIT 20",
+        "sql": "SELECT id, filename, description, lighting, scene FROM photos WHERE lighting LIKE '%逆光%' AND scene LIKE '%山%' ORDER BY shot_at DESC LIMIT 20",
     },
     {
         "question": "暖色调的人像照片",
-        "sql": "SELECT id, filename, description, colors FROM photos WHERE colors LIKE '%warm%' AND (objects LIKE '%person%' OR objects LIKE '%people%') ORDER BY shot_at DESC LIMIT 20",
+        "sql": "SELECT id, filename, description, colors FROM photos WHERE colors LIKE '%橘%' AND objects LIKE '%人%' ORDER BY shot_at DESC LIMIT 20",
     },
     {
         "question": "黑白高对比度的照片",
-        "sql": "SELECT id, filename, description, colors FROM photos WHERE (colors LIKE '%monochrome%' OR colors LIKE '%black_white%') AND colors LIKE '%high_contrast%' ORDER BY shot_at DESC LIMIT 20",
+        "sql": "SELECT id, filename, description, colors FROM photos WHERE colors LIKE '%黑%' AND colors LIKE '%白%' ORDER BY shot_at DESC LIMIT 20",
     },
     {
         "question": "柔和光线的照片",
-        "sql": "SELECT id, filename, description, lighting FROM photos WHERE lighting LIKE '%soft%' ORDER BY shot_at DESC LIMIT 20",
+        "sql": "SELECT id, filename, description, lighting FROM photos WHERE lighting LIKE '%柔%' ORDER BY shot_at DESC LIMIT 20",
     },
     {
         "question": "宁静氛围的水边照片",
-        "sql": "SELECT id, filename, description, mood, scene FROM photos WHERE (mood LIKE '%calm%' OR mood LIKE '%melancholy%') AND scene = 'water' ORDER BY shot_at DESC LIMIT 20",
+        "sql": "SELECT id, filename, description, mood, scene FROM photos WHERE mood LIKE '%静%' AND scene LIKE '%水%' ORDER BY shot_at DESC LIMIT 20",
     },
     {
         "question": "有哪些街拍照片？",
-        "sql": "SELECT id, filename, description, scene FROM photos WHERE scene LIKE '%street%' OR scene LIKE '%urban%' ORDER BY shot_at DESC LIMIT 20",
+        "sql": "SELECT id, filename, description, scene FROM photos WHERE scene LIKE '%街%' ORDER BY shot_at DESC LIMIT 20",
     },
     # === 时间线查询（timeline 列存时间线活动名，值来自用户时间线文件，SQL 已在真实库验证） ===
     {

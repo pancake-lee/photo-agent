@@ -144,7 +144,7 @@ CREATE TABLE app_settings (
 
 **P6 双档位存储**：一次 rebuild 同时产出精细/模糊两套分组。photo_groups 用 profile 列区分两档的组记录，photos 表用两列分别指向各自档位的组（`burst_group_id` 保持精细档语义，新增 `burst_group_coarse_id`）。存量数据兼容：迁移时 photo_groups.profile 默认 'fine'（存量组即按精细档默认参数算出），模糊档在首次新版 rebuild 前为空，展示层按"无分组"处理。
 
-**配置持久化选型**：连拍参数需要在网页设置页编辑，`.local/pancake.yaml` 是含密钥的用户手管文件，不做运行期 Web 回写。参数存 app_settings 表（key-value），rebuild 时读取；表内无记录时用配置文件默认值兜底并视为初始值，不引入额外容错分支。
+**配置持久化选型**：连拍参数需要在网页设置页编辑，`.local/my-config.yaml` 是含密钥的用户手管文件，不做运行期 Web 回写。参数存 app_settings 表（key-value），rebuild 时读取；表内无记录时用配置文件默认值兜底并视为初始值，不引入额外容错分支。
 
 **不建数据库外键**：表间关联只体现在列名与代码逻辑（service 层负责写入/清理的一致性）。外键的强制性约束虽安全，但会带来删除顺序限制、迁移负担，与本项目"表不约束、代码写完整、宽容度高，有 BUG 修 BUG"的倾向相悖。此为项目级数据建模规则，见 CLAUDE.md 全局行为约束。
 

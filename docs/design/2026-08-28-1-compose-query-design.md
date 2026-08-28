@@ -5,6 +5,66 @@
 
 ## 背景
 
+### 系统分层与 Agent 编排载体
+
+系统由三个服务组成（详见 `docs/tech.md`）：
+
+- **Web 前端**（Vue 3 + NaiveUI，:10006）：照片管理、AI 对话、聚类、图文工坊等页面，不承担 AI 推理
+- **Go 后端**（:10004）：照片元数据 CRUD、文件服务、VLM 描述生成、Embedding 代理、SQL 执行、OpenAPI 自描述；不承担 Agent 编排
+- **Python Agent**（FastAPI，:10005）：LangGraph 编排、Chroma 向量检索、Text-to-SQL、工具调用、会话管理；不直接访问数据库，所有数据操作走 Go API
+
+Python Agent 单进程内（`agent/chain/server.py` 的 `create_app`）挂载了对话所需的全部组件：
+
+- `PhotoAgent`：LangGraph 查询路由图（编译后的图单例）
+- `SessionStore`：会话与消息持久化（SQLite）
+- `ChromaPhotoStore`：向量库句柄，含 photos、photos_burst_fine、photos_burst_coarse 三个集合
+- `EmbedQueue`：批量嵌入异步队列，服务启动时后台同步一次连拍组封面集合
+- 非对话能力同进程暴露：黄金用例评估、聚类分析、选题建议、图文工坊
+
+### 对话 Agent 链路（LangGraph 查询路由）
+
+代码入口 `agent/chain/photo_agent.py`。核心是一张 LangGraph StateGraph：共享状态 `RouterState`，`classify` 节点用 LLM 零样本四分类（temperature=0，提示词内置类别定义与示例），条件边按 `query_type` 分发到四个查询节点之一，最终 `answer` 节点汇聚为 `answer + photos`：
+
+```mermaid
+flowchart TD
+    A["Web 前端 ChatView"] -->|"POST /api/chat/sessions/:id/messages"| S["FastAPI server<br>SessionStore 存用户消息，调 agent.route"]
+    S --> C["classify<br>LLM 零样本四分类"]
+    C -->|"sql"| N1["sql_query<br>Text-to-SQL 生成并执行"]
+    C -->|"rag"| N2["rag_query<br>Embedding + Chroma 检索"]
+    C -->|"tool"| N3["tool_query<br>OpenAPI 工具多轮循环"]
+    C -->|"combined"| N4["combined_query<br>SQL ∩ RAG 取交集"]
+    N1 --> ANS["answer 汇聚<br>answer + photos"]
+    N2 --> ANS
+    N3 --> ANS
+    N4 --> ANS
+    ANS -->|"存 AI 消息 + trace，返回前端"| OUT["对话回复"]
+```
+
+四个查询节点的内部结构：
+
+- **sql_query**（`text_to_sql.answer_with_sql`）：拉取 photos 表 Schema 与数据库实际属性值拼入 System Prompt，加 few-shot 示例，LLM 生成 SQL（temperature=0），仅 SELECT 安全校验后交 Go `/api/v1/query/sql` 执行，结果集格式化为自然语言回答
+- **rag_query**（`photo_rag.answer_question`）：问题 Embedding → Chroma Top-K 向量检索 → 按 photo_id 聚合去重 → 距离阈值与比值断层过滤 → 拼接照片描述上下文 → LLM 生成回答（Markdown 图片语法引用照片）
+- **tool_query**（`_tool_node`）：`OpenAPIClient` 首次进入节点时从 Go `/v1/openapi.json` 解析出全部接口作为 Function Calling 工具集（按 base_url 缓存），`llm.bind_tools()` 进入多轮循环：模型每轮返回 tool_calls 就全部执行（单条结果截断 4000 字符）后继续，返回纯文本即结束；达到 `tool_max_rounds`（默认 20）仍不收敛时，追加一次无工具调用强制总结
+- **combined_query**（`_combined_node`）：`generate_filter_sql` 生成结构化过滤 SQL 得 sql_ids，RAG 检索取 rag_ids（Top-20），两者取交集并保持 RAG 相似度排序，取前 5 张照片详情交 LLM 生成回答；SQL 为空、SQL 超过 50 条、交集为空或整体异常这四种情况均降级为纯 RAG
+
+链路的结构性事实：
+
+- **单问独立路由**：`agent.route(question, granularity)` 每条消息独立走一遍完整图，不携带会话历史；多轮上下文只存在于会话存储与前端展示层，不进入任何节点的 Prompt
+- **检索粒度**：granularity 参数（photo/fine/coarse）由前端随消息传入并记录在会话上，fine/coarse 检索连拍组封面集合（一组一条），影响 rag_query 与 combined_query
+- **LLM 工程保障**：所有 LLM 实例经 `llm_factory.create_llm` 创建，带 with_retry 重试与可选 fallback_model 降级；TokenCallback 记录用量与成本；`Tracer` 输出结构化 trace（`data/traces/*.jsonl`），chat 链路在消息级 emit `chat.query` 与 `chat.answer`
+- **回答协议**：`answer` 节点产出的 photos 列表（photo_id、filename、image_url，可选 burst_group_id/burst_count）由 server 序列化存入消息并随响应返回，前端据此渲染照片卡片
+
+### 外围管线（对话路由之外）
+
+Agent 进程内除对话路由外还有四条独立管线，均以 Go API + Chroma 为数据底座：
+
+- **入库向量化**：上传照片（EXIF 解析写 SQLite）→ VLM 生成描述并解析出 6 个结构化属性 → EmbedQueue 拉取描述、分块、经 Go Embedding 代理向量化、写入 Chroma 三个集合；连拍组封面集合在批量嵌入、前端重建连拍组、服务启动对齐时刷新
+- **聚类分析**（`chain/cluster.py`）：Chroma 向量 → UMAP 降维 + HDBSCAN 聚类 → 结果 JSON 落盘 → LLM 逐簇生成与评估主题标题
+- **选题建议**（`chain/suggest.py`）：三阶段编辑视角提案，随机采样 → LLM 主题直觉 → RAG 加多样性约束扩展选片 → LLM 沉淀完整提案（标题、角度、照片序列、理由）；结果版本化存储，支持从指定步骤重跑（SSE 推进度）
+- **图文工坊**（`chain/post_studio.py`）：用户自选照片 + 风格 + 要求，四层提示词（系统、风格、照片上下文、用户要求）交 LLM 生成或润色标题与正文；前端独立页面 `#/post-studio`，支持携带照片 ID 深链进入
+
+### 创作型请求为何落不进现有路由
+
 用户发送「找山西旅游第一天的照片并生成发布文案」这类请求时，现有四条路由都不匹配：
 
 - 分类器不稳定：同一问题有时进 `tool`（自由 Function Calling，21:23 复测 6 轮未收敛），有时进 `combined`（23:55 复测）。
