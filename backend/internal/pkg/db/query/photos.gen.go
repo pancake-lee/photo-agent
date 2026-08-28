@@ -38,10 +38,6 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 	_photo.DescriptionModel = field.NewString(tableName, "description_model")
 	_photo.DescriptionTime = field.NewString(tableName, "description_time")
 	_photo.DescriptionRaw = field.NewString(tableName, "description_raw")
-	_photo.AiHealthStatus = field.NewString(tableName, "ai_health_status")
-	_photo.AiHealthReason = field.NewString(tableName, "ai_health_reason")
-	_photo.VlmStatus = field.NewString(tableName, "vlm_status")
-	_photo.VlmReason = field.NewString(tableName, "vlm_reason")
 	_photo.EmbeddingStatus = field.NewString(tableName, "embedding_status")
 	_photo.EmbeddingDescriptionTime = field.NewString(tableName, "embedding_description_time")
 	_photo.Objects = field.NewString(tableName, "objects")
@@ -87,10 +83,6 @@ type photo struct {
 	DescriptionModel         field.String
 	DescriptionTime          field.String
 	DescriptionRaw           field.String
-	AiHealthStatus           field.String
-	AiHealthReason           field.String
-	VlmStatus                field.String
-	VlmReason                field.String
 	EmbeddingStatus          field.String
 	EmbeddingDescriptionTime field.String
 	Objects                  field.String
@@ -142,10 +134,6 @@ func (p *photo) updateTableName(table string) *photo {
 	p.DescriptionModel = field.NewString(table, "description_model")
 	p.DescriptionTime = field.NewString(table, "description_time")
 	p.DescriptionRaw = field.NewString(table, "description_raw")
-	p.AiHealthStatus = field.NewString(table, "ai_health_status")
-	p.AiHealthReason = field.NewString(table, "ai_health_reason")
-	p.VlmStatus = field.NewString(table, "vlm_status")
-	p.VlmReason = field.NewString(table, "vlm_reason")
 	p.EmbeddingStatus = field.NewString(table, "embedding_status")
 	p.EmbeddingDescriptionTime = field.NewString(table, "embedding_description_time")
 	p.Objects = field.NewString(table, "objects")
@@ -194,7 +182,7 @@ func (p *photo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *photo) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 39)
+	p.fieldMap = make(map[string]field.Expr, 35)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["filename"] = p.Filename
 	p.fieldMap["file_path"] = p.FilePath
@@ -206,10 +194,6 @@ func (p *photo) fillFieldMap() {
 	p.fieldMap["description_model"] = p.DescriptionModel
 	p.fieldMap["description_time"] = p.DescriptionTime
 	p.fieldMap["description_raw"] = p.DescriptionRaw
-	p.fieldMap["ai_health_status"] = p.AiHealthStatus
-	p.fieldMap["ai_health_reason"] = p.AiHealthReason
-	p.fieldMap["vlm_status"] = p.VlmStatus
-	p.fieldMap["vlm_reason"] = p.VlmReason
 	p.fieldMap["embedding_status"] = p.EmbeddingStatus
 	p.fieldMap["embedding_description_time"] = p.EmbeddingDescriptionTime
 	p.fieldMap["objects"] = p.Objects

@@ -35,6 +35,12 @@ Name | Type | Description | Notes
 **burst_group_id** | **str** |  | [optional] 
 **burst_cover** | **bool** |  | [optional] 
 **burst_count** | **int** |  | [optional] 
+**ai_health_status** | **str** |  | [optional] 
+**ai_health_reason** | **str** |  | [optional] 
+**vlm_status** | **str** |  | [optional] 
+**vlm_reason** | **str** |  | [optional] 
+**embedding_status** | **str** |  | [optional] 
+**embedding_description_time** | **str** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

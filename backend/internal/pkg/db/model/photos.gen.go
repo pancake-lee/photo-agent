@@ -23,10 +23,6 @@ type Photo struct {
 	DescriptionModel         string    `gorm:"column:description_model;not null" json:"description_model"`
 	DescriptionTime          string    `gorm:"column:description_time;not null" json:"description_time"`
 	DescriptionRaw           string    `gorm:"column:description_raw;not null" json:"description_raw"`
-	AiHealthStatus           string    `gorm:"column:ai_health_status;not null;default:'pending'" json:"ai_health_status"`
-	AiHealthReason           string    `gorm:"column:ai_health_reason;not null" json:"ai_health_reason"`
-	VlmStatus                string    `gorm:"column:vlm_status;not null;default:'pending'" json:"vlm_status"`
-	VlmReason                string    `gorm:"column:vlm_reason;not null" json:"vlm_reason"`
 	EmbeddingStatus          string    `gorm:"column:embedding_status;not null;default:'pending'" json:"embedding_status"`
 	EmbeddingDescriptionTime string    `gorm:"column:embedding_description_time;not null" json:"embedding_description_time"`
 	Objects                  string    `gorm:"column:objects;not null" json:"objects"`

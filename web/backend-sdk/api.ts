@@ -1410,11 +1410,41 @@ export interface ApiPhotoItem {
      * @memberof ApiPhotoItem
      */
     burstCount?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
     aiHealthStatus?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
     aiHealthReason?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
     vlmStatus?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
     vlmReason?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
     embeddingStatus?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ApiPhotoItem
+     */
     embeddingDescriptionTime?: string;
 }
 /**

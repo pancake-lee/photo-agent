@@ -72,14 +72,81 @@ func TestValidateVlmDescription_RejectsExplicitTestPattern(t *testing.T) {
 	}
 }
 
-func TestDerivePhotoAIStateUsesCurrentDescriptionInsteadOfLegacyReview(t *testing.T) {
+// TestValidateVlmDescription_RejectsCorruptionPhrasings 覆盖 DSC_9985 漏判案例的同族措辞：
+// VLM 对同一故障现象说法不固定，任一命中都应进入待复核。
+func TestValidateVlmDescription_RejectsCorruptionPhrasings(t *testing.T) {
+	for _, description := range []string{
+		"一张特殊的照片\n```json\n{\"mood\": \"故障失真\"}\n```",
+		"一张照片\n```json\n{\"overall_summary\": \"上半为彩色水平条纹，下半为浅蓝纯色的异常显示画面\"}\n```",
+		"屏幕内容\n```json\n{\"subject\": {\"main_objects\": [\"显示屏\"]}, \"other\": \"显示异常\"}\n```",
+		"拍摄电视\n```json\n{\"background\": {\"description\": \"花屏\"}}\n```",
+		"glitch artifacts\n```json\n{}\n```",
+		"corrupted image data\n```json\n{}\n```",
+	} {
+		if err := validateVlmDescription(description); err == nil {
+			t.Fatalf("corruption phrasing accepted: %q", description)
+		}
+	}
+}
+
+// TestValidateVlmDescription_RejectsDsc9985 DSC_9985.jpg 的真实存量描述回归：
+// 上半彩色条纹、下半浅蓝纯色的坏图，VLM 写明“故障失真”但旧规则全部未命中。
+func TestValidateVlmDescription_RejectsDsc9985(t *testing.T) {
+	description := "```json\n" + `{
+    "image_type": "screenshot",
+    "subject": {
+        "main_objects": ["密集水平彩色条纹", "纯色浅蓝色块"],
+        "count": 2,
+        "attributes": {
+            "color": "条纹包含亮蓝、青、绿、紫、粉、红、棕多色，下方色块为均匀浅蓝色",
+            "pose/action": "无具象人或物体的动态行为",
+            "other": "条纹排列紧密，横向贯穿整个画面宽度"
+        }
+    },
+    "scene": {"environment": "虚拟", "setting": "不确定", "time_of_day": "不确定", "weather": null},
+    "lighting": {"source": "未知", "brightness": "适中", "contrast": "中等"},
+    "color_palette": {"dominant_colors": ["浅蓝色", "亮蓝色", "紫红色"], "overall_tone": "冷色"},
+    "composition": {"focus": "上半区域", "depth": "无明显景深", "symmetry": "非对称"},
+    "background": {"description": "大量不同颜色的横向细线条紧密排列组成的全宽条纹区域", "blur": "清晰"},
+    "foreground": {"description": "占据画面下半部分全部区域的均匀浅蓝纯色块", "overlaps_main": false},
+    "text_and_symbols": null,
+    "mood": "故障失真",
+    "overall_summary": "上半为彩色水平条纹，下半为浅蓝纯色的异常显示画面"
+}` + "\n```"
+	err := validateVlmDescription(description)
+	if err == nil {
+		t.Fatal("DSC_9985 corrupted description accepted")
+	}
+	if !strings.Contains(err.Error(), "故障失真") {
+		t.Fatalf("expected marker 故障失真 to hit, got: %v", err)
+	}
+}
+
+// TestValidateVlmDescription_ImageIntegrityField 新 prompt 的结构化完整性结论：
+// corrupted/test_pattern 拦截，normal 放行，存量描述无该字段时放行（由关键词兜底）。
+func TestValidateVlmDescription_ImageIntegrityField(t *testing.T) {
+	for _, description := range []string{
+		"```json\n{\"image_integrity\": \"corrupted\", \"overall_summary\": \"无法辨认的内容\"}\n```",
+		"```json\n{\"image_integrity\": \"test_pattern\", \"overall_summary\": \"标准测试卡\"}\n```",
+	} {
+		if err := validateVlmDescription(description); err == nil {
+			t.Fatalf("bad image_integrity accepted: %q", description)
+		}
+	}
+	for _, description := range []string{
+		"```json\n{\"image_integrity\": \"normal\", \"overall_summary\": \"海边的日落\"}\n```",
+		"```json\n{\"overall_summary\": \"海边的日落\"}\n```",
+	} {
+		if err := validateVlmDescription(description); err != nil {
+			t.Fatalf("normal description rejected: %q: %v", description, err)
+		}
+	}
+}
+
+func TestDerivePhotoAIStateUsesCurrentDescription(t *testing.T) {
 	description := "人物站在树下\n```json\n{\"subject\": {\"main_objects\": [\"人物\"]}}\n```"
 	photo := &data.PhotoDO{
 		Description:              description,
-		AiHealthStatus:           aiStatusReview,
-		AiHealthReason:           "历史描述待复核",
-		VlmStatus:                aiStatusReview,
-		VlmReason:                "历史描述未经过质量闸门",
 		EmbeddingStatus:          aiStatusStale,
 		EmbeddingDescriptionTime: "2026-08-27T00:00:00Z",
 	}

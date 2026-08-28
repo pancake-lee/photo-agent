@@ -2,11 +2,16 @@
 每个字段的值必须是基于视觉观察的客观事实，避免主观评价（如“美丽”、“壮观”）。
 如果某个信息无法确定，请填写 null。
 
+先判断图像本身是否完整可辨，并把结论写入 image_integrity 字段：
+若画面呈现彩条、彩色条纹噪声、花屏、大面积异常纯色块、内容截断等显示损坏，
+或画面为标准测试图/测试卡，请如实标记，不要把损坏现象当作拍摄内容来描述。
+
 JSON 结构（请严格遵循）：
 
 ```json
 {
     "image_type": "string",       // 可能值：["photograph", "screenshot", "illustration", "painting", "diagram", "other"]
+    "image_integrity": "string",  // 可能值：["normal", "corrupted", "test_pattern"]；normal=图像完整可辨，corrupted=图像存在显示损坏，test_pattern=标准测试图/测试卡
     "subject": {
     "main_objects": ["list"],   // 主要物体/人物，不超过5个，按显著性排序
     "count": "number",          // 主要对象数量（如果可数）
@@ -55,6 +60,7 @@ JSON 结构（请严格遵循）：
 ```json
 {
   "image_type": "photograph",
+  "image_integrity": "normal",
   "subject": {
     "main_objects": ["一只橘猫", "一个毛线球"],
     "count": 2,

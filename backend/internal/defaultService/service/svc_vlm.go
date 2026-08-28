@@ -309,11 +309,9 @@ func (s *VlmServer) DescribePhoto(_ctx context.Context, req *api.DescribePhotoRe
 		defer describeProgress.remove(req.Id)
 
 		bgCtx := papp.NewAppCtx(context.Background())
-		_ = updateAIState(bgCtx, photo.ID, aiStatusWorking, "", aiStatusWorking, "", aiStatusPending)
 		imagePath := photoFilePath(photo)
 		description, modelUsed, err := describeImage(imagePath)
 		if err != nil {
-			_ = updateAIState(bgCtx, photo.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
 			recordAIHistory(photo.ID, "", "vlm", aiStatusFailed, err.Error())
 			plogger.Errorf("VLM describe %s failed: %v", photo.Filename, err)
 			return
@@ -325,7 +323,6 @@ func (s *VlmServer) DescribePhoto(_ctx context.Context, req *api.DescribePhotoRe
 			Time:        nowTimeString(),
 		}
 		if err := applyDescriptionToPhoto(bgCtx, photo.ID, entry); err != nil {
-			_ = updateAIState(bgCtx, photo.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
 			plogger.Errorf("VLM save %s failed: %v", photo.Filename, err)
 		}
 	}()
@@ -392,10 +389,8 @@ func runVlmQueue(taskID string, photos []*data.PhotoDO) {
 
 				imagePath := photoFilePath(p)
 				appCtx := papp.NewAppCtx(context.Background())
-				_ = updateAIState(appCtx, p.ID, aiStatusWorking, "", aiStatusWorking, "", aiStatusPending)
 				description, modelUsed, err := describeImage(imagePath)
 				if err != nil {
-					_ = updateAIState(appCtx, p.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
 					recordAIHistory(p.ID, taskID, "vlm", aiStatusFailed, err.Error())
 					vlmQueue.removeBatchPending(p.ID)
 					vlmQueue.incrFailed(p.Filename)
@@ -414,7 +409,6 @@ func runVlmQueue(taskID string, photos []*data.PhotoDO) {
 				}
 
 				if err := applyDescriptionToPhoto(appCtx, p.ID, entry); err != nil {
-					_ = updateAIState(appCtx, p.ID, aiStatusFailed, err.Error(), aiStatusFailed, err.Error(), aiStatusStale)
 					vlmQueue.removeBatchPending(p.ID)
 					vlmQueue.incrFailed(p.Filename)
 					plogger.Warnf("VLM queue %s: worker-%d failed to update %s: %v", taskID, workerID, p.Filename, err)

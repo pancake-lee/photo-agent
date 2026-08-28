@@ -58,7 +58,13 @@ class ApiPhotoItem(object):
         'has_nef': 'bool',
         'burst_group_id': 'str',
         'burst_cover': 'bool',
-        'burst_count': 'int'
+        'burst_count': 'int',
+        'ai_health_status': 'str',
+        'ai_health_reason': 'str',
+        'vlm_status': 'str',
+        'vlm_reason': 'str',
+        'embedding_status': 'str',
+        'embedding_description_time': 'str'
     }
 
     attribute_map = {
@@ -93,10 +99,16 @@ class ApiPhotoItem(object):
         'has_nef': 'hasNef',
         'burst_group_id': 'burstGroupId',
         'burst_cover': 'burstCover',
-        'burst_count': 'burstCount'
+        'burst_count': 'burstCount',
+        'ai_health_status': 'aiHealthStatus',
+        'ai_health_reason': 'aiHealthReason',
+        'vlm_status': 'vlmStatus',
+        'vlm_reason': 'vlmReason',
+        'embedding_status': 'embeddingStatus',
+        'embedding_description_time': 'embeddingDescriptionTime'
     }
 
-    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None, has_description=None, thumbnail_url=None, has_nef=None, burst_group_id=None, burst_cover=None, burst_count=None):  # noqa: E501
+    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None, has_description=None, thumbnail_url=None, has_nef=None, burst_group_id=None, burst_cover=None, burst_count=None, ai_health_status=None, ai_health_reason=None, vlm_status=None, vlm_reason=None, embedding_status=None, embedding_description_time=None):  # noqa: E501
         """ApiPhotoItem - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._filename = None
@@ -130,6 +142,12 @@ class ApiPhotoItem(object):
         self._burst_group_id = None
         self._burst_cover = None
         self._burst_count = None
+        self._ai_health_status = None
+        self._ai_health_reason = None
+        self._vlm_status = None
+        self._vlm_reason = None
+        self._embedding_status = None
+        self._embedding_description_time = None
         self.discriminator = None
         if id is not None:
             self.id = id
@@ -195,6 +213,18 @@ class ApiPhotoItem(object):
             self.burst_cover = burst_cover
         if burst_count is not None:
             self.burst_count = burst_count
+        if ai_health_status is not None:
+            self.ai_health_status = ai_health_status
+        if ai_health_reason is not None:
+            self.ai_health_reason = ai_health_reason
+        if vlm_status is not None:
+            self.vlm_status = vlm_status
+        if vlm_reason is not None:
+            self.vlm_reason = vlm_reason
+        if embedding_status is not None:
+            self.embedding_status = embedding_status
+        if embedding_description_time is not None:
+            self.embedding_description_time = embedding_description_time
 
     @property
     def id(self):
@@ -867,6 +897,132 @@ class ApiPhotoItem(object):
         """
 
         self._burst_count = burst_count
+
+    @property
+    def ai_health_status(self):
+        """Gets the ai_health_status of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The ai_health_status of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._ai_health_status
+
+    @ai_health_status.setter
+    def ai_health_status(self, ai_health_status):
+        """Sets the ai_health_status of this ApiPhotoItem.
+
+
+        :param ai_health_status: The ai_health_status of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._ai_health_status = ai_health_status
+
+    @property
+    def ai_health_reason(self):
+        """Gets the ai_health_reason of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The ai_health_reason of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._ai_health_reason
+
+    @ai_health_reason.setter
+    def ai_health_reason(self, ai_health_reason):
+        """Sets the ai_health_reason of this ApiPhotoItem.
+
+
+        :param ai_health_reason: The ai_health_reason of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._ai_health_reason = ai_health_reason
+
+    @property
+    def vlm_status(self):
+        """Gets the vlm_status of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The vlm_status of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._vlm_status
+
+    @vlm_status.setter
+    def vlm_status(self, vlm_status):
+        """Sets the vlm_status of this ApiPhotoItem.
+
+
+        :param vlm_status: The vlm_status of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._vlm_status = vlm_status
+
+    @property
+    def vlm_reason(self):
+        """Gets the vlm_reason of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The vlm_reason of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._vlm_reason
+
+    @vlm_reason.setter
+    def vlm_reason(self, vlm_reason):
+        """Sets the vlm_reason of this ApiPhotoItem.
+
+
+        :param vlm_reason: The vlm_reason of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._vlm_reason = vlm_reason
+
+    @property
+    def embedding_status(self):
+        """Gets the embedding_status of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The embedding_status of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._embedding_status
+
+    @embedding_status.setter
+    def embedding_status(self, embedding_status):
+        """Sets the embedding_status of this ApiPhotoItem.
+
+
+        :param embedding_status: The embedding_status of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._embedding_status = embedding_status
+
+    @property
+    def embedding_description_time(self):
+        """Gets the embedding_description_time of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The embedding_description_time of this ApiPhotoItem.  # noqa: E501
+        :rtype: str
+        """
+        return self._embedding_description_time
+
+    @embedding_description_time.setter
+    def embedding_description_time(self, embedding_description_time):
+        """Sets the embedding_description_time of this ApiPhotoItem.
+
+
+        :param embedding_description_time: The embedding_description_time of this ApiPhotoItem.  # noqa: E501
+        :type: str
+        """
+
+        self._embedding_description_time = embedding_description_time
 
     def to_dict(self):
         """Returns the model properties as a dict"""
