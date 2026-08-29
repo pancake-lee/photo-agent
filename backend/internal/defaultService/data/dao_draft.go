@@ -56,7 +56,7 @@ func (*draftDAO) Update(ctx *papp.AppCtx, draft *DraftDO) error {
 	}
 	draft.UpdatedAt = time.Now()
 	err := pdb.GetGormDB().WithContext(ctx).Model(draft).
-		Select("title", "content", "photo_ids", "style", "source", "status", "updated_at").
+		Select("title", "content", "photo_ids", "style", "source", "input_mode", "prompt", "draft_input", "status", "updated_at").
 		Updates(draft).Error
 	if err != nil {
 		return ctx.Log.LogErr(err)

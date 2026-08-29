@@ -38,46 +38,58 @@ func (s *DraftServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 }
 
 type draftCreateRequest struct {
-	Title    string   `json:"title"`
-	Content  string   `json:"content"`
-	PhotoIDs []string `json:"photo_ids"`
-	Style    string   `json:"style"`
-	Source   string   `json:"source"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	PhotoIDs   []string `json:"photo_ids"`
+	Style      string   `json:"style"`
+	Source     string   `json:"source"`
+	InputMode  string   `json:"input_mode"`
+	Prompt     string   `json:"prompt"`
+	DraftInput string   `json:"draft_input"`
 }
 
 type draftUpdateRequest struct {
-	Title    string   `json:"title"`
-	Content  string   `json:"content"`
-	PhotoIDs []string `json:"photo_ids"`
-	Style    string   `json:"style"`
-	Source   string   `json:"source"`
-	Status   string   `json:"status"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	PhotoIDs   []string `json:"photo_ids"`
+	Style      string   `json:"style"`
+	Source     string   `json:"source"`
+	InputMode  *string  `json:"input_mode"`
+	Prompt     *string  `json:"prompt"`
+	DraftInput *string  `json:"draft_input"`
+	Status     string   `json:"status"`
 }
 
 type draftResponse struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	Content   string   `json:"content"`
-	PhotoIDs  []string `json:"photo_ids"`
-	Style     string   `json:"style"`
-	Source    string   `json:"source"`
-	Status    string   `json:"status"`
-	CreatedAt string   `json:"created_at"`
-	UpdatedAt string   `json:"updated_at"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	PhotoIDs   []string `json:"photo_ids"`
+	Style      string   `json:"style"`
+	Source     string   `json:"source"`
+	InputMode  string   `json:"input_mode"`
+	Prompt     string   `json:"prompt"`
+	DraftInput string   `json:"draft_input"`
+	Status     string   `json:"status"`
+	CreatedAt  string   `json:"created_at"`
+	UpdatedAt  string   `json:"updated_at"`
 }
 
 func draftDO2Response(do *data.DraftDO) *draftResponse {
 	ids := parsePhotoIDs(do.PhotoIDs)
 	return &draftResponse{
-		ID:        do.ID,
-		Title:     do.Title,
-		Content:   do.Content,
-		PhotoIDs:  ids,
-		Style:     do.Style,
-		Source:    do.Source,
-		Status:    do.Status,
-		CreatedAt: do.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: do.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:         do.ID,
+		Title:      do.Title,
+		Content:    do.Content,
+		PhotoIDs:   ids,
+		Style:      do.Style,
+		Source:     do.Source,
+		InputMode:  do.InputMode,
+		Prompt:     do.Prompt,
+		DraftInput: do.DraftInput,
+		Status:     do.Status,
+		CreatedAt:  do.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:  do.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -111,15 +123,22 @@ func (s *DraftServer) CreateDraft(kctx khttp.Context) error {
 	if err := json.NewDecoder(kctx.Request().Body).Decode(&req); err != nil {
 		return ctx.Log.LogErr(perr.ErrParamInvalid)
 	}
+	inputMode := req.InputMode
+	if inputMode == "" {
+		inputMode = "prompt"
+	}
 
 	draft := &data.DraftDO{
-		ID:       putil.UUID(),
-		Title:    req.Title,
-		Content:  req.Content,
-		PhotoIDs: marshalPhotoIDs(req.PhotoIDs),
-		Style:    req.Style,
-		Source:   req.Source,
-		Status:   "draft",
+		ID:         putil.UUID(),
+		Title:      req.Title,
+		Content:    req.Content,
+		PhotoIDs:   marshalPhotoIDs(req.PhotoIDs),
+		Style:      req.Style,
+		Source:     req.Source,
+		InputMode:  inputMode,
+		Prompt:     req.Prompt,
+		DraftInput: req.DraftInput,
+		Status:     "draft",
 	}
 
 	if err := data.DraftDAO.Add(ctx, draft); err != nil {
@@ -158,6 +177,15 @@ func (s *DraftServer) UpdateDraft(kctx khttp.Context) error {
 	}
 	if req.Source != "" {
 		existing.Source = req.Source
+	}
+	if req.InputMode != nil {
+		existing.InputMode = *req.InputMode
+	}
+	if req.Prompt != nil {
+		existing.Prompt = *req.Prompt
+	}
+	if req.DraftInput != nil {
+		existing.DraftInput = *req.DraftInput
 	}
 	if req.Status != "" {
 		existing.Status = req.Status

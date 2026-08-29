@@ -141,6 +141,21 @@ func Migrate() error {
 		}
 		plogger.Info("DB migrate: created drafts table")
 	}
+	for _, column := range []struct {
+		name string
+		sql  string
+	}{
+		{"input_mode", "TEXT NOT NULL DEFAULT 'prompt'"},
+		{"prompt", "TEXT NOT NULL DEFAULT ''"},
+		{"draft_input", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		if !g.Migrator().HasColumn(&model.Draft{}, column.name) {
+			if err := g.Exec("ALTER TABLE drafts ADD COLUMN " + column.name + " " + column.sql).Error; err != nil {
+				return err
+			}
+			plogger.Infof("DB migrate: added %s column to drafts", column.name)
+		}
+	}
 
 	return nil
 }

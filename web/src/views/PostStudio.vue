@@ -365,6 +365,9 @@ async function loadDraft(id: string) {
     content.value = data.content || ''
     style.value = data.style || 'casual'
     source.value = data.source || 'self_select'
+    mode.value = data.input_mode === 'draft' ? 'draft' : 'prompt'
+    promptText.value = data.prompt ?? DEFAULT_PROMPT
+    draftInput.value = data.draft_input ?? ''
     if (data.photo_ids?.length) {
       await addItemsFromTokens(data.photo_ids)
     }
@@ -490,6 +493,9 @@ async function saveDraft() {
     photo_ids: draftPhotoIds(),
     style: style.value,
     source: source.value,
+    input_mode: mode.value,
+    prompt: promptText.value,
+    draft_input: draftInput.value,
   }
 
   try {

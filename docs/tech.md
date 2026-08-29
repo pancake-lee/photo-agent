@@ -213,7 +213,7 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 
 **图文工坊草稿**：
 
-- `POST /drafts` — 创建草稿（title/content/photo_ids/style/source）
+- `POST /drafts` — 创建草稿（title/content/photo_ids/style/source/input_mode/prompt/draft_input）
 - `PUT /drafts/:id` — 更新草稿
 - `DELETE /drafts/:id` — 删除草稿
 - `GET /drafts` — 草稿列表
