@@ -1,0 +1,32 @@
+{
+  "report_id": "2026-08-30-backend-code-quality-reassessment",
+  "backlog_id": "BQ1-BQ6,BQ8-BQ11",
+  "created_at": "2026-08-30T02:01:00+08:00",
+  "target": "后端代码质量基线问题修复后的复评",
+  "overall": 5.9,
+  "dimension_scores": {
+    "功能正确性与数据完整性": 8.9,
+    "分层与职责边界": 9.3,
+    "风格一致性与可读性": 7.0,
+    "抽象、复用与复杂度控制": 8.0,
+    "健壮性、并发与可观测性": 8.3,
+    "API、安全与兼容性": 4.0,
+    "测试策略与用户用例闭环": 7.5,
+    "废弃代码与文档同步": 9.0
+  },
+  "findings_for_backlog": [
+    "BQ10：关键用户路径测试夹具直接创建表结构，违反项目测试约定，并未经过实际迁移路径。",
+    "BQ11：VLM 队列没有覆盖 StartVlmQueue 到本地 VLM 响应、最终队列状态和处理履历的自动化闭环。"
+  ],
+  "verification_runtime": [
+    "GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go --self-check PASS（57 个文件）",
+    "GOTOOLCHAIN=local go test -count=1 ./... PASS",
+    "GOTOOLCHAIN=local go vet ./... PASS",
+    "GOTOOLCHAIN=local go test -count=1 -race ./internal/defaultService/service ./internal/defaultService/data PASS",
+    "gofmt 检查纳入的手写 Go 文件 PASS",
+    "关键进程内用户用例 PASS：草稿 HTTP CRUD/ZIP、照片上传删除/VLM 写回、Embedding 超时取消",
+    "protoc 手工 Proto 语法校验 PASS",
+    "活动 SQLite 旧 AI/VLM 状态列计数为 0",
+    "运行中服务 /v1/embeddings/health 与 /v1/openapi.json 返回 HTTP 200（进程未为本次评估重启）"
+  ]
+}

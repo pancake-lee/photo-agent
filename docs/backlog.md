@@ -17,9 +17,11 @@
 | 暂缓   | 代码治理 | BQ3  | 未鉴权服务暴露任意 SQL 查询        |
 | Done   | 代码治理 | BQ4  | 敏感配置被写入运行日志            |
 | Done   | 代码治理 | BQ5  | Embedding 外部调用缺少受控时限    |
-| Done   | 代码治理 | BQ6  | 高风险后端用户路径缺少自动闭环    |
+| 待规划 | 代码治理 | BQ6  | 高风险后端用户路径缺少自动闭环    |
 | Done   | 代码治理 | BQ8  | 数据访问边界与 Go 格式统一        |
 | Done   | 代码治理 | BQ9  | 后端评估范围文件清单脚本          |
+| 待规划 | 代码治理 | BQ10 | 用户路径测试修改表结构            |
+| 待规划 | 代码治理 | BQ11 | VLM 队列缺少端到端自动闭环        |
 | 已规划 | 对话查询 | CQ4  | 创作型查询（Compose）专用管线     |
 | Done   | 文档治理 | DOC2 | 公共文档与代码实现对齐            |
 
@@ -42,6 +44,7 @@
 ### BQ1 后端代码质量基线评估与问题拆分
 
 - **状态**：Done
+- **专题中枢**：[后端代码质量治理](design/2026-08-30-1-backend-code-quality-hub.md)。
 - **背景**：为避免在既有后端技术债、过期边界或薄弱验证上继续叠加功能，需要先对 `backend/` 做一次可复查的质量评估和针对性整理；评估不以追求 100% 单元测试覆盖率为目标，而是优先建立关键用户用例闭环。
 - **方案**：以 [后端代码质量评分标准](eval/code-quality-rubric-backend.md) 作为唯一判卷依据，范围覆盖手写 Go、人工维护的 Proto/SQL、配置及直接对应的技术文档；pgo 生成物与 abandonCode 模板完全排除。建立路由/API → Service → DAO/外部客户端的调用图，按八项加权评分并记录证据；发现的独立问题拆为 BQ2–BQ6、BQ8，由各自条目承接实施和复评。
 - **实施任务**：
@@ -50,6 +53,7 @@
   - 已完成：将评估发现的问题逐项建为 BQ2–BQ6、BQ8；本轮已完成其规划或暂缓决策。
 - **验收**：存在一份可复查的后端基线报告；每个发现均有证据和独立 backlog 或 future requirements 归属。
 - **评估**：5.7/10（57/100），不通过，详见 [2026-08-29-backend-code-quality-baseline](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **复评**：5.9/10（59/100，未封顶 79/100），不通过，详见 [2026-08-30-backend-code-quality-reassessment](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
 - **实施记录**：人工 Proto/SQL 已纳入复核，发现 3 项阻断项；衍生问题已拆为 BQ2–BQ6、BQ8。2026-08-30 用户确认以“基线评估与问题拆分”范围关单，后续实现和复评由子任务分别承担。
 
 ### BQ2 清理一次性旧列迁移代码
@@ -109,7 +113,7 @@
 
 ### BQ6 高风险后端用户路径缺少自动闭环
 
-- **状态**：Done
+- **状态**：待规划
 - **背景**：数据库迁移、上传后文件与数据库一致性、VLM 队列启停和失败恢复、草稿 HTTP CRUD/ZIP 导出均没有自动化用户用例闭环。本评估环境对运行中服务的 HTTP 探测全部超时，无法替代为成功的运行时证据。
 - **严重程度**：P1，回归风险不可定位。
 - **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
@@ -123,6 +127,8 @@
 - **验收**：四条关键路径均有无需真实服务的自动闭环；成功和代表性失败结果可重复断言；全量自动验证通过。
 
 - **实施记录**：新增临时 SQLite 与进程内 HTTP 用例，覆盖草稿创建、更新、列表、删除和 ZIP 导出；覆盖 NEF 上传与删除后的文件/记录一致性、VLM 成功/待复核/失败履历写回，以及队列启动、停止和待处理状态。上传在缩略图或落库失败时会清理已创建文件，避免静默返回空 ID。`GOTOOLCHAIN=local go test ./...`、`go vet ./...` 和受影响包 race 检查通过。
+
+- **复评**：2026-08-30 复评确认草稿 HTTP、上传删除、VLM 写回和 Embedding 异常路径已有自动证据；但测试夹具修改表结构，且 VLM 队列仅验证管理器状态，未覆盖公开启动入口到本地 VLM 响应、最终状态和处理履历。详见 BQ10、BQ11 与 [复评报告](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
 
 ### BQ8 数据访问边界与 Go 格式统一
 
@@ -152,6 +158,20 @@
   - 为规则补充自动验证，覆盖 pgo 生成物和 abandonCode 模板排除、人工 Proto/SQL 纳入及稳定排序。
 - **验收**：从仓库根目录运行脚本时，用户无需阅读筛选实现即可看到完整、稳定、按类别分组的参与评估文件列表；生成物和 abandonCode 不出现，人工 Proto/SQL 出现；规则变更可由自动验证发现。
 - **实施记录**：`GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go --self-check` 通过，输出 54 个纳入文件；评分标准和评估手册已改为引用该脚本。
+
+### BQ10 用户路径测试修改表结构
+
+- **状态**：待规划
+- **背景**：`backend/internal/defaultService/service/user_paths_test.go:25-44` 的测试夹具通过 `Migrator().CreateTable` 和原始 `CREATE TABLE` 初始化临时 SQLite。项目 Go 规范明确禁止测试修改表结构；该做法还绕过了实际启动迁移，无法证明测试用表与运行时迁移后的表一致。
+- **严重程度**：P1，关键用户路径验证可能掩盖迁移或 schema 漂移问题。
+- **证据**：[后端代码质量复评](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
+
+### BQ11 VLM 队列缺少端到端自动闭环
+
+- **状态**：待规划
+- **背景**：`TestVlmQueueLifecycle` 只直接调用 `vlmQueueManager` 的启动、停止和待处理状态；VLM 写回在另一段独立测试中验证。测试没有经由 `StartVlmQueue` 或 `runVlmQueue` 使用本地 VLM 响应，因此无法自动证明队列成功、失败、停止后的最终状态和处理履历。
+- **严重程度**：P1，VLM 队列关键用户路径仍缺少可重复的自动闭环。
+- **证据**：[后端代码质量复评](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
 
 ### CQ4 创作型查询（Compose）专用管线
 
