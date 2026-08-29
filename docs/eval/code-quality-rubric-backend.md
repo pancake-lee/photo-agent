@@ -38,8 +38,9 @@
 
 检查传输、业务、持久化、文件/外部服务职责是否清晰，依赖方向是否符合 Go Backend 的职责边界。
 
-- 高分：HTTP/Proto 层只完成参数和响应适配；Service 组织业务规则和事务性流程；DAO 封装查询与持久化；外部 VLM、Embedding、EXIF、文件操作有明确边界。Python Agent 仅通过 Go API 访问数据与文件。
-- 扣分：handler 或 DAO 承担完整业务流程；SQL、文件写入或 HTTP 调用散落在多个业务入口；循环依赖；跨层直接访问数据库；为一次性流程新增与现有 Service 平行、重叠的实现。
+- 高分：HTTP/Proto 层只完成参数和响应适配；Service 组织业务规则和事务性流程；`data` 层以业务语义函数封装全部 ORM、生成查询对象、原始 SQL 和只读数据库连接；外部 VLM、Embedding、EXIF、文件操作有明确边界。Python Agent 仅通过 Go API 访问数据与文件。
+- 扣分：handler 或 DAO 承担完整业务流程；SQL、文件写入或 HTTP 调用散落在多个业务入口；循环依赖；Service 直接使用 ORM、生成查询对象、原始 SQL 或只读数据库连接；为一次性流程新增与现有 Service 平行、重叠的实现。
+- 命名检查：单表访问以明确动作命名，例如 `GetPhotoByID`；跨表、聚合或组装访问以返回的业务对象命名，例如 `GetUserInfo`。仅为复用 ORM 调用而暴露泛化 DAO，或让 Service 自行传入任意查询条件，均不符合此边界。
 - 注意：具体纳入与排除结果以清单脚本为准；人工 Proto/SQL 需要检查路由、字段、默认值和表关联是否与手写调用层一致。
 
 ### 2.3 风格一致性与可读性（10）

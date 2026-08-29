@@ -61,6 +61,13 @@
 - 非复杂场景优先用基础类型组合，仅在复用明显或封装语义明确时抽象 `type`
 - **接口代理模式**：基础类通过接口代理支持子类覆盖，子类初始化后调用 `BindProvider(self)`
 
+### 数据访问边界
+
+- ORM、生成查询对象、原始 SQL 和只读数据库连接只允许出现在 `internal/defaultService/data/`；Service 负责业务编排，不直接查表或写表
+- `data` 层函数必须表达业务意图，而非暴露通用 ORM 操作。单表操作按明确动作命名，例如 `GetPhotoByID`、`UpdatePhotoDescription`；跨表、聚合或组装结果按返回的业务对象命名，例如 `GetUserInfo`
+- 不为减少少量重复而新增泛化 DAO、可传入任意条件的查询接口或由 Service 拼接查询条件。字段投影、筛选和排序由 `data` 层以已知业务用法收敛
+- 新增或调整数据访问时，同步为有业务规则的 DAO 行为补充临时 SQLite 测试；Service 测试只通过公开行为断言结果
+
 ### 测试
 
 - 编写集成测试验证 Service 层逻辑
