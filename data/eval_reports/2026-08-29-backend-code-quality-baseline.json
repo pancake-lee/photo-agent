@@ -1,0 +1,50 @@
+{
+  "report_id": "2026-08-29-backend-code-quality-baseline",
+  "backlog_id": "BQ1",
+  "created_at": "2026-08-29T00:00:00Z",
+  "target": "backend/ 手写 Go、人工维护的 Proto/SQL、后端配置及直接对应技术文档的基线评估",
+  "overall": 5.7,
+  "weighted_total": 57,
+  "weighted_dimension_scores": {
+    "功能正确性与数据完整性": "10/18",
+    "分层与职责边界": "10/14",
+    "风格一致性与可读性": "7/10",
+    "抽象、复用与复杂度控制": "8/10",
+    "健壮性、并发与可观测性": "5/12",
+    "API、安全与兼容性": "3/10",
+    "测试策略与用户用例闭环": "7/16",
+    "废弃代码与文档同步": "7/10"
+  },
+  "dimension_scores": {
+    "功能正确性与数据完整性": 5.6,
+    "分层与职责边界": 7.1,
+    "风格一致性与可读性": 7.0,
+    "抽象、复用与复杂度控制": 8.0,
+    "健壮性、并发与可观测性": 4.2,
+    "API、安全与兼容性": 3.0,
+    "测试策略与用户用例闭环": 4.4,
+    "废弃代码与文档同步": 7.0
+  },
+  "blockers": [
+    "P0：服务启动迁移会对已有 photos 表执行 DROP COLUMN，造成存量列值不可逆丢失。",
+    "P0：默认服务全局跳过鉴权，同时暴露任意 SQL 查询能力；当前监听地址覆盖全部网络接口。",
+    "P0：启动流程会将完整配置写入日志，实际日志中已出现敏感凭据。"
+  ],
+  "findings_for_backlog": [
+    "P0：backend/internal/pkg/db/migrate.go 在启动迁移中删除 photos 表的 ai_health_status、ai_health_reason、vlm_status、vlm_reason 列，存量值会不可逆丢失。",
+    "P0：backend/internal/defaultService/defaultService.go 全局调用 SetIgnoreAuth，QueryServer 允许调用方提交任意 SQL；当前服务监听 [::]:10004。",
+    "P0：backend/internal/defaultService/defaultService.go 调用 pconfig.Log，运行日志会输出配置中的敏感凭据。",
+    "P1：embedding 代理使用 http.DefaultClient 调用外部服务，未设置请求超时且未传播调用方取消；批量输入逐条串行执行。",
+    "P1：数据库迁移、上传后文件与数据库一致性、VLM 队列启停/失败恢复、草稿 ZIP 导出等关键用户路径没有自动化闭环；当前评估环境的 HTTP 探测均超时。",
+    "P2：internal/pkg/perr/err.go 未通过 gofmt，保留 CRLF 格式。"
+  ],
+  "verification_runtime": [
+    "GOTOOLCHAIN=local go test ./...：PASS",
+    "GOTOOLCHAIN=local go vet ./...：PASS",
+    "GOTOOLCHAIN=local go test -race ./internal/defaultService/service ./internal/defaultService/data：PASS",
+    "GOTOOLCHAIN=local go test -v ./internal/defaultService/service ./internal/defaultService/data：PASS；包含 DAO 临时 SQLite 集成测试与纯函数单测",
+    "gofmt -d 手写 Go 文件：发现 internal/pkg/perr/err.go 存在格式差异（abandonCode 模板已排除）",
+    "protoc --descriptor_set_out=/dev/null：人工维护的 common、error_reason、photo_service、query_service、tag_service、timeline_service、vlm_service Proto 语法通过",
+    "当前端口 10004、10005、10006 均在监听，但从评估环境发起的 HTTP 探测均在 5 秒内超时；未将其计为用户用例成功证据"
+  ]
+}
