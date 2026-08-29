@@ -13,7 +13,6 @@ import (
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
-	"backend/internal/pkg/db"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/plogger"
@@ -454,8 +453,7 @@ type vlmDescriptionEntry struct {
 // applyDescriptionToPhoto 将描述记录写入 photo 数据库行。
 func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *vlmDescriptionEntry) error {
 	if err := validateVlmDescription(entry.Description); err != nil {
-		q := db.GetQuery().Photo
-		if _, saveErr := q.WithContext(ctx).Where(q.ID.Eq(photoID)).Updates(map[string]any{
+		if saveErr := data.PhotoDAO.UpdateVlmDescription(ctx, photoID, map[string]any{
 			"description_raw":   entry.Description,
 			"description_model": entry.Model,
 			"description_time":  entry.Time,
@@ -482,10 +480,8 @@ func applyDescriptionToPhoto(ctx *papp.AppCtx, photoID string, entry *vlmDescrip
 		updates["composition"] = composition
 	}
 
-	q := db.GetQuery().Photo
-	_, err := q.WithContext(ctx).Where(q.ID.Eq(photoID)).Updates(updates)
-	if err != nil {
-		return ctx.Log.LogErr(err)
+	if err := data.PhotoDAO.UpdateVlmDescription(ctx, photoID, updates); err != nil {
+		return err
 	}
 	recordAIHistory(photoID, "", "vlm", aiStatusHealthy, "")
 	return nil

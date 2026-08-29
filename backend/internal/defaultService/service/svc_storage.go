@@ -1,7 +1,7 @@
 package service
 
 import (
-	"errors"
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,15 +11,12 @@ import (
 
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
-	"backend/internal/pkg/db/model"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
-	"github.com/pancake-lee/pgo/pkg/pdb"
 	"github.com/pancake-lee/pgo/pkg/plogger"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
-	"gorm.io/gorm"
 )
 
 // StorageServer 存储状态查询服务。
@@ -142,24 +139,15 @@ func (s *StorageServer) handleStorageConflicts(kctx khttp.Context) error {
 
 // queryLastSync 查询照片表中最新的导入时间。
 func (s *StorageServer) queryLastSync() string {
-	// 不要用 Select("MAX(imported_at)") 裸扫 time.Time：SQLite 把 imported_at 存成字符串，
-	// 聚合裸值扫描走 database/sql 的 time.Time.Scan，无法把 string 转成 time.Time。
-	// 改成按 imported_at 倒序取第一条，走 GORM 常规结构体扫描（和照片列表一致），能正确解析时间。
-	var photo model.Photo
-	g := pdb.GetGormDB()
-	if err := g.Model(&model.Photo{}).
-		Order("imported_at DESC").
-		Take(&photo).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ""
-		}
+	importedAt, err := data.PhotoDAO.GetLatestPhotoImportTime(papp.NewAppCtx(context.Background()))
+	if err != nil {
 		plogger.Warnf("storage/info query last_sync failed: %v", err)
 		return ""
 	}
-	if photo.ImportedAt.IsZero() {
+	if importedAt.IsZero() {
 		return ""
 	}
-	return photo.ImportedAt.UTC().Format(time.RFC3339)
+	return importedAt.UTC().Format(time.RFC3339)
 }
 
 // countFiles 递归统计目录下 JPG 和 NEF 文件数。

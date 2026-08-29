@@ -1,14 +1,15 @@
 package service
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"backend/internal/defaultService/conf"
-
-	"github.com/pancake-lee/pgo/pkg/putil"
 
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -21,6 +22,10 @@ import (
 
 // EmbeddingServer embedding 代理服务
 type EmbeddingServer struct{}
+
+const embeddingRequestTimeout = 15 * time.Second
+
+var embeddingHTTPClient = &http.Client{Timeout: embeddingRequestTimeout}
 
 // Reg 向 Kratos HTTP 服务器注册 embedding 代理路由。
 func (s *EmbeddingServer) Reg(_ *grpc.Server, httpSrv *khttp.Server) {
@@ -105,26 +110,12 @@ func (s *EmbeddingServer) handleEmbedding(ctx khttp.Context) error {
 		return nil
 	}
 
-	// 逐条请求火山引擎 API，合并结果
-	resp := embeddingResp{
-		Object: "list",
-		Model:  req.Model,
-	}
-
-	for i, text := range texts {
-		result, err := callVolcengineEmbedding(cfg, req.Model, text)
-		if err != nil {
-			_ = ctx.Result(500, map[string]string{"error": err.Error()})
-			return nil
-		}
-
-		resp.Data = append(resp.Data, embeddingData{
-			Object:    "embedding",
-			Embedding: result.embedding,
-			Index:     i,
-		})
-		resp.Usage.PromptTokens += result.usage.PromptTokens
-		resp.Usage.TotalTokens += result.usage.TotalTokens
+	requestCtx, cancel := context.WithTimeout(ctx.Request().Context(), embeddingRequestTimeout)
+	defer cancel()
+	resp, err := generateEmbeddingResponse(requestCtx, cfg, req.Model, texts)
+	if err != nil {
+		_ = ctx.Result(500, map[string]string{"error": err.Error()})
+		return nil
 	}
 
 	return ctx.Result(200, resp)
@@ -195,8 +186,25 @@ type embedResult struct {
 	usage     volcEmbeddingUsage
 }
 
+// generateEmbeddingResponse 按输入顺序逐条生成 embedding，并在任一次失败后立即停止。
+func generateEmbeddingResponse(ctx context.Context, cfg embedConfig, model string, texts []string) (*embeddingResp, error) {
+	resp := &embeddingResp{Object: "list", Model: model}
+	for i, text := range texts {
+		result, err := callVolcengineEmbedding(ctx, cfg, model, text)
+		if err != nil {
+			return nil, err
+		}
+		resp.Data = append(resp.Data, embeddingData{
+			Object: "embedding", Embedding: result.embedding, Index: i,
+		})
+		resp.Usage.PromptTokens += result.usage.PromptTokens
+		resp.Usage.TotalTokens += result.usage.TotalTokens
+	}
+	return resp, nil
+}
+
 // callVolcengineEmbedding 调用火山引擎 API 为单条文本生成 embedding。
-func callVolcengineEmbedding(cfg embedConfig, model, text string) (*embedResult, error) {
+func callVolcengineEmbedding(ctx context.Context, cfg embedConfig, model, text string) (*embedResult, error) {
 	if model == "" {
 		model = cfg.Model
 	}
@@ -208,34 +216,35 @@ func callVolcengineEmbedding(cfg embedConfig, model, text string) (*embedResult,
 		},
 	}
 
-	url := cfg.BaseURL + "/embeddings/multimodal"
-	headers := map[string]string{
-		"Authorization": "Bearer " + cfg.APIKey,
-	}
-
-	httpReq, err := putil.NewHttpRequestJson("POST", url, headers, nil, volcReq)
+	body, err := json.Marshal(volcReq)
 	if err != nil {
 		return nil, fmt.Errorf("build request failed: %w", err)
 	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.BaseURL+"/embeddings/multimodal", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build request failed: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := embeddingHTTPClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response body failed: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed: status code %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("request failed: status code %d, body: %s", resp.StatusCode, string(responseBody))
 	}
 
 	var volcResp volcEmbeddingResp
-	if err := json.Unmarshal(body, &volcResp); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %w, body: %s", err, string(body))
+	if err := json.Unmarshal(responseBody, &volcResp); err != nil {
+		return nil, fmt.Errorf("unmarshal response failed: %w, body: %s", err, string(responseBody))
 	}
 
 	return &embedResult{

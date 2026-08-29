@@ -94,23 +94,6 @@ func Migrate() error {
 			plogger.Infof("DB migrate: added %s column to photos", column.name)
 		}
 	}
-	// 删除 AI 健康死列：健康/VLM 结论已改为读取时按当前描述实时推导（derivePhotoAIState），
-	// 无任何写入方，存量列只剩误导。embedding 两列描述 Chroma 实际处理结果，保留。
-	for _, column := range []string{"ai_health_status", "ai_health_reason", "vlm_status", "vlm_reason"} {
-		var count int64
-		if err := g.Raw(
-			"SELECT COUNT(*) FROM pragma_table_info('photos') WHERE name = ?", column,
-		).Scan(&count).Error; err != nil {
-			return err
-		}
-		if count == 0 {
-			continue
-		}
-		if err := g.Exec("ALTER TABLE photos DROP COLUMN " + column).Error; err != nil {
-			return err
-		}
-		plogger.Infof("DB migrate: dropped %s column from photos", column)
-	}
 	if !g.Migrator().HasTable("ai_processing_history") {
 		if err := g.Exec(`CREATE TABLE ai_processing_history (
 			id TEXT NOT NULL PRIMARY KEY,

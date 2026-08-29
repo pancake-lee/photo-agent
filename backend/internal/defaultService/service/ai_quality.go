@@ -1,12 +1,15 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/pancake-lee/pgo/pkg/pdb"
-	"github.com/pancake-lee/pgo/pkg/putil"
+	"backend/internal/defaultService/data"
+
+	"github.com/pancake-lee/pgo/pkg/papp"
+	"github.com/pancake-lee/pgo/pkg/plogger"
 )
 
 const (
@@ -70,13 +73,8 @@ func validateVlmImageIntegrity(jsonBlock string) error {
 }
 
 func recordAIHistory(photoID, taskID, stage, status, reason string) {
-	_ = pdb.GetGormDB().Table("ai_processing_history").Create(map[string]any{
-		"id":         putil.UUID(),
-		"photo_id":   photoID,
-		"task_id":    taskID,
-		"stage":      stage,
-		"status":     status,
-		"reason":     reason,
-		"created_at": nowTimeString(),
-	}).Error
+	ctx := papp.NewAppCtx(context.Background())
+	if err := data.AddAIProcessingHistory(ctx, photoID, taskID, stage, status, reason, nowTimeString()); err != nil {
+		plogger.Warnf("record AI history failed: %v", err)
+	}
 }

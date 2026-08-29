@@ -21,7 +21,6 @@ func main() {
 
 	pconfig.MustInitConfig(*c)
 	plogger.InitFromConfig(*l)
-	pconfig.Log()
 	pdb.MustInitSqliteByConfig()
 
 	// 数据库迁移（幂等）

@@ -13,7 +13,6 @@ import (
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
-	"backend/internal/pkg/db"
 	"backend/internal/pkg/perr"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
@@ -30,8 +29,7 @@ type PhotoServer struct {
 
 // AIAuditHandler 返回批量修复前的只读候选摘要，不修改照片或原始文件。
 func (s *PhotoServer) AIAuditHandler(ctx khttp.Context) error {
-	q := db.GetQuery().Photo
-	photos, err := q.WithContext(ctx).Where(q.FileType.Neq("nef")).Find()
+	photos, err := data.PhotoDAO.GetPhotosForVlmAudit(papp.NewAppCtx(ctx.Request().Context()))
 	if err != nil {
 		return ctx.Result(500, map[string]string{"error": err.Error()})
 	}
@@ -55,8 +53,7 @@ func (s *PhotoServer) AIAuditHandler(ctx khttp.Context) error {
 // ValidateAIHandler 重新执行当前描述的本地质量校验，不调用 VLM，也不写入派生质量结论。
 func (s *PhotoServer) ValidateAIHandler(ctx khttp.Context) error {
 	id := ctx.Vars().Get("id")
-	q := db.GetQuery().Photo
-	photo, err := q.WithContext(ctx).Where(q.ID.Eq(id)).First()
+	photo, err := data.PhotoDAO.GetByID(papp.NewAppCtx(ctx.Request().Context()), id)
 	if err != nil {
 		return ctx.Result(404, map[string]string{"error": "照片不存在"})
 	}
@@ -464,9 +461,12 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	// 无冲突：保存 → 入库
 	var photoID string
 	if isNEF {
-		photoID = s.doNefUpload(ctx, file, targetFilename, folder, fileMtime)
+		photoID, err = s.doNefUpload(ctx, file, targetFilename, folder, fileMtime)
 	} else {
-		photoID = s.doUpload(ctx, file, targetFilename, folder, newShotAt, fileMtime)
+		photoID, err = s.doUpload(ctx, file, targetFilename, folder, newShotAt, fileMtime)
+	}
+	if err != nil {
+		return fmt.Errorf("store photo failed: %w", err)
 	}
 	plogger.Infof("Photo uploaded: %s -> id=%s", targetFilename, photoID)
 	return kctx.Result(200, map[string]any{
@@ -516,7 +516,9 @@ func (s *PhotoServer) handleConflict(
 				_ = os.Remove(oldPath)
 			}
 		}
-		overwritePhoto(ctx, existingPhoto.ID, targetFilename, folder, newShotAt, isNEF)
+		if err := overwritePhoto(ctx, existingPhoto.ID, targetFilename, folder, newShotAt, isNEF); err != nil {
+			return fmt.Errorf("update overwritten photo failed: %w", err)
+		}
 		return kctx.Result(200, map[string]any{
 			"status":   "stored",
 			"photo_id": existingPhoto.ID,
@@ -531,10 +533,14 @@ func (s *PhotoServer) handleConflict(
 	case "keep_both":
 		newFilename := addSuffix(targetFilename)
 		var photoID string
+		var err error
 		if isNEF {
-			photoID = s.doNefUpload(ctx, file, newFilename, folder, fileMtime)
+			photoID, err = s.doNefUpload(ctx, file, newFilename, folder, fileMtime)
 		} else {
-			photoID = s.doUpload(ctx, file, newFilename, folder, newShotAt, fileMtime)
+			photoID, err = s.doUpload(ctx, file, newFilename, folder, newShotAt, fileMtime)
+		}
+		if err != nil {
+			return fmt.Errorf("store photo failed: %w", err)
 		}
 		return kctx.Result(200, map[string]any{
 			"status":   "stored",
@@ -550,7 +556,7 @@ func (s *PhotoServer) handleConflict(
 func (s *PhotoServer) doUpload(
 	ctx *papp.AppCtx, file io.Reader, filename string,
 	folder string, shotAt *time.Time, fileMtime *time.Time,
-) string {
+) (string, error) {
 	srcDir := conf.C.Storage.PhotoSrc
 	thumbDir := conf.C.Storage.PhotoPath
 	if folder != "" {
@@ -558,34 +564,45 @@ func (s *PhotoServer) doUpload(
 		thumbDir = filepath.Join(thumbDir, folder)
 	}
 	if err := saveUploadedFile(file, filename, srcDir, fileMtime); err != nil {
-		plogger.Warnf("save uploaded file failed: %v", err)
-		return ""
+		return "", err
 	}
 
 	srcPath := filepath.Join(srcDir, filename)
+	thumbPath := filepath.Join(thumbDir, filename)
 	maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
 	if err := processToPhotoPath(srcPath, filename, thumbDir, maxBytes, fileMtime); err != nil {
-		plogger.Warnf("process to photo path failed: %v", err)
-		return ""
+		_ = os.Remove(srcPath)
+		_ = os.Remove(thumbPath)
+		return "", err
 	}
 
-	return createPhotoRecord(ctx, filename, folder, "jpg", shotAt)
+	photoID, err := createPhotoRecord(ctx, filename, folder, "jpg", shotAt)
+	if err != nil {
+		_ = os.Remove(srcPath)
+		_ = os.Remove(thumbPath)
+		return "", err
+	}
+	return photoID, nil
 }
 
 // doNefUpload 执行 NEF 上传流程（仅保存源文件 + 入库，不压缩不生成缩略图）
 func (s *PhotoServer) doNefUpload(
 	ctx *papp.AppCtx, file io.Reader, filename string,
 	folder string, fileMtime *time.Time,
-) string {
+) (string, error) {
 	srcDir := conf.C.Storage.PhotoSrc
 	if folder != "" {
 		srcDir = filepath.Join(srcDir, folder)
 	}
 	if err := saveUploadedFile(file, filename, srcDir, fileMtime); err != nil {
-		plogger.Warnf("save NEF file failed: %v", err)
-		return ""
+		return "", err
 	}
-	return createPhotoRecord(ctx, filename, folder, "nef", nil)
+	photoID, err := createPhotoRecord(ctx, filename, folder, "nef", nil)
+	if err != nil {
+		_ = os.Remove(filepath.Join(srcDir, filename))
+		return "", err
+	}
+	return photoID, nil
 }
 
 // ================================================================
@@ -698,7 +715,7 @@ func buildConflictInfo(existing *data.PhotoDO, newShotAt *time.Time) map[string]
 	}
 }
 
-func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileType string, shotAt *time.Time) string {
+func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileType string, shotAt *time.Time) (string, error) {
 	relPath := filename
 	if folder != "" {
 		relPath = filepath.Join(folder, filename)
@@ -760,14 +777,13 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 	}
 
 	if err := data.PhotoDAO.Add(ctx, photoDO); err != nil {
-		plogger.Warnf("Create photo record failed: %v", err)
-		return ""
+		return "", fmt.Errorf("create photo record failed: %w", err)
 	}
 
-	return photoDO.ID
+	return photoDO.ID, nil
 }
 
-func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, shotAt *time.Time, isNEF bool) {
+func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, shotAt *time.Time, isNEF bool) error {
 	relPath := filename
 	if folder != "" {
 		relPath = filepath.Join(folder, filename)
@@ -841,8 +857,8 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 		updates["height"] = height
 	}
 
-	q := db.GetQuery().Photo
-	if _, err := q.WithContext(ctx).Where(q.ID.Eq(photoID)).Updates(updates); err != nil {
-		plogger.Warnf("Overwrite photo failed: %v", err)
+	if err := data.PhotoDAO.UpdatePhotoAfterOverwrite(ctx, photoID, updates); err != nil {
+		return err
 	}
+	return nil
 }
