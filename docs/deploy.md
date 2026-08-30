@@ -52,27 +52,33 @@ cp configs/config.yaml .local/my-config.yaml
 编辑 `.local/my-config.yaml`，填写以下必填段：
 
 ```yaml
-llm:
-  base_url: "https://api.openai.com/v1"
-  api_key: "sk-xxxxxxxx"
-  model: "gpt-4o-mini"
+LLM:
+  BaseURL: "https://api.openai.com/v1"
+  APIKey: "sk-xxxxxxxx"
+  Model: "gpt-4o-mini"
 
-vlm:
-  api_key: "sk-xxxxxxxx"
-  model: "gpt-4o-mini"              # 需支持视觉能力
-  base_url: "https://api.openai.com/v1"
+VLM:
+  APIKey: "sk-xxxxxxxx"
+  Model: "gpt-4o-mini"              # 需支持视觉能力
+  BaseURL: "https://api.openai.com/v1"
 
-embedding:
-  api_key: "sk-xxxxxxxx"
-  model: "text-embedding-3-small"
-  base_url: "https://api.openai.com/v1"
+Embedding:
+  APIKey: "sk-xxxxxxxx"
+  Model: "text-embedding-3-small"
+  BaseURL: "https://api.openai.com/v1"
 
-storage:
-  photo_src: "./data/photos/src"        # 照片源目录
-  photo_path: "./data/photos/compressed"  # 压缩后图片存储路径
+Storage:
+  PhotoSrc: "./data/photos/src"        # 照片源目录
+  PhotoPath: "./data/photos/compressed"  # 压缩后图片存储路径
+
+Agent:
+  Addr: "0.0.0.0:10005"
+
+Web:
+  Addr: "0.0.0.0:10006"
 ```
 
-> Go 和 Python 共用此配置文件。Dify 配置段无需填写，保持默认即可。另有 `rag`（检索阈值）、`burst`（连拍分组阈值）等段，缺省时使用代码内置默认值。
+> Go、Python 和 Vite 开发服务器共用此配置文件。`Http`、`Sqlite` 暂为 pgo 兼容段；`Agent.Addr`、`Web.Addr` 分别控制 Agent 与 Web 的监听地址。连拍阈值不再写入 YAML，数据库无记录时使用后端代码默认，后续修改由 Web 设置页写入数据库。
 
 ---
 
@@ -126,12 +132,12 @@ rm -rf ./data/agent/chroma/
 
 ### Q: 如何更换 LLM 供应商？
 
-修改 `.local/my-config.yaml` 中对应段的 `base_url` 和 `model`。项目通过 OpenAI 兼容 API 调用，支持火山引擎、通义千问、DeepSeek 等。
+修改 `.local/my-config.yaml` 中 `LLM`、`VLM` 或 `Embedding` 段的 `BaseURL` 和 `Model`。项目通过 OpenAI 兼容 API 调用，支持火山引擎、通义千问、DeepSeek 等。
 
 ### Q: 端口冲突？
 
-Go 后端默认 `:10004`，Python Agent 默认 `:10005`，Web 前端默认 `:10006`。可在配置文件中修改。Python Agent 也可通过 `--serve <port>` 指定端口。
+Go 后端监听 `Http.Addr`，Python Agent 监听 `Agent.Addr`，Web 前端监听 `Web.Addr`（模板默认分别为 `:10004`、`:10005`、`:10006`）。Python Agent 也可通过 `--serve <port>` 临时覆盖监听端口。
 
 ### Q: 会话数据存储在哪里？
 
-`data/agent/sqlite/chat_sessions.db`（SQLite），可在配置文件中通过 `chat.db_path` 调整。
+`data/agent/sqlite/chat_sessions.db`（SQLite），可在配置文件中通过 `Agent.ChatDBPath` 调整。

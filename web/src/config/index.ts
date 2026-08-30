@@ -2,6 +2,7 @@
 
 import { isWails } from '../utils/env'
 import { settings } from '../stores/settings'
+export { DEFAULT_AGENT_URL, DEFAULT_BACKEND_URL } from './runtime'
 
 // ── 动态 API 地址 ──────────────────────────────────────────
 // 在 Wails 桌面环境中读取用户配置的绝对地址，浏览器中保持相对路径（走 Vite 代理）

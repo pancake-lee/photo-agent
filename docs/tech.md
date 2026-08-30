@@ -147,7 +147,7 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 → _filter_by_ratio_gap() → 构建上下文 → LLM 回答
 ```
 
-- 分块策略：由 `embedding.chunk_strategy` 配置控制，支持 none（不分块，默认）/ fixed_size（固定字数）/ markdown_heading（按标题）；fixed_size 时 chunk_size=500、chunk_overlap=50
+- 分块策略：由 `Embedding.ChunkStrategy` 配置控制，支持 none（不分块，默认）/ fixed_size（固定字数）/ markdown_heading（按标题）；fixed_size 时使用 `Embedding.ChunkSize=500`、`Embedding.ChunkOverlap=50`
 - 聚合：同一照片多 chunk 只保留距离最小的一条
 - 自动截断：相邻距离比值 ≥1.8 时截断（Max Ratio Gap），保留相关性高的结果
 
@@ -427,7 +427,7 @@ photo-agent/
 
 ## 8. 部署
 
-详细部署步骤见 [docs/deploy.md](deploy.md)。三层共用 YAML 配置，核心段：server / db / storage / llm / vlm / embedding，另有 rag（检索阈值）、burst（连拍分组阈值）、dify（早期验证）、prices（计费）等。模板位于 `configs/config.yaml`，个人配置放在 `.local/my-config.yaml`（gitignore）。
+详细部署步骤见 [docs/deploy.md](deploy.md)。三层共用 YAML 配置：`Http`、`Sqlite` 暂承载 pgo 后端适配，`Agent`、`Web` 承载服务专用地址，`Storage`、`LLM`、`VLM`、`Embedding`、`RAG`、`Evaluation`、`Prices` 承载公共能力。连拍阈值由 Web 设置页写入数据库，代码仅保存数据库无记录时的默认值。模板位于 `configs/config.yaml`，个人配置放在 `.local/my-config.yaml`（gitignore）。
 
 ---
 

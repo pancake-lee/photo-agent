@@ -1,12 +1,13 @@
 # Photo Agent 公共配置模板
-# 复制此文件并根据实际情况修改后使用
-# 建议复制到 .local/ 目录下并重命名（如 .local/my-config.yaml），避免将个人配置提交到 Git
+# 复制到 .local/my-config.yaml 后填写 API Key 和本机路径。
+#
+# 配置约定：公共能力按功能分组，服务专用值放在对应服务段。
+# Http 与 Sqlite 暂为 pgo 兼容段，待 pgo 支持 Backend 配置后再统一迁移。
 
-# --------------------------------------------------
-# backend - pgo
 Log:
   Level: "debug"
 
+# Go Backend 的 pgo 兼容配置。
 Http:
   Addr: "0.0.0.0:10004"
   Timeout: 1000
@@ -15,113 +16,62 @@ Sqlite:
   Path: "./data/backend/sqlite/photo_agent.db"
 
 Storage:
-  # 原图存储路径
+  # 项目根目录，Agent 用它解析所有相对路径。
+  ProjectRoot: ".."
+  # 原图存储路径。
   PhotoSrc: "./data/photos/src"
-  # 压缩后的图片存储路径
+  # 压缩后的展示图存储路径。
   PhotoPath: "./data/photos/compressed"
-  # 时间线活动窗口天数（活动日前后各 N 天内的照片归入该活动）
+  # 时间线活动窗口天数，活动日前后各 N 天内的照片归入该活动。
   TimelineWindowDays: 7
 
 VLM:
-  # 单张图片最大尺寸（超过自动压缩）
+  APIKey: "your-vlm-api-key"
+  Model: "gpt-4o-mini"
+  BaseURL: "https://api.openai.com/v1"
+  # 单张图片最大尺寸，超过时自动压缩。
   MaxImageSizeMB: 0.2
-  # VLM 描述生成提示词文件路径
-  Prompt: ./configs/vlm_prompt.md
+  # VLM 描述生成提示词文件路径。
+  Prompt: "./configs/vlm_prompt.md"
 
 Embedding:
-  APIKey: ""
+  APIKey: "your-embedding-api-key"
+  Model: "text-embedding-3-small"
+  BaseURL: "https://api.openai.com/v1"
+  ContextSize: 128000
+  ChunkStrategy: "none" # none | fixed_size | markdown_heading
+  ChunkSize: 500
+  ChunkOverlap: 50
+  HeadingLevel: 2
 
-Burst:
-  # 连拍分组阈值，分精细/模糊两档。运行期实际生效值以网页设置页（app_settings 表）为准，
-  # 这里的值仅在 DB 无记录时作为初始默认。
-  Fine:
-    TimeWindowSec: 5 # 相邻两张拍摄间隔阈值（秒）
-    HashThreshold: 10 # dHash 汉明距离阈值（64bit，0-64）
-    SsimThreshold: 0.85 # 灰区二次验证阈值
-    SsimGrayMin: 8 # 触发 SSIM 验证的哈希距离下界
-    SsimGrayMax: 12 # 触发 SSIM 验证的哈希距离上界
-  Coarse:
-    TimeWindowSec: 30 # 模糊档：更大时间窗，同场景多次快门归一组
-    HashThreshold: 18 # 更宽松的相似度判定
-    SsimThreshold: 0.6 # 更宽松的灰区验证
-    SsimGrayMin: 12
-    SsimGrayMax: 24
-# --------------------------------------------------
+LLM:
+  APIKey: "your-llm-api-key"
+  Model: "gpt-4o-mini"
+  BaseURL: "https://api.openai.com/v1"
+  FallbackModel: ""
+  RetryEnabled: true
+  RetryMaxAttempts: 3
+  RequestTimeout: 60.0
+  ToolMaxRounds: 20
 
-server:
-  addr: ":10004"                    # Go 后端监听地址
+RAG:
+  AutoDistanceRatio: 1.8
+  DistanceThreshold: 1.5
 
-storage:
-  # 代码根目录（影响相对路径计算）
-  project_root: "."
-  # 原图存储路径
-  photo_src: "./data/photos/src"
-  # 压缩后的图片存储路径
-  photo_path: "./data/photos/compressed"
+Agent:
+  Addr: "0.0.0.0:10005"
+  # Chroma、会话/用量 SQLite、主题发现历史、聚类与 Trace。
+  DataDir: "./data/agent"
+  ChatDBPath: "./data/agent/sqlite/chat_sessions.db"
 
-db:
-  sqlite_path: "./data/backend/sqlite/photo_agent.db"
+Web:
+  Addr: "0.0.0.0:10006"
 
-agent:
-  # Agent 运行数据：Chroma、会话/用量 SQLite、主题发现历史、聚类与 Trace
-  data_dir: "./data/agent"
+Evaluation:
+  # 可复查、应提交仓库的评估报告。
+  ReportsDir: "./docs/eval/reports"
+  # 主题发现规则与开发期检索回归标记。
+  ConfigPath: "./configs/evaluation.yaml"
 
-chat:
-  db_path: "./data/agent/sqlite/chat_sessions.db"
-
-evaluation:
-  # 可复查、应提交仓库的评估报告（运行时黄金用例快照位于 golden/）
-  reports_dir: "./docs/eval/reports"
-  # 主题发现规则与开发期检索回归标记
-  config_path: "./configs/evaluation.yaml"
-
-llm:
-  base_url: "https://api.openai.com/v1"
-  api_key: "your-llm-api-key"        # LLM API Key
-  model: "gpt-4o-mini"
-  fallback_model: ""
-  retry_enabled: true # 是否启用失败重试机制
-  retry_max_attempts: 3 # 最大重试次数
-  request_timeout: 60.0 # LLM 请求超时秒数
-  tool_max_rounds: 20 # 对话中工具调用循环的最大轮数
-
-vlm:
-  base_url: "https://api.openai.com/v1"
-  api_key: "your-vlm-api-key"
-  model: "gpt-4o-mini"
-  concurrency: 3 # VLM 并发数
-  retry: 3 # 失败重试次数
-  max_image_size_mb: 0.2 # 单张图片最大尺寸（超过自动压缩）
-  max_tokens: 500 # VLM 生成最大 token 数
-  prompt: ./configs/vlm_prompt.md # VLM 描述生成提示词文件路径
-
-embedding:
-  base_url: "https://api.openai.com/v1"
-  api_key: "your-embedding-api-key"
-  model: "text-embedding-3-small"
-  context_size: 128000 # 模型上下文窗口大小
-  chunk_strategy: "none" # 分块策略: none | fixed_size | markdown_heading
-  chunk_size: 500 # fixed_size 策略：每块字数
-  chunk_overlap: 50 # fixed_size 策略：块间重叠字数
-  heading_level: 2 # markdown_heading 策略：按 H2 切分
-
-rag:
-  # 直觉理解：1.8 表示"rag分数中下一个距离是上一个的 1.8 倍就截断"
-  auto_distance_ratio: 1.8
-  # l2 距离的理论范围
-  # 保守过滤（只保留明显相关的）：0.5 ~ 0.8
-  # 适中过滤（去除弱相关的）：1.0 ~ 1.2
-  # 宽松过滤（只排除明显无关的）：1.5
-  distance_threshold: 1.5
-
-dify:
-  base_url: "http://localhost"
-  api_key: "your-dify-api-key"
-  dataset_id: "" # 知识库 ID（首次运行 init_dify 后自动填入）
-  email: "your-dify-email" # Dify 管理员邮箱
-  password: "your-dify-password" # Dify 管理员密码
-  dataset_name: "photo-agent-descriptions"
-  db_path: "./data/backend/sqlite/photo_agent.db"
-
-prices:
-  path: ./configs/prices.yaml
+Prices:
+  Path: "./configs/prices.yaml"

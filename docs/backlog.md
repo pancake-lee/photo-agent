@@ -28,6 +28,13 @@
 | Done   | 仓库治理 | TIDY2 | data 运行数据目录审计与归档       |
 | Done   | 仓库治理 | TIDY3 | Agent 运行数据命名收敛            |
 | Done   | 仓库治理 | TIDY4 | 评估配置与黄金回归用例合并        |
+| Done   | 配置治理 | CFG1 | 配置模板存在两套重复且互不联动的结构 |
+| 待规划 | 配置治理 | CFG2 | 配置类与索引脚本契约不一致          |
+| Done   | 配置治理 | CFG3 | 核心模板保留无消费者的 Dify/VLM 配置 |
+| Done   | 配置治理 | CFG4 | 数据库与运行目录配置职责边界不清    |
+| 待规划 | 配置治理 | CFG5 | 配置值缺少统一的类型范围和枚举校验  |
+| 待规划 | 配置治理 | CFG6 | 价格模板占位且价格单位契约不清      |
+| Done   | 配置治理 | CFG7 | 服务端口和代理目标配置分散          |
 
 ### PS10 草稿保存并恢复编辑输入
 
@@ -287,6 +294,65 @@
 > v1.0.12 已归档：W12、GR1、CH1、TF1-1–TF1-10、PS7–PS9、QA1、M1、D1，详见 [v1.0.12](archive/v1.0.12.md)。
 > v1.0.11 已归档：CL1、CL2、PS1–PS6，详见 [v1.0.11](archive/v1.0.11.md)。
 > 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design/2099-01-01-future-requirements.md)。
+
+### CFG1 配置模板存在两套重复且互不联动的结构
+
+- **状态**：Done
+- **背景**：`configs/config.yaml` 同时维护 Go/PGo 大写段和 Python 小写段。VLM、Embedding、存储、数据库和端口等语义在两套结构中重复出现，但分别由不同进程读取，用户修改一处时另一处不会同步生效。
+- **严重程度**：P1，配置修改可能静默不生效。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+- **分析**：当前生效的连拍配置来自 `app_settings.burst_config`，fine 为 `300/24/0.6/12/32`，coarse 为 `600/40/0.4/24/56`。Burst 已从 YAML 和 Go 配置结构移除，以上数值改为后端代码默认，运行期仍由 Web 写入 `app_settings`。公共配置已合并为单一 `Storage`、`LLM`、`VLM`、`Embedding`、`RAG` 等功能段，Agent/Web 专用地址分别放在 `Agent.Addr`、`Web.Addr`。按用户决定，`Http`、`Sqlite` 暂保持 pgo 兼容段，待 pgo 一并改造时再迁至 `Backend`。
+- **实施任务**：
+  - 后端：将 Burst 文件默认值替换为代码常量，删除 `conf.C.Burst` 及配置读取依赖。
+  - 配置：收敛模板和 `.local/my-config.yaml`，合并重复 VLM/Embedding/路径/端口键，删除无消费者键。
+  - Agent/Web：改为从统一服务地址和共享模型配置读取；同步 Vite 代理、启动命令、Wails 开发地址和默认设置。
+  - 验证：配置加载、Go 测试、Agent 测试、Web 构建和全仓旧键引用扫描。
+- **实施记录**：已统一模板和 `.local/my-config.yaml` 的顶层结构，删除重复小写段、Dify 和 Burst；Agent、Vite 代理、Web 默认服务地址、Makefile 端口读取均改为统一配置。Burst 的默认值经活动 SQLite 的 `app_settings.burst_config` 查询确定，新增后端单测锁定该默认值。`Http`、`Sqlite` 未改动；`client/wails.json` 的开发服务器 URL 仍是 Wails 工具自身的静态默认值，不参与三服务监听或代理配置。
+
+### CFG2 配置类与索引脚本契约不一致
+
+- **状态**：待规划
+- **背景**：`agent/scripts/index_photos.py`、`agent/embedding/demo_embedding.py` 等脚本直接访问 `cfg.descriptions_path`，但 `agent/config.py` 的 `Config` 没有定义或加载该属性。
+- **严重程度**：P1，相关脚本运行时会因配置对象缺少属性而失败。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+
+### CFG3 核心模板保留无消费者的 Dify/VLM 配置
+
+- **状态**：Done
+- **背景**：当前核心 Python Agent 不消费小写 `vlm` 段，核心代码也未发现 `dify.*` 配置消费者；模板仍保留这些配置及 API Key、密码、模型和数据集字段，且 Dify 字段注释仍描述历史初始化流程。
+- **严重程度**：P1，增加误配置和敏感信息扩散风险。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+- **实施记录**：已删除 Dify 和无人消费的小写 `vlm` 段；VLM 合并到公共 `VLM` 段，Agent/后端按同一模型配置契约读取。
+
+### CFG4 数据库与运行目录配置职责边界不清
+
+- **状态**：Done
+- **背景**：`Sqlite.Path`、`db.sqlite_path`、`agent.data_dir`、`chat.db_path` 同时出现在公共模板中，但分别属于 Go 数据库、未消费的 Python 键、Agent 运行数据根目录和会话数据库；配置文件没有形成清晰的所有权和派生关系。
+- **严重程度**：P2，路径配置容易被误改或产生数据位置误判。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+- **实施记录**：Go SQLite 仍由 pgo 兼容的 `Sqlite.Path` 承载；Agent 运行目录与会话数据库收敛至 `Agent.DataDir`、`Agent.ChatDBPath`；共享资源目录收敛至 `Storage`。已删除未消费的 `db.sqlite_path` 和分散小写路径段。
+
+### CFG5 配置值缺少统一的类型范围和枚举校验
+
+- **状态**：待规划
+- **背景**：重试次数、工具轮数、请求超时、分块参数、RAG 阈值、连拍阈值、评估规则操作和 Token 价格主要依靠运行代码解释，缺少统一的配置加载期校验；未知价格模型会按零成本记录。
+- **严重程度**：P2，非法或拼写错误的配置可能以隐式默认或错误结果继续运行。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+
+### CFG6 价格模板占位且价格单位契约不清
+
+- **状态**：待规划
+- **背景**：`configs/prices.yaml` 使用 `model-name-1/2` 占位模型，和模板默认模型不匹配；代码按每 1K token 计算，但模板以“元”描述，实际供应商价格单位没有由配置契约确认。
+- **严重程度**：P2，Token 成本统计可能长期显示为零或单位错误。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+
+### CFG7 服务端口和代理目标配置分散
+
+- **状态**：Done
+- **背景**：Go 端口在 `Http.Addr`/`server.addr`，Python Agent 端口在启动参数和 Makefile，Web 端口及代理目标在 Vite，Wails 开发地址另有一份定义；这些值没有统一来源。
+- **严重程度**：P2，多服务端口变更存在遗漏和环境不一致风险。
+- **证据**：[配置项全量评估报告](eval/reports/2026-08-30-config-audit.md)。
+- **实施记录**：后端继续使用 `Http.Addr`（pgo 兼容），Agent 使用 `Agent.Addr`，Vite 开发服务器使用 `Web.Addr`；Vite 的 Go/Agent 代理目标和 Web 运行期默认地址均由这些段派生，Makefile 同步解析同一来源。Wails 开发配置只保留默认 Web 地址，不是服务监听或代理配置。
 
 ## 产品定位决策
 

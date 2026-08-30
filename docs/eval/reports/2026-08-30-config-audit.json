@@ -1,0 +1,31 @@
+{
+  "report_id": "2026-08-30-config-audit",
+  "backlog_id": "CFG1-CFG7",
+  "created_at": "2026-08-30T00:00:00Z",
+  "target": "项目自有配置文件及配置加载/消费关系",
+  "overall": 5.2,
+  "dimension_scores": {
+    "正确性": 5.0,
+    "健壮性": 5.0,
+    "可维护性": 4.0,
+    "简洁性": 4.0,
+    "功能效果": 6.0,
+    "一致性": 3.0
+  },
+  "findings_for_backlog": [
+    "配置模板同时维护 Go 大写段和 Python 小写段，重复语义没有统一生效规则",
+    "多个脚本读取 cfg.descriptions_path，但 Config 没有定义或加载该属性",
+    "核心模板保留无消费者的 Dify 配置和 Python vlm 配置",
+    "Sqlite.Path、db.sqlite_path、agent.data_dir、chat.db_path 的职责边界不清",
+    "配置值缺少统一的类型、范围和枚举校验",
+    "价格模板是占位示例，默认模型无匹配价格且单位未形成契约",
+    "服务端口和代理目标分散在多个构建/运行配置中"
+  ],
+  "verification_runtime": [
+    "Python evaluation tests: 14 passed",
+    "YAML parse of configs/config.yaml and .local/my-config.yaml: passed",
+    "Config-specific test discovery: 0 tests found, not evidence of pass",
+    "Static config consumer scan completed"
+  ],
+  "verification_commits": {}
+}

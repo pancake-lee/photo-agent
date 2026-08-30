@@ -2,11 +2,12 @@
 
 PID_DIR := .local/.pids
 LOG_DIR := logs
+CONFIG_FILE ?= .local/my-config.yaml
 
-# 各服务端口（用于兜底清理）
-BACKEND_PORT := 10004
-AGENT_PORT   := 10005
-WEB_PORT     := 10006
+# 从统一配置读取各服务端口，用于状态检查与兜底清理。
+BACKEND_PORT := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Http"]["Addr"].rsplit(":", 1)[1])')
+AGENT_PORT   := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Agent"]["Addr"].rsplit(":", 1)[1])')
+WEB_PORT     := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Web"]["Addr"].rsplit(":", 1)[1])')
 
 # ── 启动全部服务 ──────────────────────────────────────────
 start:

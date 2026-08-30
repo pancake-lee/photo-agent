@@ -1,6 +1,7 @@
 import { reactive, watch } from 'vue'
 import type { BurstViewLevel } from '../types/photo'
 import type { SegmentMode } from '../utils/segment'
+import { DEFAULT_AGENT_URL, DEFAULT_BACKEND_URL } from '../config/runtime'
 
 const STORAGE_KEY = 'photo-agent-settings'
 
@@ -14,8 +15,8 @@ export interface AppSettings {
 }
 
 const defaults: AppSettings = {
-  backendUrl: 'http://localhost:10004',
-  agentUrl: 'http://localhost:10005',
+  backendUrl: DEFAULT_BACKEND_URL,
+  agentUrl: DEFAULT_AGENT_URL,
   burstViewLevel: 'fine',
   segmentMode: 'month',
 }

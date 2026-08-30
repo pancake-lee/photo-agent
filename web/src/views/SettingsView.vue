@@ -17,6 +17,7 @@ import {
 import { RefreshOutline, SaveOutline } from '@vicons/ionicons5'
 import { settings, resetSettings } from '../stores/settings'
 import { isWails } from '../utils/env'
+import { DEFAULT_AGENT_URL, DEFAULT_BACKEND_URL } from '../config/runtime'
 import { useBurstGroups } from '../composables/useBurstGroups'
 import type { BurstProfileConfig } from '../types/photo'
 
@@ -88,12 +89,12 @@ onMounted(() => {
 })
 
 function saveBackend() {
-  settings.backendUrl = localBackendUrl.value || 'http://localhost:10004'
+  settings.backendUrl = localBackendUrl.value || DEFAULT_BACKEND_URL
   message.success('Backend 地址已保存')
 }
 
 function saveAgent() {
-  settings.agentUrl = localAgentUrl.value || 'http://localhost:10005'
+  settings.agentUrl = localAgentUrl.value || DEFAULT_AGENT_URL
   message.success('Agent 地址已保存')
 }
 

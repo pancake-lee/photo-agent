@@ -25,7 +25,7 @@ import (
 // 连拍分组阈值（精细/模糊两档）
 //
 // 运行期生效值存 app_settings 表（key = burstConfigKey，JSON 值），
-// 由网页设置页编辑保存；表内无记录时用配置文件默认值。
+// 由网页设置页编辑保存；表内无记录时使用代码默认值。
 
 const burstConfigKey = "burst_config"
 
@@ -48,34 +48,35 @@ type burstConfig struct {
 	Coarse burstParams `json:"coarse"`
 }
 
-// confBurstConfig 配置文件默认的两档阈值（DB 无记录时的初始值）。
-func confBurstConfig() burstConfig {
+// defaultBurstConfig 返回数据库无记录时的两档初始阈值。
+// 默认值取自 2026-08-20 的当前生效设置。
+func defaultBurstConfig() burstConfig {
 	return burstConfig{
 		Fine: burstParams{
-			TimeWindowSec: conf.C.Burst.Fine.TimeWindowSec,
-			HashThreshold: conf.C.Burst.Fine.HashThreshold,
-			SsimThreshold: conf.C.Burst.Fine.SsimThreshold,
-			SsimGrayMin:   conf.C.Burst.Fine.SsimGrayMin,
-			SsimGrayMax:   conf.C.Burst.Fine.SsimGrayMax,
+			TimeWindowSec: 300,
+			HashThreshold: 24,
+			SsimThreshold: 0.6,
+			SsimGrayMin:   12,
+			SsimGrayMax:   32,
 		},
 		Coarse: burstParams{
-			TimeWindowSec: conf.C.Burst.Coarse.TimeWindowSec,
-			HashThreshold: conf.C.Burst.Coarse.HashThreshold,
-			SsimThreshold: conf.C.Burst.Coarse.SsimThreshold,
-			SsimGrayMin:   conf.C.Burst.Coarse.SsimGrayMin,
-			SsimGrayMax:   conf.C.Burst.Coarse.SsimGrayMax,
+			TimeWindowSec: 600,
+			HashThreshold: 40,
+			SsimThreshold: 0.4,
+			SsimGrayMin:   24,
+			SsimGrayMax:   56,
 		},
 	}
 }
 
-// loadBurstConfig 读取生效的两档阈值：app_settings 优先，无记录回退配置文件默认值。
+// loadBurstConfig 读取生效的两档阈值：app_settings 优先，无记录使用代码默认值。
 func loadBurstConfig(ctx *papp.AppCtx) (burstConfig, error) {
 	raw, err := data.AppSettingDAO.GetAppSetting(ctx, burstConfigKey)
 	if err != nil {
 		return burstConfig{}, err
 	}
 	if raw == "" {
-		return confBurstConfig(), nil
+		return defaultBurstConfig(), nil
 	}
 	var cfg burstConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {

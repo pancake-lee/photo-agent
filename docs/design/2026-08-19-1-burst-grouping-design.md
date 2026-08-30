@@ -144,7 +144,7 @@ CREATE TABLE app_settings (
 
 **P6 双档位存储**：一次 rebuild 同时产出精细/模糊两套分组。photo_groups 用 profile 列区分两档的组记录，photos 表用两列分别指向各自档位的组（`burst_group_id` 保持精细档语义，新增 `burst_group_coarse_id`）。存量数据兼容：迁移时 photo_groups.profile 默认 'fine'（存量组即按精细档默认参数算出），模糊档在首次新版 rebuild 前为空，展示层按"无分组"处理。
 
-**配置持久化选型**：连拍参数需要在网页设置页编辑，`.local/my-config.yaml` 是含密钥的用户手管文件，不做运行期 Web 回写。参数存 app_settings 表（key-value），rebuild 时读取；表内无记录时用配置文件默认值兜底并视为初始值，不引入额外容错分支。
+**配置持久化选型**：连拍参数需要在网页设置页编辑，`.local/my-config.yaml` 是含密钥的用户手管文件，不做运行期 Web 回写。参数存 app_settings 表（key-value），rebuild 时读取；表内无记录时使用后端代码默认值并视为初始值，不引入额外容错分支。
 
 **不建数据库外键**：表间关联只体现在列名与代码逻辑（service 层负责写入/清理的一致性）。外键的强制性约束虽安全，但会带来删除顺序限制、迁移负担，与本项目"表不约束、代码写完整、宽容度高，有 BUG 修 BUG"的倾向相悖。此为项目级数据建模规则，见 CLAUDE.md 全局行为约束。
 
@@ -161,7 +161,7 @@ CREATE TABLE app_settings (
 - **组内取数**：`SearchPhotosRequest` 的 `burst_group_id` 过滤参数（与现有 timeline/tag 过滤同模式），前端展开一个组时用它拉取该组全部成员，避免组分页跨页取不全
 - **档位参数**（P6）：`SearchPhotosRequest` 增加 `burst_profile` 参数（fine/coarse，缺省 fine，向后兼容）。响应的三个 burst 字段与 `burst_group_id` 过滤所用的列，都按本次请求的档位取（精细档用 burst_group_id，模糊档用 burst_group_coarse_id）。前端切换展示级别时以对应档位重新拉列表
 - **设为封面**（P6）：`PUT /api/v1/burst-groups/{group_id}/cover`，body 带 photo_id，更新该组 cover_photo_id。组 id 自带档位前缀，无需额外档位参数
-- **参数配置读写**（P6）：`GET /api/v1/burst-groups/config` 返回精细/模糊两档阈值（DB 无记录时返回配置文件默认值）；`PUT /api/v1/burst-groups/config` 保存两档阈值到 app_settings
+- **参数配置读写**（P6）：`GET /api/v1/burst-groups/config` 返回精细/模糊两档阈值（DB 无记录时返回代码默认值）；`PUT /api/v1/burst-groups/config` 保存两档阈值到 app_settings
 - 触发时机：**仅手动**，入口在图片管理页顶栏，与 VLM/Embed 批量按钮并排（P6 调整，原设置页入口移除；设置页保留两档参数配置卡片）。不挂入 AutoSync（分组是全局重算型任务，与单张导入增量不匹配）。后续若需要可加"导入后自动重算"开关
 
 proto 定义：photo_service.proto 含 rebuild/status/config/cover 相关 rpc 与消息、PhotoItem 的 3 个 burst 字段、SearchPhotosRequest 的组过滤与档位参数，走 `make api` 重新生成，再 `make api-cli` 重新生成前后端 SDK。
@@ -189,25 +189,7 @@ proto 定义：photo_service.proto 含 rebuild/status/config/cover 相关 rpc �
 
 ### 5.6 配置项
 
-连拍阈值分精细/模糊两档，每档 5 个参数。`configs/config.yaml` 的 burst 段提供两档初始默认值，运行期实际生效值以 app_settings 表为准（网页设置页编辑保存），DB 无记录时回退配置文件默认值：
-
-```yaml
-burst:
-  Fine:
-    TimeWindowSec: 5     # T_time：相邻两张拍摄间隔阈值
-    HashThreshold: 10    # T_hash：dHash 汉明距离阈值（64bit，0-64）
-    SsimThreshold: 0.85  # T_ssim：灰区二次验证阈值
-    SsimGrayMin: 8       # 触发 SSIM 验证的哈希距离下界
-    SsimGrayMax: 12      # 触发 SSIM 验证的哈希距离上界
-  Coarse:
-    TimeWindowSec: 30    # 模糊档：更大时间窗，同场景多次快门归一组
-    HashThreshold: 18    # 更宽松的相似度判定
-    SsimThreshold: 0.6
-    SsimGrayMin: 12
-    SsimGrayMax: 24
-```
-
-模糊档默认值只是起点，用户在设置页自行摸索调整（这正是参数做成网页可编辑的原因）。
+连拍阈值分精细/模糊两档，每档 5 个参数。运行期实际生效值以 app_settings 表为准（网页设置页编辑保存）；DB 无记录时使用后端代码默认值。当前默认值与现有运行数据一致：精细档为 `300/24/0.6/12/32`，模糊档为 `600/40/0.4/24/56`（依次为时间窗口秒数、哈希阈值、SSIM 阈值、SSIM 灰区下界和上界）。模糊档默认值只是起点，用户在设置页自行摸索调整。
 
 ## 6. 阈值调优建议
 
@@ -244,7 +226,7 @@ burst:
 4. **P4 前端**：设置页"连拍分组"卡片（rebuild 按钮 + 轮询进度条 + 当前组数）；PhotoGrid 折叠（封面角标 ×N、展开组内横条按 burst_group_id 拉取成员）；types/composable 扩展
 5. **P5 实测调优**：真实库全量 rebuild，按第 8 节验收标准人工抽检，必要时调阈值
 6. **P6 体验升级**（2026-08-20 规划）：
-   - **P6.1 数据层**：photo_groups.sql 加 profile 列、photos.sql 加 burst_group_coarse_id 列、新增 app_settings.sql → `make initDB/gorm/curd` → migrate.go 扩展（两列一表的幂等迁移，存量 photo_groups profile 落 'fine'）→ conf.go Burst 段拆 Fine/Coarse + config.yaml 模板同步
+   - **P6.1 数据层**：photo_groups.sql 加 profile 列、photos.sql 加 burst_group_coarse_id 列、新增 app_settings.sql → `make initDB/gorm/curd` → migrate.go 扩展（两列一表的幂等迁移，存量 photo_groups profile 落 'fine'）→ 连拍双档默认值保存在后端代码，运行期配置写入 app_settings
    - **P6.2 proto 与 DAO**：SearchPhotosRequest 加 burst_profile、新增 config 读写/set cover rpc 与消息、status 响应加 coarse_group_count → `make api` + `make api-cli` → DAO 层支持档位列过滤、app_settings 读写、封面更新
    - **P6.3 服务层**：rebuild 一次算两档（灰度矩阵复用，算法按档位参数跑两遍）；阈值从 app_settings 读取（无记录回退配置默认值）；set cover/config 读写实现；单测适配档位参数化
    - **P6.4 前端**：连拍组弹窗组件（原尺寸主图 + 缩略列表切换 + 设为封面 + 点击进详情）；重算入口移到图片管理顶栏（进度 Tag 复用 VLM 样式）；三级展示循环切换按钮 + settings store 持久化；设置页两档参数配置表单；移除网格内横条

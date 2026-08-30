@@ -217,6 +217,20 @@ func TestValidateBurstConfig(t *testing.T) {
 	}
 }
 
+func TestDefaultBurstConfigUsesCurrentSettings(t *testing.T) {
+	got := defaultBurstConfig()
+	if got.Fine != (burstParams{
+		TimeWindowSec: 300, HashThreshold: 24, SsimThreshold: 0.6, SsimGrayMin: 12, SsimGrayMax: 32,
+	}) {
+		t.Fatalf("fine defaults = %#v", got.Fine)
+	}
+	if got.Coarse != (burstParams{
+		TimeWindowSec: 600, HashThreshold: 40, SsimThreshold: 0.4, SsimGrayMin: 24, SsimGrayMax: 56,
+	}) {
+		t.Fatalf("coarse defaults = %#v", got.Coarse)
+	}
+}
+
 func TestCalcSSIM(t *testing.T) {
 	// 完全相同 → 1
 	if v := calcSSIM(flatGray(100), flatGray(100)); v < 0.999 {

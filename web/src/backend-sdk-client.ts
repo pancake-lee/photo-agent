@@ -7,6 +7,7 @@
  */
 
 import { isWails } from './utils/env'
+import { DEFAULT_BACKEND_URL } from './config/runtime'
 import { Configuration } from '../backend-sdk/configuration'
 import {
   PhotoServiceApi,
@@ -26,7 +27,7 @@ function getBasePath(): string {
       if (backendUrl) return backendUrl
     }
   } catch {}
-  return 'http://localhost:10004'
+  return DEFAULT_BACKEND_URL
 }
 
 // SDK 生成的 BaseAPI 默认 basePath 是 "http://127.0.0.1:8080"，

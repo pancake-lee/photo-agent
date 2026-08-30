@@ -4,8 +4,8 @@
     用法:
         from chain.server import create_app, run_server
         app = create_app(cfg)
-        # 开发: uvicorn chain.server:app --port 10005
-        # 或直接: run_server(cfg, port=10005)
+        # 开发: uvicorn chain.server:app --port <Agent.Addr 的端口>
+        # 或直接: run_server(cfg) 使用 Agent.Addr
 """
 
 import sys
@@ -2434,7 +2434,7 @@ def _resolve_db_path(cfg: config_mod.Config) -> str:
     return cfg.resolve_path(db_rel).as_posix()
 
 
-def run_server(cfg: config_mod.Config, port: int = 10005) -> None:
+def run_server(cfg: config_mod.Config, port: int | None = None) -> None:
     """启动 uvicorn 服务器（阻塞调用）。"""
     import uvicorn
 
@@ -2448,7 +2448,8 @@ def run_server(cfg: config_mod.Config, port: int = 10005) -> None:
     logging.getLogger("chain").addHandler(_handler)
     logging.getLogger("chain").setLevel(logging.INFO)
 
+    actual_port = port or cfg.agent_port
     app = create_app(cfg)
-    logger.info("Chat API 服务启动: http://0.0.0.0:%d", port)
-    logger.info("API 文档: http://localhost:%d/docs", port)
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    logger.info("Chat API 服务启动: http://%s:%d", cfg.agent_host, actual_port)
+    logger.info("API 文档: http://localhost:%d/docs", actual_port)
+    uvicorn.run(app, host=cfg.agent_host, port=actual_port, log_level="info")

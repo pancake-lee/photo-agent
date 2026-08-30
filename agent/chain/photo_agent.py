@@ -9,7 +9,7 @@
     用法:
         cd agent
         python chain/photo_agent.py -c ../.local/my-config.yaml          # 聊天模式 (CLI)
-        python chain/photo_agent.py -c ../.local/my-config.yaml --serve  # API 服务 (端口 10005)
+        python chain/photo_agent.py -c ../.local/my-config.yaml --serve  # API 服务（使用 Agent.Addr）
         python chain/photo_agent.py -c ../.local/my-config.yaml --serve 9999  # API 自定义端口
         python chain/photo_agent.py -c ../.local/my-config.yaml --eval   # 评估模式
         python chain/photo_agent.py -c ../.local/my-config.yaml --usage  # 用量统计
@@ -781,7 +781,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         epilog="""
 示例:
   python chain/photo_agent.py -c config.yaml              # 交互式聊天 (CLI)
-  python chain/photo_agent.py -c config.yaml --serve      # API 服务 (端口 10005)
+  python chain/photo_agent.py -c config.yaml --serve      # API 服务（使用 Agent.Addr）
   python chain/photo_agent.py -c config.yaml --serve 9999 # API 自定义端口
   python chain/photo_agent.py -c config.yaml --eval       # 评估模式
   python chain/photo_agent.py -c config.yaml --usage      # 用量统计
@@ -809,9 +809,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="查看 Token 用量统计，可选指定天数（默认 7 天）",
     )
     parser.add_argument(
-        "--serve", dest="serve_port", nargs="?", const=10005, type=int, default=None,
+        "--serve", dest="serve_port", nargs="?", const=0, type=int, default=None,
         metavar="PORT",
-        help="启动 HTTP API 服务（默认端口 10005）",
+        help="启动 HTTP API 服务（默认使用 Agent.Addr，可选覆盖端口）",
     )
     parser.add_argument(
         "--suggest", dest="suggest_mode", action="store_true",

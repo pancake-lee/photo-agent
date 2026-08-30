@@ -276,7 +276,7 @@ def main() -> int:
     parser.add_argument("-c", "--config", required=True, help="Python Agent YAML 配置文件")
     parser.add_argument("--level", choices=("all", "L0", "L1", "L2"), default="all")
     parser.add_argument("--golden-id", help="仅运行指定的、已标记为回归用例的黄金用例 ID")
-    parser.add_argument("--agent-url", default="http://127.0.0.1:10005", help="L2 Python Agent 地址")
+    parser.add_argument("--agent-url", default="", help="L2 Python Agent 地址，默认读取 Agent.Addr")
     args = parser.parse_args()
     try:
         cfg = config.Config(args.config)
@@ -294,7 +294,7 @@ def main() -> int:
         for level in levels:
             try:
                 if level == "L2":
-                    level_failures = _run_l2(args.agent_url, cases)
+                    level_failures = _run_l2(args.agent_url or cfg.agent_url, cases)
                 else:
                     level_failures = runners[level](cfg, cases)
                 failures.extend(level_failures)
