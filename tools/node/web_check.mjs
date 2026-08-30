@@ -4,7 +4,7 @@
  * 用于 AI 评估模式中的 Web UI 自动化验证。参数化设计，不绑定任何特定页面。
  *
  * 用法:
- *   node tools/web_check.mjs \
+ *   node tools/node/web_check.mjs \
  *     --url http://localhost:10006/suggest \
  *     --click "button:has-text('生成选题建议')" \
  *     --wait-selector ".suggest-card, .empty-state" \
@@ -47,7 +47,7 @@ function parseArgs() {
 const opts = parseArgs();
 
 if (!opts.url || !opts.waitSelector) {
-  console.error("Usage: node tools/web_check.mjs --url <url> --wait-selector <sel> [--click <sel>] [--extract <sel>] [--screenshot <path>] [--timeout <ms>]");
+  console.error("Usage: node tools/node/web_check.mjs --url <url> --wait-selector <sel> [--click <sel>] [--extract <sel>] [--screenshot <path>] [--timeout <ms>]");
   process.exit(1);
 }
 
@@ -61,7 +61,7 @@ try {
   console.log(JSON.stringify({
     passed: false,
     skipped: true,
-    reason: "Playwright 未安装。安装命令: npm install playwright && npx playwright install chromium",
+    reason: "Playwright 未安装。安装命令: pnpm --dir tools/node install && pnpm --dir tools/node exec playwright install chromium",
     error: e.message,
   }));
   process.exit(2);

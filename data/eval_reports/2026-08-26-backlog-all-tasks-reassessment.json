@@ -46,7 +46,7 @@
     "agent/.venv/bin/python -m unittest tests.test_evaluation tests.test_eval_regression chain.test_post_studio_smoke：12/12 PASS",
     "agent/.venv/bin/python scripts/eval_regression.py -c ../.local/pancake.yaml --level all：L0/L1/L2 各 2 条真实种子用例 PASS",
     "web/pnpm build && pnpm test：类型检查、生产构建通过；Vitest 2/2 PASS",
-    "node tools/golden_query_ui_regression.mjs：覆盖层打开、取消和草稿恢复 PASS"
+    "node tools/node/golden_query_ui_regression.mjs：覆盖层打开、取消和草稿恢复 PASS"
   ],
   "verification_commits": {
     "W12": "当前工作树优化",

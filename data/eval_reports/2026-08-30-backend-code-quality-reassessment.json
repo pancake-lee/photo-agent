@@ -19,7 +19,7 @@
     "BQ11：VLM 队列没有覆盖 StartVlmQueue 到本地 VLM 响应、最终队列状态和处理履历的自动化闭环。"
   ],
   "verification_runtime": [
-    "GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go --self-check PASS（57 个文件）",
+    "GOTOOLCHAIN=local go run ./tools/go/main.go --self-check PASS（57 个文件）",
     "GOTOOLCHAIN=local go test -count=1 ./... PASS",
     "GOTOOLCHAIN=local go vet ./... PASS",
     "GOTOOLCHAIN=local go test -count=1 -race ./internal/defaultService/service ./internal/defaultService/data PASS",

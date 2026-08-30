@@ -138,7 +138,7 @@ photo-agent/
 │   └── scripts/          # 索引脚本、评估脚本
 ├── web/                  # Vue 3 前端
 ├── client/               # Wails Windows 导入客户端
-├── tools/                # Playwright 回归测试脚本
+├── tools/                # 跨模块开发与验证工具（按语言分目录）
 ├── configs/              # 配置模板
 ├── data/                 # 运行时数据（照片/SQLite/ChromaDB）
 ├── dify/                 # 早期 Dify 验证，保留参考（非核心方案）
@@ -160,6 +160,7 @@ photo-agent/
 - [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范
 - [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — 文档审阅规范
 - [docs/eval/baseline.md](docs/eval/baseline.md) — 评估基线指标
+- [tools/README.md](tools/README.md) — 跨模块开发与验证工具说明
 
 ---
 

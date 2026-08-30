@@ -1,6 +1,6 @@
 .PHONY: start stop status client
 
-PID_DIR := .pids
+PID_DIR := .local/.pids
 LOG_DIR := logs
 
 # 各服务端口（用于兜底清理）

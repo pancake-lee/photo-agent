@@ -45,7 +45,7 @@
 - `agent/.venv/bin/python -m unittest tests.test_evaluation tests.test_eval_regression chain.test_post_studio_smoke`：12/12 PASS。
 - `agent/.venv/bin/python scripts/eval_regression.py -c ../.local/pancake.yaml --level all`：L0、L1、L2 各 2 条真实种子用例 PASS。
 - `web/pnpm build && pnpm test`：生产构建通过，Vitest 2/2 PASS。
-- `node tools/golden_query_ui_regression.mjs`：PASS，验证选图覆盖层打开、取消与草稿恢复，不写入业务数据。
+- `node tools/node/golden_query_ui_regression.mjs`：PASS，验证选图覆盖层打开、取消与草稿恢复，不写入业务数据。
 
 ## 已登记问题
 

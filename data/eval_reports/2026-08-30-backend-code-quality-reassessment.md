@@ -6,7 +6,7 @@
 >
 > 评估报告 ID：`2026-08-30-backend-code-quality-reassessment`。
 >
-> 判卷依据：[后端代码质量评分标准](../../docs/eval/code-quality-rubric-backend.md)。评估范围由 `tools/list_backend_eval_files.go` 自检后确定，共 57 个文件。
+> 判卷依据：[后端代码质量评分标准](../../docs/eval/code-quality-rubric-backend.md)。评估范围由 `tools/go/main.go` 自检后确定，共 57 个文件。
 
 ## 摘要
 

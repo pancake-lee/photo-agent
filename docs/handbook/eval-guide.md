@@ -68,7 +68,7 @@
 1. 明确评估对象：用户指定的功能/代码/PR、或 backlog 中状态 = 「已开发」的条目
 2. 读取相关上下文：设计文档（`docs/design/`）、验收条件、编码规范
 3. 确定评分重点：代码质量为主、功能效果为主、还是两者兼顾
-4. 若目标为 `backend/`：运行 `GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go --self-check`，以输出列明评估文件、数据状态和至少一条关键用户用例。
+4. 若目标为 `backend/`：运行 `GOTOOLCHAIN=local go run ./tools/go/main.go --self-check`，以输出列明评估文件、数据状态和至少一条关键用户用例。
 
 ### 第二步：确认服务状态
 
@@ -235,7 +235,7 @@ cd agent
 通过 Playwright CLI 自动化 Web 页面交互：
 
 ```bash
-node tools/web_check.mjs \
+node tools/node/web_check.mjs \
   --url "http://localhost:10006/#/suggest" \
   --click "button:has-text('生成选题建议')" \
   --wait-selector ".n-card, .n-empty" \

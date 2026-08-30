@@ -1,6 +1,6 @@
 # 后端代码质量评分标准
 
-> 可执行范围：以 [`tools/list_backend_eval_files.go`](../../tools/list_backend_eval_files.go) 的输出为唯一文件清单。运行 `GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go` 后，人工确认其输出再开始评估。
+> 可执行范围：以 [`tools/go/main.go`](../../tools/go/main.go) 的输出为唯一文件清单。运行 `GOTOOLCHAIN=local go run ./tools/go/main.go` 后，人工确认其输出再开始评估。
 >
 > 用途：在后端功能开发前、功能完成后或日常治理时，统一判断代码是否可继续演进。本文是评估准则，不包含具体重构方案；评估发现的问题按评估模式写入 backlog，再由规划模式决定修复方式。
 
@@ -102,7 +102,7 @@
 
 ## 3. 后端评估执行清单
 
-1. 明确范围：运行 `GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go --self-check`，人工确认输出的完整文件清单，再确定本轮目标 Service/API、数据表、配置和用户用例。
+1. 明确范围：运行 `GOTOOLCHAIN=local go run ./tools/go/main.go --self-check`，人工确认输出的完整文件清单，再确定本轮目标 Service/API、数据表、配置和用户用例。
 2. 建立调用图：从人工维护的 Proto 路由到手写 Service、DAO、外部客户端和数据文件；生成接口只作为边界节点，不展开到生成物。
 3. 收集静态证据：阅读实现与规范，搜索调用点、重复实现、过期路由/配置/文档；执行 `gofmt` 检查和必要的静态检查。
 4. 收集自动证据：运行 `GOTOOLCHAIN=local go test ./...`，并针对高风险路径补充目标测试、`go vet` 或 race 检查。

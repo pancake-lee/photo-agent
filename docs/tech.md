@@ -394,7 +394,7 @@ photo-agent/
 │       ├── types/                # TypeScript 类型定义
 │       └── router/               # Vue Router 配置
 ├── client/                       # Wails Windows 导入客户端（import/sync）
-├── tools/                        # Playwright 回归测试脚本
+├── tools/                        # 跨模块开发与验证工具（按语言分目录）
 ├── configs/                      # 公共配置模板
 ├── data/                         # 运行时数据（photos/sqlite/chroma/clusters/选题历史/会话/评估报告）
 ├── dify/                         # 早期 Dify 验证，保留参考（非核心方案）

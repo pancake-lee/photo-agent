@@ -2,7 +2,7 @@
 //
 // 在仓库根目录运行：
 //
-//	GOTOOLCHAIN=local go run ./tools/list_backend_eval_files.go
+//	GOTOOLCHAIN=local go run ./tools/go/main.go
 //
 // 加 --self-check 可同时验证核心纳入/排除规则。
 package main
