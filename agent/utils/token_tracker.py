@@ -17,16 +17,35 @@ import yaml
 
 
 def load_prices(prices_path: str) -> dict[str, dict[str, float]]:
-    """从 YAML 加载模型单价（input/output 均为每 1K token 价格）。"""
+    """加载人民币元/百万 Token 价格表，并在配置边界严格校验。"""
     if not prices_path:
-        return {}
+        raise ValueError("❌ 价格配置路径不能为空。")
     p = pathlib.Path(prices_path)
     if not p.exists():
-        print(f"warning: Token 单价文件不存在: {prices_path}")
-        return {}
+        raise FileNotFoundError(f"价格配置文件不存在: {prices_path}")
     with open(p, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
-    return data.get("models", {})
+    if not isinstance(data, dict) or data.get("currency") != "CNY" or data.get("unit") != "yuan_per_million_tokens":
+        raise ValueError("❌ 价格配置无效: 必须声明 currency: CNY 和 unit: yuan_per_million_tokens。")
+    models = data.get("models")
+    if not isinstance(models, dict) or not models:
+        raise ValueError("❌ 价格配置无效: [models] 必须是非空对象。")
+    for model, price in models.items():
+        if not isinstance(model, str) or not model.strip() or not isinstance(price, dict):
+            raise ValueError("❌ 价格配置无效: 模型名和价格项必须有效。")
+        for field in ("input", "output"):
+            if field in price and (isinstance(price[field], bool) or not isinstance(price[field], (int, float)) or price[field] < 0):
+                raise ValueError(f"❌ 价格配置无效: [models.{model}.{field}] 必须是非负数字。")
+        if "input" not in price:
+            raise ValueError(f"❌ 价格配置无效: [models.{model}.input] 缺失。")
+    return models
+
+
+def validate_model_prices(prices: dict[str, dict[str, float]], *models: str) -> None:
+    """确保运行中实际会调用的模型均有价格，避免静默记为零成本。"""
+    missing = [model for model in models if model and model not in prices]
+    if missing:
+        raise ValueError(f"❌ 价格配置缺少当前启用模型: {', '.join(missing)}。")
 
 
 class TokenTracker:
@@ -56,7 +75,7 @@ class TokenTracker:
         price = self._prices.get(model, {})
         input_price = price.get("input", 0.0)
         output_price = price.get("output", 0.0)
-        cost = (input_tokens / 1000.0) * input_price + (output_tokens / 1000.0) * output_price
+        cost = (input_tokens / 1_000_000.0) * input_price + (output_tokens / 1_000_000.0) * output_price
 
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
@@ -71,7 +90,7 @@ class TokenTracker:
         """记录一次 embedding 调用（仅有 total_tokens，无 output）。"""
         price = self._prices.get(model, {})
         input_price = price.get("input", 0.0)
-        cost = (tokens / 1000.0) * input_price
+        cost = (tokens / 1_000_000.0) * input_price
 
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(

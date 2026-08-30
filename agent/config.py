@@ -27,6 +27,18 @@ def _addr_to_local_url(addr: str) -> str:
     return f"http://{host}:{port}"
 
 
+def _require_int(value: typing.Any, path: str, minimum: int = 0) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"❌ 配置无效: [{path}] 必须是大于等于 {minimum} 的整数。")
+    return value
+
+
+def _require_number(value: typing.Any, path: str, minimum: float = 0) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < minimum:
+        raise ValueError(f"❌ 配置无效: [{path}] 必须是大于等于 {minimum} 的数字。")
+    return float(value)
+
+
 class Config:
     """统一管理 Agent 所需配置，缺失必填项时直接报错。"""
 
@@ -59,6 +71,8 @@ class Config:
         self.prices_path = ""
         self.rag_distance_threshold: float | None = None
         self.rag_auto_distance_ratio = 1.8
+        self.compose_group_limit = 20
+        self.compose_cover_limit = 40
         self.project_root = pathlib.Path(".")
 
         self._load_from_yaml(config_path)
@@ -97,19 +111,36 @@ class Config:
         self.llm_model = self._require(data, "LLM", "Model")
         self.llm_base_url = self._require(data, "LLM", "BaseURL")
         self.llm_fallback_model = self._optional(data, "LLM", "FallbackModel", "")
-        self.retry_enabled = bool(self._optional(data, "LLM", "RetryEnabled", True))
-        self.retry_max_attempts = int(self._optional(data, "LLM", "RetryMaxAttempts", 3))
-        self.llm_request_timeout = float(self._optional(data, "LLM", "RequestTimeout", 60.0))
-        self.tool_max_rounds = int(self._optional(data, "LLM", "ToolMaxRounds", 20))
+        retry_enabled = self._optional(data, "LLM", "RetryEnabled", True)
+        if not isinstance(retry_enabled, bool):
+            raise ValueError("❌ 配置无效: [LLM].RetryEnabled 必须是布尔值。")
+        self.retry_enabled = retry_enabled
+        self.retry_max_attempts = _require_int(
+            self._optional(data, "LLM", "RetryMaxAttempts", 3), "LLM.RetryMaxAttempts", 1
+        )
+        self.llm_request_timeout = _require_number(
+            self._optional(data, "LLM", "RequestTimeout", 60.0), "LLM.RequestTimeout", 0.001
+        )
+        self.tool_max_rounds = _require_int(
+            self._optional(data, "LLM", "ToolMaxRounds", 20), "LLM.ToolMaxRounds", 1
+        )
 
         self.embedding_model = self._require(data, "Embedding", "Model")
-        self.embedding_context_size = int(self._optional(data, "Embedding", "ContextSize", 0))
+        self.embedding_context_size = _require_int(
+            self._optional(data, "Embedding", "ContextSize", 0), "Embedding.ContextSize", 0
+        )
         self.chunk_strategy = self._optional(data, "Embedding", "ChunkStrategy", "none")
-        self.chunk_overlap = int(self._optional(data, "Embedding", "ChunkOverlap", 50))
-        self.heading_level = int(self._optional(data, "Embedding", "HeadingLevel", 2))
+        if self.chunk_strategy not in {"none", "fixed_size", "markdown_heading"}:
+            raise ValueError("❌ 配置无效: [Embedding].ChunkStrategy 必须是 none、fixed_size 或 markdown_heading。")
+        self.chunk_overlap = _require_int(
+            self._optional(data, "Embedding", "ChunkOverlap", 50), "Embedding.ChunkOverlap", 0
+        )
+        self.heading_level = _require_int(
+            self._optional(data, "Embedding", "HeadingLevel", 2), "Embedding.HeadingLevel", 1
+        )
         configured_chunk_size = self._optional(data, "Embedding", "ChunkSize", None)
         if configured_chunk_size is not None:
-            self.chunk_size = int(configured_chunk_size)
+            self.chunk_size = _require_int(configured_chunk_size, "Embedding.ChunkSize", 1)
         elif self.embedding_context_size > 0:
             self.chunk_size = int(self.embedding_context_size * 0.5)
 
@@ -125,9 +156,22 @@ class Config:
         self.rag_distance_threshold = (
             float(distance_threshold) if distance_threshold is not None else None
         )
-        self.rag_auto_distance_ratio = float(
-            self._optional(data, "RAG", "AutoDistanceRatio", 1.8)
+        self.rag_auto_distance_ratio = _require_number(
+            self._optional(data, "RAG", "AutoDistanceRatio", 1.8), "RAG.AutoDistanceRatio", 1
         )
+        self.compose_group_limit = _require_int(
+            self._optional(data, "Compose", "GroupLimit", 20), "Compose.GroupLimit", 1
+        )
+        self.compose_cover_limit = _require_int(
+            self._optional(data, "Compose", "CoverLimit", 40), "Compose.CoverLimit", 1
+        )
+        if self.compose_cover_limit < self.compose_group_limit:
+            raise ValueError("❌ 配置无效: [Compose].CoverLimit 必须大于等于 GroupLimit。")
+        if self.rag_distance_threshold is not None and self.rag_distance_threshold < 0:
+            raise ValueError("❌ 配置无效: [RAG].DistanceThreshold 必须大于等于 0。")
+
+        if self.chunk_strategy == "fixed_size" and self.chunk_overlap >= self.chunk_size:
+            raise ValueError("❌ 配置无效: [Embedding].ChunkOverlap 必须小于 ChunkSize。")
 
         self.eval_reports_dir = self._require(data, "Evaluation", "ReportsDir")
         self.evaluation_config_path = self._require(data, "Evaluation", "ConfigPath")

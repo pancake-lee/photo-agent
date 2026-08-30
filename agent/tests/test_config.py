@@ -1,5 +1,8 @@
 import pathlib
+import tempfile
 import unittest
+
+import yaml
 
 import config
 
@@ -15,6 +18,16 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.agent_port, 10005)
         self.assertEqual(cfg.chunk_strategy, "none")
         self.assertEqual(cfg.project_root, project_root)
+
+    def test_rejects_invalid_chunk_combination(self):
+        project_root = pathlib.Path(__file__).resolve().parents[2]
+        data = yaml.safe_load((project_root / "configs" / "config.yaml").read_text())
+        data["Embedding"].update({"ChunkStrategy": "fixed_size", "ChunkSize": 10, "ChunkOverlap": 10})
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
+            yaml.safe_dump(data, file)
+            file.flush()
+            with self.assertRaisesRegex(ValueError, "ChunkOverlap"):
+                config.Config(file.name)
 
 
 if __name__ == "__main__":

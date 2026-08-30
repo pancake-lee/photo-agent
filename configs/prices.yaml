@@ -1,7 +1,10 @@
+# 模型成本表。价格单位固定为人民币元 / 百万 Token。
+# 请复制为 .local/prices.yaml，按实际供应商账单填写当前模型价格。
+currency: CNY
+unit: yuan_per_million_tokens
 models:
-  model-name-1:
-    input: 0.0008    # 每 1K token 价格（元）
-    output: 0.002
-  model-name-2:
-    input: 0.0003
-    output: 0.0006
+  gpt-4o-mini:
+    input: 0 # 元 / 百万 Token
+    output: 0 # 元 / 百万 Token
+  text-embedding-3-small:
+    input: 0 # Embedding 仅计输入 Token

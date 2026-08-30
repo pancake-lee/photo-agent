@@ -58,6 +58,11 @@ RAG:
   AutoDistanceRatio: 1.8
   DistanceThreshold: 1.5
 
+# 创作型查询：连拍折叠后进入 LLM 的候选数上限。
+Compose:
+  GroupLimit: 20
+  CoverLimit: 40
+
 Agent:
   Addr: "0.0.0.0:10005"
   # Chroma、会话/用量 SQLite、主题发现历史、聚类与 Trace。

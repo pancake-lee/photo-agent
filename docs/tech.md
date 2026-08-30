@@ -439,5 +439,5 @@ photo-agent/
 - **Python**：
   - `chain/evaluation.py`：RAG 检索评估（黄金查询 + MRR/P@10 指标）
   - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag/function_agent/react_agent），用于单独测试各模块
-  - `scripts/`：索引与回归脚本（index_photos.py 批量嵌入、batch_embed.py、eval_regression.py 等）
+  - `scripts/`：队列辅助与回归脚本（batch_embed.py、eval_regression.py 等）；照片嵌入由 VLM/Embedding 队列闭环完成
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护

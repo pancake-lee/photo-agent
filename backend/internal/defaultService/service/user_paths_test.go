@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,7 +18,7 @@ import (
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
-	"backend/internal/pkg/db/model"
+	"backend/internal/pkg/db"
 
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/pancake-lee/pgo/pkg/papp"
@@ -30,16 +31,10 @@ func setupUserPathTest(t *testing.T) (*papp.AppCtx, string) {
 	if err := pdb.InitSqlite(filepath.Join(tempDir, "photo-agent.db")); err != nil {
 		t.Fatalf("init sqlite: %v", err)
 	}
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("run production migration: %v", err)
+	}
 	gdb := pdb.GetGormDB()
-	if err := gdb.Migrator().CreateTable(&model.Photo{}, &model.Draft{}, &model.TimelineEvent{}); err != nil {
-		t.Fatalf("create test tables: %v", err)
-	}
-	if err := gdb.Exec(`CREATE TABLE ai_processing_history (
-		id TEXT PRIMARY KEY, photo_id TEXT NOT NULL, task_id TEXT NOT NULL,
-		stage TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL, created_at DATETIME NOT NULL
-	)`).Error; err != nil {
-		t.Fatalf("create history table: %v", err)
-	}
 
 	previous := conf.C
 	conf.C.Storage.PhotoSrc = filepath.Join(tempDir, "source")
@@ -288,5 +283,50 @@ func TestVlmQueueLifecycle(t *testing.T) {
 	manager.removeBatchPending("p1")
 	if manager.hasBatchPending("p1") {
 		t.Fatal("processed photo remained pending")
+	}
+}
+
+func TestVlmQueueEndToEndSuccess(t *testing.T) {
+	ctx, tempDir := setupUserPathTest(t)
+	if err := os.MkdirAll(conf.C.Storage.PhotoSrc, 0755); err != nil {
+		t.Fatal(err)
+	}
+	image, err := base64.StdEncoding.DecodeString("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, "queue.jpg"), image, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.PhotoDAO.Add(ctx, &data.PhotoDO{ID: "queue-photo", Filename: "queue.jpg", FilePath: "queue.jpg", FileType: "jpg"}); err != nil {
+		t.Fatalf("add queue photo: %v", err)
+	}
+	promptPath := filepath.Join(tempDir, "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("describe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	vlm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("{\"model\":\"local-vlm\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"山景\\n```json\\n{\\\"subject\\\":{\\\"main_objects\\\":[\\\"山\\\"]}}\\n```\"}]}]}"))
+	}))
+	defer vlm.Close()
+	conf.C.VLM.BaseURL = vlm.URL
+	conf.C.VLM.Prompt = promptPath
+	conf.C.VLM.MaxImageSizeMB = 0
+
+	server := VlmServer{}
+	started, err := server.StartVlmQueue(context.Background(), &api.StartVlmQueueRequest{})
+	if err != nil || started.Total != 1 {
+		t.Fatalf("start VLM queue = %#v, err=%v", started, err)
+	}
+	if !vlmQueue.waitExit(3 * time.Second) {
+		t.Fatal("VLM worker did not exit")
+	}
+	status, err := server.GetVlmQueueStatus(context.Background(), &api.Empty{})
+	if err != nil || status.Status.Running || status.Status.Completed != 1 || status.Status.Failed != 0 {
+		t.Fatalf("final queue status = %#v, err=%v", status, err)
+	}
+	photo, err := data.PhotoDAO.GetByID(ctx, "queue-photo")
+	if err != nil || !strings.Contains(photo.Description, "山景") {
+		t.Fatalf("VLM writeback = %#v, err=%v", photo, err)
 	}
 }

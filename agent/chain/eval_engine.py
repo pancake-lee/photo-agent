@@ -32,6 +32,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+_SEVERITIES = {"error", "warning"}
+_OPS = {"length_between", "not_contains_any", "min_length", "all_unique", "non_empty_ratio"}
+
 # ── 类型定义 ──
 
 RuleDef = dict
@@ -53,6 +56,35 @@ def load_rules(yaml_path: str | pathlib.Path) -> dict[str, list[RuleDef]]:
         return {}
     with open(fp, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError("评估规则配置根节点必须是对象。")
+    rule_ids: set[str] = set()
+    for group, rules in data.items():
+        if group == "retrieval_regression":
+            continue
+        if not isinstance(rules, list):
+            raise ValueError(f"评估规则 [{group}] 必须是列表。")
+        for index, rule in enumerate(rules):
+            path = f"{group}[{index}]"
+            if not isinstance(rule, dict) or not isinstance(rule.get("id"), str) or not rule["id"]:
+                raise ValueError(f"评估规则 {path}.id 必须是非空字符串。")
+            if rule["id"] in rule_ids:
+                raise ValueError(f"评估规则 ID 重复: {rule['id']}。")
+            rule_ids.add(rule["id"])
+            if rule.get("severity", "error") not in _SEVERITIES:
+                raise ValueError(f"评估规则 {path}.severity 必须是 error 或 warning。")
+            check = rule.get("check")
+            if not isinstance(check, dict) or check.get("op") not in _OPS:
+                raise ValueError(f"评估规则 {path}.check.op 不受支持。")
+            op = check["op"]
+            if op in {"length_between", "min_length", "not_contains_any", "non_empty_ratio"} and not check.get("field"):
+                raise ValueError(f"评估规则 {path}.check.field 缺失。")
+            if op == "length_between" and not all(isinstance(check.get(k), int) for k in ("min", "max")):
+                raise ValueError(f"评估规则 {path}.check 需要整数 min/max。")
+            if op in {"min_length", "non_empty_ratio"} and not isinstance(check.get("min"), (int, float)):
+                raise ValueError(f"评估规则 {path}.check.min 缺失。")
+            if op == "not_contains_any" and not isinstance(check.get("values"), list):
+                raise ValueError(f"评估规则 {path}.check.values 必须是列表。")
     return data
 
 

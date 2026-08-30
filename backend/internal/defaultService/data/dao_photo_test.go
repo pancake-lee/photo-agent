@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	appdb "backend/internal/pkg/db"
 	"backend/internal/pkg/db/model"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
@@ -21,10 +22,10 @@ func setupTestDB(t *testing.T) (*papp.AppCtx, func()) {
 	if err := pdb.InitSqlite(filepath.Join(tmpDir, "test.db")); err != nil {
 		t.Fatalf("init sqlite failed: %v", err)
 	}
-	g := pdb.GetGormDB()
-	if err := g.Migrator().CreateTable(&model.Photo{}); err != nil {
-		t.Fatalf("create photos table failed: %v", err)
+	if err := appdb.Migrate(); err != nil {
+		t.Fatalf("run production migration: %v", err)
 	}
+	g := pdb.GetGormDB()
 
 	ctx := papp.NewAppCtx(context.Background())
 	return ctx, func() {

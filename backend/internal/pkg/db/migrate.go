@@ -10,6 +10,13 @@ import (
 // Migrate 执行数据库迁移，幂等添加新列/新表。
 func Migrate() error {
 	g := pdb.GetGormDB()
+	// 空数据库首次启动时由同一条生产迁移链创建基础表；测试不得自行建表。
+	if !g.Migrator().HasTable(&model.Photo{}) {
+		if err := g.Migrator().CreateTable(&model.Photo{}); err != nil {
+			return err
+		}
+		plogger.Info("DB migrate: created photos table")
+	}
 
 	// photos 表按需补列
 	if !g.Migrator().HasColumn(&model.Photo{}, "file_type") {

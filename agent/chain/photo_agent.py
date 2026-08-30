@@ -62,7 +62,8 @@ class RouterState(typing.TypedDict):
 
 
 CLASSIFY_SYSTEM = (
-    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool 或 combined，不要解释。\n\n"
+    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined 或 compose，不要解释。\n\n"
+    "compose: 用户要求按条件挑选照片并生成标题、发布文案等创作内容；即使同时有时间线或日期条件也优先 compose。\n"
     "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、"
     "数量聚合的结构化查询\n"
     "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的纯语义检索\n"
@@ -87,6 +88,7 @@ CLASSIFY_SYSTEM = (
     "- \"逆光的雪山照片\" → combined\n"
     "- \"黑白高对比度的建筑\" → combined\n"
     "- \"宁静氛围的水边照片\" → combined\n\n"
+    "- \"找山西旅游第一天的照片并生成发布文案\" → compose\n\n"
     "用户问题: {question}\n"
     "分类:"
 )
@@ -106,7 +108,9 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     chain = prompt | llm
     response = chain.invoke({"question": state["question"]})
     raw = str(response.content).strip().lower()
-    if "combined" in raw:
+    if "compose" in raw:
+        query_type = "compose"
+    elif "combined" in raw:
         query_type = "combined"
     elif "sql" in raw:
         query_type = "sql"
@@ -445,7 +449,6 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
             "answer": answer_text,
             "photos": photo_refs,
         }
-
     except Exception as exc:
         _log.exception("[combined] 组合查询异常，降级为纯 RAG")
         try:
@@ -469,6 +472,47 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
             "rag_answer": answer_text,
             "photos": photo_refs,
         }
+
+
+def _collapse_compose_candidates(photos: list[dict], include_group_members: bool = True) -> list[dict]:
+    """按连拍组折叠候选项，优先采用标记的封面。"""
+    collapsed: dict[str, dict] = {}
+    for photo in photos:
+        group_id = photo.get("burst_group_id") or photo.get("burst_group_coarse_id") or ""
+        key = f"group:{group_id}" if group_id else f"photo:{photo.get('id', '')}"
+        current = collapsed.get(key)
+        if current is None or photo.get("is_burst_cover"):
+            item = dict(photo)
+            item["_group_count"] = 0
+            collapsed[key] = item
+        collapsed[key]["_group_count"] += 1
+    result = list(collapsed.values())
+    if not include_group_members:
+        for item in result:
+            item.pop("_group_count", None)
+    return result
+
+
+def _compose_node(state: RouterState, runtime_config: lc_runnables.RunnableConfig) -> dict:
+    """确定性创作管线：SQL 候选、连拍折叠、限量后由 LLM 创作。"""
+    cfg = _get_cfg(runtime_config)
+    log = logging.getLogger(__name__)
+    try:
+        sql = text_to_sql.generate_filter_sql(cfg, state["question"])
+        ids = text_to_sql.execute_sql_for_ids(cfg.go_backend_url, sql)
+        collapsed = _collapse_compose_candidates(_fetch_photos_batch(cfg, ids))
+        log.info("[compose] SQL=%d，连拍折叠=%d", len(ids), len(collapsed))
+        if len(collapsed) > cfg.compose_cover_limit:
+            token = ",".join(item.get("id", "") for item in collapsed if item.get("id"))
+            return {"answer": "候选照片过多，建议进入图文工坊自行选图后生成文案。", "photos": [], "compose_url": f"#/post-studio?photos={token}"}
+        context = "\n\n".join(f"[{i}] id={p.get('id')} 文件={p.get('filename')} 时间={p.get('shot_at')} 连拍数={p.get('_group_count', 1)}\n描述：{p.get('description') or '无描述'}" for i, p in enumerate(collapsed, 1))
+        response = (lc_prompts.ChatPromptTemplate.from_messages([("system", "你是摄影编辑。基于候选挑选最适合发布的照片，写一个标题和一段发布文案；清楚标注选择的照片 id。"), ("human", "用户请求：{question}\n\n候选：\n{context}")]) | llm_factory.create_llm(cfg, temperature=0.5, callbacks=_get_callbacks())).invoke({"question": state["question"], "context": context})
+        refs = [{"photo_id": p.get("id", ""), "filename": p.get("filename", p.get("id", "")), "image_url": f"{cfg.go_backend_url}/api/v1/photos/{p.get('id', '')}/image"} for p in collapsed]
+        log.info("[compose] 创作完成，候选=%d", len(refs))
+        return {"answer": str(response.content), "photos": refs}
+    except Exception as exc:
+        log.exception("[compose] 执行失败")
+        return {"answer": f"创作型查询失败: {exc}", "photos": []}
 
 
 def _fetch_photos_batch(cfg: config.Config, photo_ids: list[str]) -> list[dict]:
@@ -505,7 +549,12 @@ def _fetch_photos_batch(cfg: config.Config, photo_ids: list[str]) -> list[dict]:
 
 def _answer_node(state: RouterState) -> dict:
     query_type = state["query_type"]
-    if query_type == "combined":
+    if query_type == "compose":
+        text = state.get("answer") or "创作型查询未返回结果。"
+        if state.get("compose_url"):
+            text += f"\n\n[进入图文工坊]({state['compose_url']})"
+        photos = state.get("photos", [])
+    elif query_type == "combined":
         combined = state.get("combined_result", {})
         if combined.get("fallback"):
             # 降级为 RAG，使用 rag_answer
@@ -558,6 +607,7 @@ def _get_graph():
         g.add_node("rag_query", _rag_node)
         g.add_node("tool_query", _tool_node)
         g.add_node("combined_query", _combined_node)
+        g.add_node("compose_query", _compose_node)
         g.add_node("answer", _answer_node)
         g.add_edge(lg_graph.START, "classify")
         g.add_conditional_edges(
@@ -567,12 +617,14 @@ def _get_graph():
                 "rag": "rag_query",
                 "tool": "tool_query",
                 "combined": "combined_query",
+                "compose": "compose_query",
             },
         )
         g.add_edge("sql_query", "answer")
         g.add_edge("rag_query", "answer")
         g.add_edge("tool_query", "answer")
         g.add_edge("combined_query", "answer")
+        g.add_edge("compose_query", "answer")
         g.add_edge("answer", lg_graph.END)
         _graph_app = g.compile()
     return _graph_app
@@ -618,6 +670,9 @@ class PhotoAgent:
             prices = token_tracker.load_prices(
                 cfg.resolve_path(cfg.prices_path).as_posix()
             )
+            token_tracker.validate_model_prices(
+                prices, cfg.llm_model, cfg.llm_fallback_model, cfg.embedding_model
+            )
         db_path = cfg.agent_path("sqlite", "token_usage.db").as_posix()
         db_path = str(pathlib.Path(db_path).resolve())
         pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -634,10 +689,7 @@ class PhotoAgent:
         _log.info("   重试: %s（最多 %d 次）",
                   "开启" if cfg.retry_enabled else "关闭",
                   cfg.retry_max_attempts)
-        if prices:
-            _log.info("   Token 追踪: 已加载 %d 个模型单价", len(prices))
-        else:
-            _log.info("   Token 追踪: 已开启（无单价配置，仅记录 token 数）")
+        _log.info("   Token 追踪: 已加载 %d 个模型单价（人民币元/百万 Token）", len(prices))
 
     def route(self, question: str, granularity: str = "photo") -> RouterState:
         """路由单次查询，自动分发到 SQL / RAG / Tool 分支。
