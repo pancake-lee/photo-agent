@@ -13,7 +13,7 @@
   .venv/bin/python scripts/eval_regression.py -c ../.local/my-config.yaml --level all
   ```
 - **「评估」**：指黄金用例打分链路（`agent/chain/evaluation.py` + `eval_engine.py`），产出维度评分与报告。
-- 两者共用 `data/agent/retrieval-regression-cases.json` 与同一套检索模块，但评估评效果、回归验闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。
+- 两者共用同一份黄金用例；仅配置文件 `configs/evaluation.yaml` 标记的黄金用例进入三层回归。评估衡量效果，回归验证闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。
 
 ## 1. 测试范围
 
@@ -71,13 +71,13 @@
 - 指定 `fine` 时保持为 `fine`。
 - 指定非法值时校验失败。
 
-### 2.4 种子文件结构
+### 2.4 回归黄金用例标记
 
-`test_eval_regression.py` 不执行真实检索，只检查种子契约：
+`test_eval_regression.py` 不执行真实检索，只检查配置标记与黄金用例的组合契约：
 
-- 必须存在检索闭环和连拍粒度闭环两条用例。
-- 连拍用例必须同时覆盖 `photo`、`fine`、`coarse`。
-- JSON 可以正常读取。
+- 配置标记的黄金用例必须存在，且有查询文本和关联照片。
+- 连拍用例必须覆盖 `photo`、`fine`、`coarse` 的预期结果。
+- 黄金用例 JSON 与评估配置均可正常读取。
 - `.jpg` 和 `.nef` 文件名归一化为相同的无扩展名 ID。
 
 ## 3. 三层回归 CLI 逻辑
@@ -94,7 +94,7 @@ cd agent
 参数：
 
 - `--level all|L0|L1|L2`：运行全部层级或指定层级。
-- `--case all|retrieval|burst`：运行全部种子、检索种子或连拍种子。
+- `--golden-id <id>`：仅运行指定的、已标记为回归用例的黄金用例。
 - `--agent-url`：L2 Python Agent 地址，默认 `http://127.0.0.1:10005`。
 
 成功输出每层一行结论；失败输出层级、用例名、断言和实际错误，并以非零状态码结束。
@@ -142,16 +142,16 @@ L1 直接调用 `_retrieve`，不经过 HTTP，不调用 LLM；检索结果中�
 
 L2 不发送聊天消息，因此不会触发 LLM。服务未启动、地址错误、健康状态异常或返回结构错误时，报告为 L2 失败。
 
-## 4. 种子数据来源
+## 4. 回归用例来源
 
-种子文件为 [data/agent/retrieval-regression-cases.json](../../data/agent/retrieval-regression-cases.json)。照片 ID 来自当前 SQLite 图库，不是临时生成数据：
+回归查询和关联照片来自 [黄金用例](../../data/agent/retrieval-golden-queries.json)；开发期标记和连拍粒度断言位于 [评估配置](../../configs/evaluation.yaml)，不会通过 Web API 暴露。照片 ID 来自当前 SQLite 图库，不是临时生成数据：
 
 - `DSC_2215.jpg`：佛像旁有两名女性合影。
 - `DSC_2167.jpg`：同一连拍组的封面照片。
 - 精细组：`burst_fine_2cfd1ebd`。
 - 模糊组：`burst_coarse_2cfd1ebd`。
 
-如果图库重建导致文件名或连拍组封面变化，应同步更新种子文件，并先运行 L0 确认数据态，再判断 L1 检索是否回归。
+如果图库重建导致文件名或连拍组封面变化，应更新黄金用例或评估配置中的对应断言，并先运行 L0 确认数据态，再判断 L1 检索是否回归。
 
 ## 5. 当前验证状态
 

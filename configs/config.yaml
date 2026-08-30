@@ -72,6 +72,8 @@ chat:
 evaluation:
   # 可复查、应提交仓库的评估报告（运行时黄金用例快照位于 golden/）
   reports_dir: "./docs/eval/reports"
+  # 主题发现规则与开发期检索回归标记
+  config_path: "./configs/evaluation.yaml"
 
 llm:
   base_url: "https://api.openai.com/v1"
@@ -123,4 +125,3 @@ dify:
 
 prices:
   path: ./configs/prices.yaml
-

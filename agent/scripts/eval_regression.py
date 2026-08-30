@@ -5,12 +5,13 @@
     python scripts/eval_regression.py -c ../.local/my-config.yaml --level L1
 
 L0 检查 Go 图库与本地 Chroma 的数据态，L1 直接调用检索函数，
-L2 只验证 Python HTTP 服务契约。每一层都复用 Agent 检索回归种子用例。
+L2 验证 Python HTTP 检索链路。回归用例由配置标记的黄金用例生成。
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import pathlib
 import sys
@@ -18,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+import yaml
 
 # 允许从 agent 目录直接运行 `python scripts/eval_regression.py`。
 AGENT_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -45,16 +47,60 @@ def _normalize_filename(value: str) -> str:
     return pathlib.Path(value or "").stem
 
 
-def _load_cases(path: pathlib.Path) -> list[dict[str, Any]]:
+def _load_regression_cases(
+    golden_queries_path: pathlib.Path,
+    evaluation_config_path: pathlib.Path,
+) -> list[dict[str, Any]]:
+    """从配置标记的黄金用例构造开发期三层回归用例。"""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        golden_items = json.loads(golden_queries_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
-        raise RuntimeError(f"种子用例文件不存在: {path}") from exc
+        raise RuntimeError(f"黄金用例文件不存在: {golden_queries_path}") from exc
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"种子用例 JSON 无法解析: {path}: {exc}") from exc
-    if not isinstance(data, list) or not data:
-        raise RuntimeError(f"种子用例为空或格式错误: {path}")
-    return data
+        raise RuntimeError(f"黄金用例 JSON 无法解析: {golden_queries_path}: {exc}") from exc
+    if not isinstance(golden_items, list):
+        raise RuntimeError(f"黄金用例格式错误: {golden_queries_path}")
+
+    try:
+        definition = yaml.safe_load(evaluation_config_path.read_text(encoding="utf-8")) or {}
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"评估配置文件不存在: {evaluation_config_path}") from exc
+    if not isinstance(definition, dict):
+        raise RuntimeError(f"评估配置格式错误: {evaluation_config_path}")
+
+    marked = definition.get("retrieval_regression", {}).get("golden_cases", [])
+    if not isinstance(marked, list) or not marked:
+        raise RuntimeError("评估配置未标记任何检索回归黄金用例")
+
+    by_id = {str(item.get("id", "")): item for item in golden_items if isinstance(item, dict)}
+    cases: list[dict[str, Any]] = []
+    for marker in marked:
+        if not isinstance(marker, dict) or not isinstance(marker.get("id"), str):
+            raise RuntimeError("检索回归黄金用例标记缺少 id")
+        golden = by_id.get(marker["id"])
+        if golden is None:
+            raise RuntimeError(f"检索回归黄金用例不存在: {marker['id']}")
+        question = str(golden.get("query_text", "")).strip()
+        if not question:
+            raise RuntimeError(f"检索回归黄金用例缺少 query_text: {marker['id']}")
+        relevant_ids = [
+            _normalize_filename(str(photo.get("photo_id", "")))
+            for photo in golden.get("relevant_photos", [])
+            if isinstance(photo, dict) and photo.get("photo_id")
+        ]
+        if not relevant_ids:
+            raise RuntimeError(f"检索回归黄金用例缺少关联照片: {marker['id']}")
+        levels = copy.deepcopy(marker.get("levels", {}))
+        if not isinstance(levels, dict):
+            raise RuntimeError(f"检索回归黄金用例 levels 格式错误: {marker['id']}")
+        levels.setdefault("L0", {}).setdefault("photo_ids", relevant_ids)
+        cases.append({
+            "id": marker["id"],
+            "name": marker.get("name") or question,
+            "question": question,
+            "levels": levels,
+        })
+    return cases
 
 
 def _get(obj: dict[str, Any], *names: str, default: Any = "") -> Any:
@@ -229,17 +275,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Photo Agent 三层评估回归")
     parser.add_argument("-c", "--config", required=True, help="Python Agent YAML 配置文件")
     parser.add_argument("--level", choices=("all", "L0", "L1", "L2"), default="all")
-    parser.add_argument("--case", choices=("all", "retrieval", "burst"), default="all")
+    parser.add_argument("--golden-id", help="仅运行指定的、已标记为回归用例的黄金用例 ID")
     parser.add_argument("--agent-url", default="http://127.0.0.1:10005", help="L2 Python Agent 地址")
     args = parser.parse_args()
     try:
         cfg = config.Config(args.config)
-        cases = _load_cases(cfg.agent_path("retrieval-regression-cases.json"))
-        if args.case != "all":
-            prefix = "retrieval-" if args.case == "retrieval" else "burst-"
-            cases = [case for case in cases if case["id"].startswith(prefix)]
+        cases = _load_regression_cases(
+            cfg.agent_path("retrieval-golden-queries.json"),
+            cfg.resolve_path(cfg.evaluation_config_path),
+        )
+        if args.golden_id:
+            cases = [case for case in cases if case["id"] == args.golden_id]
         if not cases:
-            raise RuntimeError(f"没有匹配的种子用例: {args.case}")
+            raise RuntimeError("没有匹配的已标记黄金用例")
         levels = ("L0", "L1", "L2") if args.level == "all" else (args.level,)
         runners = {"L0": _run_l0, "L1": _run_l1}
         failures: list[Failure] = []

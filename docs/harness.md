@@ -45,7 +45,7 @@ AI 根据用户在对话中使用的触发词自动切换工作模式。四种�
 对聚类标题、选题质量等模块做多维度质量评分。
 
 - **评分维度**：代码质量（正确性/健壮性/可维护性/简洁性）+ 功能效果（准确性/完整性/一致性）+ 用户价值（惊喜度/可用性/交互体验）
-- **启发式规则引擎**：`data/agent/topic-discovery-evaluation-rules.yaml` 配置规则，`agent/chain/eval_engine.py` 执行，支持跨簇规则
+- **启发式规则引擎**：`configs/evaluation.yaml` 配置规则，`agent/chain/eval_engine.py` 执行，支持跨簇规则；同文件还标记仅供开发期回归使用的黄金用例
 - **评估报告**：JSONL 格式追加到 `data/agent/execution-traces/YYYY-MM-DD.jsonl`，通过 API 查询历史报告
 - **LLM-judge**：暂缓，prompt 已设计完成
 

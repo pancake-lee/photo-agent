@@ -27,6 +27,7 @@
 | Done   | 仓库治理 | TIDY1 | 工具目录按语言分层                |
 | Done   | 仓库治理 | TIDY2 | data 运行数据目录审计与归档       |
 | Done   | 仓库治理 | TIDY3 | Agent 运行数据命名收敛            |
+| Done   | 仓库治理 | TIDY4 | 评估配置与黄金回归用例合并        |
 
 ### PS10 草稿保存并恢复编辑输入
 
@@ -255,9 +256,17 @@
 
 - **状态**：Done。
 - **背景**：三个 Agent 专属文件仍在 `data/` 根目录；原 `traces/` 目录未表达其承载跨聊天、选题与评估的执行记录。
-- **方案**：只做直接迁移和命名收敛，不新增目录层级：`retrieval-golden-queries.json`、`retrieval-regression-cases.json`、`topic-discovery-evaluation-rules.yaml` 置于 `data/agent/`；`traces/` 改为 `execution-traces/`。同步所有代码、测试、Trace payload 和文档引用。
+- **方案**：只做直接迁移和命名收敛，不新增目录层级；Trace 目录改为 `execution-traces/`。后续经 TIDY4 将规则与回归定义进一步归入配置，避免其作为运行数据长期保留。
 - **验收**：四项数据均由新路径读写；根目录不再保留这三个 Agent 文件；自动测试与 Trace 回放通过。
-- **实施记录**：已将三个根目录文件迁为 `data/agent/retrieval-golden-queries.json`、`data/agent/retrieval-regression-cases.json`、`data/agent/topic-discovery-evaluation-rules.yaml`，并将 `traces/` 更名为 `execution-traces/`；所有 Trace payload 引用、代码、测试、Web 导出文件名及文档链接均已同步。Agent 100 项单元测试、配置路径检查、12 步历史 Trace 回放和 payload 完整性检查、JSON 格式检查及全仓旧路径扫描均通过。
+- **实施记录**：已将根目录的 Agent 专属文件迁入 Agent 范围，并将 `traces/` 更名为 `execution-traces/`；所有 Trace payload 引用、代码、测试、Web 导出文件名及文档链接均已同步。规则与回归定义的最终归属见 TIDY4。Agent 100 项单元测试、配置路径检查、12 步历史 Trace 回放和 payload 完整性检查、JSON 格式检查及全仓旧路径扫描均通过。
+
+### TIDY4 评估配置与黄金回归用例合并
+
+- **状态**：Done。
+- **背景**：主题发现规则是配置而非运行数据；检索回归查询与黄金用例重复维护，容易出现查询或关联照片漂移。
+- **方案**：主题发现规则迁入 `configs/evaluation.yaml`；仅在该配置中标记开发期回归黄金用例，并保留粒度/连拍断言。回归 CLI 从黄金用例读取查询与关联照片，不再读取独立回归 JSON。
+- **验收**：运行数据目录不再保留规则 YAML 或独立回归 JSON；配置标记的黄金用例可驱动三层回归，规则评估和相关自动测试通过。
+- **实施记录**：规则已迁入 `configs/evaluation.yaml`，主配置和本地配置均以 `evaluation.config_path` 指向该文件；黄金用例 `3ccdb0321084` 被配置标记为当前开发回归用例，查询与关联照片只从黄金用例读取，粒度/连拍断言仅留在配置中。两个废弃数据文件已移入 `data/bak/2026-08-30-data-audit/`。Agent 100 项单元测试、配置加载、规则加载和回归黄金用例解析通过；全仓活动路径扫描与 `git diff --check` 通过。
 
 ### DOC2 公共文档与代码实现对齐
 

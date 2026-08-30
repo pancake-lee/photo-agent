@@ -47,6 +47,7 @@ class Config:
         self.tool_max_rounds: int = 20
         self.agent_data_dir: str = ""
         self.eval_reports_dir: str = ""
+        self.evaluation_config_path: str = ""
 
         self.project_root: pathlib.Path = pathlib.Path(".")
 
@@ -149,6 +150,7 @@ class Config:
         # Agent 运行数据与可提交评估报告目录（必填，避免隐式散落到 data 根目录）
         self.agent_data_dir = self._require(data, "agent", "data_dir")
         self.eval_reports_dir = self._require(data, "evaluation", "reports_dir")
+        self.evaluation_config_path = self._require(data, "evaluation", "config_path")
 
         # storage 配置（必填）
         self.project_root = pathlib.Path(

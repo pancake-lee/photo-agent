@@ -1,20 +1,18 @@
-import json
 import unittest
 from pathlib import Path
 
 from scripts import eval_regression
 
 
-class TestEvalRegressionSeeds(unittest.TestCase):
-    def test_seed_cases_cover_retrieval_and_all_granularities(self):
-        cases = eval_regression._load_cases(
-            Path(__file__).parents[2] / "data/agent/retrieval-regression-cases.json"
+class TestEvalRegressionGoldenCases(unittest.TestCase):
+    def test_marked_golden_case_covers_all_granularities(self):
+        project_root = Path(__file__).parents[2]
+        cases = eval_regression._load_regression_cases(
+            project_root / "data/agent/retrieval-golden-queries.json",
+            project_root / "configs/evaluation.yaml",
         )
-        self.assertEqual({case["id"] for case in cases}, {
-            "retrieval-buddha-person",
-            "burst-buddha-person",
-        })
-        burst = next(case for case in cases if case["id"] == "burst-buddha-person")
+        self.assertEqual([case["id"] for case in cases], ["3ccdb0321084"])
+        burst = cases[0]
         self.assertEqual(
             burst["levels"]["L1"]["expected_photo_ids"]["fine"],
             ["DSC_1813", "DSC_2167"],
@@ -24,9 +22,14 @@ class TestEvalRegressionSeeds(unittest.TestCase):
             ["DSC_1813"],
         )
 
-    def test_seed_cases_are_json_serializable(self):
-        path = Path(__file__).parents[2] / "data/agent/retrieval-regression-cases.json"
-        self.assertIsInstance(json.loads(path.read_text(encoding="utf-8")), list)
+    def test_marked_golden_case_uses_golden_question_and_photos(self):
+        project_root = Path(__file__).parents[2]
+        case = eval_regression._load_regression_cases(
+            project_root / "data/agent/retrieval-golden-queries.json",
+            project_root / "configs/evaluation.yaml",
+        )[0]
+        self.assertEqual(case["question"], "佛像和人的合照1")
+        self.assertIn("DSC_2215", case["levels"]["L0"]["photo_ids"])
 
     def test_filename_normalization(self):
         self.assertEqual(eval_regression._normalize_filename("DSC_2215.jpg"), "DSC_2215")

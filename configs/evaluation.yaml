@@ -1,0 +1,77 @@
+# 评估配置：主题发现质量规则与仅供开发使用的检索回归标记。
+
+# 聚类标题质量启发式规则
+cluster_theme:
+  - id: label_length
+    description: "标题长度 6-16 字"
+    severity: error
+    check:
+      field: label
+      op: length_between
+      min: 6
+      max: 16
+  - id: no_placeholder
+    description: "标题不含兜底文本"
+    severity: error
+    check:
+      field: label
+      op: not_contains_any
+      values: ["未识别", "聚类", "无描述", "未知"]
+  - id: no_markdown_residue
+    description: "标题无 markdown 残留"
+    severity: error
+    check:
+      field: label
+      op: not_contains_any
+      values: ["**", "#", "`"]
+  - id: has_description
+    description: "描述至少 10 字"
+    severity: warning
+    check:
+      field: theme_description
+      op: min_length
+      min: 10
+  - id: diverse_labels
+    description: "簇间标题不重复"
+    severity: error
+    scope: all_clusters
+    check:
+      op: all_unique
+      field: label
+
+attribute_availability:
+  - id: objects_non_empty
+    description: "objects 字段非空率 ≥ 60%"
+    severity: warning
+    check: {field: objects, op: non_empty_ratio, min: 0.6}
+  - id: scene_non_empty
+    description: "scene 字段非空率 ≥ 50%"
+    severity: warning
+    check: {field: scene, op: non_empty_ratio, min: 0.5}
+  - id: colors_non_empty
+    description: "colors 字段非空率 ≥ 50%"
+    severity: warning
+    check: {field: colors, op: non_empty_ratio, min: 0.5}
+
+# 仅供开发回归 CLI 使用；不会通过 Web API 暴露。
+retrieval_regression:
+  golden_cases:
+    - id: "3ccdb0321084"
+      name: "佛像和人的合照连拍粒度闭环"
+      levels:
+        L0:
+          covers:
+            fine: "DSC_2167"
+            coarse: "DSC_2167"
+        L1:
+          expected_photo_ids:
+            photo: ["DSC_1813"]
+            fine: ["DSC_1813", "DSC_2167"]
+            coarse: ["DSC_1813", "DSC_2167"]
+          expected_group_ids:
+            fine: "burst_fine_2cfd1ebd"
+            coarse: "burst_coarse_2cfd1ebd"
+        L2:
+          expected_chat_filenames:
+            fine: ["DSC_1813"]
+            coarse: ["DSC_1813"]

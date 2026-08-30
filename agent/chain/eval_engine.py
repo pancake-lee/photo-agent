@@ -1,14 +1,14 @@
 """
     启发式规则评估引擎。
 
-    加载 eval_rules.yaml 配置，对聚类结果执行启发式规则检查，
+    加载评估配置，对聚类结果执行启发式规则检查，
     生成评估报告并以 JSONL 行追加到 data/agent/execution-traces/YYYY-MM-DD.jsonl（按天拆分）。
 
     用法:
         import chain.eval_engine as eval_engine
 
         # 加载规则
-        rules = eval_engine.load_rules("data/agent/topic-discovery-evaluation-rules.yaml")
+        rules = eval_engine.load_rules("configs/evaluation.yaml")
 
         # 执行评估
         report = eval_engine.evaluate_cluster_themes(result, rules)

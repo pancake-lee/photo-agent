@@ -2196,7 +2196,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     async def eval_cluster_themes(result_id: str, body: BatchClusterIdsRequest, req: fastapi.Request):
         """对聚类结果的所有/指定簇标题执行启发式规则评估。
 
-        加载 eval_rules.yaml 中的 cluster_theme 规则，
+        加载评估配置中的 cluster_theme 规则，
         检查标题长度、兜底文本、markdown 残留、描述长度、簇间多样性。
 
         Body: { "cluster_ids": [1, 2, 3] | null }
@@ -2209,7 +2209,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
 
         cfg = req.app.state.cfg
-        rules_path = cfg.agent_path("topic-discovery-evaluation-rules.yaml")
+        rules_path = cfg.resolve_path(cfg.evaluation_config_path)
         if not rules_path.exists():
             raise fastapi.HTTPException(status_code=500, detail="规则配置文件不存在")
 
@@ -2286,7 +2286,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail=f"簇 {cluster_id} 不存在")
 
         cfg = req.app.state.cfg
-        rules_path = cfg.agent_path("topic-discovery-evaluation-rules.yaml")
+        rules_path = cfg.resolve_path(cfg.evaluation_config_path)
         if not rules_path.exists():
             raise fastapi.HTTPException(status_code=500, detail="规则配置文件不存在")
 
