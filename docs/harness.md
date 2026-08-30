@@ -35,7 +35,7 @@ AI 根据用户在对话中使用的触发词自动切换工作模式。四种�
 协作规则的双文件同步是 Harness 的强制原则：`CLAUDE.md` 与 `AGENTS.md` 分别服务 Claude 和 Codex 工作流，但承载同一套全局规则。任一文件发生修改时，必须在同一轮同步修改另一文件，确保两个工作流读取到的规则、文档索引和流程说明始终一致。
 
 - **评估模式**：对代码/功能产出做质量评分，产出评估报告 + backlog 条目（只描述问题，不写方案）
-- **规划模式**：分析需求并产出方案文档；方案、子任务与实施步骤统一写入 backlog，作为 Plan → Generate 的唯一交接
+- **规划模式**：分析需求并将方案、子任务与实施步骤统一写入 backlog，作为 Plan → Generate 的唯一交接；目录、文件或配置命名整理只留 backlog，详细判定见[工作模式手册](handbook/work-modes.md#规划模式)
 - **生成模式**：按方案实现代码、完成自动验证，并按验收责任将任务关闭或交接给用户
 - **全流程模式**：规划→生成→评估串联，适合小体量任务的单会话闭环
 - **项目管理模式**：版本归档、里程碑规划、backlog 治理
@@ -45,8 +45,8 @@ AI 根据用户在对话中使用的触发词自动切换工作模式。四种�
 对聚类标题、选题质量等模块做多维度质量评分。
 
 - **评分维度**：代码质量（正确性/健壮性/可维护性/简洁性）+ 功能效果（准确性/完整性/一致性）+ 用户价值（惊喜度/可用性/交互体验）
-- **启发式规则引擎**：`agent/data/eval_rules.yaml` 配置规则，`agent/chain/eval_engine.py` 执行，支持跨簇规则
-- **评估报告**：JSONL 格式追加到 `data/traces/YYYY-MM-DD.jsonl`，通过 API 查询历史报告
+- **启发式规则引擎**：`data/agent/topic-discovery-evaluation-rules.yaml` 配置规则，`agent/chain/eval_engine.py` 执行，支持跨簇规则
+- **评估报告**：JSONL 格式追加到 `data/agent/execution-traces/YYYY-MM-DD.jsonl`，通过 API 查询历史报告
 - **LLM-judge**：暂缓，prompt 已设计完成
 
 ### 2.3 Trace 结构化日志
@@ -82,8 +82,8 @@ Go（plogger）和 Python（自建）统一输出结构化 JSON 日志，`trace_
 
 - [docs/eval/baseline.md](eval/baseline.md) — 评估基线记录（RAG 检索 + 模块质量 + 管道正确性）
 - [docs/eval/eval-test-logic.md](eval/eval-test-logic.md) — 测试用例逻辑 + 三层回归 CLI（L0/L1/L2，「回归测试」称呼约定见该文第 0 节）
-- `data/eval_reports/` — 评估报告（`{date}-{topic}.json` 结构化 + `.md` 人工阅读，双格式）
-- `data/traces/` — Trace 结构化日志（JSONL）
+- `eval/reports/` — 评估报告（`{date}-{topic}.json` 结构化 + `.md` 人工阅读，双格式）
+- `data/agent/execution-traces/` — Trace 结构化日志（JSONL）
 
 ### 专题中枢
 

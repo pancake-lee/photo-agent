@@ -4,7 +4,7 @@
 >
 > 本文档覆盖 3.8 交互式管线评估（7.3/10）发现的四个衍生优化任务（B13 / 3.9 / B12 / 3.10），以及用户提出的管线产出简化（3.11）。
 >
-> **评估**：7.3/10（结构清晰度 8 / 决策合理性 8 / 验收可执行性 7 / 代码一致性 5 / 方案完整性 7），详见 [评估报告](../../data/eval_reports/2026-07-31-suggest-pipeline-optimizations-design.json)
+> **评估**：7.3/10（结构清晰度 8 / 决策合理性 8 / 验收可执行性 7 / 代码一致性 5 / 方案完整性 7），详见 [评估报告](../../eval/reports/2026-07-31-suggest-pipeline-optimizations-design.json)
 
 ## 1. 任务概览
 
@@ -328,4 +328,4 @@ LLM 被约束为输出 1 个直觉后，`_parse_intuitions_response` 会返回�
 
 - [2026-07-27-5-topic-discovery-hub.md](2026-07-27-5-topic-discovery-hub.md) — 专题中枢
 - [2026-07-31-1-suggest-interactive-pipeline.md](2026-07-31-1-suggest-interactive-pipeline.md) — 3.8 交互式管线方案设计
-- [2026-07-31-topic-discovery-3.8.json](../../data/eval_reports/2026-07-31-topic-discovery-3.8.json) — 3.8 评估报告
+- [2026-07-31-topic-discovery-3.8.json](../../eval/reports/2026-07-31-topic-discovery-3.8.json) — 3.8 评估报告

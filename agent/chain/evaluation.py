@@ -145,7 +145,7 @@ def _build_asset_health(queries: list[dict], photo_records: dict[str, dict], ver
 
 def save_evaluation_snapshot(cfg: config.Config, result: dict) -> pathlib.Path:
     """持久化每次黄金评估，便于直接比较修复前后的数据和检索证据。"""
-    directory = cfg.resolve_path("./data/eval_reports/golden")
+    directory = cfg.resolve_path(cfg.eval_reports_dir) / "golden"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{result['generated_at'][:10]}-{result['report_id']}.json"
     path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -178,8 +178,8 @@ def _load_golden_queries_from_items(items: list[dict]) -> list[dict]:
 
 
 def _load_golden_queries(cfg: config.Config) -> list[dict]:
-    """从 agent/data/golden_queries.json 加载黄金用例。"""
-    json_path = cfg.resolve_path("./data/golden_queries.json")
+    """从 Agent 检索黄金用例文件加载评估基线。"""
+    json_path = cfg.agent_path("retrieval-golden-queries.json")
     if not json_path.exists():
         return []
     try:
@@ -261,7 +261,7 @@ def run_evaluation(
     )
     stores = {
         "photo": chroma_client.ChromaPhotoStore(
-            persist_dir=str(cfg.resolve_path("./data/chroma")),
+            persist_dir=str(cfg.agent_path("chroma")),
             collection_name=photo_rag.GRANULARITY_COLLECTIONS["photo"],
         ),
     }

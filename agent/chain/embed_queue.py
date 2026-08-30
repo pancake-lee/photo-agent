@@ -51,7 +51,7 @@ class EmbedQueue:
         )
 
         # 连拍粒度集合：每组仅保留封面，同时保留未分组单张。
-        chroma_dir = str(cfg.resolve_path("./data/chroma"))
+        chroma_dir = str(cfg.agent_path("chroma"))
         self._group_stores = {
             "fine": chroma_client.ChromaPhotoStore(
                 persist_dir=chroma_dir,

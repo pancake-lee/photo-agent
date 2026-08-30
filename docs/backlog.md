@@ -25,6 +25,8 @@
 | 已规划 | 对话查询 | CQ4  | 创作型查询（Compose）专用管线     |
 | Done   | 文档治理 | DOC2 | 公共文档与代码实现对齐            |
 | Done   | 仓库治理 | TIDY1 | 工具目录按语言分层                |
+| Done   | 仓库治理 | TIDY2 | data 运行数据目录审计与归档       |
+| Done   | 仓库治理 | TIDY3 | Agent 运行数据命名收敛            |
 
 ### PS10 草稿保存并恢复编辑输入
 
@@ -53,8 +55,8 @@
   - 已完成：按标准完成后端基线报告，包含阻断项、八项加权分、调用图、自动验证和关键用户用例证据。
   - 已完成：将评估发现的问题逐项建为 BQ2–BQ6、BQ8；本轮已完成其规划或暂缓决策。
 - **验收**：存在一份可复查的后端基线报告；每个发现均有证据和独立 backlog 或 future requirements 归属。
-- **评估**：5.7/10（57/100），不通过，详见 [2026-08-29-backend-code-quality-baseline](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
-- **复评**：5.9/10（59/100，未封顶 79/100），不通过，详见 [2026-08-30-backend-code-quality-reassessment](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
+- **评估**：5.7/10（57/100），不通过，详见 [2026-08-29-backend-code-quality-baseline](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
+- **复评**：5.9/10（59/100，未封顶 79/100），不通过，详见 [2026-08-30-backend-code-quality-reassessment](eval/reports/2026-08-30-backend-code-quality-reassessment.md)。
 - **实施记录**：人工 Proto/SQL 已纳入复核，发现 3 项阻断项；衍生问题已拆为 BQ2–BQ6、BQ8。2026-08-30 用户确认以“基线评估与问题拆分”范围关单，后续实现和复评由子任务分别承担。
 
 ### BQ2 清理一次性旧列迁移代码
@@ -62,7 +64,7 @@
 - **状态**：Done
 - **背景**：`backend/internal/pkg/db/migrate.go` 在启动迁移时会对已有 `photos` 表执行 `DROP COLUMN`，删除 `ai_health_status`、`ai_health_reason`、`vlm_status`、`vlm_reason` 四列；存量值没有备份或迁移出口，启动后不可恢复。
 - **严重程度**：P0，数据不可逆丢失风险。
-- **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **证据**：[后端代码质量基线评估](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
 - **分析**：2026-08-30 已查询 `.local/my-config.yaml` 指向的活动 SQLite 库，`photos` 表不含这四个列名，说明当前环境的明确清理已完成。它们不是当前 API 的持久化字段：照片响应中的 AI 健康/VLM 状态仍由当前描述实时推导，必须保留该展示语义和 Proto 契约。
 - **方案**：删除 `migrate.go` 中针对四个旧列的检测、`DROP COLUMN` 和相关日志，不再让日后启动携带一次性清理行为；保留实时状态计算、响应字段以及仍在使用的 Embedding 状态列。同步移除误导性迁移注释，不新建替代迁移。
 - **实施任务**：
@@ -77,7 +79,7 @@
 - **状态**：暂缓
 - **背景**：默认服务全局调用 `SetIgnoreAuth`，同时注册了接收调用方 SQL 文本的 QueryService。当前服务监听全部网络接口；虽使用只读数据库连接，调用方仍可读取任意可访问表和元数据。
 - **严重程度**：P0，未授权数据访问风险。
-- **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **证据**：[后端代码质量基线评估](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
 - **方案**：当前开发阶段保留 `SetIgnoreAuth` 与自由只读 SQL 查询，不改变接口、监听方式或开发调试效率。将风险、启动条件和后续收敛方向迁入 FR-11；当服务需要被非受信任网络、多人或真实用户访问时，必须先恢复鉴权并收紧查询能力，再继续发布。
 - **实施任务**：
   - 文档：登记 future requirements，明确当前接受的边界和进入生产/共享环境前的阻断条件。
@@ -88,7 +90,7 @@
 - **状态**：Done
 - **背景**：默认服务启动时输出完整配置；实际运行日志已出现 API 凭据和外部服务认证信息，日志文件与分享、诊断流程均可能扩大泄露范围。
 - **严重程度**：P0，敏感凭据泄露风险。
-- **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **证据**：[后端代码质量基线评估](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
 - **方案**：移除默认服务启动时对完整配置树的输出，不将脱敏责任扩散到每个配置字段。启动日志只保留不含配置值的服务初始化结果与必要运行状态；配置加载失败仍按现有错误路径直接暴露缺失项，不把 API Key、密码或 Token 写入日志。
 - **实施任务**：
   - 后端：移除唯一的完整配置输出入口，保留配置初始化与日志初始化顺序。
@@ -102,7 +104,7 @@
 - **状态**：Done
 - **背景**：Embedding 代理使用 `http.DefaultClient` 调用外部服务，未设置显式超时且未传播调用方取消；多条输入逐条串行处理，外部服务无响应时请求时长不可控。
 - **严重程度**：P1，外部依赖阻塞风险。
-- **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **证据**：[后端代码质量基线评估](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
 - **方案**：为 Embedding 外部客户端建立唯一受控调用边界：请求继承入站 HTTP 上下文，客户端使用固定的显式时限；每条输入复用同一个受限上下文，保持现有串行执行和结果顺序。超时、调用方取消和非成功响应统一返回可定位错误，不改变 OpenAI 兼容响应的成功格式。
 - **实施任务**：
   - 后端：收敛 Embedding 请求构造与执行入口，传递入站取消信号并配置有限时 HTTP 客户端。
@@ -118,7 +120,7 @@
 - **专题中枢**：[后端代码质量治理](design/2026-08-30-1-backend-code-quality-hub.md)。
 - **背景**：数据库迁移、上传后文件与数据库一致性、VLM 队列启停和失败恢复、草稿 HTTP CRUD/ZIP 导出均没有自动化用户用例闭环。本评估环境对运行中服务的 HTTP 探测全部超时，无法替代为成功的运行时证据。
 - **严重程度**：P1，回归风险不可定位。
-- **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **证据**：[后端代码质量基线评估](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
 - **方案**：以 BQ10 → BQ11 → BQ6 复评的顺序收口。先建立由真实启动迁移产出的版本化空 SQLite schema 基线；用户路径和 DAO 测试只复制该基线，在 schema 不变的前提下执行启动迁移校验，禁止任何测试直接建表或改表。再通过公开 VLM 队列启动入口与本地 VLM 替身驱动 worker，分别断言成功、失败与停止后的照片、队列和处理履历最终状态。草稿、上传/删除和 Embedding 的既有自动证据保持回归；全部关键路径在同一 schema 契约下通过后重新复评 BQ6。
 - **分析**：版本化 schema 基线是唯一同时满足“测试不改表结构”和“用户路径依赖真实迁移结果”的方式：日常测试只复制基线；迁移发生变化时，兼容校验必须失败并要求通过显式维护入口刷新基线，不能由夹具隐式修补。VLM 队列选择本地 HTTP 替身而非仅测试管理器，是为了把公开入口、并发 worker、外部响应和持久化写回纳入同一自动证据；停止场景沿用既有语义，在途任务获得明确结果，未领取任务仍可重试。
 - **实施任务**：
@@ -129,14 +131,14 @@
 
 - **实施记录**：新增临时 SQLite 与进程内 HTTP 用例，覆盖草稿创建、更新、列表、删除和 ZIP 导出；覆盖 NEF 上传与删除后的文件/记录一致性、VLM 成功/待复核/失败履历写回，以及队列启动、停止和待处理状态。上传在缩略图或落库失败时会清理已创建文件，避免静默返回空 ID。`GOTOOLCHAIN=local go test ./...`、`go vet ./...` 和受影响包 race 检查通过。
 
-- **复评**：2026-08-30 复评确认草稿 HTTP、上传删除、VLM 写回和 Embedding 异常路径已有自动证据；但测试夹具修改表结构，且 VLM 队列仅验证管理器状态，未覆盖公开启动入口到本地 VLM 响应、最终状态和处理履历。详见 BQ10、BQ11 与 [复评报告](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
+- **复评**：2026-08-30 复评确认草稿 HTTP、上传删除、VLM 写回和 Embedding 异常路径已有自动证据；但测试夹具修改表结构，且 VLM 队列仅验证管理器状态，未覆盖公开启动入口到本地 VLM 响应、最终状态和处理履历。详见 BQ10、BQ11 与 [复评报告](eval/reports/2026-08-30-backend-code-quality-reassessment.md)。
 
 ### BQ8 数据访问边界与 Go 格式统一
 
 - **状态**：Done
 - **背景**：`internal/pkg/perr/err.go` 未通过 `gofmt` 检查，仍保留 CRLF 格式差异；此外，`svc_photo.go`、`svc_vlm.go`、`svc_storage.go`、`svc_query.go` 和 `ai_quality.go` 仍有 Service 直接使用 GORM、只读数据库连接或生成查询对象的情况，数据访问边界不一致。
 - **严重程度**：P2，可读性与格式一致性问题。
-- **证据**：[后端代码质量基线评估](../data/eval_reports/2026-08-29-backend-code-quality-baseline.md)。
+- **证据**：[后端代码质量基线评估](eval/reports/2026-08-29-backend-code-quality-baseline.md)。
 - **方案**：将所有 Service 直接 ORM/只读 SQL/生成查询访问迁入 `data`，按业务动作或返回对象命名：单表访问使用明确的查询、更新或删除动作，跨表和聚合访问使用业务结果命名。Service 只编排业务规则、文件和外部调用，不再自行定义查表细节。同步把这条约束写入 Go 编码规范和后端评分标准，并格式化现有手写 Go 文件；不为减少少量代码而引入泛化 DAO。
 - **实施任务**：
   - 规范：在 Go 编码规范和评分标准中加入“ORM 仅限 `data` 层、以业务语义封装”的判定、正反例及检查范围。
@@ -166,7 +168,7 @@
 - **父任务**：BQ6。
 - **背景**：`backend/internal/defaultService/service/user_paths_test.go:25-44` 的测试夹具通过 `Migrator().CreateTable` 和原始 `CREATE TABLE` 初始化临时 SQLite。项目 Go 规范明确禁止测试修改表结构；该做法还绕过了实际启动迁移，无法证明测试用表与运行时迁移后的表一致。
 - **严重程度**：P1，关键用户路径验证可能掩盖迁移或 schema 漂移问题。
-- **证据**：[后端代码质量复评](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
+- **证据**：[后端代码质量复评](eval/reports/2026-08-30-backend-code-quality-reassessment.md)。
 - **方案**：新增版本化的空 SQLite schema 基线，其唯一生成来源是生产启动迁移。测试运行时只复制该基线到临时目录，不执行直接 DDL；随后调用启动迁移并校验 schema 未变化，以同时证明当前基线与迁移兼容。基线需要更新时，由显式维护入口重新以生产迁移生成，而非由测试隐式修补。将该公共夹具用于用户路径测试及现有直接建表的 DAO 测试，彻底移除手写测试中的 `CreateTable`/`CREATE TABLE`。
 - **实施任务**：
   - 测试资产：提供可审阅、无业务数据的 SQLite schema 基线及显式刷新方式，记录其与生产迁移的对应关系。
@@ -181,7 +183,7 @@
 - **父任务**：BQ6（依赖 BQ10）。
 - **背景**：`TestVlmQueueLifecycle` 只直接调用 `vlmQueueManager` 的启动、停止和待处理状态；VLM 写回在另一段独立测试中验证。测试没有经由 `StartVlmQueue` 或 `runVlmQueue` 使用本地 VLM 响应，因此无法自动证明队列成功、失败、停止后的最终状态和处理履历。
 - **严重程度**：P1，VLM 队列关键用户路径仍缺少可重复的自动闭环。
-- **证据**：[后端代码质量复评](../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md)。
+- **证据**：[后端代码质量复评](eval/reports/2026-08-30-backend-code-quality-reassessment.md)。
 - **方案**：复用 BQ10 的 schema 基线和临时照片目录，以本地 HTTP VLM 替身替代云端调用，不改变生产 API 或外部协议。测试必须从 `StartVlmQueue` 启动真实 worker，等待其退出后经状态查询和 DAO 读取验证：有效响应写入描述与健康履历；外部失败写入失败履历并计入失败数；停止请求保留在途任务的明确最终结果、不再领取新任务，队列退出并清理运行态。保留轻量管理器单测作为同步原语回归，不再将它作为用户路径证据。
 - **实施任务**：
   - 成功/失败闭环：本地 VLM 分别返回有效描述和受控错误，断言启动响应、队列计数、照片描述及处理履历的最终值。
@@ -231,6 +233,31 @@
   - 已完成：将 Node 锁文件转为 `pnpm-lock.yaml`，不提交 `node_modules/`。
 - **验收**：Go 工具通过自检，Node 脚本通过语法检查；仓库中不再引用迁移前路径；工具目录说明明确单入口扩展约定。
 - **实施记录**：`GOTOOLCHAIN=local go run ./tools/go/main.go --self-check` 通过，输出 56 个评估文件；`node --check tools/node/web_check.mjs`、`node --check tools/node/golden_query_ui_regression.mjs` 通过。
+
+### TIDY2 data 运行数据目录审计与归档
+
+- **状态**：Done。
+- **背景**：`data/` 同时承载运行态数据、可追溯历史与已淘汰的中间文件；根目录残留旧 VLM 描述、旧去重登记、空 SQLite 文件及无引用的评估截图，影响数据归属判断。
+- **方案**：保留当前运行链路和可追溯历史的原位路径；仅将已有淘汰结论、无代码/配置引用且无内容价值的文件迁入按审计日期分组的 `data/bak/`。不删除文件，不移动运行中数据库、Chroma 分段文件或仍被选题历史回放引用的 Trace。
+- **分析**：
+  - `data/backend/sqlite/photo_agent.db` 是后端主照片库；其 `-wal`/`-shm` 与数据库不可拆分。
+  - `data/agent/chroma/` 中三个 HNSW 目录由 `chroma.sqlite3` 的三个当前 collection 引用；一个未映射的孤立目录已归档，不能只按目录时间判断。
+  - `data/agent/topic-discovery/history.json`、`clusters/` 和 `data/agent/execution-traces/` 分别承载选题历史、聚类浏览及 Agent 全链路执行 Trace。
+  - 时间线只由 Web 页面维护并持久化至 `timeline_events`，JSON 导入代码和配置已移除。
+- **实施任务**：
+  - 已完成：归档 `descriptions.json`、`dedup_hashes.json`、空 `photo.db`、4 张无引用旧评估截图及未映射的旧 Chroma HNSW 目录至 `data/bak/2026-08-30-data-audit/`。
+  - 已完成：将活跃数据按后端、Agent、主题发现和可提交评估报告的归属重排，并同步更新代码、配置、Trace payload 引用和文档链接。
+  - 已完成：移除 JSON 时间线初始化，选题历史统一使用 `history.json`。
+- **验收**：归档文件均可在备份目录找到；后端、Agent 和文档评估数据均位于新目录；无文件被删除；SQLite 与 Chroma 元数据完整性通过。
+- **实施记录**：核对配置、代码引用、SQLite/Chroma 元数据与当前选题历史的 Trace 关联后执行迁移；归档总量约 15 MB。`GOTOOLCHAIN=local go test ./...`、Agent 100 项单元测试、配置路径加载、选题历史 Trace 回放、SQLite/Chroma 完整性检查及评估报告链接检查均通过。
+
+### TIDY3 Agent 运行数据命名收敛
+
+- **状态**：Done。
+- **背景**：三个 Agent 专属文件仍在 `data/` 根目录；原 `traces/` 目录未表达其承载跨聊天、选题与评估的执行记录。
+- **方案**：只做直接迁移和命名收敛，不新增目录层级：`retrieval-golden-queries.json`、`retrieval-regression-cases.json`、`topic-discovery-evaluation-rules.yaml` 置于 `data/agent/`；`traces/` 改为 `execution-traces/`。同步所有代码、测试、Trace payload 和文档引用。
+- **验收**：四项数据均由新路径读写；根目录不再保留这三个 Agent 文件；自动测试与 Trace 回放通过。
+- **实施记录**：已将三个根目录文件迁为 `data/agent/retrieval-golden-queries.json`、`data/agent/retrieval-regression-cases.json`、`data/agent/topic-discovery-evaluation-rules.yaml`，并将 `traces/` 更名为 `execution-traces/`；所有 Trace payload 引用、代码、测试、Web 导出文件名及文档链接均已同步。Agent 100 项单元测试、配置路径检查、12 步历史 Trace 回放和 payload 完整性检查、JSON 格式检查及全仓旧路径扫描均通过。
 
 ### DOC2 公共文档与代码实现对齐
 

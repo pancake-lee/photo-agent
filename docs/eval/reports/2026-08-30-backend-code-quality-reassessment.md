@@ -1,12 +1,12 @@
 # 后端代码质量问题修复后复评
 
-> 专题中枢：[后端代码质量治理专题中枢](../../docs/design/2026-08-30-1-backend-code-quality-hub.md)。
+> 专题中枢：[后端代码质量治理专题中枢](../../design/2026-08-30-1-backend-code-quality-hub.md)。
 >
 > 评估对象：2026-08-29 基线报告所列 BQ2–BQ6、BQ8 的后续规划与生成结果，以及仍暂缓的 BQ3。
 >
 > 评估报告 ID：`2026-08-30-backend-code-quality-reassessment`。
 >
-> 判卷依据：[后端代码质量评分标准](../../docs/eval/code-quality-rubric-backend.md)。评估范围由 `tools/go/main.go` 自检后确定，共 57 个文件。
+> 判卷依据：[后端代码质量评分标准](../../eval/code-quality-rubric-backend.md)。评估范围由 `tools/go/main.go` 自检后确定，共 57 个文件。
 
 ## 摘要
 

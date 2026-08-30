@@ -5,8 +5,7 @@ type Config struct {
 	Storage struct {
 		PhotoPath          string `default:"./data/photos"`
 		PhotoSrc           string `default:"./data/photos_src"`
-		TimelinePath       string
-		TimelineWindowDays int `default:"7"`
+		TimelineWindowDays int    `default:"7"`
 	}
 	VLM struct {
 		MaxImageSizeMB float64 `default:"1"`

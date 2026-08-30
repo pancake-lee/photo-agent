@@ -51,7 +51,7 @@ flowchart TD
 
 - **单问独立路由**：`agent.route(question, granularity)` 每条消息独立走一遍完整图，不携带会话历史；多轮上下文只存在于会话存储与前端展示层，不进入任何节点的 Prompt
 - **检索粒度**：granularity 参数（photo/fine/coarse）由前端随消息传入并记录在会话上，fine/coarse 检索连拍组封面集合（一组一条），影响 rag_query 与 combined_query
-- **LLM 工程保障**：所有 LLM 实例经 `llm_factory.create_llm` 创建，带 with_retry 重试与可选 fallback_model 降级；TokenCallback 记录用量与成本；`Tracer` 输出结构化 trace（`data/traces/*.jsonl`），chat 链路在消息级 emit `chat.query` 与 `chat.answer`
+- **LLM 工程保障**：所有 LLM 实例经 `llm_factory.create_llm` 创建，带 with_retry 重试与可选 fallback_model 降级；TokenCallback 记录用量与成本；`Tracer` 输出结构化 trace（`data/agent/execution-traces/*.jsonl`），chat 链路在消息级 emit `chat.query` 与 `chat.answer`
 - **回答协议**：`answer` 节点产出的 photos 列表（photo_id、filename、image_url，可选 burst_group_id/burst_count）由 server 序列化存入消息并随响应返回，前端据此渲染照片卡片
 
 ### 外围管线（对话路由之外）

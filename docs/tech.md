@@ -19,7 +19,7 @@ flowchart LR
     C -->|Embedding| G["Go /v1/embeddings<br>代理"]
     C -->|聚类分析| H["ChromaDB 向量聚类<br>HDBSCAN + UMAP"]
     C -->|选题建议| I["suggest.py<br>三阶段编辑视角提案"]
-    C -->|黄金用例| J["data/golden_queries.json"]
+    C -->|黄金用例| J["data/agent/retrieval-golden-queries.json"]
 
     B --> K["照片 CRUD / 文件服务 / 统计 API"]
     B --> M["VLM: 实时调用 VLM API 生成描述"]

@@ -618,7 +618,7 @@ class PhotoAgent:
             prices = token_tracker.load_prices(
                 cfg.resolve_path(cfg.prices_path).as_posix()
             )
-        db_path = cfg.resolve_path("./data/token_usage.db").as_posix()
+        db_path = cfg.agent_path("sqlite", "token_usage.db").as_posix()
         db_path = str(pathlib.Path(db_path).resolve())
         pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -829,7 +829,7 @@ def _handle_sessions(cfg: config.Config, cmd: list[str]) -> None:
     import chain.session_store as session_store
 
     db_path = cfg.resolve_path(
-        getattr(cfg, "chat_db_path", "") or "./data/chat_sessions.db"
+        getattr(cfg, "chat_db_path", "") or "./data/agent/sqlite/chat_sessions.db"
     ).as_posix()
     store = session_store.SessionStore(db_path)
 
@@ -975,7 +975,7 @@ def main() -> None:
         elif args.suggest_mode:
             print("潜在主题识别（选题建议）...")
             print()
-            cluster_dir = cfg.resolve_path("./data/clusters")
+            cluster_dir = cfg.agent_path("topic-discovery", "clusters")
             suggestions, meta = suggest_mod.run_suggest(
                 cfg, cfg.go_backend_url, cluster_dir,
             )

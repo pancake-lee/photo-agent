@@ -140,7 +140,7 @@ git show <commit>
 - 评估通过（总分 ≥ 6 且无 1-3 分的维度）→ 更新 `docs/backlog.md` 条目状态为 Done
 - 评估不通过 → 在 backlog 中新增条目（**只描述问题现象和严重程度，不写方案**），状态 = 待规划
 - 首次为某维度建立基线 → 更新 `docs/eval/baseline.md`
-- **回写评估分数到 backlog**：在任务总览表的「评估」列填入综合总分；在任务详情区增加 `- **评估**：<总分>（<维度1> <分> <维度2> <分> ...），详见 [报告文件名](../data/eval_reports/<报告文件名>)` 一行。各维度得分横向展开不换行，不写得分解
+- **回写评估分数到 backlog**：在任务总览表的「评估」列填入综合总分；在任务详情区增加 `- **评估**：<总分>（<维度1> <分> <维度2> <分> ...），详见 [报告文件名](../eval/reports/<报告文件名>)` 一行。各维度得分横向展开不换行，不写得分解
 - **回写方案验收列表**：评估过程必然对照验收标准逐项检查，结果应回写到验收清单中。如果任务有独立 design 文档，勾选 `docs/design/` 对应文档的验收项；如果任务方案直接记录在 backlog 中，则勾选 backlog 条目自身的验收清单。代码审查可验证的直接勾选，需运行时验证的标注「需运行时」后留待用户确认
 
 ---
@@ -157,13 +157,13 @@ git show <commit>
 
 ### 数据库检查
 
-SQLite 数据库路径：`data/sqlite/photo_agent.db`
+SQLite 数据库路径：`data/backend/sqlite/photo_agent.db`
 
 直接使用 `sqlite3` CLI 查询：
 
 ```bash
 # 统计属性非空率
-sqlite3 data/sqlite/photo_agent.db \
+sqlite3 data/backend/sqlite/photo_agent.db \
   "SELECT COUNT(*) AS total,
     ROUND(100.0*SUM(CASE WHEN objects!='' THEN 1 END)/COUNT(*),1) AS objects_pct,
     ROUND(100.0*SUM(CASE WHEN colors!='' THEN 1 END)/COUNT(*),1) AS colors_pct,
@@ -176,7 +176,7 @@ sqlite3 data/sqlite/photo_agent.db \
 
 ```bash
 # 查看特定照片的属性值（抽样）
-sqlite3 data/sqlite/photo_agent.db \
+sqlite3 data/backend/sqlite/photo_agent.db \
   "SELECT id, objects, colors, scene, lighting, mood FROM photos LIMIT 5;"
 ```
 
@@ -240,7 +240,7 @@ node tools/node/web_check.mjs \
   --click "button:has-text('生成选题建议')" \
   --wait-selector ".n-card, .n-empty" \
   --extract ".n-card .n-card-header__main" \
-  --screenshot "data/eval_reports/web-{ts}.png" \
+  --screenshot "../eval/reports/web-{ts}.png" \
   --timeout 120000
 ```
 

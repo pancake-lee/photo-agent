@@ -5,7 +5,7 @@
     python scripts/eval_regression.py -c ../.local/my-config.yaml --level L1
 
 L0 检查 Go 图库与本地 Chroma 的数据态，L1 直接调用检索函数，
-L2 只验证 Python HTTP 服务契约。每一层都复用 data/eval_seed_cases.json。
+L2 只验证 Python HTTP 服务契约。每一层都复用 Agent 检索回归种子用例。
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def _run_l0(cfg: config.Config, cases: list[dict[str, Any]]) -> list[Failure]:
     photos = _fetch_photos(cfg)
     photos_coarse = _fetch_photos(cfg, burst_profile="coarse")
     failures: list[Failure] = []
-    chroma_path = cfg.resolve_path("./data/chroma")
+    chroma_path = cfg.agent_path("chroma")
     stores = {
         g: chroma_client.ChromaPhotoStore(
             persist_dir=str(chroma_path),
@@ -234,7 +234,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         cfg = config.Config(args.config)
-        cases = _load_cases(PROJECT_ROOT / "data/eval_seed_cases.json")
+        cases = _load_cases(cfg.agent_path("retrieval-regression-cases.json"))
         if args.case != "all":
             prefix = "retrieval-" if args.case == "retrieval" else "burst-"
             cases = [case for case in cases if case["id"].startswith(prefix)]

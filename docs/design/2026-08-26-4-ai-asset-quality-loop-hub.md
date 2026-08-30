@@ -17,7 +17,7 @@
 | [描述质量闸门状态去滞后设计](2026-08-27-2-description-gate-state-design.md) | 即时质量结论与持久化处理状态的边界 | 已完成 |
 | [AI 资产实时状态设计](2026-08-27-3-realtime-ai-state-design.md) | 取消照片健康状态持久化，改为全链路实时推导 | 已完成 |
 | [Backlog](../backlog.md) | AQL1-5 至 AQL1-8 的实施交接；AQL2-1 批量审查误报修复；AQL2-2 坏图描述漏判修复 | 全部完成，含运行时验收 |
-| [2026-08-27 Done 任务复评](../../data/eval_reports/2026-08-27-current-backlog-done-reassessment.md) | AQL1-1 至 AQL1-8 的当前代码与证据复核 | 8.4/10，通过 |
+| [2026-08-27 Done 任务复评](../eval/reports/2026-08-27-current-backlog-done-reassessment.md) | AQL1-1 至 AQL1-8 的当前代码与证据复核 | 8.4/10，通过 |
 
 ## 3. 完整时间线
 

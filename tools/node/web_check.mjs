@@ -9,7 +9,7 @@
  *     --click "button:has-text('生成选题建议')" \
  *     --wait-selector ".suggest-card, .empty-state" \
  *     --extract ".suggest-card .card-title" \
- *     --screenshot "data/eval_reports/web-{ts}.png" \
+ *     --screenshot "docs/eval/reports/web-{ts}.png" \
  *     --timeout 120000
  *
  * 参数:

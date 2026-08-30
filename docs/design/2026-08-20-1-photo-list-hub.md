@@ -22,7 +22,7 @@
 
 ### 评估报告
 
-- `data/eval_reports/2026-08-21-photo-list-lb-series.json` — LB 系列整体评估（8.1 通过），2026-08-21
+- `../eval/reports/2026-08-21-photo-list-lb-series.json` — LB 系列整体评估（8.1 通过），2026-08-21
 
 ### 版本归档
 

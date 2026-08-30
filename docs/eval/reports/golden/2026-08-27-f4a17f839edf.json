@@ -1,0 +1,195 @@
+{
+  "report_id": "f4a17f839edf",
+  "generated_at": "2026-08-27T07:34:10.983094+00:00",
+  "precision@k": 0.7142857142857143,
+  "recall@k": 0.7142857142857143,
+  "mrr": 1.0,
+  "total": 1,
+  "precision_k": 10,
+  "details": [
+    {
+      "golden_id": "3ccdb0321084",
+      "question": "佛像和人的合照1",
+      "relevant_ids": [
+        "DSC_1813",
+        "DSC_2167",
+        "DSC_2185",
+        "DSC_2190",
+        "DSC_2215",
+        "DSC_2220",
+        "DSC_2662"
+      ],
+      "retrieved_ids": [
+        "DSC_2185",
+        "DSC_2215",
+        "DSC_1813",
+        "DSC_2167",
+        "DSC_2520",
+        "DSC_2662",
+        "DSC_2322",
+        "IMG_4182",
+        "DSC_2288",
+        "DSC_2282"
+      ],
+      "hit_ids": [
+        {
+          "photo_id": "DSC_2185",
+          "filename": "DSC_2185",
+          "uuid": "1fa32ada-d22a-4d3d-b860-05a1dfd657ac"
+        },
+        {
+          "photo_id": "DSC_2215",
+          "filename": "DSC_2215",
+          "uuid": "fb666737-ced7-4283-9d10-af3ae16260a0"
+        },
+        {
+          "photo_id": "DSC_1813",
+          "filename": "DSC_1813",
+          "uuid": "e1ad46f3-0558-423b-8743-1a1121a839ba"
+        },
+        {
+          "photo_id": "DSC_2167",
+          "filename": "DSC_2167",
+          "uuid": "2cfd1ebd-32d8-493c-9035-08cbd493b538"
+        },
+        {
+          "photo_id": "DSC_2662",
+          "filename": "DSC_2662",
+          "uuid": "2b2a126b-b1d2-4f10-8c26-97a51e9f5092"
+        }
+      ],
+      "miss_ids": [
+        {
+          "photo_id": "DSC_2520",
+          "filename": "DSC_2520",
+          "uuid": "0ae192ed-d921-4006-943c-e2b3c9c1f4f1"
+        },
+        {
+          "photo_id": "DSC_2322",
+          "filename": "DSC_2322",
+          "uuid": "68027284-852f-4f36-9ac6-6527c807ed8b"
+        }
+      ],
+      "remaining_ids": [
+        {
+          "photo_id": "DSC_2190",
+          "filename": "DSC_2190",
+          "uuid": "6ca48bd0-79b7-41f2-be51-11685036515e"
+        },
+        {
+          "photo_id": "DSC_2220",
+          "filename": "DSC_2220",
+          "uuid": "1858b1f7-b251-4595-b1de-b9574bad4140"
+        }
+      ],
+      "hits": [
+        "DSC_2185",
+        "DSC_2215",
+        "DSC_1813",
+        "DSC_2167",
+        "DSC_2662"
+      ],
+      "misses": [
+        "DSC_2520",
+        "DSC_2322"
+      ],
+      "remaining": [
+        "DSC_2190",
+        "DSC_2220"
+      ],
+      "precision": 0.7142857142857143,
+      "recall": 0.7142857142857143,
+      "mrr": 1.0,
+      "effective_k": 7,
+      "asset_health": {
+        "trusted": true,
+        "assets": [
+          {
+            "photo_id": "2b2a126b-b1d2-4f10-8c26-97a51e9f5092",
+            "filename": "DSC_2662",
+            "vlm_status": "healthy",
+            "description_version": "7368b427f33e5aa721badcb21e30bcdd5fad3e84b6c96759c6af39b3bd773feb",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          },
+          {
+            "photo_id": "84cc140d-a3e8-42c3-b9dc-f34aea852fa4",
+            "filename": "DSC_2220",
+            "vlm_status": "healthy",
+            "description_version": "d5fc93335ef8eab0eac6604c9abd0a3f1b40940883d154586564b43bbadec21e",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          },
+          {
+            "photo_id": "fb666737-ced7-4283-9d10-af3ae16260a0",
+            "filename": "DSC_2215",
+            "vlm_status": "healthy",
+            "description_version": "5a5b4c765ab07838a701c6e952580225db897d5a3da1c96b3fad58360163cf0e",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          },
+          {
+            "photo_id": "08b47a24-7bd6-41f0-9b30-247ad8f231e6",
+            "filename": "DSC_2190",
+            "vlm_status": "healthy",
+            "description_version": "46523b541841af235220c52e60d3fbc7f8b5f2355001d9631504b8fcd265ffd8",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          },
+          {
+            "photo_id": "1fa32ada-d22a-4d3d-b860-05a1dfd657ac",
+            "filename": "DSC_2185",
+            "vlm_status": "healthy",
+            "description_version": "482d2c9d4302ab28f3f161d39a686d96db831d7d6f4a5899b2021ee89629adcf",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          },
+          {
+            "photo_id": "2cfd1ebd-32d8-493c-9035-08cbd493b538",
+            "filename": "DSC_2167",
+            "vlm_status": "healthy",
+            "description_version": "eaebc67842f7e9d5753378337e7758a52253ea246ad7642b070e85bea41373af",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          },
+          {
+            "photo_id": "e1ad46f3-0558-423b-8743-1a1121a839ba",
+            "filename": "DSC_1813",
+            "vlm_status": "healthy",
+            "description_version": "4169b7aa1de135636581f64ee1fd36f2bdc2f06bd6b784b084c5c124ea71fbf8",
+            "vector_versions": [
+              ""
+            ],
+            "healthy": true,
+            "reason": ""
+          }
+        ]
+      }
+    }
+  ],
+  "asset_health": {
+    "total": 7,
+    "healthy": 7,
+    "unhealthy": 0,
+    "missing": 0
+  },
+  "data_trusted": true
+}

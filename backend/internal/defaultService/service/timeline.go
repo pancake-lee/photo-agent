@@ -2,19 +2,14 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
-	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
-	"github.com/pancake-lee/pgo/pkg/plogger"
-	"github.com/pancake-lee/pgo/pkg/putil"
 )
 
 // TimelineEntry 时间线中的单条事件（DB timeline_events 表记录的内存形态）
@@ -50,107 +45,16 @@ func isScatteredName(name string) bool {
 
 // --------------------------------------------------
 // loadTimeline 从 timeline_events 表加载时间线事件，按日期升序。
-// 首次调用时若表为空且 JSON 文件存在，执行一次性导入后 JSON 退役。
 func loadTimeline(ctx *papp.AppCtx) ([]TimelineEntry, error) {
 	events, err := data.TimelineEventDAO.GetTimelineEventsOrderByDate(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// 表空且 JSON 存在：一次性导入（幂等，导入成功后 JSON 不再读取）
-	if len(events) == 0 {
-		imported, err := importTimelineFromJSON(ctx, conf.C.Storage.TimelinePath)
-		if err != nil {
-			plogger.Warnf("Import timeline JSON failed: %v", err)
-			return nil, nil
-		}
-		if imported > 0 {
-			events, err = data.TimelineEventDAO.GetTimelineEventsOrderByDate(ctx)
-			if err != nil {
-				return nil, err
-			}
-			plogger.Infof("Timeline JSON migrated: %d entries imported, JSON file retired", imported)
-		}
-	}
-
 	entries := make([]TimelineEntry, len(events))
 	for i, e := range events {
 		entries[i] = TimelineEntry{Date: e.EventDate, Event: e.Event}
 	}
-	return entries, nil
-}
-
-// importTimelineFromJSON 从旧版 timeline.json 导入事件到 DB，返回导入条数。
-// JSON 格式：[[dateStr, event], ...]，dateStr 为 YYMMDD 格式（如 "250309"），
-// "none" 表示散图（跳过）。
-func importTimelineFromJSON(ctx *papp.AppCtx, path string) (int, error) {
-	if path == "" {
-		return 0, nil
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("read timeline JSON failed: %w", err)
-	}
-
-	entries, err := parseTimelineJSON(raw)
-	if err != nil {
-		return 0, err
-	}
-	if len(entries) == 0 {
-		return 0, nil
-	}
-
-	now := time.Now()
-	dos := make([]*data.TimelineEventDO, len(entries))
-	for i, e := range entries {
-		dos[i] = &data.TimelineEventDO{
-			ID:        putil.UUID(),
-			EventDate: e.Date,
-			Event:     e.Event,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-	}
-	if err := data.TimelineEventDAO.AddTimelineEventList(ctx, dos); err != nil {
-		return 0, err
-	}
-	return len(dos), nil
-}
-
-// parseTimelineJSON 解析旧版 JSON，跳过 "none" / 空日期 / 解析失败的条目，按日期排序返回。
-func parseTimelineJSON(raw []byte) ([]TimelineEntry, error) {
-	var rows [][2]string
-	if err := json.Unmarshal(raw, &rows); err != nil {
-		return nil, fmt.Errorf("parse timeline JSON failed: %w", err)
-	}
-
-	const dateFormat = "060102" // YYMMDD
-
-	var entries []TimelineEntry
-	for _, row := range rows {
-		dateStr := row[0]
-		event := strings.TrimSpace(row[1])
-
-		if dateStr == "none" || dateStr == "" || event == "" {
-			continue
-		}
-
-		t, err := time.ParseInLocation(dateFormat, dateStr, time.Local)
-		if err != nil {
-			plogger.Warnf("Skip timeline entry with invalid date %q: %v", dateStr, err)
-			continue
-		}
-
-		entries = append(entries, TimelineEntry{Date: t, Event: event})
-	}
-
-	if len(entries) > 0 {
-		sort.Slice(entries, func(i, j int) bool { return entries[i].Date.Before(entries[j].Date) })
-	}
-
 	return entries, nil
 }
 

@@ -12,8 +12,8 @@
 
 ## 2. 关联文档索引
 
-- 评估报告：[2026-08-29 后端代码质量基线](../../data/eval_reports/2026-08-29-backend-code-quality-baseline.md) — 首次 57/100，发现 BQ2–BQ6、BQ8。
-- 复评报告：[2026-08-30 后端代码质量复评](../../data/eval_reports/2026-08-30-backend-code-quality-reassessment.md) — 未封顶 79/100，受 BQ3 阻断项封顶为 59/100，发现 BQ10、BQ11。
+- 评估报告：[2026-08-29 后端代码质量基线](../eval/reports/2026-08-29-backend-code-quality-baseline.md) — 首次 57/100，发现 BQ2–BQ6、BQ8。
+- 复评报告：[2026-08-30 后端代码质量复评](../eval/reports/2026-08-30-backend-code-quality-reassessment.md) — 未封顶 79/100，受 BQ3 阻断项封顶为 59/100，发现 BQ10、BQ11。
 - 评分标准：[后端代码质量评分标准](../eval/code-quality-rubric-backend.md) — 八项加权与阻断项规则。
 - 评估基线：[评估基线](../eval/baseline.md) — 历史分数与趋势。
 - 任务交接：[backlog BQ1–BQ11](../backlog.md) — 当前状态和后续规划入口。

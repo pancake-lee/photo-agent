@@ -496,7 +496,7 @@ Agent 自主循环：
   - 提交 `6299cf9b1dc6a044257e77439a9af99474f19e73`
 - /clear
 - 提示词：评估`主题发现选题相似度过高”
-  - 评估并不通过，4.2/10分，报告已保存至 data/eval_reports/2026-07-27-topic-discovery-3.4.json
+  - 评估并不通过，4.2/10分，报告已保存至 ../eval/reports/2026-07-27-topic-discovery-3.4.json
   - 主要问题已经在backlog.md追加了任务
   - 提交 `b7c8ac883aac86ac6b88cf5a95c999efe6d8ad3c`
   - 规划 `c2b198886f4d860bb2bb11240e4da74f98b0fafe`
@@ -573,7 +573,7 @@ Agent 自主循环：
 
 - **JSON**：面向程序化处理（通过判定、基线更新、趋势追踪），只保留结构化可计算字段
 - **Markdown**：面向人工阅读（复盘、代码审查参考），完整保留描述性内容
-- 两个文件同目录（`data/eval_reports/`）同名：`eval-xxx.json` + `eval-xxx.md`
+- 两个文件同目录（`../eval/reports/`）同名：`eval-xxx.json` + `eval-xxx.md`
 
 **JSON 保留**：
 
@@ -612,4 +612,4 @@ Agent 自主循环：
 
 ### 存量迁移
 
-规范确立后，`data/eval_reports/` 下已有的单 JSON 报告需补齐精简 JSON + 拆出 Markdown。分两批执行：先迁移 2 份供用户确认格式，再迁移全部。
+规范确立后，`../eval/reports/` 下已有的单 JSON 报告需补齐精简 JSON + 拆出 Markdown。分两批执行：先迁移 2 份供用户确认格式，再迁移全部。

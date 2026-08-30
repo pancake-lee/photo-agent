@@ -242,7 +242,7 @@ def _retrieve(
 
     collection_name = resolve_collection(granularity)
     store = chroma_client.ChromaPhotoStore(
-        persist_dir=str(cfg.resolve_path("./data/chroma")),
+        persist_dir=str(cfg.agent_path("chroma")),
         collection_name=collection_name,
     )
     logger.info(

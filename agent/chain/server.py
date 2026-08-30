@@ -41,7 +41,7 @@ import config as config_mod
 logger = logging.getLogger(__name__)
 
 # ── 黄金用例 JSON 存储 ─────────────────────────────────────
-# 注意: 黄金用例存储路径已迁移到 app.state.golden_queries_dir，
+# 注意: 黄金用例存储路径已迁移到 app.state.golden_queries_path，
 # 不再使用模块级全局变量。各函数通过 request.app.state 访问。
 
 
@@ -113,18 +113,13 @@ def _build_chat_asset_snapshot(cfg: config_mod.Config, store: chroma_client.Chro
 
 
 
-def _golden_queries_path(dir_path: pathlib.Path) -> pathlib.Path:
-    """返回 golden_queries.json 的路径。"""
-    return dir_path / "golden_queries.json"
-
-
-def _load_golden_queries(dir_path: pathlib.Path) -> list[dict]:
+def _load_golden_queries(file_path: pathlib.Path) -> list[dict]:
     """加载所有黄金用例。文件不存在时返回空列表。
 
     兼容旧格式 relevant_photo_ids (list[str])，自动迁移为
     新格式 relevant_photos (list[{photo_id, filename}]).
     """
-    fp = _golden_queries_path(dir_path)
+    fp = file_path
     if not fp.exists():
         return []
     try:
@@ -148,13 +143,13 @@ def _load_golden_queries(dir_path: pathlib.Path) -> list[dict]:
                     photo.pop("granularity")
                     migrated = True
     if migrated:
-        _save_golden_queries(items, dir_path)
+        _save_golden_queries(items, file_path)
     return items
 
 
-def _save_golden_queries(items: list[dict], dir_path: pathlib.Path) -> None:
+def _save_golden_queries(items: list[dict], file_path: pathlib.Path) -> None:
     """保存黄金用例列表到 JSON 文件。"""
-    fp = _golden_queries_path(dir_path)
+    fp = file_path
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(
         json.dumps(items, ensure_ascii=False, indent=2, default=str),
@@ -254,15 +249,14 @@ def _update_golden_query(
 
 
 # ── 选题历史 JSON 存储 ─────────────────────────────────────
-# v2（suggest_history_v2.json）是唯一数据源。
-# suggest_history.json 自 B13 起不再写入，仅保留文件供回退读取。
+# history.json 是唯一数据源；历史格式迁移已完成，不再保留运行时兼容分支。
 
 _suggest_history_lock = threading.Lock()
 
 
 def _suggest_history_path(dir_path: pathlib.Path) -> pathlib.Path:
-    """返回选题历史 v2 文件的路径（唯一数据源）。"""
-    return dir_path / "suggest_history_v2.json"
+    """返回选题历史文件的路径。"""
+    return dir_path / "history.json"
 
 
 def _suggest_history_v1_path(dir_path: pathlib.Path) -> pathlib.Path:
@@ -271,7 +265,7 @@ def _suggest_history_v1_path(dir_path: pathlib.Path) -> pathlib.Path:
 
 
 def _load_suggest_history(dir_path: pathlib.Path) -> list[dict]:
-    """加载选题历史（v2 格式）。文件不存在时返回空列表。"""
+    """加载选题历史（history 格式）。文件不存在时返回空列表。"""
     fp = _suggest_history_path(dir_path)
     if not fp.exists():
         return []
@@ -282,7 +276,7 @@ def _load_suggest_history(dir_path: pathlib.Path) -> list[dict]:
 
 
 def _save_suggest_history(items: list[dict], dir_path: pathlib.Path) -> None:
-    """保存选题历史列表到 v2 JSON 文件。"""
+    """保存选题历史列表到 history JSON 文件。"""
     fp = _suggest_history_path(dir_path)
     fp.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -294,14 +288,14 @@ def _save_suggest_history(items: list[dict], dir_path: pathlib.Path) -> None:
         logger.error("保存选题历史失败: %s", e)
 
 
-def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict | None:
-    """将 v1 单条记录懒迁移为 v2 格式（创建 v0 版本，不含步骤快照）。
+def _migrate_legacy_history(v1_item: dict, project_root: pathlib.Path) -> dict | None:
+    """将 v1 单条记录懒迁移为 history 格式（创建 v0 版本，不含步骤快照）。
 
-    返回 v2 记录字典，失败返回 None。
+    返回 history 记录字典，失败返回 None。
     """
     import chain.trace_replay as trace_replay
 
-    v2_id = v1_item.get("id", "")
+    history_id = v1_item.get("id", "")
     trace_id = v1_item.get("trace_id", "")
 
     # 尝试从 trace 重建步骤
@@ -327,13 +321,13 @@ def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict | None:
                 ]
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
             logger.warning(
-                "v2 迁移: trace 重放失败 trace_id=%s, 错误类型=%s: %s",
+                "history 迁移: trace 重放失败 trace_id=%s, 错误类型=%s: %s",
                 trace_id, type(e).__name__, e,
             )
             trace_expired = True
 
     v0_version = {
-        "version_id": f"{v2_id}-v0",
+        "version_id": f"{history_id}-v0",
         "parent_version_id": None,
         "created_at": v1_item.get("generated_at", ""),
         "created_from": "auto",
@@ -344,7 +338,7 @@ def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict | None:
     }
 
     return {
-        "id": v2_id,
+        "id": history_id,
         "generated_at": v1_item.get("generated_at", ""),
         "pipeline": v1_item.get("pipeline", ""),
         "total_photos": v1_item.get("total_photos", 0),
@@ -363,15 +357,15 @@ def _migrate_to_v2(v1_item: dict, project_root: pathlib.Path) -> dict | None:
     }
 
 
-def _try_refill_steps(v2_item: dict, project_root: pathlib.Path) -> bool:
-    """补偿修复：若 v2 条目版本步骤为空但 trace 未过期，尝试从 trace 回放填充。
+def _try_refill_steps(history_item: dict, project_root: pathlib.Path) -> bool:
+    """补偿修复：若 history 条目版本步骤为空但 trace 未过期，尝试从 trace 回放填充。
 
     返回 True 表示有填充发生（调用方需要写回文件）。
     """
     import chain.trace_replay as trace_replay
 
     refilled = False
-    for ver in v2_item.get("versions", []):
+    for ver in history_item.get("versions", []):
         if ver.get("steps"):
             continue
         if ver.get("trace_expired", True):
@@ -637,7 +631,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
     # 初始化 Embedding 相关组件
     chroma_store = chroma_client.ChromaPhotoStore(
-        persist_dir=str(cfg.resolve_path("./data/chroma")),
+        persist_dir=str(cfg.agent_path("chroma")),
         collection_name="photos",
     )
     app.state.chroma_store = chroma_store
@@ -659,14 +653,14 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     threading.Thread(target=_sync_groups_on_start, daemon=True).start()
 
     # 初始化黄金用例存储路径（存入 app.state，避免模块级全局变量）
-    app.state.golden_queries_dir = cfg.resolve_path("./data")
+    app.state.golden_queries_path = cfg.agent_path("retrieval-golden-queries.json")
 
     # 初始化聚类结果存储路径（存入 app.state，避免模块级全局变量）
-    app.state.cluster_dir = cfg.resolve_path("./data/clusters")
+    app.state.cluster_dir = cfg.agent_path("topic-discovery", "clusters")
     app.state.cluster_dir.mkdir(parents=True, exist_ok=True)
 
     # 初始化选题历史存储路径
-    app.state.suggest_history_dir = cfg.resolve_path("./data")
+    app.state.suggest_history_dir = cfg.agent_path("topic-discovery")
 
     # ── 注册路由 ──────────────────────────────────────────
 
@@ -752,7 +746,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         query_type = result.get("query_type", "")
         photos_raw = result.get("photos", [])
         asset_snapshot = _build_chat_asset_snapshot(req.app.state.cfg, req.app.state.chroma_store, photos_raw)
-        tracer = tracer_mod.Tracer(req.app.state.cfg.project_root)
+        tracer = tracer_mod.Tracer(req.app.state.cfg.project_root, req.app.state.cfg.agent_data_dir)
         tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
         tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
 
@@ -881,7 +875,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     @app.get("/api/golden-queries", response_model=list[GoldenQueryItem])
     async def list_golden_queries(req: fastapi.Request):
         """列出所有黄金查询用例。"""
-        return _load_golden_queries(req.app.state.golden_queries_dir)
+        return _load_golden_queries(req.app.state.golden_queries_path)
 
     @app.post("/api/golden-queries", response_model=GoldenQueryItem, status_code=201)
     async def create_golden_query(body: GoldenQueryCreateRequest, req: fastapi.Request):
@@ -891,7 +885,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if not body.relevant_photos:
             raise fastapi.HTTPException(status_code=400, detail="关联照片不能为空")
 
-        gq_dir = req.app.state.golden_queries_dir
+        gq_path = req.app.state.golden_queries_path
         now = datetime.datetime.now().isoformat()
         item = {
             "id": uuid.uuid4().hex[:12],
@@ -910,9 +904,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "created_at": now,
             "updated_at": now,
         }
-        items = _load_golden_queries(gq_dir)
+        items = _load_golden_queries(gq_path)
         items.append(item)
-        _save_golden_queries(items, gq_dir)
+        _save_golden_queries(items, gq_path)
         return item
 
     @app.put("/api/golden-queries/{golden_id}", response_model=GoldenQueryItem)
@@ -926,8 +920,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=400, detail="查询文本不能为空")
         if not body.relevant_photos:
             raise fastapi.HTTPException(status_code=400, detail="关联照片不能为空")
-        gq_dir = req.app.state.golden_queries_dir
-        items = _load_golden_queries(gq_dir)
+        gq_path = req.app.state.golden_queries_path
+        items = _load_golden_queries(gq_path)
         fname_to_uuid = _build_filename_to_uuid(req.app.state.cfg.go_backend_url)
         target = _update_golden_query(
             items,
@@ -938,19 +932,19 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             body.notes,
             fname_to_uuid,
         )
-        _save_golden_queries(items, gq_dir)
+        _save_golden_queries(items, gq_path)
         return target
 
     @app.delete("/api/golden-queries/{golden_id}", response_model=dict)
     async def delete_golden_query(golden_id: str, req: fastapi.Request):
         """删除一条黄金查询用例。"""
-        gq_dir = req.app.state.golden_queries_dir
-        items = _load_golden_queries(gq_dir)
+        gq_path = req.app.state.golden_queries_path
+        items = _load_golden_queries(gq_path)
         before = len(items)
         items = [it for it in items if it["id"] != golden_id]
         if len(items) == before:
             raise fastapi.HTTPException(status_code=404, detail="用例不存在")
-        _save_golden_queries(items, gq_dir)
+        _save_golden_queries(items, gq_path)
         return {"ok": True}
 
     @app.post("/api/golden-queries/import", response_model=dict)
@@ -964,10 +958,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=400, detail="导入数据不能为空")
 
         cfg = req.app.state.cfg
-        gq_dir = req.app.state.golden_queries_dir
+        gq_path = req.app.state.golden_queries_path
         fname_to_uuid = _build_filename_to_uuid(cfg.go_backend_url)
 
-        items = _load_golden_queries(gq_dir)
+        items = _load_golden_queries(gq_path)
         added = 0
         now = datetime.datetime.now().isoformat()
         for it in body:
@@ -992,7 +986,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 "updated_at": now,
             })
             added += 1
-        _save_golden_queries(items, gq_dir)
+        _save_golden_queries(items, gq_path)
         return {"ok": True, "imported": added}
 
     @app.post("/api/golden-queries/{golden_id}/photos", response_model=GoldenQueryItem)
@@ -1007,12 +1001,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         因此追加结果可以立即被下一次评估读取。
         """
         cfg = req.app.state.cfg
-        gq_dir = req.app.state.golden_queries_dir
-        items = _load_golden_queries(gq_dir)
+        gq_path = req.app.state.golden_queries_path
+        items = _load_golden_queries(gq_path)
         fname_to_uuid = _build_filename_to_uuid(cfg.go_backend_url)
         target, added = _append_photos_to_case(items, golden_id, body.photos, fname_to_uuid)
         if added:
-            _save_golden_queries(items, gq_dir)
+            _save_golden_queries(items, gq_path)
         logger.info("用例 %s 追加 %d 张期望照片", golden_id, added)
         return target
 
@@ -1027,7 +1021,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         # 从 JSON 加载用例（复用 evaluation 模块的加载逻辑）
         queries = evaluation_mod._load_golden_queries(cfg)
         if body and body.golden_id:
-            stored = _load_golden_queries(req.app.state.golden_queries_dir)
+            stored = _load_golden_queries(req.app.state.golden_queries_path)
             selected = next((item for item in stored if item["id"] == body.golden_id), None)
             if selected is None:
                 raise fastapi.HTTPException(status_code=404, detail="用例不存在")
@@ -1111,7 +1105,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         def _run_in_thread():
             try:
-                _tracer = tracer_mod.Tracer(cfg.project_root)
+                _tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
                 result = cluster_mod.run_clustering(
                     chroma,
                     min_cluster_size=body.min_cluster_size,
@@ -1176,7 +1170,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
 
         cfg = req.app.state.cfg
-        _tracer = tracer_mod.Tracer(cfg.project_root)
+        _tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
         try:
             updated = cluster_mod.generate_cluster_theme(
                 cfg, result, cluster_id, cfg.go_backend_url, cluster_dir,
@@ -1215,7 +1209,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             target_ids = [c.cluster_id for c in result.clusters]
 
         cfg = req.app.state.cfg
-        _tracer = tracer_mod.Tracer(cfg.project_root)
+        _tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
 
         for cid in target_ids:
             try:
@@ -1294,7 +1288,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     class SuggestRatingRequest(pydantic.BaseModel):
         rating: int
 
-    # ── v2 管线步骤模型 ──
+    # ── history 管线步骤模型 ──
 
     class PipelineStepModel(pydantic.BaseModel):
         event: str
@@ -1357,10 +1351,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         每个主题作为独立记录持久化到 suggest_history.json。
         """
         cfg = req.app.state.cfg
-        cluster_dir = cfg.resolve_path("./data/clusters")
+        cluster_dir = cfg.agent_path("topic-discovery", "clusters")
 
         # 创建 Tracer 用于全链路可观测
-        tracer = tracer_mod.Tracer(cfg.project_root)
+        tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
 
         suggestions, meta = suggest_mod.run_suggest(
             cfg, cfg.go_backend_url, cluster_dir, tracer=tracer,
@@ -1406,9 +1400,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             items.append(item)
 
         # 持久化保存（最新的插入列表头部），加锁防止并发写丢失
-        v2_items_batch: list[dict] = []
+        history_items_batch: list[dict] = []
         for it in items:
-            v2_items_batch.append({
+            history_items_batch.append({
                 "id": it["id"],
                 "generated_at": it["generated_at"],
                 "pipeline": it.get("pipeline", ""),
@@ -1436,10 +1430,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 "current_version_id": f"{it['id']}-v0",
             })
         with _suggest_history_lock:
-            v2_history = _load_suggest_history(req.app.state.suggest_history_dir)
-            for v2_item in reversed(v2_items_batch):
-                v2_history.insert(0, v2_item)
-            _save_suggest_history(v2_history, req.app.state.suggest_history_dir)
+            history_records = _load_suggest_history(req.app.state.suggest_history_dir)
+            for history_item in reversed(history_items_batch):
+                history_records.insert(0, history_item)
+            _save_suggest_history(history_records, req.app.state.suggest_history_dir)
 
         return {"items": items, "count": len(items), "error": error}
 
@@ -1486,37 +1480,37 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
 
     @app.get("/api/suggest/history/{item_id}/detail", response_model=SuggestHistoryDetail)
-    async def suggest_history_detail_v2(item_id: str, req: fastapi.Request):
-        """获取选题历史详情（v2 格式，含版本和管线步骤）。
+    async def suggest_history_detail(item_id: str, req: fastapi.Request):
+        """获取选题历史详情（history 格式，含版本和管线步骤）。
 
-        若记录尚未迁移到 v2，触发懒迁移：从 v1 数据创建 v0 版本并从 trace 重建步骤。
+        若记录尚未迁移到 history，触发懒迁移：从 v1 数据创建 v0 版本并从 trace 重建步骤。
         trace 数据过期时，步骤列表为空且 trace_expired=True。
-        若 v2 条目步骤为空但 trace 未过期（例如旧版 suggest/run 未填充），
+        若 history 条目步骤为空但 trace 未过期（例如旧版 suggest/run 未填充），
         自动尝试从 trace 回放填补并写回。
         """
         hist_dir = req.app.state.suggest_history_dir
         cfg = req.app.state.cfg
 
-        # 先查 v2
-        v2_item: dict | None = None
+        # 先查 history
+        history_item: dict | None = None
         with _suggest_history_lock:
-            v2_items = _load_suggest_history(hist_dir)
-            for v2 in v2_items:
-                if v2["id"] == item_id:
-                    v2_item = v2
+            history_items = _load_suggest_history(hist_dir)
+            for history in history_items:
+                if history["id"] == item_id:
+                    history_item = history
                     break
 
-        if v2_item is not None:
+        if history_item is not None:
             # 补偿修复：若步骤为空但 trace 未过期，尝试重新回放
-            if _try_refill_steps(v2_item, cfg.project_root):
+            if _try_refill_steps(history_item, cfg.project_root):
                 with _suggest_history_lock:
-                    v2_items2 = _load_suggest_history(hist_dir)
-                    for i, v in enumerate(v2_items2):
+                    history_items2 = _load_suggest_history(hist_dir)
+                    for i, v in enumerate(history_items2):
                         if v["id"] == item_id:
-                            v2_items2[i] = v2_item
+                            history_items2[i] = history_item
                             break
-                    _save_suggest_history(v2_items2, hist_dir)
-            return v2_item
+                    _save_suggest_history(history_items2, hist_dir)
+            return history_item
 
         # 回退到旧 v1 文件并懒迁移（只读，不写回 v1）
         v1_item = None
@@ -1535,30 +1529,30 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
 
         # 懒迁移
-        v2_item = _migrate_to_v2(v1_item, cfg.project_root)
-        if v2_item is None:
+        history_item = _migrate_legacy_history(v1_item, cfg.project_root)
+        if history_item is None:
             raise fastapi.HTTPException(status_code=500, detail="迁移失败")
 
         with _suggest_history_lock:
-            v2_items = _load_suggest_history(hist_dir)
-            v2_items.insert(0, v2_item)
-            _save_suggest_history(v2_items, hist_dir)
+            history_items = _load_suggest_history(hist_dir)
+            history_items.insert(0, history_item)
+            _save_suggest_history(history_items, hist_dir)
 
-        return v2_item
+        return history_item
 
     @app.patch("/api/suggest/history/{item_id}/version/{version_id}/switch", response_model=dict)
     async def suggest_history_version_switch(item_id: str, version_id: str, req: fastapi.Request):
         """切换当前活跃版本。"""
         hist_dir = req.app.state.suggest_history_dir
         with _suggest_history_lock:
-            v2_items = _load_suggest_history(hist_dir)
-            for v2 in v2_items:
-                if v2["id"] == item_id:
-                    version_ids = {v["version_id"] for v in v2.get("versions", [])}
+            history_items = _load_suggest_history(hist_dir)
+            for history in history_items:
+                if history["id"] == item_id:
+                    version_ids = {v["version_id"] for v in history.get("versions", [])}
                     if version_id not in version_ids:
                         raise fastapi.HTTPException(status_code=404, detail="版本不存在")
-                    v2["current_version_id"] = version_id
-                    _save_suggest_history(v2_items, hist_dir)
+                    history["current_version_id"] = version_id
+                    _save_suggest_history(history_items, hist_dir)
                     return {"id": item_id, "current_version_id": version_id}
             raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
 
@@ -1587,13 +1581,13 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
     @app.post("/api/suggest/manual-run", response_model=SuggestHistoryDetail)
     async def suggest_manual_run(body: ManualSuggestRequest, req: fastapi.Request):
-        """手动选题：用户自选照片 + 可选直觉 → 走管线 → 新建 v2 记录。
+        """手动选题：用户自选照片 + 可选直觉 → 走管线 → 新建 history 记录。
 
         photo_ids 为空时自动随机采样。
         提供 intuition 时跳过 Stage 1 LLM，直接进入 Stage 2+3。
         """
         cfg = req.app.state.cfg
-        cluster_dir = cfg.resolve_path("./data/clusters")
+        cluster_dir = cfg.agent_path("topic-discovery", "clusters")
         hist_dir = req.app.state.suggest_history_dir
 
         try:
@@ -1604,7 +1598,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if not all_photos:
             raise fastapi.HTTPException(status_code=400, detail="照片库为空")
 
-        tracer = tracer_mod.Tracer(cfg.project_root)
+        tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
         generated_at = datetime.datetime.now().isoformat()
 
         # 确定照片：用户指定 或 随机采样
@@ -1666,9 +1660,9 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             for st in replayed
         ] if not expired else []
 
-        v2_id = uuid.uuid4().hex[:12]
+        history_id = uuid.uuid4().hex[:12]
         version = {
-            "version_id": f"{v2_id}-v0",
+            "version_id": f"{history_id}-v0",
             "parent_version_id": None,
             "created_at": generated_at,
             "created_from": "manual",
@@ -1678,8 +1672,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "steps": steps_snapshots,
         }
 
-        v2_item = {
-            "id": v2_id,
+        history_item = {
+            "id": history_id,
             "generated_at": generated_at,
             "pipeline": "editorial_three_stage",
             "total_photos": len(all_photos),
@@ -1698,11 +1692,11 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         }
 
         with _suggest_history_lock:
-            v2_items = _load_suggest_history(hist_dir)
-            v2_items.insert(0, v2_item)
-            _save_suggest_history(v2_items, hist_dir)
+            history_items = _load_suggest_history(hist_dir)
+            history_items.insert(0, history_item)
+            _save_suggest_history(history_items, hist_dir)
 
-        return v2_item
+        return history_item
 
     @app.post("/api/suggest/history/{item_id}/rerun", response_model=SuggestHistoryDetail)
     async def suggest_history_rerun(item_id: str, body: RerunRequest, req: fastapi.Request):
@@ -1714,16 +1708,16 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         cfg = req.app.state.cfg
         hist_dir = req.app.state.suggest_history_dir
 
-        # 找到当前 v2 记录
+        # 找到当前 history 记录
         with _suggest_history_lock:
-            v2_items = _load_suggest_history(hist_dir)
-            v2_item = None
-            for v in v2_items:
+            history_items = _load_suggest_history(hist_dir)
+            history_item = None
+            for v in history_items:
                 if v["id"] == item_id:
-                    v2_item = v
+                    history_item = v
                     break
 
-        if v2_item is None:
+        if history_item is None:
             # 尝试从旧 v1 文件懒迁移（只读，不写回 v1）
             v1_item = None
             v1_fp = _suggest_history_v1_path(hist_dir)
@@ -1738,8 +1732,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                         break
             if v1_item is None:
                 raise fastapi.HTTPException(status_code=404, detail="选题记录不存在")
-            v2_item = _migrate_to_v2(v1_item, cfg.project_root)
-            if v2_item is None:
+            history_item = _migrate_legacy_history(v1_item, cfg.project_root)
+            if history_item is None:
                 raise fastapi.HTTPException(status_code=500, detail="迁移失败")
 
         try:
@@ -1749,7 +1743,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         photo_by_id = {getattr(p, "id", ""): p for p in all_photos}
 
-        tracer = tracer_mod.Tracer(cfg.project_root)
+        tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
         generated_at = datetime.datetime.now().isoformat()
 
         from_step = body.from_step
@@ -1793,8 +1787,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
             # 从当前版本的步骤中恢复直觉
             current_version = None
-            for ver in v2_item.get("versions", []):
-                if ver["version_id"] == v2_item.get("current_version_id", ""):
+            for ver in history_item.get("versions", []):
+                if ver["version_id"] == history_item.get("current_version_id", ""):
                     current_version = ver
                     break
 
@@ -1833,8 +1827,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             photo_ids_ov = overrides.get("photo_ids", [])
 
             current_version = None
-            for ver in v2_item.get("versions", []):
-                if ver["version_id"] == v2_item.get("current_version_id", ""):
+            for ver in history_item.get("versions", []):
+                if ver["version_id"] == history_item.get("current_version_id", ""):
                     current_version = ver
                     break
 
@@ -1893,10 +1887,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         ] if not expired else []
 
         # 生成新版本号
-        existing_versions = v2_item.get("versions", [])
+        existing_versions = history_item.get("versions", [])
         version_num = len(existing_versions)
         new_version_id = f"{item_id}-v{version_num}"
-        parent_id = v2_item.get("current_version_id", None)
+        parent_id = history_item.get("current_version_id", None)
 
         new_version = {
             "version_id": new_version_id,
@@ -1909,27 +1903,27 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             "steps": steps_snapshots,
         }
 
-        # 更新 v2 记录
-        v2_item["title"] = s.title
-        v2_item["angle"] = s.angle
-        v2_item["rationale"] = s.rationale
-        v2_item["photo_ids"] = s.photo_ids
-        v2_item["photo_sequence"] = s.photo_sequence
-        v2_item["intuition_source"] = s.intuition_source
-        v2_item["versions"].append(new_version)
-        v2_item["current_version_id"] = new_version_id
+        # 更新 history 记录
+        history_item["title"] = s.title
+        history_item["angle"] = s.angle
+        history_item["rationale"] = s.rationale
+        history_item["photo_ids"] = s.photo_ids
+        history_item["photo_sequence"] = s.photo_sequence
+        history_item["intuition_source"] = s.intuition_source
+        history_item["versions"].append(new_version)
+        history_item["current_version_id"] = new_version_id
 
         with _suggest_history_lock:
-            v2_all = _load_suggest_history(hist_dir)
-            for i, v in enumerate(v2_all):
+            history_all = _load_suggest_history(hist_dir)
+            for i, v in enumerate(history_all):
                 if v["id"] == item_id:
-                    v2_all[i] = v2_item
+                    history_all[i] = history_item
                     break
             else:
-                v2_all.insert(0, v2_item)
-            _save_suggest_history(v2_all, hist_dir)
+                history_all.insert(0, history_item)
+            _save_suggest_history(history_all, hist_dir)
 
-        return v2_item
+        return history_item
 
     @app.post("/api/suggest/history/{item_id}/rerun-stream")
     async def suggest_history_rerun_stream(item_id: str, body: RerunRequest, req: fastapi.Request):
@@ -1952,16 +1946,16 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
             def run():
                 try:
-                    # ── 加载 v2 记录 ──
+                    # ── 加载 history 记录 ──
                     with _suggest_history_lock:
-                        v2_items = _load_suggest_history(hist_dir)
-                        v2_item_local = None
-                        for v in v2_items:
+                        history_items = _load_suggest_history(hist_dir)
+                        history_item_local = None
+                        for v in history_items:
                             if v["id"] == item_id:
-                                v2_item_local = v
+                                history_item_local = v
                                 break
 
-                    if v2_item_local is None:
+                    if history_item_local is None:
                         v1_item = None
                         v1_fp = _suggest_history_v1_path(hist_dir)
                         if v1_fp.exists():
@@ -1976,15 +1970,15 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                         if v1_item is None:
                             progress_q.put({"event": "error", "data": {"message": "选题记录不存在"}})
                             return
-                        v2_item_local = _migrate_to_v2(v1_item, cfg.project_root)
-                        if v2_item_local is None:
+                        history_item_local = _migrate_legacy_history(v1_item, cfg.project_root)
+                        if history_item_local is None:
                             progress_q.put({"event": "error", "data": {"message": "迁移失败"}})
                             return
 
                     all_photos = suggest_mod._fetch_all_photos(cfg.go_backend_url)
                     photo_by_id = {getattr(p, "id", ""): p for p in all_photos}
 
-                    tracer = tracer_mod.Tracer(cfg.project_root)
+                    tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
                     generated_at = datetime.datetime.now().isoformat()
 
                     stage1_events = {"suggest.stage1.sample", "suggest.stage1.llm.start", "suggest.stage1.llm.end"}
@@ -2025,8 +2019,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
                         # 恢复直觉
                         current_version = None
-                        for ver in v2_item_local.get("versions", []):
-                            if ver["version_id"] == v2_item_local.get("current_version_id", ""):
+                        for ver in history_item_local.get("versions", []):
+                            if ver["version_id"] == history_item_local.get("current_version_id", ""):
                                 current_version = ver
                                 break
                         if current_version:
@@ -2068,8 +2062,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
                         # 恢复直觉
                         current_version = None
-                        for ver in v2_item_local.get("versions", []):
-                            if ver["version_id"] == v2_item_local.get("current_version_id", ""):
+                        for ver in history_item_local.get("versions", []):
+                            if ver["version_id"] == history_item_local.get("current_version_id", ""):
                                 current_version = ver
                                 break
                         if current_version:
@@ -2131,10 +2125,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     ] if not expired else []
 
                     # 生成新版本号
-                    existing_versions = v2_item_local.get("versions", [])
+                    existing_versions = history_item_local.get("versions", [])
                     version_num = len(existing_versions)
                     new_version_id = f"{item_id}-v{version_num}"
-                    parent_id = v2_item_local.get("current_version_id", None)
+                    parent_id = history_item_local.get("current_version_id", None)
 
                     new_version = {
                         "version_id": new_version_id,
@@ -2147,27 +2141,27 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                         "steps": steps_snapshots,
                     }
 
-                    # 更新 v2 记录
-                    v2_item_local["title"] = s_result.title
-                    v2_item_local["angle"] = s_result.angle
-                    v2_item_local["rationale"] = s_result.rationale
-                    v2_item_local["photo_ids"] = s_result.photo_ids
-                    v2_item_local["photo_sequence"] = s_result.photo_sequence
-                    v2_item_local["intuition_source"] = s_result.intuition_source
-                    v2_item_local["versions"].append(new_version)
-                    v2_item_local["current_version_id"] = new_version_id
+                    # 更新 history 记录
+                    history_item_local["title"] = s_result.title
+                    history_item_local["angle"] = s_result.angle
+                    history_item_local["rationale"] = s_result.rationale
+                    history_item_local["photo_ids"] = s_result.photo_ids
+                    history_item_local["photo_sequence"] = s_result.photo_sequence
+                    history_item_local["intuition_source"] = s_result.intuition_source
+                    history_item_local["versions"].append(new_version)
+                    history_item_local["current_version_id"] = new_version_id
 
                     with _suggest_history_lock:
-                        v2_all = _load_suggest_history(hist_dir)
-                        for i, v in enumerate(v2_all):
+                        history_all = _load_suggest_history(hist_dir)
+                        for i, v in enumerate(history_all):
                             if v["id"] == item_id:
-                                v2_all[i] = v2_item_local
+                                history_all[i] = history_item_local
                                 break
                         else:
-                            v2_all.insert(0, v2_item_local)
-                        _save_suggest_history(v2_all, hist_dir)
+                            history_all.insert(0, history_item_local)
+                        _save_suggest_history(history_all, hist_dir)
 
-                    progress_q.put({"event": "complete", "data": v2_item_local})
+                    progress_q.put({"event": "complete", "data": history_item_local})
 
                 except Exception as e:
                     logger.exception("SSE rerun 失败")
@@ -2215,7 +2209,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="聚类结果不存在")
 
         cfg = req.app.state.cfg
-        rules_path = cfg.resolve_path("./data/eval_rules.yaml")
+        rules_path = cfg.agent_path("topic-discovery-evaluation-rules.yaml")
         if not rules_path.exists():
             raise fastapi.HTTPException(status_code=500, detail="规则配置文件不存在")
 
@@ -2292,7 +2286,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail=f"簇 {cluster_id} 不存在")
 
         cfg = req.app.state.cfg
-        rules_path = cfg.resolve_path("./data/eval_rules.yaml")
+        rules_path = cfg.agent_path("topic-discovery-evaluation-rules.yaml")
         if not rules_path.exists():
             raise fastapi.HTTPException(status_code=500, detail="规则配置文件不存在")
 
@@ -2435,8 +2429,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 # ── 辅助函数 ──────────────────────────────────────────────
 
 def _resolve_db_path(cfg: config_mod.Config) -> str:
-    """解析会话数据库路径，优先配置，兜底 data/chat_sessions.db。"""
-    db_rel = getattr(cfg, "chat_db_path", "") or "./data/chat_sessions.db"
+    """解析会话数据库路径，优先配置，兜底 Agent 专属 SQLite 目录。"""
+    db_rel = getattr(cfg, "chat_db_path", "") or "./data/agent/sqlite/chat_sessions.db"
     return cfg.resolve_path(db_rel).as_posix()
 
 

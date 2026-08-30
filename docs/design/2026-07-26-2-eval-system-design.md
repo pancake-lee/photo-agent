@@ -117,7 +117,7 @@ chat.request.start → classify → sql.generate/execute → rag.retrieve
 ### 3.3 输出与轮转
 
 - 日志：`logs/agent.jsonl`、`logs/backend.jsonl`（替换现有文本日志）
-- Payload：`data/traces/payloads/YYYY-MM-DD/`
+- Payload：`data/agent/execution-traces/payloads/YYYY-MM-DD/`
 - 保留最近 7 天
 
 ---
@@ -145,7 +145,7 @@ chat.request.start → classify → sql.generate/execute → rag.retrieve
 - `GET /api/eval/reports`：历史评估报告列表
 - `GET /api/eval/reports/{id}`：单份报告详情
 
-评估报告以 JSON 文件存储在 `data/eval_reports/`。
+评估报告以 JSON 文件存储在 `../eval/reports/`。
 
 ### 4.4 启发式规则入口设计
 
@@ -188,7 +188,7 @@ chat.request.start → classify → sql.generate/execute → rag.retrieve
 
 - Python 侧新增 `tracer.py`，cluster.py 埋点
 - Go 侧 plogger 切换到 JSON 格式
-- Trace 事件输出到 `data/traces/`
+- Trace 事件输出到 `data/agent/execution-traces/`
 
 ### 阶段二：聚类标题启发式评估
 
@@ -219,5 +219,5 @@ chat.request.start → classify → sql.generate/execute → rag.retrieve
 - **LLM-as-judge**：暂缓，先人工跑通流程再引入
 - **Go 日志**：用 plogger `SetJsonLog` 切换 JSON 格式，Python 参考同结构自建
 - **Payload 存储**：大体积内容独立文件存储，日志行只记路径引用
-- **评估报告存储**：JSON 文件（`data/eval_reports/`），不走 SQLite
+- **评估报告存储**：JSON 文件（`../eval/reports/`），不走 SQLite
 - **启发式规则形式**：待定（配置文件 / 代码文件 / 混合），先出初始规则再确定

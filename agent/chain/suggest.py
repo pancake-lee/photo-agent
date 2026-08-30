@@ -1072,7 +1072,7 @@ def run_suggest(
     # 内部创建 tracer（如果调用方未传入）
     if tracer is None:
         try:
-            tracer = tracer_mod.Tracer(cfg.project_root)
+            tracer = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
         except Exception:
             tracer = None
 
@@ -1106,7 +1106,7 @@ def run_suggest(
         stats = {}
 
     if cluster_dir is None:
-        cluster_dir = cfg.resolve_path("./data/clusters")
+        cluster_dir = cfg.agent_path("topic-discovery", "clusters")
 
     cluster_results = _load_cluster_results(cluster_dir)
     meta["cluster_count"] = len(cluster_results)

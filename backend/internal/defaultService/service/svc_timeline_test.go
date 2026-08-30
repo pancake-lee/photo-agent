@@ -146,29 +146,6 @@ func TestFindEventByTimeWindow(t *testing.T) {
 	}
 }
 
-func TestParseTimelineJSON(t *testing.T) {
-	raw := []byte(`[
-		["250309", "活动A"],
-		["none", " 散图"],
-		["", "空日期"],
-		["250323", " 活动B "],
-		["bad-date", "坏日期"]
-	]`)
-	entries, err := parseTimelineJSON(raw)
-	if err != nil {
-		t.Fatalf("parse failed: %v", err)
-	}
-	if len(entries) != 2 {
-		t.Fatalf("entries = %d, want 2（none/空日期/坏日期跳过）", len(entries))
-	}
-	if entries[0].Event != "活动A" || entries[1].Event != "活动B" {
-		t.Errorf("entries = %+v，事件名应去空格且按日期排序", entries)
-	}
-	if !entries[0].Date.Before(entries[1].Date) {
-		t.Errorf("entries 应按日期升序")
-	}
-}
-
 // dateOf / shotAtOf 测试辅助
 func dateOf(s string) time.Time {
 	t, _ := time.ParseInLocation("2006-01-02", s, time.Local)

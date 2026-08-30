@@ -18,7 +18,7 @@
 
 目标：把照片列表改造成**分段浏览**，按拍摄时间或活动标签把照片流分段并插入分割线，右侧提供导航快速跳转，滚动加载替代翻页。
 
-**库内数据实测**（2026-08-20 对 `data/sqlite/photo_agent.db`）：非 NEF 照片 1323 张，覆盖 16 个月份、23 个有活动标签的时间线；**无活动标签（散图）335 张，占 25%**；shot_at 零值 2 张。散图量级决定了「未分类」不能是导航里的二等公民，见第 6 节。
+**库内数据实测**（2026-08-20 对 `data/backend/sqlite/photo_agent.db`）：非 NEF 照片 1323 张，覆盖 16 个月份、23 个有活动标签的时间线；**无活动标签（散图）335 张，占 25%**；shot_at 零值 2 张。散图量级决定了「未分类」不能是导航里的二等公民，见第 6 节。
 
 ## 2. 功能目标
 
@@ -75,7 +75,7 @@
 
 - 列表接口 `photoServiceSearchPhotos` 是分页式的（page + pageSize，后端单页上限 100），滚动加载可继续复用，前端改为追加渲染（pageSize 调大到 100，1323 张库约 14 次请求可全量加载）
 - `GET /photos/stats` 已返回 `monthly` 月份直方图（month + count，SQLite `strftime('%Y-%m')` 聚合，仅含有 shot_at 的照片），月份导航可直接复用
-- `GET /timelines` 已返回活动列表（`timelineServiceListTimelines`，按 timeline.json 文件顺序排列），活动导航可直接复用；活动的时间排序可由该活动下照片的 shot_at 推导（前端从已加载照片推导，或跳转时直接用 `timeline` 筛选，无需后端新增接口）
+- `GET /timelines` 已返回活动列表（`timelineServiceListTimelines`，按时间线事件日期排列），活动导航可直接复用；活动的时间排序可由该活动下照片的 shot_at 推导（前端从已加载照片推导，或跳转时直接用 `timeline` 筛选，无需后端新增接口）
 - 照片已有 `shot_at`（拍摄时间）和 `timeline`（活动标签）字段，可作为分割依据
 - **唯一后端改动**：`timeline` 筛选目前传空串等于不过滤，无法筛出「无活动标签」照片（库内 335 张散图）。约定 sentinel 值 `timeline="none"`，DAO 层翻译为 `timeline = ''` 过滤（svc 层 3 行翻译逻辑，proto/SDK 均不变）。用于按活动分段下「未分类」段落的导航跳转
 
@@ -90,7 +90,7 @@
 
 ## 7. 验收标准
 
-> 2026-08-21 评估回写：运行时实测详见 [2026-08-21-photo-list-lb-series.json](../../data/eval_reports/2026-08-21-photo-list-lb-series.json)
+> 2026-08-21 评估回写：运行时实测详见 [2026-08-21-photo-list-lb-series.json](../eval/reports/2026-08-21-photo-list-lb-series.json)
 
 - [x] 分割线按天/月/活动三种方式正确插入（月模式实测渲染正常，天/活动共用同一分组计算）
 - [x] 右侧导航列出对应跳转目标，当前段落高亮（跳转策略已按第 4.2 节后续修订为窗口重定位，实测有效）

@@ -72,6 +72,7 @@ class TestEvaluation(unittest.TestCase):
         go_backend_url="http://go",
         embedding_model="test",
         resolve_path=lambda path: Path("/tmp"),
+        agent_path=lambda *parts: Path("/tmp").joinpath(*parts),
     )
     result = evaluation.run_evaluation(cfg, test_queries=[{
         "id": "case-1",
@@ -110,7 +111,10 @@ class TestEvaluation(unittest.TestCase):
 
   def test_save_evaluation_snapshot_writes_report_id(self):
     with tempfile.TemporaryDirectory() as temp_dir:
-      cfg = SimpleNamespace(resolve_path=lambda _: Path(temp_dir))
+      cfg = SimpleNamespace(
+          resolve_path=lambda _: Path(temp_dir),
+          eval_reports_dir="./docs/eval/reports",
+      )
       path = evaluation.save_evaluation_snapshot(cfg, {
           "report_id": "beforefix123", "generated_at": "2026-08-27T12:00:00+00:00",
           "details": [],

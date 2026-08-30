@@ -1,5 +1,5 @@
 """
-    Trace 重放模块：从 data/traces/*.jsonl 中按 trace_id 重建管线步骤。
+    Trace 重放模块：从 data/agent/execution-traces/*.jsonl 中按 trace_id 重建管线步骤。
 
     用法:
         import chain.trace_replay as trace_replay
@@ -53,9 +53,13 @@ class PipelineStepSnapshot:
     payload_ref: str = ""      # payload 文件路径引用
 
 
+def _traces_dir(project_root: pathlib.Path) -> pathlib.Path:
+    return project_root / "data" / "agent" / "execution-traces"
+
+
 def _find_trace_events(project_root: pathlib.Path, trace_id: str) -> list[dict]:
-    """在 data/traces/*.jsonl 中搜索指定 trace_id 的所有事件，按时间排序。"""
-    traces_dir = project_root / "data" / "traces"
+    """在 data/agent/execution-traces/*.jsonl 中搜索指定 trace_id 的所有事件，按时间排序。"""
+    traces_dir = _traces_dir(project_root)
     if not traces_dir.exists():
         return []
 
@@ -95,7 +99,7 @@ def _load_payload(project_root: pathlib.Path, payload_ref: str) -> str:
 
 def _is_trace_expired(project_root: pathlib.Path, trace_id: str) -> bool:
     """判断 trace 数据是否已过期（所有相关 JSONL 文件的日期均超过保留天数）。"""
-    traces_dir = project_root / "data" / "traces"
+    traces_dir = _traces_dir(project_root)
     if not traces_dir.exists():
         return True
 
@@ -192,7 +196,7 @@ def list_available_trace_dates(
 ) -> list[str]:
     """列出所有可用的 trace 日期（用于判断某 trace_id 是否有数据）。"""
     root = pathlib.Path(project_root)
-    traces_dir = root / "data" / "traces"
+    traces_dir = _traces_dir(root)
     if not traces_dir.exists():
         return []
     dates: list[str] = []

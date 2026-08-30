@@ -233,7 +233,7 @@ POST /api/cluster/results/{result_id}/clusters/{cluster_id}/evaluate-theme
 
 ### 5.6 评估报告存储：按天追加 JSONL
 
-**决策**：评估报告不再每次生成独立 JSON 文件（`data/eval_reports/<uuid>.json`），改为以 JSONL 行追加到 `data/traces/YYYY-MM-DD.jsonl`，与其他 trace 事件统一管理。
+**决策**：评估报告不再每次生成独立 JSON 文件（`../eval/reports/<uuid>.json`），改为以 JSONL 行追加到 `data/agent/execution-traces/YYYY-MM-DD.jsonl`，与其他 trace 事件统一管理。
 
 **理由**：
 - 评估是快速规则检查，页面刷新后不需要重新加载历史报告。独立文件无复用价值

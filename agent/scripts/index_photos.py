@@ -308,7 +308,7 @@ def main() -> None:
     print(f"📸 共 {total_photos} 张照片")
 
 
-    persist_dir = cfg.resolve_path("./data/chroma")
+    persist_dir = cfg.agent_path("chroma")
     manifest_path = persist_dir / "index_manifest.json"
     manifest = _load_manifest(manifest_path)
 

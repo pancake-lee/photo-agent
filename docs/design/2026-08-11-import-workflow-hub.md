@@ -21,9 +21,9 @@
 
 | 报告 | 时间 | 评分 | 关键发现 |
 | ---- | ---- | ---- | -------- |
-| [2026-08-18-import-workflow.json](../data/eval_reports/2026-08-18-import-workflow.json) | 2026-08-18 | 7.7 | W1-W4 首轮，衍生 W5-W9 |
-| [2026-08-18-import-workflow-v2.json](../data/eval_reports/2026-08-18-import-workflow-v2.json) | 2026-08-18 | 8.3 | W5-W9 修复后二轮，剩余 W10-W11 |
-| [2026-08-18-import-workflow-v3.json](../data/eval_reports/2026-08-18-import-workflow-v3.json) | 2026-08-18 | 8.4 | W1-W11 三轮整体总评，专题代码侧闭环 |
+| [2026-08-18-import-workflow.json](../eval/reports/2026-08-18-import-workflow.json) | 2026-08-18 | 7.7 | W1-W4 首轮，衍生 W5-W9 |
+| [2026-08-18-import-workflow-v2.json](../eval/reports/2026-08-18-import-workflow-v2.json) | 2026-08-18 | 8.3 | W5-W9 修复后二轮，剩余 W10-W11 |
+| [2026-08-18-import-workflow-v3.json](../eval/reports/2026-08-18-import-workflow-v3.json) | 2026-08-18 | 8.4 | W1-W11 三轮整体总评，专题代码侧闭环 |
 
 ### Backlog 条目
 

@@ -120,7 +120,7 @@ cd web && pnpm dev
 ### Q: 如何重建 ChromaDB 索引？
 
 ```bash
-rm -rf ./data/chroma/
+rm -rf ./data/agent/chroma/
 # 然后通过 Web 界面或 CLI 重新执行批量 Embedding
 ```
 
@@ -134,4 +134,4 @@ Go 后端默认 `:10004`，Python Agent 默认 `:10005`，Web 前端默认 `:100
 
 ### Q: 会话数据存储在哪里？
 
-`data/chat_sessions.db`（SQLite），可在配置文件中自定义 `chat.db_path`。
+`data/agent/sqlite/chat_sessions.db`（SQLite），可在配置文件中通过 `chat.db_path` 调整。

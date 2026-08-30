@@ -48,7 +48,7 @@
 - `agent/.venv/bin/python -m unittest tests.test_session_store tests.test_embed_queue_health tests.test_evaluation tests.test_eval_regression`：20/20 通过。
 - `agent/.venv/bin/python -m unittest discover -s agent/tests`：83/86 通过，3 项失败，见 QA2。
 - `cd web && pnpm build`：通过。
-- `data/eval_reports/golden/2026-08-27-6407e7ab8ef5.json` 与 `2026-08-27-f4a17f839edf.json`：目标照片 `DSC_1813` 健康、可信，P@10/R@10=0.714，MRR=1.0。
+- `golden/2026-08-27-6407e7ab8ef5.json` 与 `2026-08-27-f4a17f839edf.json`：目标照片 `DSC_1813` 健康、可信，P@10/R@10=0.714，MRR=1.0。
 
 ## 已登记问题
 

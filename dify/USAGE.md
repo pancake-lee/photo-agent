@@ -19,7 +19,7 @@ cp ./configs/config.yaml .local/my-config.yaml
 
 - `./configs/config.yaml` 是脱密的公共模板，**不要直接编辑**，避免敏感信息意外提交到 Git
 - 复制到 `.local/`（已加入 `.gitignore`）后按需修改
-- `storage.timeline_path` 指向一个 Markdown 表格文件，记录活动时间线（见下方格式）
+- 时间线由 Web 页面维护并直接写入后端数据库，不再读取配置文件中的时间线文件
 - `vlm.*` 配置三选一：volcengine / openai / qwen
 
 ### 2. 准备时间线文件

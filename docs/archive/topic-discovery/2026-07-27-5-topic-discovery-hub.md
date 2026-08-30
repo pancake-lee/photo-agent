@@ -46,16 +46,16 @@
 
 | 报告 | 时间 | 评分 | 通过 | 关键发现 |
 | ---- | ---- | ---- | ---- | ---- |
-| `data/eval_reports/2026-07-27-topic-discovery-3.4.json` | 2026-07-27 18:24 | 4.2/10 | ❌ | 三阶段主路径因 embedding 代理 500 而 100% 回退，选题与改进前一致。发现 B4/B5/B6/R5 |
-| `data/eval_reports/2026-07-27-b4-b5-b6-r5.json` | 2026-07-27 22:12 | 8.3/10 | ✅ | B4/B5/B6/R5 修复验证通过 |
-| `data/eval_reports/2026-07-27-topic-discovery-3.4-v2.json` | 2026-07-27 22:30 | 5.8/10 | ❌ | B4/B5/B6/R5 修复后重新评估 3.4，主路径仍因 config 缺失未激活。发现 B7 |
-| `data/eval_reports/2026-07-27-topic-discovery-3.4-v3.json` | 2026-07-27 23:04 | 7.0/10 | ✅ | B7 修复后三阶段主路径首次端到端跑通，选题质量明显提升。发现 B8/B9/R6 |
-| `data/eval_reports/2026-07-27-b8-b9-r6.json` | 2026-07-27 23:45 | 6.5/10 | ✅ | B8 有效（6 幻觉 ID 被替换），B9 prompt 层有效（2/3 提案跨度好），B9 后处理因 shot_at 为 Unix 时间戳而不工作。发现 B10 |
-| `data/eval_reports/2026-07-27-b10-2026-07-28.json` | 2026-07-28 00:10 | 8.0/10 | ✅ | B10 修复后全面评估，全链路日期逻辑正常，9/9 提案均满足验收标准 |
-| `data/eval_reports/2026-07-28-suggest-persistence-3.5.json` | 2026-07-28 01:05 | 7.9/10 | ✅ | 3.5 持久化存储 + 五星打分 + 删除，5 个 API 全链路通过。发现 3.6（hover 预览 + 数字标签） |
-| `data/eval_reports/2026-07-28-suggest-persistence-3.5-design.json` | 2026-07-28 02:10 | 7.5/10 | ✅ | 3.5 第二轮：评估设计文档质量 + 数据兼容性。修正前次误判（SuggestHistoryItem 非 dead code、并发锁已实现）。发现旧数据格式不兼容 + loadHistory 静默失败（3.7） |
-| `data/eval_reports/2026-07-31-topic-discovery-3.8.json` | 2026-07-31 | 7.3/10 | ✅ | 3.8 交互式管线首轮评估：2728 行代码，6 Phase 全部实现。发现 B12/B13/3.9/3.10 |
-| `data/eval_reports/2026-07-31-suggest-pipeline-optimizations-design.json` | 2026-07-31 | 7.3/10 | ✅ | 3.8 衍生优化设计方案文档质量评估。发现 §7 代码质量清单 3 处不准确、backlog 与设计文档验收勾选不一致（B14/B15） |
+| `../../eval/reports/2026-07-27-topic-discovery-3.4.json` | 2026-07-27 18:24 | 4.2/10 | ❌ | 三阶段主路径因 embedding 代理 500 而 100% 回退，选题与改进前一致。发现 B4/B5/B6/R5 |
+| `../../eval/reports/2026-07-27-b4-b5-b6-r5.json` | 2026-07-27 22:12 | 8.3/10 | ✅ | B4/B5/B6/R5 修复验证通过 |
+| `../../eval/reports/2026-07-27-topic-discovery-3.4-v2.json` | 2026-07-27 22:30 | 5.8/10 | ❌ | B4/B5/B6/R5 修复后重新评估 3.4，主路径仍因 config 缺失未激活。发现 B7 |
+| `../../eval/reports/2026-07-27-topic-discovery-3.4-v3.json` | 2026-07-27 23:04 | 7.0/10 | ✅ | B7 修复后三阶段主路径首次端到端跑通，选题质量明显提升。发现 B8/B9/R6 |
+| `../../eval/reports/2026-07-27-b8-b9-r6.json` | 2026-07-27 23:45 | 6.5/10 | ✅ | B8 有效（6 幻觉 ID 被替换），B9 prompt 层有效（2/3 提案跨度好），B9 后处理因 shot_at 为 Unix 时间戳而不工作。发现 B10 |
+| `../../eval/reports/2026-07-27-b10-2026-07-28.json` | 2026-07-28 00:10 | 8.0/10 | ✅ | B10 修复后全面评估，全链路日期逻辑正常，9/9 提案均满足验收标准 |
+| `../../eval/reports/2026-07-28-suggest-persistence-3.5.json` | 2026-07-28 01:05 | 7.9/10 | ✅ | 3.5 持久化存储 + 五星打分 + 删除，5 个 API 全链路通过。发现 3.6（hover 预览 + 数字标签） |
+| `../../eval/reports/2026-07-28-suggest-persistence-3.5-design.json` | 2026-07-28 02:10 | 7.5/10 | ✅ | 3.5 第二轮：评估设计文档质量 + 数据兼容性。修正前次误判（SuggestHistoryItem 非 dead code、并发锁已实现）。发现旧数据格式不兼容 + loadHistory 静默失败（3.7） |
+| `../../eval/reports/2026-07-31-topic-discovery-3.8.json` | 2026-07-31 | 7.3/10 | ✅ | 3.8 交互式管线首轮评估：2728 行代码，6 Phase 全部实现。发现 B12/B13/3.9/3.10 |
+| `../../eval/reports/2026-07-31-suggest-pipeline-optimizations-design.json` | 2026-07-31 | 7.3/10 | ✅ | 3.8 衍生优化设计方案文档质量评估。发现 §7 代码质量清单 3 处不准确、backlog 与设计文档验收勾选不一致（B14/B15） |
 
 ### 2.3 Backlog 条目
 
@@ -314,7 +314,7 @@ v2 成为唯一数据源，移除 v1 写入。v1 列表接口从 v2 数据动态
 
 ### 5.5 新发现：B14/B15 — 文档质量问题 ✅ Done
 
-设计方案文档 §7 代码质量清单 3 处不准确（已修正），backlog 与设计文档验收勾选状态不一致（已统一）。详见 [评估报告](../../data/eval_reports/2026-07-31-suggest-pipeline-optimizations-design.json)。
+设计方案文档 §7 代码质量清单 3 处不准确（已修正），backlog 与设计文档验收勾选状态不一致（已统一）。详见 [评估报告](../../eval/reports/2026-07-31-suggest-pipeline-optimizations-design.json)。
 
 ---
 

@@ -8,7 +8,7 @@ from scripts import eval_regression
 class TestEvalRegressionSeeds(unittest.TestCase):
     def test_seed_cases_cover_retrieval_and_all_granularities(self):
         cases = eval_regression._load_cases(
-            Path(__file__).parents[2] / "data/eval_seed_cases.json"
+            Path(__file__).parents[2] / "data/agent/retrieval-regression-cases.json"
         )
         self.assertEqual({case["id"] for case in cases}, {
             "retrieval-buddha-person",
@@ -25,7 +25,7 @@ class TestEvalRegressionSeeds(unittest.TestCase):
         )
 
     def test_seed_cases_are_json_serializable(self):
-        path = Path(__file__).parents[2] / "data/eval_seed_cases.json"
+        path = Path(__file__).parents[2] / "data/agent/retrieval-regression-cases.json"
         self.assertIsInstance(json.loads(path.read_text(encoding="utf-8")), list)
 
     def test_filename_normalization(self):

@@ -45,6 +45,8 @@ class Config:
         self.retry_max_attempts: int = 3
         self.llm_request_timeout: float = 60.0
         self.tool_max_rounds: int = 20
+        self.agent_data_dir: str = ""
+        self.eval_reports_dir: str = ""
 
         self.project_root: pathlib.Path = pathlib.Path(".")
 
@@ -144,6 +146,10 @@ class Config:
         # chat 配置（可选）
         self.chat_db_path: str = self._optional(data, "chat", "db_path", "")
 
+        # Agent 运行数据与可提交评估报告目录（必填，避免隐式散落到 data 根目录）
+        self.agent_data_dir = self._require(data, "agent", "data_dir")
+        self.eval_reports_dir = self._require(data, "evaluation", "reports_dir")
+
         # storage 配置（必填）
         self.project_root = pathlib.Path(
             self._require(data, "storage", "project_root")
@@ -159,6 +165,10 @@ class Config:
         if p.is_absolute():
             return p
         return (self.project_root / p).resolve()
+
+    def agent_path(self, *parts: str) -> pathlib.Path:
+        """返回 Agent 专属运行数据目录下的路径。"""
+        return self.resolve_path(self.agent_data_dir).joinpath(*parts)
 
     def check_api_key(self):
         """检查 LLM 的 API Key 是否已配置。"""

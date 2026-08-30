@@ -70,7 +70,7 @@ flowchart TD
 | ---- | -------- | ---- | -------- |
 | 照片总数 | `total_photos` 字段 | `suggest_history.json` 每条记录 | 前端卡片直接展示，或 `cat data/suggest_history.json \| jq` |
 | 聚类数量 | `cluster_count` 字段 | 同上 | 同上 |
-| 聚类详情 | 各簇的 label / theme_description / 照片列表 | `data/clusters/*.json` | `cat data/clusters/<id>.json \| jq '.clusters[] \| {cluster_id, label, theme_description, size}'` |
+| 聚类详情 | 各簇的 label / theme_description / 照片列表 | `data/agent/topic-discovery/clusters/*.json` | `cat data/agent/topic-discovery/clusters/<id>.json \| jq '.clusters[] \| {cluster_id, label, theme_description, size}'` |
 | 生成路径 | `pipeline` 字段（`editorial_three_stage` 或 `legacy_three_dimension`） | `suggest_history.json` 每条记录 | 前端卡片展示 |
 | Embedding 健康状态 | agent 日志中的检查结果 | `logs/agent.log` | `grep "Embedding 服务" logs/agent.log` |
 
@@ -360,7 +360,7 @@ grep "Stage 3: 选题.*跳过\|Stage 1 未产出\|Stage 3 未产出" logs/agent.
 
 ```bash
 # 查看最新聚类结果的簇标签（选题建议使用这些作为上下文）
-ls -t data/clusters/*.json | head -1 | xargs cat | python3 -c "
+ls -t data/agent/topic-discovery/clusters/*.json | head -1 | xargs cat | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 for c in d.get('clusters', []):
@@ -372,7 +372,7 @@ for c in d.get('clusters', []):
 
 ```bash
 # 查看属性覆盖率
-sqlite3 data/sqlite/photo_agent.db \
+sqlite3 data/backend/sqlite/photo_agent.db \
   "SELECT COUNT(*) AS total,
     ROUND(100.0*SUM(CASE WHEN objects!='' THEN 1 END)/COUNT(*),1) AS objects_pct,
     ROUND(100.0*SUM(CASE WHEN colors!='' THEN 1 END)/COUNT(*),1) AS colors_pct,
@@ -386,7 +386,7 @@ sqlite3 data/sqlite/photo_agent.db \
 
 ```bash
 # 随机抽样 5 张有描述的照片，看描述是否准确
-sqlite3 data/sqlite/photo_agent.db \
+sqlite3 data/backend/sqlite/photo_agent.db \
   "SELECT id, description FROM photos WHERE description != '' ORDER BY RANDOM() LIMIT 5;"
 ```
 

@@ -16,7 +16,7 @@
 
 目标：自动识别照片库中的连拍组，在前端以"组"为单位折叠展示，同时保留查看单张照片的能力。
 
-**库内数据佐证**（2026-08-19 对 `data/sqlite/photo_agent.db` 1436 张照片实测）：按 shot_at 排序后相邻间隔分布为 ≤2s 共 190 对、2~5s 共 55 对、5~10s 共 67 对。连拍数据真实存在且量级可观，5 秒默认窗口约覆盖 245 对相邻照片。
+**库内数据佐证**（2026-08-19 对 `data/backend/sqlite/photo_agent.db` 1436 张照片实测）：按 shot_at 排序后相邻间隔分布为 ≤2s 共 190 对、2~5s 共 55 对、5~10s 共 67 对。连拍数据真实存在且量级可观，5 秒默认窗口约覆盖 245 对相邻照片。
 
 **P6 追加需求**（2026-08-20，基于 P4 落地后的使用反馈）：
 
@@ -116,7 +116,7 @@ flowchart LR
 
 1. `backend/sql/photo_groups.sql` 新增 DDL（photos.sql 同步追加 burst_group_id 列）
 2. `make initDB` 重建 ORM 模板库 → `make gorm` 重新生成 model/query → `make curd` 生成 PhotoGroup 标准 CRUD
-3. 生产库（`data/sqlite/photo_agent.db`）由 `db.Migrate()` 幂等迁移：HasTable/HasColumn 判断后 CreateTable/AddColumn（现有 migrate.go 已有 file_type 先例，扩展为处理 photo_groups 建表 + photos 加列）
+3. 生产库（`data/backend/sqlite/photo_agent.db`）由 `db.Migrate()` 幂等迁移：HasTable/HasColumn 判断后 CreateTable/AddColumn（现有 migrate.go 已有 file_type 先例，扩展为处理 photo_groups 建表 + photos 加列）
 
 ```sql
 -- backend/sql/photo_groups.sql

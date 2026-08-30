@@ -1,7 +1,7 @@
 """
     结构化追踪日志模块。
 
-    统一输出 JSON 结构日志到 data/traces/YYYY-MM-DD.jsonl，
+    统一输出 JSON 结构日志到 data/agent/execution-traces/YYYY-MM-DD.jsonl，
     大体积 payload（LLM prompt/response 全文）写入独立文件，
     日志行中只记路径引用。
 
@@ -34,8 +34,11 @@ _RETENTION_DAYS = 7
 class Tracer:
     """结构化追踪器，每个实例绑定一个 trace_id。"""
 
-    def __init__(self, project_root: str | pathlib.Path):
+    def __init__(self, project_root: str | pathlib.Path, agent_data_dir: str = "./data/agent"):
         self.project_root = pathlib.Path(project_root)
+        self.agent_data_dir = pathlib.Path(agent_data_dir)
+        if not self.agent_data_dir.is_absolute():
+            self.agent_data_dir = self.project_root / self.agent_data_dir
         self.trace_id = uuid.uuid4().hex[:12]
         self._lock = threading.Lock()
 
@@ -45,12 +48,12 @@ class Tracer:
         return datetime.date.today().isoformat()
 
     def _trace_log_path(self) -> pathlib.Path:
-        d = self.project_root / "data" / "traces"
+        d = self.agent_data_dir / "execution-traces"
         d.mkdir(parents=True, exist_ok=True)
         return d / f"{self._today_str()}.jsonl"
 
     def _payload_dir(self) -> pathlib.Path:
-        d = self.project_root / "data" / "traces" / "payloads" / self._today_str()
+        d = self.agent_data_dir / "execution-traces" / "payloads" / self._today_str()
         d.mkdir(parents=True, exist_ok=True)
         return d
 
@@ -130,7 +133,7 @@ class Tracer:
     def cleanup_old(days: int = _RETENTION_DAYS, project_root: str | pathlib.Path = ".") -> int:
         """清理超过指定天数的 trace 日志和 payload 文件。返回删除的文件数。"""
         root = pathlib.Path(project_root)
-        traces_dir = root / "data" / "traces"
+        traces_dir = root / "data" / "agent" / "execution-traces"
         if not traces_dir.exists():
             return 0
 

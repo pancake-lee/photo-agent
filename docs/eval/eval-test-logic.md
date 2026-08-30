@@ -13,7 +13,7 @@
   .venv/bin/python scripts/eval_regression.py -c ../.local/my-config.yaml --level all
   ```
 - **「评估」**：指黄金用例打分链路（`agent/chain/evaluation.py` + `eval_engine.py`），产出维度评分与报告。
-- 两者共用 `data/eval_seed_cases.json` 与同一套检索模块，但评估评效果、回归验闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。
+- 两者共用 `data/agent/retrieval-regression-cases.json` 与同一套检索模块，但评估评效果、回归验闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。
 
 ## 1. 测试范围
 
@@ -144,7 +144,7 @@ L2 不发送聊天消息，因此不会触发 LLM。服务未启动、地址错�
 
 ## 4. 种子数据来源
 
-种子文件为 [data/eval_seed_cases.json](../../data/eval_seed_cases.json)。照片 ID 来自当前 SQLite 图库，不是临时生成数据：
+种子文件为 [data/agent/retrieval-regression-cases.json](../../data/agent/retrieval-regression-cases.json)。照片 ID 来自当前 SQLite 图库，不是临时生成数据：
 
 - `DSC_2215.jpg`：佛像旁有两名女性合影。
 - `DSC_2167.jpg`：同一连拍组的封面照片。

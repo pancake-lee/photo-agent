@@ -203,7 +203,7 @@ def main() -> None:
 
     # 检查已嵌入状态
     store = chroma_client.ChromaPhotoStore(
-        persist_dir=str(cfg.resolve_path("./data/chroma")),
+        persist_dir=str(cfg.agent_path("chroma")),
         collection_name="photos",
     )
     embedded_ids = store.get_embedded_photo_ids()

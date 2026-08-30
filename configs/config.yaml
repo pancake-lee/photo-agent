@@ -6,21 +6,19 @@
 # backend - pgo
 Log:
   Level: "debug"
-  
+
 Http:
   Addr: "0.0.0.0:10004"
   Timeout: 1000
 
 Sqlite:
-  Path: "./data/sqlite/photo_agent.db"
+  Path: "./data/backend/sqlite/photo_agent.db"
 
 Storage:
   # 原图存储路径
   PhotoSrc: "./data/photos/src"
   # 压缩后的图片存储路径
   PhotoPath: "./data/photos/compressed"
-  # 用户提供的时间线文件路径
-  TimelinePath: "./data/timeline.json"
   # 时间线活动窗口天数（活动日前后各 N 天内的照片归入该活动）
   TimelineWindowDays: 7
 
@@ -60,11 +58,20 @@ storage:
   photo_src: "./data/photos/src"
   # 压缩后的图片存储路径
   photo_path: "./data/photos/compressed"
-  # 用户提供的时间线文件路径
-  timeline_path: "./data/timeline.md"
 
 db:
-  sqlite_path: "./data/sqlite/photo_agent.db"
+  sqlite_path: "./data/backend/sqlite/photo_agent.db"
+
+agent:
+  # Agent 运行数据：Chroma、会话/用量 SQLite、主题发现历史、聚类与 Trace
+  data_dir: "./data/agent"
+
+chat:
+  db_path: "./data/agent/sqlite/chat_sessions.db"
+
+evaluation:
+  # 可复查、应提交仓库的评估报告（运行时黄金用例快照位于 golden/）
+  reports_dir: "./docs/eval/reports"
 
 llm:
   base_url: "https://api.openai.com/v1"
@@ -112,8 +119,8 @@ dify:
   email: "your-dify-email" # Dify 管理员邮箱
   password: "your-dify-password" # Dify 管理员密码
   dataset_name: "photo-agent-descriptions"
-  db_path: "./data/sqlite/photo_agent.db"
+  db_path: "./data/backend/sqlite/photo_agent.db"
 
 prices:
   path: ./configs/prices.yaml
-  
+

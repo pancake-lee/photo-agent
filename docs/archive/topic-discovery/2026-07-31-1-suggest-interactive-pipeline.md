@@ -38,7 +38,7 @@ flowchart TD
 ```
 
 核心设计决策：
-- **管线步骤从 trace 数据重建**：`data/traces/YYYY-MM-DD.jsonl` 已包含完整的处理过程记录，按 `trace_id` 过滤即可还原每一步的输入输出
+- **管线步骤从 trace 数据重建**：`data/agent/execution-traces/YYYY-MM-DD.jsonl` 已包含完整的处理过程记录，按 `trace_id` 过滤即可还原每一步的输入输出
 - **版本采用线性历史**：每次重跑产生新版本，`parent_version_id` 指向上一版本。预留树形分支的数据结构，初始实现只展示线性链
 - **详情用全屏 Modal**：复用现有 SuggestView 的卡片风格，不引入新路由
 
@@ -74,7 +74,7 @@ flowchart TD
 
 ### 2.4 版本管理
 
-**存储**：新建 `data/suggest_history_v2.json`，每条记录增加 `versions` 数组和 `current_version_id`。旧 `suggest_history.json` 保持兼容（列表接口继续可用）。
+**存储**：新建 `data/agent/topic-discovery/history.json`，每条记录增加 `versions` 数组和 `current_version_id`。旧 `suggest_history.json` 保持兼容（列表接口继续可用）。
 
 **迁移**：懒迁移。用户首次打开某条记录的详情时，自动升级为 v2 格式（创建 v0 版本，步骤从 trace 按需重建）。
 
@@ -124,7 +124,7 @@ flowchart TD
 
 ### Phase 1：后端基础（存储 + trace 重建）
 
-- [ ] **1.1** 新建 `agent/chain/trace_replay.py`：实现按 trace_id 扫描 `data/traces/*.jsonl`、加载 payload 文件、重建有序步骤列表
+- [ ] **1.1** 新建 `agent/chain/trace_replay.py`：实现按 trace_id 扫描 `data/agent/execution-traces/*.jsonl`、加载 payload 文件、重建有序步骤列表
 - [ ] **1.2** 在 `server.py` 新增 v2 存储层：`_load_suggest_history_v2` / `_save_suggest_history_v2` + 线程锁 + 懒迁移函数
 - [ ] **1.3** 在 `server.py` 新增 Pydantic 模型：`PipelineStepSnapshot`、`SuggestVersion`、`SuggestHistoryDetail`
 - [ ] **1.4** 实现 `GET /api/suggest/history/{id}/detail`：懒迁移 + 步骤重建 + 返回完整 detail

@@ -109,7 +109,7 @@ func Migrate() error {
 		plogger.Info("DB migrate: created ai_processing_history table")
 	}
 
-	// timeline_events 表按需补建（时间线事件，从 timeline.json 迁移）
+	// timeline_events 表按需补建（时间线事件由 Web 页面直接维护）
 	if !g.Migrator().HasTable(&model.TimelineEvent{}) {
 		if err := g.Migrator().CreateTable(&model.TimelineEvent{}); err != nil {
 			return err

@@ -31,7 +31,7 @@
 
 Agent 层 JSON 文件存储，路径：`agent/data/suggest_history.json`
 
-遵循项目既有模式（黄金用例用 `golden_queries.json`，聚类结果用 `data/clusters/*.json`）。
+遵循项目既有模式（黄金用例用 `golden_queries.json`，聚类结果用 `data/agent/topic-discovery/clusters/*.json`）。
 
 ### 3.2 数据结构
 
@@ -147,8 +147,8 @@ Agent 层 JSON 文件存储，路径：`agent/data/suggest_history.json`
 
 ## 9. 已知问题（来自评估）
 
-> 评估报告：[2026-07-28-suggest-persistence-3.5-design.json](../../data/eval_reports/2026-07-28-suggest-persistence-3.5-design.json)（第二轮，7.5/10）
-> 首轮评估：[2026-07-28-suggest-persistence-3.5.json](../../data/eval_reports/2026-07-28-suggest-persistence-3.5.json)（7.9/10）
+> 评估报告：[2026-07-28-suggest-persistence-3.5-design.json](../../eval/reports/2026-07-28-suggest-persistence-3.5-design.json)（第二轮，7.5/10）
+> 首轮评估：[2026-07-28-suggest-persistence-3.5.json](../../eval/reports/2026-07-28-suggest-persistence-3.5.json)（7.9/10）
 
 - **旧数据格式不兼容**：suggest_history.json 中已有旧格式数据（嵌套 suggestions 数组）与新前端期望的扁平 records 不兼容，旧数据渲染为空白卡片。需手动清理或添加迁移逻辑 → backlog [3.7](../../docs/backlog.md)
 - **loadHistory 静默失败**：网络错误时用户看到空状态与真实无历史无法区分 → backlog [3.7](../../docs/backlog.md)

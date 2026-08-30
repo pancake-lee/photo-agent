@@ -1,12 +1,12 @@
 # 后端代码质量基线评估
 
-> 专题中枢：[后端代码质量治理专题中枢](../../docs/design/2026-08-30-1-backend-code-quality-hub.md)。后续复评见 [2026-08-30 后端代码质量复评](2026-08-30-backend-code-quality-reassessment.md)。
+> 专题中枢：[后端代码质量治理专题中枢](../../design/2026-08-30-1-backend-code-quality-hub.md)。后续复评见 [2026-08-30 后端代码质量复评](2026-08-30-backend-code-quality-reassessment.md)。
 
 > 评估对象：`backend/` 的手写 Go 代码、人工维护的 Proto/SQL、后端配置和直接对应技术文档。
 >
 > 评估报告 ID：`2026-08-29-backend-code-quality-baseline`。
 >
-> 判卷依据：[后端代码质量评分标准](../../docs/eval/code-quality-rubric-backend.md)。pgo 生成的 `*.pb.go`、`*.gen.go`、`*.gen.proto`、生成的 API Client/OpenAPI 产物及 abandonCode 模板均未读取、未评分。
+> 判卷依据：[后端代码质量评分标准](../../eval/code-quality-rubric-backend.md)。pgo 生成的 `*.pb.go`、`*.gen.go`、`*.gen.proto`、生成的 API Client/OpenAPI 产物及 abandonCode 模板均未读取、未评分。
 
 ## 摘要
 

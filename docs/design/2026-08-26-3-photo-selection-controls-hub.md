@@ -46,7 +46,7 @@
 
 ### 评估报告
 
-- [2026-08-26-current-done-round.md](../../data/eval_reports/2026-08-26-current-done-round.md) — PS7-PS9 评分 8.1/10，通过；关键浏览器交互仍缺可重复回归
+- [2026-08-26-current-done-round.md](../eval/reports/2026-08-26-current-done-round.md) — PS7-PS9 评分 8.1/10，通过；关键浏览器交互仍缺可重复回归
 
 ### Backlog 条目
 

@@ -7,7 +7,7 @@
     用法（作为模块导入）:
         import vectorstore.chroma_client as chroma_client
 
-        store = chroma_client.ChromaPhotoStore(persist_dir="./data/chroma")
+        store = chroma_client.ChromaPhotoStore(persist_dir="./data/agent/chroma")
         store.add(
             ids=["photo_001", "photo_002"],
             documents=["夕阳下的海滩", "雪山清晨"],
@@ -55,7 +55,7 @@ class ChromaPhotoStore:
 
     def __init__(
         self,
-        persist_dir: str = "./data/chroma",
+        persist_dir: str = "./data/agent/chroma",
         collection_name: str = COLLECTION_PHOTOS,
     ):
         """
