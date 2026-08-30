@@ -2,12 +2,11 @@ package data
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
-	appdb "backend/internal/pkg/db"
 	"backend/internal/pkg/db/model"
+	"backend/internal/testutil"
 
 	"github.com/pancake-lee/pgo/pkg/papp"
 	"github.com/pancake-lee/pgo/pkg/pdb"
@@ -18,13 +17,8 @@ import (
 func setupTestDB(t *testing.T) (*papp.AppCtx, func()) {
 	t.Helper()
 
-	tmpDir := t.TempDir()
-	if err := pdb.InitSqlite(filepath.Join(tmpDir, "test.db")); err != nil {
-		t.Fatalf("init sqlite failed: %v", err)
-	}
-	if err := appdb.Migrate(); err != nil {
-		t.Fatalf("run production migration: %v", err)
-	}
+	testutil.InitSchemaSQLite(t)
+	testutil.AssertMigrationCompatible(t)
 	g := pdb.GetGormDB()
 
 	ctx := papp.NewAppCtx(context.Background())

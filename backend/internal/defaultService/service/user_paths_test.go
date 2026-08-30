@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,7 @@ import (
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
-	"backend/internal/pkg/db"
+	"backend/internal/testutil"
 
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/pancake-lee/pgo/pkg/papp"
@@ -28,12 +29,8 @@ import (
 func setupUserPathTest(t *testing.T) (*papp.AppCtx, string) {
 	t.Helper()
 	tempDir := t.TempDir()
-	if err := pdb.InitSqlite(filepath.Join(tempDir, "photo-agent.db")); err != nil {
-		t.Fatalf("init sqlite: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("run production migration: %v", err)
-	}
+	testutil.InitSchemaSQLite(t)
+	testutil.AssertMigrationCompatible(t)
 	gdb := pdb.GetGormDB()
 
 	previous := conf.C
@@ -328,5 +325,106 @@ func TestVlmQueueEndToEndSuccess(t *testing.T) {
 	photo, err := data.PhotoDAO.GetByID(ctx, "queue-photo")
 	if err != nil || !strings.Contains(photo.Description, "山景") {
 		t.Fatalf("VLM writeback = %#v, err=%v", photo, err)
+	}
+}
+
+func TestVlmQueueEndToEndFailure(t *testing.T) {
+	ctx, tempDir := setupUserPathTest(t)
+	if err := os.MkdirAll(conf.C.Storage.PhotoSrc, 0755); err != nil {
+		t.Fatal(err)
+	}
+	image, err := base64.StdEncoding.DecodeString("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, "failed.jpg"), image, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.PhotoDAO.Add(ctx, &data.PhotoDO{ID: "failed-photo", Filename: "failed.jpg", FilePath: "failed.jpg", FileType: "jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	promptPath := filepath.Join(tempDir, "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("describe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	vlm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"code":"Internal","message":"controlled failure","type":"test"}}`))
+	}))
+	defer vlm.Close()
+	conf.C.VLM.BaseURL, conf.C.VLM.Prompt, conf.C.VLM.MaxImageSizeMB = vlm.URL, promptPath, 0
+	server := VlmServer{}
+	if _, err := server.StartVlmQueue(context.Background(), &api.StartVlmQueueRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if !vlmQueue.waitExit(3 * time.Second) {
+		t.Fatal("VLM worker did not exit")
+	}
+	status, _ := server.GetVlmQueueStatus(context.Background(), &api.Empty{})
+	if status.Status.Failed != 1 || status.Status.Completed != 0 {
+		t.Fatalf("final queue status = %#v", status.Status)
+	}
+	var failures int64
+	if err := pdb.GetGormDB().Table("ai_processing_history").Where("photo_id = ? AND status = ?", "failed-photo", aiStatusFailed).Count(&failures).Error; err != nil || failures != 1 {
+		t.Fatalf("failure history = %d, err=%v", failures, err)
+	}
+}
+
+func TestVlmQueueStopLeavesUnclaimedPhotosRetryable(t *testing.T) {
+	ctx, tempDir := setupUserPathTest(t)
+	if err := os.MkdirAll(conf.C.Storage.PhotoSrc, 0755); err != nil {
+		t.Fatal(err)
+	}
+	image, err := base64.StdEncoding.DecodeString("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 5; i++ {
+		filename := fmt.Sprintf("stop-%d.jpg", i)
+		if err := os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, filename), image, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := data.PhotoDAO.Add(ctx, &data.PhotoDO{ID: fmt.Sprintf("stop-%d", i), Filename: filename, FilePath: filename, FileType: "jpg"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	promptPath := filepath.Join(tempDir, "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("describe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{}, 4)
+	release := make(chan struct{})
+	vlm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		started <- struct{}{}
+		<-release
+		_, _ = w.Write([]byte("{\"model\":\"local-vlm\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"山景\\n```json\\n{\\\"subject\\\":{\\\"main_objects\\\":[\\\"山\\\"]}}\\n```\"}]}]}"))
+	}))
+	defer vlm.Close()
+	conf.C.VLM.BaseURL, conf.C.VLM.Prompt, conf.C.VLM.MaxImageSizeMB = vlm.URL, promptPath, 0
+	server := VlmServer{}
+	if _, err := server.StartVlmQueue(context.Background(), &api.StartVlmQueueRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		select {
+		case <-started:
+		case <-time.After(3 * time.Second):
+			t.Fatal("workers did not start")
+		}
+	}
+	if _, err := server.StopVlmQueue(context.Background(), &api.Empty{}); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	if !vlmQueue.waitExit(3 * time.Second) {
+		t.Fatal("VLM worker did not exit after stop")
+	}
+	untouched, err := data.PhotoDAO.GetByID(ctx, "stop-5")
+	if err != nil || untouched.Description != "" {
+		t.Fatalf("unclaimed photo = %#v, err=%v", untouched, err)
+	}
+	status, _ := server.GetVlmQueueStatus(context.Background(), &api.Empty{})
+	if status.Status.Running || status.Status.Completed != 4 || status.Status.Failed != 0 {
+		t.Fatalf("final queue status = %#v", status.Status)
 	}
 }

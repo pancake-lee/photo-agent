@@ -483,7 +483,7 @@ def _collapse_compose_candidates(photos: list[dict], include_group_members: bool
         current = collapsed.get(key)
         if current is None or photo.get("is_burst_cover"):
             item = dict(photo)
-            item["_group_count"] = 0
+            item["_group_count"] = current.get("_group_count", 0) if current else 0
             collapsed[key] = item
         collapsed[key]["_group_count"] += 1
     result = list(collapsed.values())
@@ -493,6 +493,22 @@ def _collapse_compose_candidates(photos: list[dict], include_group_members: bool
     return result
 
 
+def _prepare_compose_candidates(photos: list[dict], group_limit: int, cover_limit: int) -> tuple[str, list[dict]]:
+    """按两级阈值准备创作候选：组信息、仅封面或图文工坊兜底。"""
+    collapsed = _collapse_compose_candidates(photos)
+    if len(collapsed) <= group_limit:
+        return "groups", collapsed
+    if len(collapsed) <= cover_limit:
+        return "covers", _collapse_compose_candidates(photos, include_group_members=False)
+    return "overflow", collapsed
+
+
+def _compose_photo_token(photo: dict) -> str:
+    group_id = photo.get("burst_group_id") or photo.get("burst_group_coarse_id") or ""
+    photo_id = photo.get("id", "")
+    return f"g:{group_id}:{photo_id}" if group_id else photo_id
+
+
 def _compose_node(state: RouterState, runtime_config: lc_runnables.RunnableConfig) -> dict:
     """确定性创作管线：SQL 候选、连拍折叠、限量后由 LLM 创作。"""
     cfg = _get_cfg(runtime_config)
@@ -500,14 +516,16 @@ def _compose_node(state: RouterState, runtime_config: lc_runnables.RunnableConfi
     try:
         sql = text_to_sql.generate_filter_sql(cfg, state["question"])
         ids = text_to_sql.execute_sql_for_ids(cfg.go_backend_url, sql)
-        collapsed = _collapse_compose_candidates(_fetch_photos_batch(cfg, ids))
-        log.info("[compose] SQL=%d，连拍折叠=%d", len(ids), len(collapsed))
-        if len(collapsed) > cfg.compose_cover_limit:
-            token = ",".join(item.get("id", "") for item in collapsed if item.get("id"))
-            return {"answer": "候选照片过多，建议进入图文工坊自行选图后生成文案。", "photos": [], "compose_url": f"#/post-studio?photos={token}"}
+        mode, collapsed = _prepare_compose_candidates(
+            _fetch_photos_batch(cfg, ids), cfg.compose_group_limit, cfg.compose_cover_limit
+        )
+        log.info("[compose] SQL=%d，连拍折叠=%d，收缩模式=%s", len(ids), len(collapsed), mode)
+        if mode == "overflow":
+            tokens = ",".join(_compose_photo_token(item) for item in collapsed)
+            return {"answer": "候选照片过多，建议进入图文工坊自行选图后生成文案。", "photos": [], "compose_url": f"#/post-studio?photo_ids={tokens}"}
         context = "\n\n".join(f"[{i}] id={p.get('id')} 文件={p.get('filename')} 时间={p.get('shot_at')} 连拍数={p.get('_group_count', 1)}\n描述：{p.get('description') or '无描述'}" for i, p in enumerate(collapsed, 1))
         response = (lc_prompts.ChatPromptTemplate.from_messages([("system", "你是摄影编辑。基于候选挑选最适合发布的照片，写一个标题和一段发布文案；清楚标注选择的照片 id。"), ("human", "用户请求：{question}\n\n候选：\n{context}")]) | llm_factory.create_llm(cfg, temperature=0.5, callbacks=_get_callbacks())).invoke({"question": state["question"], "context": context})
-        refs = [{"photo_id": p.get("id", ""), "filename": p.get("filename", p.get("id", "")), "image_url": f"{cfg.go_backend_url}/api/v1/photos/{p.get('id', '')}/image"} for p in collapsed]
+        refs = [{"photo_id": p.get("id", ""), "filename": p.get("filename", p.get("id", "")), "image_url": f"{cfg.go_backend_url}/api/v1/photos/{p.get('id', '')}/image", **({"burst_group_id": p.get("burst_group_id"), "burst_count": p.get("_group_count", 1)} if mode == "groups" and p.get("burst_group_id") else {})} for p in collapsed]
         log.info("[compose] 创作完成，候选=%d", len(refs))
         return {"answer": str(response.content), "photos": refs}
     except Exception as exc:
