@@ -1,0 +1,31 @@
+{
+  "report_id": "2026-08-30-current-backlog-done-reassessment",
+  "backlog_id": "PS10,BQ1-BQ2,BQ4-BQ6,BQ8-BQ11,DOC2,TIDY1-TIDY4,CFG1-CFG7",
+  "created_at": "2026-08-30T18:00:00Z",
+  "target": "当前 backlog 中全部 22 个 Done 任务，排除暂缓项 BQ3、CQ4",
+  "overall": 8.8,
+  "per_task": {
+    "PS10": 8.7, "BQ1": 8.7, "BQ2": 9.2, "BQ4": 9.1, "BQ5": 9.0,
+    "BQ6": 9.0, "BQ8": 8.7, "BQ9": 8.7, "BQ10": 9.0, "BQ11": 9.0,
+    "DOC2": 8.6, "TIDY1": 8.7, "TIDY2": 8.5, "TIDY3": 8.7, "TIDY4": 8.7,
+    "CFG1": 8.9, "CFG2": 9.0, "CFG3": 9.0, "CFG4": 8.7, "CFG5": 8.8,
+    "CFG6": 8.7, "CFG7": 8.7
+  },
+  "dimension_scores": {
+    "正确性": 9.0, "健壮性": 8.6, "可维护性": 8.5, "简洁性": 8.6,
+    "准确性": 8.9, "完整性": 8.7, "一致性": 8.5,
+    "惊喜度": 7.8, "可用性": 8.9, "交互体验": 8.6, "AI增量": 8.5
+  },
+  "findings_for_backlog": [],
+  "verification_runtime": [
+    "GOTOOLCHAIN=local go run ./tools/go/main.go --self-check PASS，当前输出 58 个纳入文件",
+    "cd backend && GOTOOLCHAIN=local go test -count=1 ./... PASS",
+    "cd backend && GOTOOLCHAIN=local go vet ./... PASS",
+    "cd backend && GOTOOLCHAIN=local go test -count=1 -race ./internal/defaultService/data ./internal/defaultService/service PASS",
+    "cd web && pnpm build PASS；pnpm test 2/2 PASS",
+    "agent/.venv/bin/python -m unittest discover -s agent/tests -p 'test_*.py'：107/107 PASS",
+    "Agent 配置测试 2/2 PASS，评估规则测试 14/14 PASS",
+    "静态检查未发现手写后端测试直接建表、生产 Service 直接使用 ORM/pdb/生成查询对象，或完整配置日志及旧列删除语句"
+  ],
+  "verification_commits": {}
+}

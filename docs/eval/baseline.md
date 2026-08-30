@@ -59,6 +59,12 @@
 >
 > 中枢文档：[2026-08-11-import-workflow-hub.md](../design/2026-08-11-import-workflow-hub.md) — 导入工作流专题全部关联产物的汇总入口
 
+### 2026-08-30 — 当前 Backlog Done 任务复评（排除暂缓项）
+
+- **总体评分**：8.8/10 ✅ 通过，22 项 Done 均维持 Done
+- **验证方式**：后端全量测试、vet、关键包 race，Web 构建与 Vitest，Agent 107/107 单测，以及配置和评估规则定向测试均通过
+- **评估报告**：`reports/2026-08-30-current-backlog-done-reassessment.md`
+
 ### 2026-08-26 — Backlog 全任务优化后复评（W12、PS7-PS9、GR1、CH1、TF1、QA1、M1）
 
 - **总体评分**：8.4/10 ✅ 通过（阈值 6.0，较同日优化前 8.1 提升 0.3）
