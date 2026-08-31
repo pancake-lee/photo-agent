@@ -11,6 +11,7 @@ import {
   CloudUploadOutline,
   CreateOutline,
   FolderOpenOutline,
+  GitNetworkOutline,
   TimeOutline,
   StarOutline,
 } from '@vicons/ionicons5'
@@ -282,6 +283,14 @@ onMounted(() => window.addEventListener('keydown', onKeydown))
         >
           <NIcon size="18"><StarOutline /></NIcon>
           <span class="bottom-item-text">黄金用例</span>
+        </div>
+        <div
+          class="bottom-item"
+          :class="{ active: selectedKey === '/cluster' }"
+          @click="router.push('/cluster')"
+        >
+          <NIcon size="18"><GitNetworkOutline /></NIcon>
+          <span class="bottom-item-text">组图发现</span>
         </div>
         <div
           class="bottom-item"
