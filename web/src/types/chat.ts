@@ -20,6 +20,16 @@ export interface PhotoRef {
 /** 检索粒度：photo 单张照片 / fine 精细连拍组 / coarse 模糊连拍组 */
 export type Granularity = 'photo' | 'fine' | 'coarse'
 
+export interface RuntimeStep {
+  step: number
+  title: string
+  status: string
+  decision: string
+  result: string
+  facts: string[]
+  details: Record<string, string | number>
+}
+
 export interface ChatMessage {
   id: number
   session_id: string
@@ -31,6 +41,8 @@ export interface ChatMessage {
   /** AI 回复实际使用的检索粒度；旧历史消息未记录时为空 */
   granularity?: Granularity
   photos?: PhotoRef[]
+  /** Runtime 多步执行的用户过程快照，旧消息为空数组。 */
+  runtime_steps?: RuntimeStep[]
   input_tokens?: number
   output_tokens?: number
   cost?: number
@@ -48,4 +60,5 @@ export interface SendMessageResponse {
   granularity: Granularity
   photos?: PhotoRef[]
   trace_id: string
+  runtime_steps?: RuntimeStep[]
 }

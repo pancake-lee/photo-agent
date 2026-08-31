@@ -488,6 +488,9 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
     """开放目标节点：进入 Runtime 多步执行（decide/execute/reduce/check 循环）。"""
     cfg = _get_cfg(config)
     configurable = config.get("configurable", {})
+    progress_callback = configurable.get("progress_callback")
+    if progress_callback is not None:
+        progress_callback("runtime.started", {"message": "任务已进入多步处理"})
     result = rt_graph.run_runtime(
         cfg, state["question"],
         granularity=state.get("granularity", "photo"),
@@ -495,6 +498,7 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
         prices=configurable.get("prices"),
         pricing_available=bool(configurable.get("pricing_available", True)),
         tracer=configurable.get("tracer"),
+        progress_callback=progress_callback,
     )
     return {
         "answer": result["answer"],
@@ -665,6 +669,7 @@ class PhotoAgent:
         question: str,
         granularity: str = "photo",
         tracer=None,
+        progress_callback=None,
     ) -> RouterState:
         """路由单次查询，自动分发到 SQL / RAG / Tool / Combined / Runtime 分支。
 
@@ -692,6 +697,7 @@ class PhotoAgent:
                 "prices": self._prices,
                 "pricing_available": not self._pricing_error,
                 "tracer": tracer,
+                "progress_callback": progress_callback,
             },
         })
         return typing.cast(RouterState, result)

@@ -54,6 +54,11 @@ def _normalize_ext(filename: str) -> str:
     return os.path.splitext(filename)[0]
 
 
+def _format_sse_event(event: str, data: dict) -> str:
+    """按 SSE 文本格式序列化一个事件。"""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
 def _build_filename_to_uuid(go_backend_url: str) -> dict[str, str]:
     """从 Go 后端获取全部照片，构建 文件名(去后缀) → UUID 映射。"""
     import infra.http_client as http_utils
@@ -753,7 +758,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="会话不存在")
         return s.get_messages(session_id)
 
-    @app.post("/api/chat/sessions/{session_id}/messages", response_model=MessageResponse)
+    @app.post("/api/chat/sessions/{session_id}/messages")
     async def send_message(session_id: str, body: SendMessageRequest, req: fastapi.Request):
         s: session_store.SessionStore = req.app.state.store
         agent_inst: photo_agent.PhotoAgent = req.app.state.agent
@@ -766,57 +771,70 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if not question:
             raise fastapi.HTTPException(status_code=400, detail="问题不能为空")
 
+        is_first_message = s.is_first_message(session_id)
         # 保存用户消息
         s.add_message(session_id, "user", question)
         s.update_last_granularity(session_id, body.granularity)
 
-        # 调用 Agent 路由（tracer 先建好传入，Runtime 多步执行可输出步骤事件）
         tracer = req.state.tracer
-        try:
-            result = agent_inst.route(question, granularity=body.granularity, tracer=tracer)
-        except Exception as exc:
-            logger.exception("Agent 路由失败")
-            # 保存错误消息（仅向前端暴露通用提示，避免泄露内部信息）
-            s.add_message(session_id, "assistant", "抱歉，处理请求时发生内部错误，请稍后重试。", query_type="error", trace_id=tracer.trace_id)
-            raise fastapi.HTTPException(status_code=500, detail="处理请求时发生内部错误")
+        event_queue: queue.Queue[tuple[str, dict]] = queue.Queue()
 
-        answer = result.get("answer", "") or "未能获取回答。"
-        query_type = result.get("query_type", "")
-        photos_raw = result.get("photos", [])
-        asset_snapshot = _build_chat_asset_snapshot(req.app.state.cfg, req.app.state.chroma_store, photos_raw)
-        tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
-        tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
+        event_queue_runtime_steps: list[dict] = []
 
-        # 序列化照片引用
-        import json
-        photos_json = json.dumps(photos_raw, ensure_ascii=False) if photos_raw else ""
+        def collect_steps(event: str, data: dict) -> None:
+            if event == "runtime.step":
+                event_queue_runtime_steps[:] = data.get("steps") or []
+            event_queue.put((event, data))
 
-        # 保存 AI 回复
-        msg_id = s.add_message(
-            session_id, "assistant", answer,
-            query_type=query_type,
-            trace_id=tracer.trace_id,
-            granularity=body.granularity,
-            photos_json=photos_json,
+        def execute() -> None:
+            try:
+                result = agent_inst.route(
+                    question, granularity=body.granularity, tracer=tracer,
+                    progress_callback=collect_steps,
+                )
+                answer = result.get("answer", "") or "未能获取回答。"
+                query_type = result.get("query_type", "")
+                photos_raw = result.get("photos", [])
+                asset_snapshot = _build_chat_asset_snapshot(
+                    req.app.state.cfg, req.app.state.chroma_store, photos_raw,
+                )
+                tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
+                tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
+                msg_id = s.add_message(
+                    session_id, "assistant", answer, query_type=query_type,
+                    trace_id=tracer.trace_id, granularity=body.granularity,
+                    photos_json=json.dumps(photos_raw, ensure_ascii=False) if photos_raw else "",
+                    runtime_steps=event_queue_runtime_steps,
+                )
+                event_queue.put(("final", {
+                    "message_id": msg_id, "answer": answer, "query_type": query_type,
+                    "granularity": body.granularity, "photos": photos_raw,
+                    "trace_id": tracer.trace_id, "runtime_steps": event_queue_runtime_steps,
+                }))
+            except Exception:
+                logger.exception("Agent 路由失败")
+                error_text = "抱歉，处理请求时发生内部错误，请稍后重试。"
+                s.add_message(session_id, "assistant", error_text, query_type="error", trace_id=tracer.trace_id)
+                event_queue.put(("error", {"message": error_text, "trace_id": tracer.trace_id}))
+
+        # 首条提问后立即更新标题，不等耗时的 Runtime 完成。
+        if is_first_message:
+            s.update_title(session_id, session_store._format_question_title(question))
+
+        def stream():
+            yield _format_sse_event("accepted", {"trace_id": tracer.trace_id})
+            worker = threading.Thread(target=execute)
+            worker.start()
+            while True:
+                event, data = event_queue.get()
+                yield _format_sse_event(event, data)
+                if event in {"final", "error"}:
+                    break
+
+        return fastapi.responses.StreamingResponse(
+            stream(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-
-        # 首条提问后自动更新标题
-        # 计算当前 user 消息数（包括刚保存的这条）= 1 表示是第一条
-        user_count = sum(
-            1 for m in s.get_messages(session_id) if m["role"] == "user"
-        )
-        if user_count == 1:
-            new_title = session_store._format_question_title(question)
-            s.update_title(session_id, new_title)
-
-        return {
-            "message_id": msg_id,
-            "answer": answer,
-            "query_type": query_type,
-            "granularity": body.granularity,
-            "photos": photos_raw,
-            "trace_id": tracer.trace_id,
-        }
 
     # ── Embedding API ─────────────────────────────────────
 

@@ -53,7 +53,6 @@ class SessionStore:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
     def _init_tables(self) -> None:
@@ -72,11 +71,12 @@ class SessionStore:
 
                     CREATE TABLE IF NOT EXISTS messages (
                         id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                        session_id  TEXT NOT NULL,
                         role        TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
                         content     TEXT NOT NULL,
                         query_type  TEXT,
                         trace_id    TEXT,
+                        runtime_steps TEXT DEFAULT '',
                         granularity TEXT,
                         usage_json  TEXT DEFAULT '{}',
                         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -100,6 +100,10 @@ class SessionStore:
                 if "trace_id" not in col_names:
                     conn.execute(
                         "ALTER TABLE messages ADD COLUMN trace_id TEXT"
+                    )
+                if "runtime_steps" not in col_names:
+                    conn.execute(
+                        "ALTER TABLE messages ADD COLUMN runtime_steps TEXT DEFAULT ''"
                     )
 
                 session_cols = conn.execute("PRAGMA table_info(sessions)").fetchall()
@@ -181,7 +185,7 @@ class SessionStore:
                     return None
 
                 msg_rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, created_at
+                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, runtime_steps, created_at
                        FROM messages WHERE session_id=? ORDER BY id""",
                     (session_id,),
                 ).fetchall()
@@ -191,11 +195,17 @@ class SessionStore:
                     import json
                     usage = json.loads(m["usage_json"] or "{}")
                     photos_list = []
+                    runtime_steps = []
                     if m["photos"]:
                         try:
                             photos_list = json.loads(m["photos"])
                         except json.JSONDecodeError:
                             photos_list = []
+                    if m["runtime_steps"]:
+                        try:
+                            runtime_steps = json.loads(m["runtime_steps"])
+                        except json.JSONDecodeError:
+                            runtime_steps = []
                     messages.append({
                         "id": m["id"],
                         "session_id": m["session_id"],
@@ -205,6 +215,7 @@ class SessionStore:
                         "trace_id": m["trace_id"],
                         "granularity": m["granularity"],
                         "photos": photos_list,
+                        "runtime_steps": runtime_steps,
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "cost": usage.get("cost", 0.0),
@@ -275,19 +286,21 @@ class SessionStore:
         granularity: Optional[str] = None,
         usage: Optional[dict] = None,
         photos_json: str = "",
+        runtime_steps: list[dict] | None = None,
     ) -> int:
         """添加一条消息，返回消息 ID。同时更新会话的 updated_at。"""
         import json
         now = _now_iso()
         usage_str = json.dumps(usage or {}, ensure_ascii=False)
+        runtime_steps_json = json.dumps(runtime_steps or [], ensure_ascii=False)
 
         with self._lock:
             conn = self._get_conn()
             try:
                 cur = conn.execute(
-                    """INSERT INTO messages (session_id, role, content, query_type, trace_id, granularity, usage_json, photos, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (session_id, role, content, query_type, trace_id, granularity, usage_str, photos_json, now),
+                    """INSERT INTO messages (session_id, role, content, query_type, trace_id, granularity, usage_json, photos, runtime_steps, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, role, content, query_type, trace_id, granularity, usage_str, photos_json, runtime_steps_json, now),
                 )
                 conn.execute(
                     "UPDATE sessions SET updated_at=? WHERE id=?",
@@ -304,7 +317,7 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, created_at
+                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, runtime_steps, created_at
                        FROM messages WHERE session_id=? ORDER BY id""",
                     (session_id,),
                 ).fetchall()
@@ -313,11 +326,17 @@ class SessionStore:
                 for m in rows:
                     usage = json.loads(m["usage_json"] or "{}")
                     photos_list = []
+                    runtime_steps = []
                     if m["photos"]:
                         try:
                             photos_list = json.loads(m["photos"])
                         except json.JSONDecodeError:
                             photos_list = []
+                    if m["runtime_steps"]:
+                        try:
+                            runtime_steps = json.loads(m["runtime_steps"])
+                        except json.JSONDecodeError:
+                            runtime_steps = []
                     result.append({
                         "id": m["id"],
                         "session_id": m["session_id"],
@@ -327,6 +346,7 @@ class SessionStore:
                         "trace_id": m["trace_id"],
                         "granularity": m["granularity"],
                         "photos": photos_list,
+                        "runtime_steps": runtime_steps,
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "cost": usage.get("cost", 0.0),

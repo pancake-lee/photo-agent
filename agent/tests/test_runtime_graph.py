@@ -103,6 +103,26 @@ class RunRuntimeLoopTest(unittest.TestCase):
         self.assertIn("已完成：检索候选照片", result["answer"])
         self.assertIn("仍缺少：入选照片、发布文案", result["answer"])
 
+    def test_progress_callback_emits_ordered_user_snapshots(self):
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+            '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+            '{"action": "write_post", "params": {}, "reason": "文案"}',
+        ])
+        events = []
+        patches = self._happy_patches(llm)
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            rt_graph.run_runtime(
+                _cfg(), "找山西旅游第一天的照片并生成发布文案",
+                progress_callback=lambda event, data: events.append((event, data)),
+            )
+
+        step_events = [data for event, data in events if event == "runtime.step"]
+        self.assertGreaterEqual(len(step_events), 12)
+        final_steps = step_events[-1]["steps"]
+        self.assertEqual([step["title"] for step in final_steps], ["查询照片", "挑选代表照片", "生成发布文案"])
+        self.assertTrue(all(step["status"] == "已完成" for step in final_steps))
+
     def test_invalid_decision_becomes_error_observation(self):
         """无效决策（编造能力名/参数）转为失败观察，不炸循环。"""
         state = {

@@ -5,9 +5,11 @@ import type {
   ChatSessionDetail,
   SendMessageResponse,
   Granularity,
+  RuntimeStep,
 } from '../types/chat'
 
 import { getAgentBase } from '../config'
+import { createChatStreamParser } from '../utils/chatStream'
 
 // ── 响应式状态 ──
 
@@ -98,21 +100,48 @@ async function sendMessage(
       const errText = await resp.text()
       throw new Error(errText || '请求失败')
     }
-    const data: SendMessageResponse = await resp.json()
+    if (!resp.body) throw new Error('服务未返回流式响应')
+    const parser = createChatStreamParser()
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let runtimeMsg: ChatMessage | undefined
+    let finalData: SendMessageResponse | undefined
 
-    // 添加 AI 回复
-    const aiMsg: ChatMessage = {
-      id: data.message_id,
-      session_id: sessionId,
-      role: 'assistant',
-      content: data.answer,
-      query_type: data.query_type,
-      trace_id: data.trace_id,
-      granularity: data.granularity,
-      photos: data.photos || [],
-      created_at: new Date().toISOString(),
+    const applyEvent = (event: string, data: Record<string, unknown>) => {
+      if (event === 'runtime.started') {
+        runtimeMsg = {
+          id: 0, session_id: sessionId, role: 'assistant', content: '',
+          query_type: 'runtime', trace_id: String(data.trace_id || ''),
+          granularity, photos: [], runtime_steps: [], created_at: new Date().toISOString(),
+        }
+        messages.value.push(runtimeMsg)
+      }
+      if (event === 'runtime.step' && runtimeMsg) {
+        runtimeMsg.runtime_steps = (data.steps || []) as RuntimeStep[]
+      }
+      if (event === 'final') {
+        finalData = data as unknown as SendMessageResponse
+        const target: ChatMessage = runtimeMsg || {
+          id: 0, session_id: sessionId, role: 'assistant' as const, content: '', created_at: new Date().toISOString(),
+        }
+        Object.assign(target, {
+          id: finalData.message_id, content: finalData.answer, query_type: finalData.query_type,
+          trace_id: finalData.trace_id, granularity: finalData.granularity,
+          photos: finalData.photos || [], runtime_steps: finalData.runtime_steps || target.runtime_steps || [],
+        })
+        if (!runtimeMsg) messages.value.push(target)
+      }
+      if (event === 'error') throw new Error(String(data.message || '处理请求失败'))
     }
-    messages.value.push(aiMsg)
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      for (const item of parser.push(decoder.decode(value, { stream: true }))) {
+        applyEvent(item.event, item.data)
+      }
+    }
+    if (!finalData) throw new Error('服务未返回最终结果')
 
     // 更新会话标题（首条消息后标题可能已变）
     if (currentSession.value) {
@@ -122,7 +151,7 @@ async function sendMessage(
     // 刷新会话列表以获取更新的标题
     fetchSessions()
 
-    return data
+    return finalData
   } finally {
     isLoading.value = false
   }

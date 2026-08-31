@@ -30,6 +30,17 @@ class TestSessionStore(unittest.TestCase):
                 "trace-123",
             )
 
+    def test_runtime_steps_are_persisted_and_legacy_messages_default_to_empty(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = session_store.SessionStore(str(Path(temp_dir) / "sessions.db"))
+            session = store.create_session()
+            steps = [{"step": 1, "title": "查询照片", "status": "已完成", "details": {}}]
+            store.add_message(session["session_id"], "assistant", "回答", runtime_steps=steps)
+
+            messages = store.get_messages(session["session_id"])
+
+            self.assertEqual(messages[0]["runtime_steps"], steps)
+
     def test_last_granularity_is_persisted_on_session(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "sessions.db"
@@ -74,6 +85,7 @@ class TestSessionStore(unittest.TestCase):
             messages = store.get_messages("legacy")
             self.assertIsNone(messages[0]["granularity"])
             self.assertIsNone(messages[0]["trace_id"])
+            self.assertEqual(messages[0]["runtime_steps"], [])
             self.assertEqual(store.get_session("legacy")["last_granularity"], "photo")
 
 

@@ -23,6 +23,7 @@ import langgraph.graph as lg_graph
 import internal.runtime.budget as rt_budget
 import internal.runtime.capabilities as rt_capabilities
 import internal.runtime.completion as rt_completion
+import internal.runtime.progress as rt_progress
 import internal.runtime.registry as rt_registry
 import internal.runtime.state as rt_state
 import infra.llm_factory as llm_factory
@@ -92,7 +93,7 @@ class _CostCallback(lc_callbacks.BaseCallbackHandler):
         self._budget_state.add_cost(cost)
 
 
-def _get_runtime_config(config: dict) -> tuple[typing.Any, list, typing.Any, bool]:
+def _get_runtime_config(config: dict) -> tuple[typing.Any, list, typing.Any, bool, typing.Callable | None]:
     """从 LangGraph configurable 中取配置、LLM 回调与 tracer。"""
     configurable = config.get("configurable", {})
     cfg = configurable.get("cfg")
@@ -103,18 +104,37 @@ def _get_runtime_config(config: dict) -> tuple[typing.Any, list, typing.Any, boo
         list(configurable.get("llm_callbacks") or []),
         configurable.get("tracer"),
         bool(configurable.get("pricing_available", True)),
+        configurable.get("progress_callback"),
     )
 
 
-def _emit(tracer, event: str, data: dict) -> None:
+def _emit(tracer, progress_callback, event: str, data: dict) -> None:
     """写入 runtime 步骤事件（tracer 缺失时静默跳过，如 CLI 直跑）。"""
     if tracer is not None:
         tracer.emit(event, data, module="runtime")
+    if progress_callback is not None:
+        progress_callback(event, data)
+
+
+def _progress_details(action: str, params: dict, observation: rt_state.Observation | None = None) -> dict:
+    """挑出允许进入用户过程面板的受控细节，绝不传递 ID、提示词或异常栈。"""
+    details: dict = {}
+    if action in {"sql_search", "rag_search", "hybrid_search"} and params.get("query"):
+        details["查询条件"] = str(params["query"])
+    if action == "resolve_trip" and params.get("hint"):
+        details["匹配提示"] = str(params["hint"])
+    if action == "select_photos" and isinstance(params.get("max_photos"), int):
+        details["最多入选"] = params["max_photos"]
+    if action == "write_post" and params.get("style"):
+        details["文案风格"] = str(params["style"])
+    if observation is not None and observation.payload.get("sql"):
+        details["SQL"] = str(observation.payload["sql"])[:1000]
+    return details
 
 
 def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """决策节点：LLM 在能力列表中选择下一动作（程序负责解析与校验）。"""
-    cfg, callbacks, tracer, _ = _get_runtime_config(config)
+    cfg, callbacks, tracer, _, progress_callback = _get_runtime_config(config)
     registry = _get_registry()
     task = state["task"]
 
@@ -141,7 +161,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         "[runtime] 第 %d 步决策: action=%s, params=%s",
         state["step_no"] + 1, decision["action"], decision["params"],
     )
-    _emit(tracer, "runtime.decide", {
+    _emit(tracer, progress_callback, "runtime.decide", {
         "step": state["step_no"] + 1,
         "action": decision["action"],
         "params": decision["params"],
@@ -153,7 +173,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
 
 def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """执行节点：程序校验参数并调用能力，异常与无效决策都转为失败观察。"""
-    cfg, callbacks, tracer, _ = _get_runtime_config(config)
+    cfg, callbacks, tracer, _, progress_callback = _get_runtime_config(config)
     registry = _get_registry()
     decision = state["decision"]
     action = decision.get("action", "")
@@ -181,36 +201,42 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
         "[runtime] 第 %d 步执行: %s → %s（%s）",
         state["step_no"], action, observation.kind, observation.summary,
     )
-    _emit(tracer, "runtime.execute", {
+    _emit(tracer, progress_callback, "runtime.execute", {
         "step": state["step_no"],
         "action": action,
         "duration_ms": duration_ms,
+        "details": _progress_details(action, decision.get("params") or {}),
     })
     return {"observation": observation}
 
 
 def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """归约节点：把观察按显式规则合并进 TaskState。"""
-    _, _, tracer, _ = _get_runtime_config(config)
+    _, _, tracer, _, progress_callback = _get_runtime_config(config)
     observation = state["observation"]
     action = state["decision"].get("action", "")
     task = rt_state.reduce_observation(
         state["task"], observation, step_no=state["step_no"], action=action,
     )
-    _emit(tracer, "runtime.observe", {
+    facts = []
+    for key, value in (observation.payload.get("facts") or {}).items():
+        facts.append(f"已确认{key}：{value}")
+    _emit(tracer, progress_callback, "runtime.observe", {
         "step": state["step_no"],
         "action": action,
         "kind": observation.kind,
         "summary": observation.summary,
         "candidate_count": len(task.artifacts.candidate_ids),
         "selected_count": len(task.artifacts.selected_ids),
+        "facts": facts,
+        "details": _progress_details(action, state["decision"].get("params") or {}, observation),
     })
     return {"task": task}
 
 
 def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """检查节点：程序消耗一步预算并判定完成/停止。"""
-    cfg, _, tracer, pricing_available = _get_runtime_config(config)
+    cfg, _, tracer, pricing_available, progress_callback = _get_runtime_config(config)
     budget_state = state["budget_state"]
     budget_state.consume_step()
     budget = rt_budget.Budget(
@@ -226,7 +252,7 @@ def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -
             stop_reason, budget_state.steps_used,
             budget_state.elapsed_seconds(), budget_state.cost_used,
         )
-    _emit(tracer, "runtime.check", {
+    _emit(tracer, progress_callback, "runtime.check", {
         "step": state["step_no"],
         "steps_used": budget_state.steps_used,
         "complete": completion.complete,
@@ -253,7 +279,7 @@ def _route_after_check(state: RuntimeGraphState) -> str:
 
 def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """收尾节点：组装最终输出与照片引用，并输出轨迹摘要。"""
-    cfg, _, tracer, _ = _get_runtime_config(config)
+    cfg, _, tracer, _, progress_callback = _get_runtime_config(config)
     output = rt_state.build_final_output(state["task"], stop_reason=state.get("stop_reason", ""))
 
     photos: list[dict] = []
@@ -276,7 +302,7 @@ def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         completion.complete, task.progress.terminal_reason,
         state.get("stop_reason", ""), state["budget_state"].steps_used, len(photos),
     )
-    _emit(tracer, "runtime.trace_summary", {
+    _emit(tracer, progress_callback, "runtime.trace_summary", {
         "steps_used": state["budget_state"].steps_used,
         "capability_calls": capability_calls,
         "milestones_done": [m for m in ("locate", "candidates", "select", "copy")
@@ -329,10 +355,16 @@ def run_runtime(
     prices: dict | None = None,
     pricing_available: bool = True,
     tracer=None,
+    progress_callback: typing.Callable[[str, dict], None] | None = None,
 ) -> dict:
     """执行一次开放目标任务，返回 {"answer", "photos", "compose_url"}。"""
     budget_state = rt_budget.BudgetState()
     callbacks = [*(llm_callbacks or []), _CostCallback(prices, budget_state)]
+    translator = rt_progress.RuntimeProgressTranslator()
+
+    def emit_progress(event: str, data: dict) -> None:
+        if progress_callback is not None:
+            progress_callback("runtime.step", {"steps": translator.consume(event, data)})
     initial: RuntimeGraphState = {
         "question": question,
         "granularity": granularity,
@@ -356,6 +388,7 @@ def run_runtime(
             "llm_callbacks": callbacks,
             "pricing_available": pricing_available,
             "tracer": tracer,
+            "progress_callback": emit_progress,
         },
         "recursion_limit": recursion_limit,
     })

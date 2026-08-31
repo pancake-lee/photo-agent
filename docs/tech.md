@@ -271,7 +271,7 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 - `GET /api/chat/sessions/:id/messages` — 会话消息列表
 - `PATCH /api/chat/sessions/:id` — 更新标题
 - `DELETE /api/chat/sessions/:id` — 删除会话
-- `POST /api/chat/sessions/:id/messages` — 发送消息 → AI 回复
+- `POST /api/chat/sessions/:id/messages` — 发送消息，返回 SSE：`accepted`、Runtime 真实步骤快照（仅 runtime）、`final` 或 `error`
 
 **Embedding 管理**：
 
