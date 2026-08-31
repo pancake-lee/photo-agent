@@ -78,13 +78,18 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         ), step_no=1, action="sql_search")
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = '{"selected_ids": ["b", "ghost", "a"]}'
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[
-            {"id": "a", "filename": "a.jpg"}, {"id": "b", "filename": "b.jpg"},
-            {"id": "c", "filename": "c.jpg"},
-        ]), unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
-            obs = rt_caps._select_photos({}, _ctx(_cfg(), task))
+        fetched = [
+            {"id": "a", "filename": "a.jpg", "description": "草坡黄昏"},
+            {"id": "b", "filename": "b.jpg", "description": "湖面飞鸟"},
+            {"id": "c", "filename": "c.jpg", "description": "岸边剪影"},
+        ]
+        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=fetched), \
+             unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
+            obs = rt_caps._select_photos({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_PHOTOS_SELECTED)
         self.assertEqual(obs.payload["ids"], ["b", "a"])
+        # 挑选观察必须携带完整详情（含 description），归约写入缓存后 write_post 直接可用
+        self.assertEqual(obs.payload["photos"], [fetched[1], fetched[0]])
 
     def test_select_respects_max_photos(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "挑照片", {"question": "q"})
@@ -124,6 +129,34 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
 
 
 class WritePostCapabilityTest(unittest.TestCase):
+    def test_write_post_after_selection_uses_cached_full_details(self):
+        """回归：挑选归约写入缓存的必须是完整详情，write_post 不得误判"都还没有 AI 描述"。
+
+        走真实 generate_post（只 mock LLM），否则 _split_described 的缺描述判定不会被执行。
+        """
+        cfg = _cfg()
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中",
+            {"ids": ["a"], "photos": [
+                {"id": "a", "filename": "a.jpg", "description": "暮色湖面"},
+            ]},
+        ), step_no=1, action="select_photos")
+
+        def fetch_spy(_cfg_arg, ids):
+            # 缓存命中完整详情时，补拉列表必须为空（空列表不会发起任何请求）
+            self.assertEqual(ids, [], "缓存命中完整详情时不应再补拉详情")
+            return []
+
+        fake_llm = unittest.mock.MagicMock()
+        fake_llm.invoke.return_value.content = '{"title": "标题", "content": "正文"}'
+        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", side_effect=fetch_spy), \
+             unittest.mock.patch.object(rt_caps.post_studio.llm_factory, "create_llm",
+                                        return_value=fake_llm):
+            obs = rt_caps._write_post({}, _ctx(cfg, task))
+        self.assertEqual(obs.kind, rt_state.OBS_COPY_DRAFTED)
+        self.assertEqual(obs.payload["title"], "标题")
+
     def test_write_post_uses_selected_photos_and_post_studio(self):
         cfg = _cfg()
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "发帖"})

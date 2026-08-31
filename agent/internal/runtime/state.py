@@ -191,14 +191,28 @@ def _apply_photo_details(state: TaskState, obs: Observation) -> None:
         if not pid:
             continue
         state.artifacts.photo_cache[pid] = photo
+    _trim_photo_cache(state)
+
+
+def _trim_photo_cache(state: TaskState) -> None:
+    """缓存只保留最近写入的 _PHOTO_CACHE_MAX 条，超出淘汰最早写入的条目。"""
     while len(state.artifacts.photo_cache) > _PHOTO_CACHE_MAX:
         oldest = next(iter(state.artifacts.photo_cache))
         del state.artifacts.photo_cache[oldest]
 
 
 def _apply_photos_selected(state: TaskState, obs: Observation) -> None:
-    """挑选观察：写入入选照片引用。"""
+    """挑选观察：写入入选照片引用，并把入选照片完整详情并入缓存。
+
+    缓存语义是"命中即完整详情"（_cached_photos 据此跳过补拉），
+    因此 payload.photos 必须携带能力手中的完整详情，不能只带 id/filename 摘要。
+    """
     state.artifacts.selected_ids = list(obs.payload.get("ids") or [])
+    for photo in obs.payload.get("photos") or []:
+        pid = photo.get("id")
+        if pid:
+            state.artifacts.photo_cache[pid] = photo
+    _trim_photo_cache(state)
     _finish_milestone(state, "select")
 
 
@@ -302,6 +316,15 @@ _STOP_REASON_LABELS = {
 }
 
 
+def _selected_photo_labels(state: TaskState) -> list[str]:
+    """入选照片展示名：缓存里有文件名用文件名，缺失时回退照片 ID。"""
+    labels = []
+    for pid in state.artifacts.selected_ids:
+        filename = state.artifacts.photo_cache.get(pid, {}).get("filename")
+        labels.append(str(filename) if filename else pid)
+    return labels
+
+
 def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
     """组装最终输出（纯函数，确定性）。
 
@@ -314,7 +337,7 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
         draft = state.artifacts.copy_draft
         answer = f"# {draft.get('title', '')}\n\n{draft.get('content', '')}"
         if state.artifacts.selected_ids:
-            answer += f"\n\n入选照片：{'、'.join(state.artifacts.selected_ids)}"
+            answer += f"\n\n入选照片：{'、'.join(_selected_photo_labels(state))}"
         return {"answer": answer, "handoff_url": ""}
 
     if state.progress.terminal_reason == "candidate_overflow":

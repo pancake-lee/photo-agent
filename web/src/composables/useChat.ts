@@ -17,6 +17,8 @@ const sessions = ref<Session[]>([])
 const messages = ref<ChatMessage[]>([])
 const currentSession = ref<Session | null>(null)
 const isLoading = ref(false)
+// 当前正在流式执行的 Runtime 消息（数组内的代理对象）；终态后清空，用于执行期自动展开过程面板
+const activeRuntimeMsg = ref<ChatMessage | null>(null)
 
 // ── API 方法 ──
 
@@ -109,12 +111,15 @@ async function sendMessage(
 
     const applyEvent = (event: string, data: Record<string, unknown>) => {
       if (event === 'runtime.started') {
-        runtimeMsg = {
+        const startedMsg: ChatMessage = {
           id: 0, session_id: sessionId, role: 'assistant', content: '',
           query_type: 'runtime', trace_id: String(data.trace_id || ''),
           granularity, photos: [], runtime_steps: [], created_at: new Date().toISOString(),
         }
-        messages.value.push(runtimeMsg)
+        messages.value.push(startedMsg)
+        // 数组内是 Vue 转换后的代理对象，后续步骤更新必须通过代理才能触发视图重绘
+        runtimeMsg = messages.value[messages.value.length - 1]
+        activeRuntimeMsg.value = runtimeMsg
       }
       if (event === 'runtime.step' && runtimeMsg) {
         runtimeMsg.runtime_steps = (data.steps || []) as RuntimeStep[]
@@ -154,6 +159,7 @@ async function sendMessage(
     return finalData
   } finally {
     isLoading.value = false
+    activeRuntimeMsg.value = null
   }
 }
 
@@ -209,6 +215,7 @@ export function useChat() {
     messages,
     currentSession,
     isLoading,
+    activeRuntimeMsg,
     fetchSessions,
     createSession,
     loadSession,

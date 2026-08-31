@@ -152,6 +152,23 @@ class BuildFinalOutputTest(unittest.TestCase):
         self.assertIn("入选照片：a、b", output["answer"])
         self.assertEqual(output["handoff_url"], "")
 
+    def test_complete_output_prefers_filenames_and_falls_back_to_ids(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中",
+            {"ids": ["a", "b", "c"], "photos": [
+                {"id": "a", "filename": "DSC0001.jpg"},
+                {"id": "b", "filename": "DSC0002.jpg"},
+            ]},
+        ), step_no=1, action="select_photos")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "标题", "content": "正文"},
+        ), step_no=2, action="write_post")
+        # 挑选观察带入的详情进入缓存，且不覆盖已有完整详情
+        self.assertEqual(task.artifacts.photo_cache["a"]["filename"], "DSC0001.jpg")
+        output = rt_state.build_final_output(task)
+        self.assertIn("入选照片：DSC0001.jpg、DSC0002.jpg、c", output["answer"])
+
     def test_complete_takes_priority_over_budget_stop(self):
         output = rt_state.build_final_output(self._completed_task(), stop_reason="max_steps")
         self.assertIn("# 标题", output["answer"])

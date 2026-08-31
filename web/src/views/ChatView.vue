@@ -24,6 +24,7 @@ import type { PhotoRef, Granularity } from '../types/chat'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 import BurstGroupModal from '../components/BurstGroupModal.vue'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
+import RuntimeProcessPanel from '../components/RuntimeProcessPanel.vue'
 import { photoApi } from '../backend-sdk-client'
 import type { ApiSearchPhotosResponse } from '../../backend-sdk/api'
 import { canSaveAsGoldenQuery } from '../utils/goldenQuery'
@@ -36,6 +37,7 @@ const {
   currentSession,
   messages,
   isLoading,
+  activeRuntimeMsg,
   fetchSessions,
   createSession,
   loadSession,
@@ -396,6 +398,12 @@ const hasMessages = computed(() => messages.value.length > 0)
             :class="msg.role === 'user' ? 'message-row--user' : 'message-row--assistant'"
           >
             <div class="message-bubble" :class="`message-bubble--${msg.role}`">
+              <!-- Runtime 消息：执行过程在前，回复与照片在后，与流式展示顺序一致 -->
+              <RuntimeProcessPanel
+                v-if="msg.role === 'assistant' && msg.query_type === 'runtime' && (msg.runtime_steps?.length || activeRuntimeMsg === msg)"
+                :steps="msg.runtime_steps || []"
+                :active="activeRuntimeMsg === msg"
+              />
               <!-- 用户消息：转义文本；AI 消息：渲染 Markdown -->
               <div
                 v-if="msg.role === 'user'"
@@ -406,27 +414,6 @@ const hasMessages = computed(() => messages.value.length > 0)
                 class="message-text markdown-body"
                 v-html="renderMarkdown(msg.content)"
               ></div>
-              <details
-                v-if="msg.role === 'assistant' && msg.query_type === 'runtime' && msg.runtime_steps?.length"
-                class="runtime-process"
-              >
-                <summary>执行过程（{{ msg.runtime_steps.length }} 步）</summary>
-                <div v-for="step in msg.runtime_steps" :key="step.step" class="runtime-step">
-                  <div class="runtime-step-title">
-                    <strong>第 {{ step.step }} 步：{{ step.title }}</strong>
-                    <NTag size="tiny" :bordered="false" type="info">{{ step.status }}</NTag>
-                  </div>
-                  <div v-if="step.decision" class="runtime-step-text">{{ step.decision }}</div>
-                  <div v-if="step.result" class="runtime-step-text">{{ step.result }}</div>
-                  <div v-for="fact in step.facts" :key="fact" class="runtime-step-fact">{{ fact }}</div>
-                  <details v-if="Object.keys(step.details).length" class="runtime-details">
-                    <summary>执行细节</summary>
-                    <div v-for="(value, key) in step.details" :key="key" class="runtime-detail-row">
-                      <span>{{ key }}</span><code>{{ value }}</code>
-                    </div>
-                  </details>
-                </div>
-              </details>
               <div v-if="msg.role === 'assistant' && msg.query_type" class="message-meta">
                 <NTag :bordered="false" size="tiny">
                   {{ routeLabel[msg.query_type] || msg.query_type }}
@@ -689,49 +676,6 @@ const hasMessages = computed(() => messages.value.length > 0)
   margin-top: 8px;
   display: flex;
   gap: 8px;
-}
-.runtime-process {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--n-border-color);
-  font-size: 13px;
-}
-.runtime-process > summary,
-.runtime-details > summary {
-  cursor: pointer;
-  color: var(--n-text-color-2);
-  font-weight: 500;
-}
-.runtime-step {
-  margin-top: 12px;
-  padding-left: 12px;
-  border-left: 2px solid var(--n-border-color);
-}
-.runtime-step-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.runtime-step-text,
-.runtime-step-fact {
-  margin-top: 4px;
-  color: var(--n-text-color-2);
-}
-.runtime-step-fact {
-  color: var(--n-color-info);
-}
-.runtime-details {
-  margin-top: 8px;
-}
-.runtime-detail-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-  color: var(--n-text-color-3);
-}
-.runtime-detail-row code {
-  overflow-x: auto;
-  white-space: pre-wrap;
 }
 .chat-footer {
   flex: 0 0 auto;

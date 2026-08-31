@@ -395,10 +395,12 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> Observation:
             "挑选结果为空或均不在候选内，无法继续生成文案",
             {"terminal_reason": "photo_selection_failed"},
         )
+    photo_by_id = {p.get("id"): p for p in photos}
+    selected_details = [dict(photo_by_id[pid]) for pid in valid_ids]
     return rt_state.Observation(
         rt_state.OBS_PHOTOS_SELECTED,
         f"已挑选 {len(valid_ids)} 张发布照片",
-        {"ids": valid_ids},
+        {"ids": valid_ids, "photos": selected_details},
     )
 
 
