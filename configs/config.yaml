@@ -68,6 +68,10 @@ Agent:
   # Chroma、会话/用量 SQLite、主题发现历史、聚类与 Trace。
   DataDir: "./data/agent"
   ChatDBPath: "./data/agent/sqlite/chat_sessions.db"
+  # Runtime 开放目标执行的预算：最大步数 / 超时秒数 / 成本上限（元，0 不限制）。
+  RuntimeMaxSteps: 12
+  RuntimeTimeoutSeconds: 300
+  RuntimeCostLimit: 2.0
 
 Web:
   Addr: "0.0.0.0:10006"

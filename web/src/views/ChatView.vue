@@ -61,6 +61,8 @@ const routeLabel: Record<string, string> = {
   sql: 'SQL 统计',
   rag: 'RAG 检索',
   tool: 'API 调用',
+  combined: '组合查询',
+  runtime: 'Runtime 多步',
   error: '错误',
 }
 

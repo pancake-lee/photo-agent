@@ -733,9 +733,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         s.add_message(session_id, "user", question)
         s.update_last_granularity(session_id, body.granularity)
 
-        # 调用 Agent 路由
+        # 调用 Agent 路由（tracer 先建好传入，Runtime 多步执行可输出步骤事件）
+        tracer = tracer_mod.Tracer(req.app.state.cfg.project_root, req.app.state.cfg.agent_data_dir)
         try:
-            result = agent_inst.route(question, granularity=body.granularity)
+            result = agent_inst.route(question, granularity=body.granularity, tracer=tracer)
         except Exception as exc:
             logger.exception("Agent 路由失败")
             # 保存错误消息（仅向前端暴露通用提示，避免泄露内部信息）
@@ -746,7 +747,6 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         query_type = result.get("query_type", "")
         photos_raw = result.get("photos", [])
         asset_snapshot = _build_chat_asset_snapshot(req.app.state.cfg, req.app.state.chroma_store, photos_raw)
-        tracer = tracer_mod.Tracer(req.app.state.cfg.project_root, req.app.state.cfg.agent_data_dir)
         tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
         tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
 

@@ -39,6 +39,8 @@ import chain.photo_rag as photo_rag
 import chain.suggest as suggest_mod
 import chain.text_to_sql as text_to_sql
 import config
+import runtime.capabilities as rt_capabilities
+import runtime.graph as rt_graph
 import tools.openapi_client as openapi_client
 import utils.llm_factory as llm_factory
 import utils.token_tracker as token_tracker
@@ -59,11 +61,13 @@ class RouterState(typing.TypedDict):
     combined_result: dict   # {sql_ids, rag_ids, intersection_ids, answer}
     answer: str
     photos: list[dict]
+    compose_url: str        # Runtime 兜底深链（候选超限时引导进图文工坊）
 
 
 CLASSIFY_SYSTEM = (
-    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined 或 compose，不要解释。\n\n"
-    "compose: 用户要求按条件挑选照片并生成标题、发布文案等创作内容；即使同时有时间线或日期条件也优先 compose。\n"
+    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined 或 runtime，不要解释。\n\n"
+    "runtime: 用户提出开放目标，需要挑选照片并生成标题、发布文案等创作内容的多步任务；"
+    "即使同时有时间线或日期条件也优先 runtime。\n"
     "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、"
     "数量聚合的结构化查询\n"
     "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的纯语义检索\n"
@@ -88,7 +92,7 @@ CLASSIFY_SYSTEM = (
     "- \"逆光的雪山照片\" → combined\n"
     "- \"黑白高对比度的建筑\" → combined\n"
     "- \"宁静氛围的水边照片\" → combined\n\n"
-    "- \"找山西旅游第一天的照片并生成发布文案\" → compose\n\n"
+    "- \"找山西旅游第一天的照片并生成发布文案\" → runtime\n\n"
     "用户问题: {question}\n"
     "分类:"
 )
@@ -108,8 +112,8 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     chain = prompt | llm
     response = chain.invoke({"question": state["question"]})
     raw = str(response.content).strip().lower()
-    if "compose" in raw:
-        query_type = "compose"
+    if "runtime" in raw or "compose" in raw:
+        query_type = "runtime"
     elif "combined" in raw:
         query_type = "combined"
     elif "sql" in raw:
@@ -397,7 +401,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
 
         # Step 5: 交集非空 → 获取照片详情并生成回答
         top_ids = intersection_ids[:5]  # 最多展示 5 张
-        photo_details = _fetch_photos_batch(cfg, top_ids)
+        photo_details = rt_capabilities.fetch_photos_batch(cfg, top_ids)
 
         # 构建上下文
         context_lines: list[str] = []
@@ -474,101 +478,28 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
         }
 
 
-def _collapse_compose_candidates(photos: list[dict], include_group_members: bool = True) -> list[dict]:
-    """按连拍组折叠候选项，优先采用标记的封面。"""
-    collapsed: dict[str, dict] = {}
-    for photo in photos:
-        group_id = photo.get("burst_group_id") or photo.get("burst_group_coarse_id") or ""
-        key = f"group:{group_id}" if group_id else f"photo:{photo.get('id', '')}"
-        current = collapsed.get(key)
-        if current is None or photo.get("is_burst_cover"):
-            item = dict(photo)
-            item["_group_count"] = current.get("_group_count", 0) if current else 0
-            collapsed[key] = item
-        collapsed[key]["_group_count"] += 1
-    result = list(collapsed.values())
-    if not include_group_members:
-        for item in result:
-            item.pop("_group_count", None)
-    return result
-
-
-def _prepare_compose_candidates(photos: list[dict], group_limit: int, cover_limit: int) -> tuple[str, list[dict]]:
-    """按两级阈值准备创作候选：组信息、仅封面或图文工坊兜底。"""
-    collapsed = _collapse_compose_candidates(photos)
-    if len(collapsed) <= group_limit:
-        return "groups", collapsed
-    if len(collapsed) <= cover_limit:
-        return "covers", _collapse_compose_candidates(photos, include_group_members=False)
-    return "overflow", collapsed
-
-
-def _compose_photo_token(photo: dict) -> str:
-    group_id = photo.get("burst_group_id") or photo.get("burst_group_coarse_id") or ""
-    photo_id = photo.get("id", "")
-    return f"g:{group_id}:{photo_id}" if group_id else photo_id
-
-
-def _compose_node(state: RouterState, runtime_config: lc_runnables.RunnableConfig) -> dict:
-    """确定性创作管线：SQL 候选、连拍折叠、限量后由 LLM 创作。"""
+def _runtime_node(state: RouterState, runtime_config: lc_runnables.RunnableConfig) -> dict:
+    """开放目标节点：进入 Runtime 多步执行（decide/execute/reduce/check 循环）。"""
     cfg = _get_cfg(runtime_config)
-    log = logging.getLogger(__name__)
-    try:
-        sql = text_to_sql.generate_filter_sql(cfg, state["question"])
-        ids = text_to_sql.execute_sql_for_ids(cfg.go_backend_url, sql)
-        mode, collapsed = _prepare_compose_candidates(
-            _fetch_photos_batch(cfg, ids), cfg.compose_group_limit, cfg.compose_cover_limit
-        )
-        log.info("[compose] SQL=%d，连拍折叠=%d，收缩模式=%s", len(ids), len(collapsed), mode)
-        if mode == "overflow":
-            tokens = ",".join(_compose_photo_token(item) for item in collapsed)
-            return {"answer": "候选照片过多，建议进入图文工坊自行选图后生成文案。", "photos": [], "compose_url": f"#/post-studio?photo_ids={tokens}"}
-        context = "\n\n".join(f"[{i}] id={p.get('id')} 文件={p.get('filename')} 时间={p.get('shot_at')} 连拍数={p.get('_group_count', 1)}\n描述：{p.get('description') or '无描述'}" for i, p in enumerate(collapsed, 1))
-        response = (lc_prompts.ChatPromptTemplate.from_messages([("system", "你是摄影编辑。基于候选挑选最适合发布的照片，写一个标题和一段发布文案；清楚标注选择的照片 id。"), ("human", "用户请求：{question}\n\n候选：\n{context}")]) | llm_factory.create_llm(cfg, temperature=0.5, callbacks=_get_callbacks())).invoke({"question": state["question"], "context": context})
-        refs = [{"photo_id": p.get("id", ""), "filename": p.get("filename", p.get("id", "")), "image_url": f"{cfg.go_backend_url}/api/v1/photos/{p.get('id', '')}/image", **({"burst_group_id": p.get("burst_group_id"), "burst_count": p.get("_group_count", 1)} if mode == "groups" and p.get("burst_group_id") else {})} for p in collapsed]
-        log.info("[compose] 创作完成，候选=%d", len(refs))
-        return {"answer": str(response.content), "photos": refs}
-    except Exception as exc:
-        log.exception("[compose] 执行失败")
-        return {"answer": f"创作型查询失败: {exc}", "photos": []}
-
-
-def _fetch_photos_batch(cfg: config.Config, photo_ids: list[str]) -> list[dict]:
-    """批量获取照片详情（并行请求 Go 后端）。"""
-    import utils.http_client as http_utils
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    if not photo_ids:
-        return []
-
-    results: list[dict] = []
-
-    def _fetch(pid: str) -> dict | None:
-        try:
-            with http_utils.create_client(timeout=5.0) as client:
-                resp = client.get(f"{cfg.go_backend_url}/api/v1/photos/{pid}")
-                resp.raise_for_status()
-                return resp.json()
-        except Exception:
-            return None
-
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(_fetch, pid): pid for pid in photo_ids}
-        for future in as_completed(futures):
-            data = future.result()
-            if data:
-                results.append(data)
-
-    # 按原始顺序排列
-    id_order = {pid: i for i, pid in enumerate(photo_ids)}
-    results.sort(key=lambda x: id_order.get(x.get("id", ""), 999))
-    return results
+    configurable = runtime_config.get("configurable", {})
+    result = rt_graph.run_runtime(
+        cfg, state["question"],
+        granularity=state.get("granularity", "photo"),
+        llm_callbacks=_get_callbacks(),
+        prices=configurable.get("prices") or {},
+        tracer=configurable.get("tracer"),
+    )
+    return {
+        "answer": result["answer"],
+        "photos": result["photos"],
+        "compose_url": result.get("compose_url", ""),
+    }
 
 
 def _answer_node(state: RouterState) -> dict:
     query_type = state["query_type"]
-    if query_type == "compose":
-        text = state.get("answer") or "创作型查询未返回结果。"
+    if query_type == "runtime":
+        text = state.get("answer") or "任务执行未返回结果。"
         if state.get("compose_url"):
             text += f"\n\n[进入图文工坊]({state['compose_url']})"
         photos = state.get("photos", [])
@@ -625,7 +556,7 @@ def _get_graph():
         g.add_node("rag_query", _rag_node)
         g.add_node("tool_query", _tool_node)
         g.add_node("combined_query", _combined_node)
-        g.add_node("compose_query", _compose_node)
+        g.add_node("runtime_query", _runtime_node)
         g.add_node("answer", _answer_node)
         g.add_edge(lg_graph.START, "classify")
         g.add_conditional_edges(
@@ -635,14 +566,14 @@ def _get_graph():
                 "rag": "rag_query",
                 "tool": "tool_query",
                 "combined": "combined_query",
-                "compose": "compose_query",
+                "runtime": "runtime_query",
             },
         )
         g.add_edge("sql_query", "answer")
         g.add_edge("rag_query", "answer")
         g.add_edge("tool_query", "answer")
         g.add_edge("combined_query", "answer")
-        g.add_edge("compose_query", "answer")
+        g.add_edge("runtime_query", "answer")
         g.add_edge("answer", lg_graph.END)
         _graph_app = g.compile()
     return _graph_app
@@ -691,6 +622,8 @@ class PhotoAgent:
             token_tracker.validate_model_prices(
                 prices, cfg.llm_model, cfg.llm_fallback_model, cfg.embedding_model
             )
+        # 价格表同时供 Runtime 预算的成本累加使用
+        self._prices = prices
         db_path = cfg.agent_path("sqlite", "token_usage.db").as_posix()
         db_path = str(pathlib.Path(db_path).resolve())
         pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -709,13 +642,19 @@ class PhotoAgent:
                   cfg.retry_max_attempts)
         _log.info("   Token 追踪: 已加载 %d 个模型单价（人民币元/百万 Token）", len(prices))
 
-    def route(self, question: str, granularity: str = "photo") -> RouterState:
-        """路由单次查询，自动分发到 SQL / RAG / Tool 分支。
+    def route(
+        self,
+        question: str,
+        granularity: str = "photo",
+        tracer=None,
+    ) -> RouterState:
+        """路由单次查询，自动分发到 SQL / RAG / Tool / Combined / Runtime 分支。
 
         参数:
             question:    用户问题
             granularity: 检索粒度 photo/fine/coarse。photo 为单张照片检索（默认），
                          fine/coarse 走连拍组封面集合，一组只返回一个结果
+            tracer:      可选 Tracer，Runtime 多步执行时输出步骤事件
         """
         initial: RouterState = {
             "question": question,
@@ -727,8 +666,15 @@ class PhotoAgent:
             "combined_result": {},
             "answer": "",
             "photos": [],
+            "compose_url": "",
         }
-        result = self._app.invoke(initial, {"configurable": {"cfg": self._cfg}})
+        result = self._app.invoke(initial, {
+            "configurable": {
+                "cfg": self._cfg,
+                "prices": self._prices,
+                "tracer": tracer,
+            },
+        })
         return typing.cast(RouterState, result)
 
     @property
@@ -773,6 +719,7 @@ def _chat_loop(agent: PhotoAgent) -> None:
             "rag": "RAG 语义检索",
             "tool": "Tool API 调用",
             "combined": "Combined 组合查询",
+            "runtime": "Runtime 多步执行",
         }.get(query_type, "未知路由")
         print(f"路由: {route_name}")
 
@@ -984,6 +931,7 @@ def _handle_sessions(cfg: config.Config, cmd: list[str]) -> None:
 
                 route_label = {
                     "sql": "SQL", "rag": "RAG", "tool": "Tool", "combined": "Combined",
+                    "runtime": "Runtime",
                 }.get(query_type, query_type)
                 print(f"[{route_label}] {answer}")
                 print()

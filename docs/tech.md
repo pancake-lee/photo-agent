@@ -63,7 +63,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["用户问题（自然语言）"] --> B["[classify] LLM 零样本分类<br>query_type: sql | rag | tool | combined"]
+    A["用户问题（自然语言）"] --> B["[classify] LLM 零样本分类<br>query_type: sql | rag | tool | combined | runtime"]
 
     B -->|sql| C["[_sql_node]<br>NL → generate_sql() → LLM 生成 SQL<br>→ Go POST /api/v1/sql/query 执行<br>→ 结果格式化为自然语言"]
 
@@ -82,11 +82,36 @@ flowchart TD
 
     J -.->|"降级策略（任一失败 → 纯 RAG）<br>SQL异常 / SQL>50条 / SQL空 / 交集空 / 整体异常"| D
 
+    B -->|runtime| N["[_runtime_node]<br>Agent Runtime 多步执行<br>（开放目标：选片 + 创作）"]
+
     C --> M["[_answer_node]<br>聚合结果 → answer + photos"]
     D --> M
     E --> M
     L --> M
+    N --> M
 ```
+
+### 3.2.1 Agent Runtime 开放目标执行
+
+开放目标（如「找山西旅游第一天的照片并生成发布文案」）进入 Runtime 循环图，单步查询保持单发管线直调：
+
+```mermaid
+flowchart TD
+    S["START 开放目标"] --> DC["decide<br>LLM 在能力列表中选择下一动作"]
+    DC --> EX["execute<br>程序校验参数并调用能力"]
+    EX --> RD["reduce<br>观察归约进 TaskState"]
+    RD --> CK["check<br>完成检查 + 预算判定"]
+    CK -->|"要件未齐且预算可用"| DC
+    CK -->|"要件齐备"| FN["finish<br>标题文案 + 入选照片引用"]
+    CK -->|"候选超限兜底"| FH["finish<br>图文工坊深链"]
+    CK -->|"预算耗尽"| FS["finish<br>说明已完成与缺口"]
+```
+
+- **分层**：`agent/runtime/` 中 state（TaskState + 显式归约）、budget（步数/时长/成本）、completion（确定性完成检查）、registry（能力注册表 + 参数校验）为框架无关纯 Python；graph.py 仅用 LangGraph 表达循环图与条件回环
+- **TaskState**：goal（目标类型 + 完成要件）/ constraints（用户原始约束）/ resolved_facts（推断事实）/ artifacts（候选与入选照片 ID、文案草稿，大对象只存引用）/ progress（待办里程碑 + 有界历史）
+- **能力层**：sql_search / rag_search / hybrid_search（检索）、resolve_trip / fetch_photo_details（Go 工具）、select_photos（连拍折叠 + 两级收缩 + 超限深链，迁移自 Compose 管线）/ write_post（复用图文工坊提示词栈）
+- **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加
+- **追踪**：tracer 输出 runtime.decide / execute / observe / check 步骤事件与 trace_summary 轨迹摘要（步数、能力调用、里程碑、结束形态）
 
 ### 3.3 Combined 组合查询详解
 
@@ -371,7 +396,7 @@ photo-agent/
 │   └── go.mod
 ├── agent/                        # Python AI 服务层
 │   ├── chain/                    # LangGraph 编排 + FastAPI 服务
-│   │   ├── photo_agent.py        # LangGraph 主图（路由 + 各查询节点）
+│   │   ├── photo_agent.py        # LangGraph 主图（入口路由 + 各查询节点）
 │   │   ├── text_to_sql.py        # Text-to-SQL（Schema + Few-shot + 动态属性值）
 │   │   ├── photo_rag.py          # RAG 检索（向量检索 + 聚合 + 断层过滤）
 │   │   ├── server.py             # FastAPI API（对话/聚类/选题/嵌入/黄金用例/图文工坊）
@@ -381,6 +406,13 @@ photo-agent/
 │   │   ├── eval_engine.py        # 启发式规则评估引擎
 │   │   ├── session_store.py      # 会话持久化（SQLite）
 │   │   └── embed_queue.py        # 批量 Embedding 队列
+│   ├── runtime/                  # Agent Runtime（开放目标多步执行）
+│   │   ├── state.py              # TaskState + 显式归约规则（框架无关）
+│   │   ├── budget.py             # 步数/时长/成本预算（框架无关）
+│   │   ├── completion.py         # 确定性完成检查（框架无关）
+│   │   ├── registry.py           # 能力注册表 + 参数校验（框架无关）
+│   │   ├── capabilities.py       # 具体能力（检索/工具/挑选/文案）
+│   │   └── graph.py              # LangGraph 循环图外壳（decide/execute/reduce/check）
 │   ├── embedding/                # 分块策略 + Embedding 客户端
 │   ├── vectorstore/              # ChromaDB 封装
 │   ├── db/                       # Go 后端 HTTP 客户端（schema/sql）
@@ -405,7 +437,7 @@ photo-agent/
 
 ## 7. 关键设计决策
 
-- **Agent 编排** → LangGraph StateGraph：4 类查询灵活路由，节点可独立测试，支持条件边
+- **Agent 编排** → LangGraph StateGraph：单步查询（sql/rag/tool/combined）单发路由，开放目标（runtime）进入 decide/execute/reduce/check 循环图；循环图仅是编排外壳，TaskState/归约/完成检查/预算/能力注册表全部框架无关，可脱离 LangGraph 单测
 - **向量检索 vs 结构化过滤** → ChromaDB 仅做语义，结构化走 Text-to-SQL：职责边界清晰，避免 Chroma metadata 与 SQLite 冗余同步
 - **属性值提示词** → 动态从 DB 获取 distinct 值拼入：结构化属性为 VLM 中文原文直出，LLM 只能使用实际存在的值，避免生成数据库中不存在的值
 - **Combined 降级** → SQL 失败/过宽/交集空 → 纯 RAG：保证任何情况下都有结果返回

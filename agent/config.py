@@ -66,6 +66,9 @@ class Config:
         self.agent_port = 0
         self.agent_data_dir = ""
         self.chat_db_path = ""
+        self.runtime_max_steps = 12
+        self.runtime_timeout_seconds = 300.0
+        self.runtime_cost_limit = 2.0
         self.eval_reports_dir = ""
         self.evaluation_config_path = ""
         self.prices_path = ""
@@ -150,6 +153,16 @@ class Config:
         self.agent_host, self.agent_port = _split_addr(self.agent_addr, "0.0.0.0")
         self.agent_data_dir = self._require(data, "Agent", "DataDir")
         self.chat_db_path = self._require(data, "Agent", "ChatDBPath")
+        self.runtime_max_steps = _require_int(
+            self._optional(data, "Agent", "RuntimeMaxSteps", 12), "Agent.RuntimeMaxSteps", 1
+        )
+        self.runtime_timeout_seconds = _require_number(
+            self._optional(data, "Agent", "RuntimeTimeoutSeconds", 300.0),
+            "Agent.RuntimeTimeoutSeconds", 0.001,
+        )
+        self.runtime_cost_limit = _require_number(
+            self._optional(data, "Agent", "RuntimeCostLimit", 2.0), "Agent.RuntimeCostLimit", 0
+        )
 
         self.prices_path = self._require(data, "Prices", "Path")
         distance_threshold = self._optional(data, "RAG", "DistanceThreshold", None)
