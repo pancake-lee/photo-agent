@@ -6,15 +6,21 @@
 
 > 表头不能随意修改，即使表格清空了，也要保留表头，保留一个空表。
 
-| 状态 | 分组 | 编号 | 任务 | 评估 |
-| ---- | ---- | ---- | ---- | ---- |
-| 待规划 | Agent 升级 | AR1 | Agent Runtime V1：状态化多步执行 | |
-| Done | 代码治理 | TIDY6 | agent 目录按功能分包重组（方案 B） | |
-| Done | 配置治理 | CFG8 | 价格配置故障隔离，核心功能可用 | |
-| Done | 前端导航 | NAV1 | 恢复组图发现入口 | |
-| Done | 代码治理 | TIDY5 | agent 目录整理（退役文件移入 bak/ + README） | |
-| 暂缓 | 代码治理 | BQ3 | 未鉴权服务暴露任意 SQL 查询 | |
-| 已取代 | 对话查询 | CQ4 | 创作型查询（Compose）专用管线 | |
+| 状态   | 分组       | 编号  | 任务                                         | 评估 |
+| ------ | ---------- | ----- | -------------------------------------------- | ---- |
+| 已规划 | Agent 升级 | AR    | Agent Runtime V1：状态化多步执行             |      |
+| Done   | Agent 升级 | AR1   | Runtime 核心语义（框架无关）                 |      |
+| Done   | Agent 升级 | AR2   | Runtime 能力层接入                           |      |
+| Done   | Agent 升级 | AR3   | Runtime 编排接入与入口路由                   |      |
+| Done   | Agent 升级 | AR4   | Runtime 追踪与评估                           |      |
+| Done   | Agent 升级 | AR5   | Runtime 入口配置注入修复                     |      |
+| 待用户验收 | Agent 升级 | AR6   | Runtime 真实闭环验收与候选详情修复           |      |
+| Done   | 代码治理   | TIDY6 | agent 目录按功能分包重组（方案 B）           |      |
+| Done   | 配置治理   | CFG8  | 价格配置故障隔离，核心功能可用               |      |
+| Done   | 前端导航   | NAV1  | 恢复组图发现入口                             |      |
+| Done   | 代码治理   | TIDY5 | agent 目录整理（退役文件移入 bak/ + README） |      |
+| 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
+| 已取代 | 对话查询   | CQ4   | 创作型查询（Compose）专用管线                |      |
 
 > v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](archive/v1.0.15.md)。
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
@@ -74,7 +80,7 @@
 
 ### CQ4 创作型查询（Compose）专用管线
 
-- **状态**：已取代（2026-08-31，由 AR1 承接）
+- **状态**：已取代（2026-08-31，由 AR 承接）
 - **背景**：「找山西旅游第一天的照片并生成发布文案」这类“选照片 + 做发布内容”的请求未被现有四条路由准确承接。用户期望确定性流程：SQL 查候选 → 连拍去重 → LLM 挑选发布照片并生成标题文案；候选过多时逐级收缩，最终引导用户进图文工坊自选。
 - **分析**：分类器对同一请求会落入 `tool` 或 `combined`，说明需独立类别；照片表、连拍组、时间线和图文工坊深链的数据基础已具备。
 - **方案**：详见 [创作型查询设计](design/2026-08-28-1-compose-query-design.md)。新增第五类 `compose` 路由和确定性候选管线，按连拍组折叠、两级阈值收缩后交由 LLM 挑选并创作；超限时给出携带候选照片的图文工坊深链；以 `[compose]` 记录各阶段条目数。
@@ -85,12 +91,12 @@
   - 前端（如需）：提供图文工坊入口。
 - **验收**：单元测试覆盖收缩分支且全量通过；（用户）重启 Agent 后重发原始山西请求，回复含第一天照片、标题和文案，无同连拍组重复照片，日志出现 `[compose]` 阶段记录。
 - **实施记录**：已加入 `compose` 路由、SQL 候选、连拍封面折叠、两级阈值收缩和超限 `photo_ids` 深链；模板与本地配置已补齐 Compose 阈值，自动单元测试已覆盖核心分支。
-- **取代说明**：专用管线不再作为独立形态验收。连拍折叠、两级收缩、超限深链逻辑在 AR1 子阶段 2 迁移为 Runtime 挑选临时能力；原定的山西请求人工验收并入 AR1 验收。Compose 两个阈值配置继续复用。
-- **关单说明（2026-08-31）**：AR1 子阶段 2 已完成迁移（`agent/runtime/capabilities.py` 的 `collapse_burst_candidates` / `prepare_select_candidates` / `select_token` / `select_photos`），`_compose_node` 专用管线已删除，原单测断言全部迁入 `tests/test_runtime_capabilities.py`。CQ4 正式关闭，不再有独立交付物。
+- **取代说明**：专用管线不再作为独立形态验收。连拍折叠、两级收缩、超限深链逻辑在 AR2 迁移为 Runtime 挑选临时能力；原定的山西请求人工验收并入 AR6 验收。Compose 两个阈值配置继续复用。
+- **关单说明（2026-08-31）**：AR2 已完成迁移（`agent/runtime/capabilities.py` 的 `collapse_burst_candidates` / `prepare_select_candidates` / `select_token` / `select_photos`），`_compose_node` 专用管线已删除，原单测断言全部迁入 `tests/test_runtime_capabilities.py`。CQ4 正式关闭，不再有独立交付物。
 
-### AR1 Agent Runtime V1：状态化多步执行
+### AR Agent Runtime V1：状态化多步执行
 
-- **状态**：待规划（2026-08-31，入口修复完成，真实任务仍有后续失败）
+- **状态**：已规划（子任务 AR1–AR5 已完成，AR6 待执行）
 - **背景**：当前 Agent 为单发路由形态，一次分类进入单条管线后直接产出回答，无执行中再决策。开放目标（山西第一天发帖）的路径取决于每步返回的事实，CQ4 用专用管线硬编码承接，但新的组合需求会不断要求新增专用管线。按学习路径 V1 引入 Agent Runtime：目标跨多次能力调用持续执行，观察归约进任务状态，完成要件满足或预算耗尽时结束。
 - **方案**：详见 [Agent Runtime V1 设计](design/2026-08-31-1-agent-runtime-v1-design.md)。要点：
   - 新增 runtime 模块：TaskState（goal/constraints/resolved_facts/artifacts/progress）、显式状态归约、确定性完成检查、预算（步数/时长/成本）、能力注册表，全部框架无关纯 Python
@@ -101,17 +107,30 @@
   - 配置 Agent 段新增 Runtime 预算键（最大步数/超时秒数/成本上限），沿用 Compose 两级阈值
   - tracer 新增 runtime 步骤事件（decide/execute/observe/check）与轨迹摘要
   - 前端对话界面查询类型标签补 Runtime
-- **子阶段拆分**：
-  1. **Runtime 核心语义（框架无关）** ✅：`agent/runtime/`（state/budget/completion/registry），33 个纯函数单测覆盖归约规则、完成要件判定、预算停止，不依赖 LangGraph 与真实 LLM
-  2. **能力层接入** ✅：`agent/runtime/capabilities.py` 注册 7 项能力（sql_search / rag_search / hybrid_search / resolve_trip / fetch_photo_details / select_photos / write_post）；CQ4 折叠收缩深链逻辑迁入 select_photos，原单测断言迁入 `tests/test_runtime_capabilities.py` 后全量通过
-  3. **编排接入与入口路由** ✅：`agent/runtime/graph.py` 组装 decide → execute → reduce → check 循环图 + 条件回环；classify 新增 runtime 类别（兼容 compose 输出）；`_compose_node` 删除、`_runtime_node` 接入；server 串 tracer 传入 route；配置 Agent 段 Runtime 预算键（可选，缺省 12 步 / 300 秒 / 2 元）+ 模板与部署文档；前端 routeLabel 补 runtime 与 combined
-  4. **追踪与评估** ✅：tracer 输出 runtime.decide / execute / observe / check / trace_summary 事件；伪 LLM 驱动的完整轨迹还原测试通过；检索回归 L0/L1 通过（L2 需 Agent 服务重启后执行）
-  5. **真实环境验收与收尾** ✅：prd / tech / deploy / backlog 文档同步完成，CQ4 关单说明已补
-- **实施记录**：
-  - 新增 `agent/runtime/` 六个模块 + 三个测试文件（state / core / capabilities / graph，共 60 个新测试），全量 166 个测试通过
-  - LangGraph 外壳注意点：节点 `config` 参数必须注解为 `RunnableConfig` 才会注入；循环图 recursion_limit 按预算步数 ×5 放大
-  - 预算成本维度由 `_CostCallback` 按价格表累加（含 decide 与能力内 LLM 调用），sql/rag 能力内部的历史遗留 LLM 调用（text_to_sql 生成）不计入，与现有全局 Token 追踪行为一致
-  - 检索回归 `scripts/eval_regression.py` L0（数据态）/ L1（检索函数）通过；L2（HTTP 契约）需 Agent 服务运行
+
+### AR1 Runtime 核心语义（框架无关）
+
+- **状态**：Done
+- **实施记录**：`agent/runtime/` 的 state / budget / completion / registry 已完成；33 个纯函数单测覆盖归约规则、完成要件判定、预算停止，不依赖 LangGraph 与真实 LLM。
+
+### AR2 Runtime 能力层接入
+
+- **状态**：Done
+- **实施记录**：`agent/runtime/capabilities.py` 已注册 7 项能力（sql_search / rag_search / hybrid_search / resolve_trip / fetch_photo_details / select_photos / write_post）；CQ4 折叠收缩深链逻辑已迁入 select_photos，原单测断言已迁入 `tests/test_runtime_capabilities.py`。
+
+### AR3 Runtime 编排接入与入口路由
+
+- **状态**：Done
+- **实施记录**：`agent/runtime/graph.py` 已组装 decide → execute → reduce → check 循环图与条件回环；runtime 路由、Compose 迁移、预算配置、前端类型标签及文档同步均已完成。
+
+### AR4 Runtime 追踪与评估
+
+- **状态**：Done
+- **实施记录**：tracer 已输出 runtime.decide / execute / observe / check / trace_summary；伪 LLM 驱动的完整轨迹还原测试通过，检索回归 L0/L1 通过。
+
+### AR5 Runtime 入口配置注入修复
+
+- **状态**：Done
 - **验收失败分析（2026-08-31）**：原始山西请求已被分类为 `runtime`，但在外层查询路由图进入 Runtime 节点时立即抛出 `TypeError: _runtime_node() missing 1 required positional argument: 'runtime_config'`，未执行任何 Runtime 步骤。根因是 LangGraph 的节点配置注入依赖约定的配置参数形式；该节点使用了未被识别的参数名，导致框架只传入 State。现有测试直接调用节点函数，绕过了外层图的实际调用路径，未能发现这一集成断点。
 - **修复方案**：对齐 Runtime 入口节点与其他路由节点的 LangGraph 配置注入约定，确保外层图实际执行时能向 Runtime 传递配置、成本状态与追踪器；新增经编译外层路由图进入 Runtime 的集成回归测试，以伪 Runtime 执行器断言请求可返回回答、照片和 Runtime 类型，不触发真实 LLM、数据库或网络调用。
 - **实施任务**：
@@ -122,7 +141,23 @@
   - Runtime 入口节点已采用 LangGraph 可识别的配置注入形式；外层查询图可将请求实际分发到 Runtime。
   - 新增编译后外层路由图的 Runtime 分支回归测试，覆盖配置、回答、照片和查询类型的端到端状态传递；`tests.test_runtime_graph` 11/11、Agent 全量 171/171 通过。
   - 临时 Agent 服务的同一 HTTP 请求不再返回 500，日志确认进入 `resolve_trip → sql_search → select_photos`，并返回 HTTP 200。
-- **新增问题（待规划）**：真实请求在照片挑选阶段多次返回“挑选结果为空或均不在候选内”，最终 303 秒后因超时预算结束，响应无照片与文案，未满足 AR1 验收。该问题位于已修复的入口之后，需单独定位挑选模型输出、候选照片详情获取及 ID 一致性，不能把 Runtime 入口 500 的修复误判为 AR1 整体通过。
+
+### AR6 Runtime 真实闭环验收与候选详情修复
+
+- **状态**：待用户验收
+- **验收失败分析（2026-08-31，第二轮）**：真实请求正确完成旅行定位和 SQL 候选检索（20 张），但 Runtime 的照片详情客户端将后端 `GET /api/v1/photos/{id}` 的响应整体当作照片对象；实际照片位于响应的 `photo` 字段。后端日志确认全部详情请求均为 200，Runtime 却因根级没有 `id` 而丢弃为 0 张。挑选器收到空上下文后输出的 ID 无法通过校验，模型随即重复检索、详情和挑选，直至第 14 步在 367.1 秒超时。故根因是后端响应契约解析错误及失败后的重复决策，不是任务规模或预算不足；配置的 20 步尚未耗尽。
+- **方案**：
+  - 统一 Runtime 照片详情读取与既有 Agent 客户端的响应契约，提取 `photo` 对象后再写入缓存、连拍折叠、挑选提示和最终照片引用；详情请求失败时保留可定位的失败 ID 与原因，不能静默伪装成“0 张详情”。
+  - 为详情为空和挑选产物为空建立确定性失败归约：禁止 LLM 在相同候选集上反复尝试，直接给出可定位的能力失败结果；正常候选详情齐备时，状态摘要只暴露“下一里程碑”，使决策顺序稳定为检索 → 挑选 → 文案。
+  - 补充真实 HTTP 响应形状的能力层回归测试、详情缺失的终止测试，以及原始山西请求的伪 LLM 完整路径测试；修复后先以当前 20 步 / 300 秒配置验收。仅在正常路径的时延仍稳定超过 300 秒时，再基于 Trace 调整时长上限，而非先行提高预算。
+- **实施任务**：
+  - 修正 Runtime 照片详情响应解析并补充失败诊断。
+  - 收紧详情/挑选失败后的状态归约与回环条件，杜绝无进展重复调用。
+  - 运行 Agent 全量测试；重启后重发原始山西请求，核对一次正常闭环的 Runtime 轨迹、入选照片及文案。
+- **实施记录（2026-08-31）**：
+  - `fetch_photos_batch` 已按后端契约提取响应中的 `photo` 对象；异常或响应缺少 `photo.id` 时记录照片 ID 与原因。
+  - 候选详情全缺失、挑选结果无效均会归约为确定性终止，最终回复明确失败原因，不再将无进展状态反复交给模型或误报为预算耗尽。
+  - 自动验证：Runtime 相关测试 51/51、Agent 全量 176/176 通过；使用当前运行的 Go 后端对一张真实候选执行详情读取，确认返回 1 张且含 `id`、`description`。
 - **（用户）验收操作**：
   - （可选）在 `.local/my-config.yaml` Agent 段补预算键（不加则用默认 12 / 300 / 2.0）：
     ```yaml
@@ -134,14 +169,14 @@
   - 重启 Python Agent（`make dev` 或 `python cli/photo_agent.py -c ../.local/my-config.yaml --serve`）
   - 在对话界面发送原始山西请求：「找山西旅游第一天的照片并生成发布文案」
 - **预期结果**：回复标注「Runtime 多步」标签，包含标题、正文文案和第一天照片（无同连拍组重复照片）；日志出现 `[runtime]` 步骤记录；`data/agent/execution-traces/` 当日 jsonl 含 runtime.decide/execute/observe/check/trace_summary 事件
-- **最小回传**：回复「AR1 已通过」或贴出回复截图/文本；如异常，贴 `[runtime]` 日志片段
-- **AI 自动验证**：166 个单测全量通过（含伪 LLM 驱动的三步闭环、预算停止、轨迹还原）；检索回归 L0/L1 通过
+- **最小回传**：回复「AR6 已通过」或贴出回复截图/文本；如异常，贴 `[runtime]` 日志片段
+- **AI 自动验证**：Runtime 相关测试 51/51、Agent 全量 176/176 通过；真实 Go 后端详情响应读取通过。
 - **关单方式**：用户回复确认后，AI 在同一轮将任务改为 `Done` 并注明确认日期，不追加核验
 
 ### TIDY5 agent 目录整理（退役文件移入 bak/ + README）
 
 - **状态**：Done（2026-08-31，AI 自动验证关单）
-- **背景**：AR1 完成后 agent/ 目录混杂早期学习性 demo、一次性调试脚本与 codegen 脚手架，职责不清晰
+- **背景**：AR 主体开发后 agent/ 目录混杂早期学习性 demo、一次性调试脚本与 codegen 脚手架，职责不清晰
 - **动作**：
   - 新增 `agent/README.md`（列表形式描述各目录与文件职责）与 `agent/bak/`（退役文件暂存，用户后续手动删除）
   - 移入 bak/：`demo/` 全目录及其配套 `tests/test_query_router.py`（16 个用例仅覆盖已退役的旧路由）、`scripts/debug_pid.py`（一次性 PID 调参）、`chain/test_suggest_smoke.py`（suggest 管线重构后早已过期，运行即报 AttributeError）、backend-sdk 的 codegen 自带 `test/`（87 个文件）与 CI 脚手架（tox.ini/.travis.yml/git_push.sh/test-requirements.txt）
@@ -173,13 +208,13 @@
   - 执行中用户新增规则：import 风格向 Go 靠拢，项目内模块禁止 `from xxx import <符号>`，统一 `import pkg.module as alias` + 限定调用；规则已补强进 `docs/handbook/coding-conventions.md` 导入规范（含标准库/第三方例外），存量 6 处 `from import`（tests 与各模块 docstring 用法示例）全部转换
   - `server.py` 日志初始化的硬编码 `getLogger("chain")` 根因修复为按新包名（chat/topics/posts/evals/infra/runtime/入口）逐包挂 handler，模块内 `getLogger(__name__)` 随包名自动生效
   - `pyproject.toml`：`py-modules` 补 server/photo_agent/demo；`packages.find` 排除 `bak*`（退役代码不得进入 editable 映射）
-  - 文档同步：`agent/README.md` 重写（含目录规范章节：依赖方向单向 + import 风格，作为 agent 目录规范载体）；`docs/tech.md` 架构树与 §9；`docs/handbook/eval-guide.md` 与本文件 AR1 的 CLI 路径
+  - 文档同步：`agent/README.md` 重写（含目录规范章节：依赖方向单向 + import 风格，作为 agent 目录规范载体）；`docs/tech.md` 架构树与 §9；`docs/handbook/eval-guide.md` 与本文件 AR 的 CLI 路径
   - 自动验证结果：166 个单测全绿；`posts.test_post_studio_smoke` 通过；全部新旧模块 import 正常（含 agent 目录外执行，验证 editable 映射）；无 `from <项目模块> import` 与旧前缀残留
   - 二次追加（同日用户要求：金字塔分层 + tech.md 收敛目录粒度）：五个功能包（chat / topics / posts / runtime / evals）套入父目录 `internal/`（类 Go internal/；候选 internal / features / apps / core 中用户选定 internal），形成 `cli → internal → infra` 三层金字塔；import 路径全部加 `internal.` 前缀，server logger 挂载收敛为 3 个包根名（internal / infra / cli）；`docs/tech.md` agent 子树收敛为目录粒度（文件级职责只在 agent/README.md）
   - 追加（同日用户追加要求：顶层不放源码）：三个入口文件移入 `cli/`（类似 Go cmd/；命名弃用 `cmd` 因与 Python 标准库模块重名，实测依赖零引用但属长期遮蔽风险），`config.py` 移入 `infra/`，顶层仅剩 makefile / pyproject.toml / uv.lock / README；入口引用统一别名形式 `import cli.photo_agent as photo_agent`；`cli/photo_agent.py` 加 sys.path 引导支持任意目录直接运行；`pyproject.toml` 移除 `py-modules`；修复三处 `assertLogs("photo_agent")` → `"cli.photo_agent"` 与 server logger 挂载列表（收敛为 7 个包根名）；`pip install -e .` 产生的 `photo_agent_ai.egg-info/` 构建残留已清理（`*.egg-info/` 已在 .gitignore）
-- **（用户）验收操作**：`make dev`（或 `python cli/photo_agent.py -c ../.local/my-config.yaml --serve`）启动后在对话页发一条消息冒烟；可顺带执行 AR1 的山西请求（两项验收一次完成）
+- **（用户）验收操作**：`make dev`（或 `python cli/photo_agent.py -c ../.local/my-config.yaml --serve`）启动后在对话页发一条消息冒烟；可顺带执行 AR6 的山西请求（两项验收一次完成）
 - **预期结果**：服务正常启动，对话回复正常，日志 `[chat.xxx]`/`[infra.xxx]` 等新包名 logger 输出正常
-- **最小回传**：回复「TIDY6 已通过」（可与 AR1 验收合并回复）
+- **最小回传**：回复「TIDY6 已通过」（可与 AR6 验收合并回复）
 - **（用户）验收**：`make dev` 启动后在对话页发一条消息冒烟，回复「TIDY6 已通过」即关单
 - **关单记录（2026-08-31）**：用户确认 TIDY6 已通过。
 
@@ -209,8 +244,8 @@
 - **2026-08-31**：TIDY6 执行中新增 import 风格规则：项目内模块禁止 `from xxx import <符号>`，统一 Go 式限定调用（`import pkg.module as alias` + `alias.func()`），标准库与第三方例外；规则落在 coding-conventions.md 导入规范，agent/README.md 目录规范章节同步引用。
 - **2026-08-31**：TIDY6 方向确认。agent 目录重组采用 package by feature（chat/topics/posts/runtime/evals/infra + 顶层入口），否决数字前缀方案（Python 模块名禁止数字开头，import 语法错误）；依赖方向规则（入口 → 功能包 → infra 单向）随重组写入 agent/README.md 作为目录规范。
 - **2026-08-31**：TIDY5 agent 目录整理。退役文件（学习性 demo、一次性脚本、过期 smoke、backend-sdk codegen 脚手架）按原相对路径移入 `agent/bak/` 待手动删除，不直接物理删除；新增 `agent/README.md` 作为目录职责总览入口。166 个测试通过，无需用户操作。
-- **2026-08-31**：AR1 开发完成待验收。新增 `agent/runtime/`（框架无关核心 + LangGraph 外壳），入口 classify 增加 runtime 类别承接原 compose 开放目标，CQ4 专用管线删除、其折叠/收缩/深链逻辑迁入 select_photos 能力；预算键落在 Agent 段（RuntimeMaxSteps/TimeoutSeconds/CostLimit，缺省 12/300/2.0）；tracer 增加 runtime 步骤事件与轨迹摘要；前端标签补 runtime。166 个测试全量通过。
-- **2026-08-31**：AR1 规划，Agent 从单发路由升级为 Agent Runtime V1。编排底座定为 LangGraph 只做 Runtime 外壳（decide/execute/reduce/check 循环图），TaskState、状态归约、完成检查、预算、能力注册表保持框架无关；CQ4 compose 专用管线由 AR1 取代关闭，其折叠/收缩/深链逻辑迁移为挑选临时能力，山西案例验收并入 AR1。
+- **2026-08-31**：AR 主体开发完成待验收。新增 `agent/runtime/`（框架无关核心 + LangGraph 外壳），入口 classify 增加 runtime 类别承接原 compose 开放目标，CQ4 专用管线删除、其折叠/收缩/深链逻辑迁入 select_photos 能力；预算键落在 Agent 段（RuntimeMaxSteps/TimeoutSeconds/CostLimit，缺省 12/300/2.0）；tracer 增加 runtime 步骤事件与轨迹摘要；前端标签补 runtime。166 个测试全量通过。
+- **2026-08-31**：AR 规划，Agent 从单发路由升级为 Agent Runtime V1。编排底座定为 LangGraph 只做 Runtime 外壳（decide/execute/reduce/check 循环图），TaskState、状态归约、完成检查、预算、能力注册表保持框架无关；CQ4 compose 专用管线由 AR 取代关闭，其折叠/收缩/深链逻辑迁移为挑选临时能力，山西案例验收并入 AR6。
 - **2026-08-30**：v1.0.15 归档。完成草稿编辑输入恢复、后端质量治理与关键用户路径闭环、公共文档对齐、工具和运行数据整理、配置契约收敛，共 22 项任务；BQ3、CQ4 继续暂缓，分别受 FR-11 与真实环境验收条件约束。
 - **2026-08-30**：BQ1 以“后端代码质量基线评估与问题拆分”范围关单。活动 SQLite 库已确认不含四个旧 AI 状态列，BQ2 改为删除一次性迁移代码；BQ3 按开发阶段决策暂缓并迁入 future requirements；BQ4–BQ6、BQ8 的技术方案和验收已补充至各自 backlog 条目。
 - **2026-08-29**：新增 BQ1，建立长期使用的后端代码质量 100 分制标准并接入评估模式；后续以独立逻辑单测、Service 集成测试和关键用户用例闭环组合验证，不以 100% 单元测试覆盖率为目标。

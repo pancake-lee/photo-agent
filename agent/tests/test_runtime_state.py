@@ -87,6 +87,14 @@ class ReduceObservationTest(unittest.TestCase):
         self.assertEqual(len(task.progress.errors), rt_state._ERRORS_MAX)
         self.assertEqual(task.progress.errors[-1], f"失败{rt_state._ERRORS_MAX + 2}")
 
+    def test_terminal_error_stops_runtime_with_reason(self):
+        task = self._task()
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_ERROR, "无法获取候选照片详情", 
+            {"terminal_reason": "photo_details_unavailable"},
+        ), step_no=1, action="fetch_photo_details")
+        self.assertEqual(task.progress.terminal_reason, "photo_details_unavailable")
+
     def test_unknown_kind_raises(self):
         task = self._task()
         with self.assertRaises(KeyError):
@@ -167,6 +175,16 @@ class BuildFinalOutputTest(unittest.TestCase):
         self.assertIn("已完成：定位旅行与日期", output["answer"])
         self.assertIn("仍缺少：入选照片、发布文案", output["answer"])
         self.assertIn("最后动作：resolve_trip", output["answer"])
+
+    def test_terminal_error_output_does_not_claim_budget_exhaustion(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_ERROR, "无法获取候选照片详情", 
+            {"terminal_reason": "photo_details_unavailable"},
+        ), step_no=1, action="fetch_photo_details")
+        output = rt_state.build_final_output(task)
+        self.assertIn("无法获取候选照片详情", output["answer"])
+        self.assertNotIn("预算已耗尽", output["answer"])
 
 
 if __name__ == "__main__":

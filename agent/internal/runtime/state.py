@@ -221,6 +221,9 @@ def _apply_error(state: TaskState, obs: Observation) -> None:
     """错误观察：记录有界错误清单，供决策与最终说明使用。"""
     state.progress.errors.append(obs.summary or "未知错误")
     del state.progress.errors[:-_ERRORS_MAX]
+    terminal_reason = obs.payload.get("terminal_reason")
+    if terminal_reason:
+        state.progress.terminal_reason = str(terminal_reason)
 
 
 _APPLY_RULES: dict[str, typing.Callable[[TaskState, Observation], None]] = {
@@ -319,6 +322,13 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
         return {
             "answer": "候选照片过多，请进入图文工坊自选后生成文案。",
             "handoff_url": state.artifacts.handoff_url,
+        }
+
+    if state.progress.terminal_reason:
+        last_error = state.progress.errors[-1] if state.progress.errors else "关键能力执行失败"
+        return {
+            "answer": f"任务未能完成：{last_error}。",
+            "handoff_url": "",
         }
 
     reason_label = _STOP_REASON_LABELS.get(stop_reason, stop_reason or "未知")

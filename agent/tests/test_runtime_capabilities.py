@@ -110,6 +110,17 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
              unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
             obs = rt_caps._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.payload["terminal_reason"], "photo_selection_failed")
+
+    def test_select_without_photo_details_stops_deterministically(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "挑照片", {"question": "q"})
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a"]},
+        ), step_no=1, action="sql_search")
+        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[]):
+            obs = rt_caps._select_photos({}, _ctx(_cfg(), task))
+        self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
 
 class WritePostCapabilityTest(unittest.TestCase):
@@ -180,6 +191,15 @@ class ResolveTripCapabilityTest(unittest.TestCase):
 
 
 class RetrievalCapabilityTest(unittest.TestCase):
+    def test_fetch_photos_batch_unwraps_photo_response(self):
+        response = unittest.mock.MagicMock()
+        response.json.return_value = {"photo": {"id": "a", "filename": "a.jpg"}}
+        client = unittest.mock.MagicMock()
+        client.__enter__.return_value.get.return_value = response
+        with unittest.mock.patch.object(rt_caps.http_utils, "create_client", return_value=client):
+            photos = rt_caps.fetch_photos_batch(_cfg(), ["a"])
+        self.assertEqual(photos, [{"id": "a", "filename": "a.jpg"}])
+
     def test_sql_search_returns_photo_ids_observation(self):
         with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",
                                         return_value="SELECT id FROM photos") as gen, \
@@ -217,6 +237,12 @@ class RetrievalCapabilityTest(unittest.TestCase):
     def test_fetch_photo_details_requires_ids(self):
         obs = rt_caps._fetch_photo_details({}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+
+    def test_fetch_photo_details_stops_when_all_details_missing(self):
+        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[]):
+            obs = rt_caps._fetch_photo_details({"ids": ["a"]}, _ctx(_cfg()))
+        self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
     def test_capability_exception_becomes_error_observation(self):
         with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",

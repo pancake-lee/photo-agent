@@ -48,8 +48,14 @@ def fetch_photos_batch(cfg, photo_ids: list[str]) -> list[dict]:
             with http_utils.create_client(timeout=5.0) as client:
                 resp = client.get(f"{cfg.go_backend_url}/api/v1/photos/{pid}")
                 resp.raise_for_status()
-                return resp.json()
-        except Exception:
+                payload = resp.json()
+                photo = payload.get("photo") if isinstance(payload, dict) else None
+                if not isinstance(photo, dict) or not photo.get("id"):
+                    logger.warning("[runtime] 照片详情响应缺少 photo.id: id=%s", pid)
+                    return None
+                return photo
+        except Exception as exc:
+            logger.warning("[runtime] 获取照片详情失败: id=%s, error=%s", pid, exc)
             return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -302,6 +308,12 @@ def _fetch_photo_details(params: dict, ctx: rt_registry.RunContext) -> Observati
     if not ids:
         return rt_state.Observation(rt_state.OBS_ERROR, "未指定要获取详情的照片 ID")
     photos = _cached_photos(ctx, ids)
+    if not photos:
+        return rt_state.Observation(
+            rt_state.OBS_ERROR,
+            f"无法获取候选照片详情（0/{len(ids)} 张），无法继续挑选",
+            {"terminal_reason": "photo_details_unavailable", "ids": ids},
+        )
     return rt_state.Observation(
         rt_state.OBS_PHOTO_DETAILS,
         f"获取 {len(photos)}/{len(ids)} 张照片详情",
@@ -331,6 +343,12 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> Observation:
         )
 
     photos = _cached_photos(ctx, candidates)
+    if not photos:
+        return rt_state.Observation(
+            rt_state.OBS_ERROR,
+            f"无法获取候选照片详情（0/{len(candidates)} 张），无法继续挑选",
+            {"terminal_reason": "photo_details_unavailable", "ids": candidates},
+        )
     mode, collapsed = prepare_select_candidates(
         photos, ctx.cfg.compose_group_limit, ctx.cfg.compose_cover_limit,
     )
@@ -367,7 +385,9 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> Observation:
         valid_ids = valid_ids[:max_photos]
     if not valid_ids:
         return rt_state.Observation(
-            rt_state.OBS_ERROR, "挑选结果为空或均不在候选内，请重试或调整候选",
+            rt_state.OBS_ERROR,
+            "挑选结果为空或均不在候选内，无法继续生成文案",
+            {"terminal_reason": "photo_selection_failed"},
         )
     return rt_state.Observation(
         rt_state.OBS_PHOTOS_SELECTED,
