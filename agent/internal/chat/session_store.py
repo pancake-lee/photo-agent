@@ -76,6 +76,7 @@ class SessionStore:
                         role        TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
                         content     TEXT NOT NULL,
                         query_type  TEXT,
+                        trace_id    TEXT,
                         granularity TEXT,
                         usage_json  TEXT DEFAULT '{}',
                         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -95,6 +96,10 @@ class SessionStore:
                 if "granularity" not in col_names:
                     conn.execute(
                         "ALTER TABLE messages ADD COLUMN granularity TEXT"
+                    )
+                if "trace_id" not in col_names:
+                    conn.execute(
+                        "ALTER TABLE messages ADD COLUMN trace_id TEXT"
                     )
 
                 session_cols = conn.execute("PRAGMA table_info(sessions)").fetchall()
@@ -176,7 +181,7 @@ class SessionStore:
                     return None
 
                 msg_rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, granularity, usage_json, photos, created_at
+                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, created_at
                        FROM messages WHERE session_id=? ORDER BY id""",
                     (session_id,),
                 ).fetchall()
@@ -197,6 +202,7 @@ class SessionStore:
                         "role": m["role"],
                         "content": m["content"],
                         "query_type": m["query_type"],
+                        "trace_id": m["trace_id"],
                         "granularity": m["granularity"],
                         "photos": photos_list,
                         "input_tokens": usage.get("input_tokens", 0),
@@ -265,6 +271,7 @@ class SessionStore:
         role: str,
         content: str,
         query_type: Optional[str] = None,
+        trace_id: Optional[str] = None,
         granularity: Optional[str] = None,
         usage: Optional[dict] = None,
         photos_json: str = "",
@@ -278,9 +285,9 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 cur = conn.execute(
-                    """INSERT INTO messages (session_id, role, content, query_type, granularity, usage_json, photos, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (session_id, role, content, query_type, granularity, usage_str, photos_json, now),
+                    """INSERT INTO messages (session_id, role, content, query_type, trace_id, granularity, usage_json, photos, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, role, content, query_type, trace_id, granularity, usage_str, photos_json, now),
                 )
                 conn.execute(
                     "UPDATE sessions SET updated_at=? WHERE id=?",
@@ -297,7 +304,7 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, granularity, usage_json, photos, created_at
+                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, created_at
                        FROM messages WHERE session_id=? ORDER BY id""",
                     (session_id,),
                 ).fetchall()
@@ -317,6 +324,7 @@ class SessionStore:
                         "role": m["role"],
                         "content": m["content"],
                         "query_type": m["query_type"],
+                        "trace_id": m["trace_id"],
                         "granularity": m["granularity"],
                         "photos": photos_list,
                         "input_tokens": usage.get("input_tokens", 0),

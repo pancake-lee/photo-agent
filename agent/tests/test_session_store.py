@@ -17,6 +17,19 @@ class TestSessionStore(unittest.TestCase):
 
             self.assertEqual(messages[0]["granularity"], "fine")
 
+    def test_assistant_message_trace_id_is_persisted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = session_store.SessionStore(str(Path(temp_dir) / "sessions.db"))
+            session = store.create_session()
+            store.add_message(
+                session["session_id"], "assistant", "回答", trace_id="trace-123",
+            )
+
+            self.assertEqual(
+                store.get_session(session["session_id"])["messages"][0]["trace_id"],
+                "trace-123",
+            )
+
     def test_last_granularity_is_persisted_on_session(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "sessions.db"
@@ -60,6 +73,7 @@ class TestSessionStore(unittest.TestCase):
 
             messages = store.get_messages("legacy")
             self.assertIsNone(messages[0]["granularity"])
+            self.assertIsNone(messages[0]["trace_id"])
             self.assertEqual(store.get_session("legacy")["last_granularity"], "photo")
 
 

@@ -993,7 +993,7 @@ def main() -> None:
     cfg = config.Config(args.config)
     cfg.check_api_key()
 
-    # 日志配置：server 模式静默（uvicorn 自行管理），CLI 模式输出到 stdout
+    # CLI 模式保留控制台输出；服务模式由 server 配置独立 JSONL 应用日志。
     if args.serve_port is None:
         logging.basicConfig(
             level=logging.INFO,

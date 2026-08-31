@@ -26,6 +26,7 @@ import BurstGroupModal from '../components/BurstGroupModal.vue'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
 import { photoApi } from '../backend-sdk-client'
 import type { ApiSearchPhotosResponse } from '../../backend-sdk/api'
+import { canSaveAsGoldenQuery } from '../utils/goldenQuery'
 
 const route = useRoute()
 const router = useRouter()
@@ -412,8 +413,11 @@ const hasMessages = computed(() => messages.value.length > 0)
                 <NTag :bordered="false" size="tiny" type="info">
                   {{ msg.granularity ? granularityLabel[msg.granularity] : '粒度未记录' }}
                 </NTag>
+                <NTag v-if="msg.trace_id" :bordered="false" size="tiny" type="default">
+                  轨迹 {{ msg.trace_id }}
+                </NTag>
                 <NButton
-                  v-if="msg.photos && msg.photos.length"
+                  v-if="canSaveAsGoldenQuery(msg)"
                   size="tiny"
                   text
                   @click="openGoldenSave(i)"

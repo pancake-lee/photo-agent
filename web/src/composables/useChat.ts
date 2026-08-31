@@ -107,6 +107,7 @@ async function sendMessage(
       role: 'assistant',
       content: data.answer,
       query_type: data.query_type,
+      trace_id: data.trace_id,
       granularity: data.granularity,
       photos: data.photos || [],
       created_at: new Date().toISOString(),

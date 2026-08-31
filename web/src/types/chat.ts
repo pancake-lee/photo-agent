@@ -26,6 +26,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   query_type?: string
+  /** 请求执行轨迹编号，旧历史消息未记录时为空 */
+  trace_id?: string
   /** AI 回复实际使用的检索粒度；旧历史消息未记录时为空 */
   granularity?: Granularity
   photos?: PhotoRef[]
@@ -45,4 +47,5 @@ export interface SendMessageResponse {
   query_type: string
   granularity: Granularity
   photos?: PhotoRef[]
+  trace_id: string
 }

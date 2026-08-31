@@ -17,6 +17,7 @@ import datetime
 import os
 import threading
 import queue
+import time
 from typing import Literal
 
 import requests
@@ -37,6 +38,7 @@ import internal.evals.tracer as tracer_mod
 import internal.evals.eval_engine as eval_engine
 import infra.chroma_client as chroma_client
 import infra.config as config_mod
+import infra.app_logging as app_logging
 
 logger = logging.getLogger(__name__)
 
@@ -612,6 +614,33 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         description="照片 AI 助手对话接口",
     )
 
+    @app.middleware("http")
+    async def bind_request_trace(request: fastapi.Request, call_next):
+        """为聊天请求建立 Trace 上下文，并以统一格式记录 access。"""
+        request_trace = None
+        token = None
+        if request.url.path.startswith("/api/chat/sessions/") and request.url.path.endswith("/messages"):
+            request_trace = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
+            request.state.tracer = request_trace
+            token = app_logging.trace_id_var.set(request_trace.trace_id)
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            logger.info(
+                "HTTP access",
+                extra={
+                    "event": "http.access",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": locals().get("response", None).status_code if "response" in locals() else 500,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                },
+            )
+            if token is not None:
+                app_logging.trace_id_var.reset(token)
+
     # CORS — 开发阶段允许所有来源
     # 注意: allow_credentials=True 时 allow_origins 不能是 *
     app.add_middleware(
@@ -742,13 +771,13 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         s.update_last_granularity(session_id, body.granularity)
 
         # 调用 Agent 路由（tracer 先建好传入，Runtime 多步执行可输出步骤事件）
-        tracer = tracer_mod.Tracer(req.app.state.cfg.project_root, req.app.state.cfg.agent_data_dir)
+        tracer = req.state.tracer
         try:
             result = agent_inst.route(question, granularity=body.granularity, tracer=tracer)
         except Exception as exc:
             logger.exception("Agent 路由失败")
             # 保存错误消息（仅向前端暴露通用提示，避免泄露内部信息）
-            s.add_message(session_id, "assistant", "抱歉，处理请求时发生内部错误，请稍后重试。", query_type="error")
+            s.add_message(session_id, "assistant", "抱歉，处理请求时发生内部错误，请稍后重试。", query_type="error", trace_id=tracer.trace_id)
             raise fastapi.HTTPException(status_code=500, detail="处理请求时发生内部错误")
 
         answer = result.get("answer", "") or "未能获取回答。"
@@ -766,6 +795,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         msg_id = s.add_message(
             session_id, "assistant", answer,
             query_type=query_type,
+            trace_id=tracer.trace_id,
             granularity=body.granularity,
             photos_json=photos_json,
         )
@@ -2446,20 +2476,17 @@ def run_server(cfg: config_mod.Config, port: int | None = None) -> None:
     """启动 uvicorn 服务器（阻塞调用）。"""
     import uvicorn
 
-    # 为应用层各包的 logger 配置 handler（uvicorn 不管这些）
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        datefmt="%H:%M:%S",
-    ))
-    _handler.setLevel(logging.DEBUG)
-    for _pkg in ("internal", "infra", "cli"):
-        _pkg_logger = logging.getLogger(_pkg)
-        _pkg_logger.addHandler(_handler)
-        _pkg_logger.setLevel(logging.INFO)
+    app_logging.configure_service_logging(cfg.project_root)
 
     actual_port = port or cfg.agent_port
     app = create_app(cfg)
     logger.info("Chat API 服务启动: http://%s:%d", cfg.agent_host, actual_port)
     logger.info("API 文档: http://localhost:%d/docs", actual_port)
-    uvicorn.run(app, host=cfg.agent_host, port=actual_port, log_level="info")
+    uvicorn.run(
+        app,
+        host=cfg.agent_host,
+        port=actual_port,
+        log_level="info",
+        access_log=False,
+        log_config=None,
+    )
