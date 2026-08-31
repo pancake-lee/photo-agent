@@ -484,10 +484,10 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
         }
 
 
-def _runtime_node(state: RouterState, runtime_config: lc_runnables.RunnableConfig) -> dict:
+def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     """开放目标节点：进入 Runtime 多步执行（decide/execute/reduce/check 循环）。"""
-    cfg = _get_cfg(runtime_config)
-    configurable = runtime_config.get("configurable", {})
+    cfg = _get_cfg(config)
+    configurable = config.get("configurable", {})
     result = rt_graph.run_runtime(
         cfg, state["question"],
         granularity=state.get("granularity", "photo"),

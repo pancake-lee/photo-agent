@@ -262,6 +262,43 @@ class EntryRoutingTest(unittest.TestCase):
         self.assertEqual(run.call_args[0][0], cfg)
         self.assertEqual(run.call_args[1]["granularity"], "fine")
 
+    def test_outer_route_graph_injects_config_into_runtime_node(self):
+        """编译后的外层图能进入 Runtime，防止节点配置注入约定回归。"""
+        cfg = _cfg()
+        fake = unittest.mock.MagicMock()
+        fake.return_value.content = "runtime"
+        initial = {
+            "question": "找山西旅游第一天的照片并生成发布文案",
+            "granularity": "photo",
+            "query_type": "",
+            "sql_result": {},
+            "rag_answer": "",
+            "tool_answer": "",
+            "combined_result": {},
+            "answer": "",
+            "photos": [],
+            "compose_url": "",
+        }
+        previous_graph = photo_agent._graph_app
+        photo_agent._graph_app = None
+        try:
+            with unittest.mock.patch.object(
+                photo_agent.llm_factory, "create_llm", return_value=fake,
+            ), unittest.mock.patch.object(
+                photo_agent.rt_graph, "run_runtime",
+                return_value={"answer": "# 山西第一天", "photos": [{"photo_id": "a"}], "compose_url": ""},
+            ) as run:
+                result = photo_agent._get_graph().invoke(initial, {
+                    "configurable": {"cfg": cfg, "prices": {}},
+                })
+        finally:
+            photo_agent._graph_app = previous_graph
+
+        self.assertEqual(result["query_type"], "runtime")
+        self.assertEqual(result["answer"], "# 山西第一天")
+        self.assertEqual(result["photos"], [{"photo_id": "a"}])
+        run.assert_called_once()
+
     def test_answer_node_runtime_branch_appends_handoff(self):
         update = photo_agent._answer_node({
             "query_type": "runtime",
