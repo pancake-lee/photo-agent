@@ -1,6 +1,8 @@
 # Agent Runtime V1 — 状态化多步执行设计
 
 > 需求条目：AR（见 backlog）。本文档只记录功能与架构决策，实施步骤与子任务拆分以 backlog 条目为准。
+>
+> 专题中枢：[Agent Runtime 专题中枢](2026-08-31-2-agent-runtime-hub.md)。
 
 ## 1. 需求背景
 

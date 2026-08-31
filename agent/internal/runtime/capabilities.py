@@ -121,7 +121,11 @@ def _capability_run(fn: typing.Callable[[dict, rt_registry.RunContext], Observat
             return fn(params or {}, ctx)
         except Exception as exc:
             logger.exception("[runtime] 能力 %s 执行失败", fn.__name__)
-            return rt_state.Observation(rt_state.OBS_ERROR, f"{fn.__name__} 执行失败: {exc}")
+            return rt_state.Observation(
+                rt_state.OBS_ERROR,
+                f"{fn.__name__} 执行失败: {exc}",
+                {"terminal_reason": "capability_execution_failed"},
+            )
 
     return wrapped
 
@@ -271,7 +275,9 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> Observation:
     timelines = _fetch_timelines(ctx.cfg)
     if not timelines:
         return rt_state.Observation(
-            rt_state.OBS_FACTS, "照片库暂无时间线，无法定位旅行", {"facts": {}},
+            rt_state.OBS_ERROR,
+            "照片库暂无时间线，无法定位旅行",
+            {"terminal_reason": "trip_unresolved"},
         )
 
     hint = str(params.get("hint") or ctx.question or "")
@@ -289,9 +295,9 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> Observation:
     matched = _match_timeline_name(str(data.get("timeline") or ""), timelines)
     if not matched:
         return rt_state.Observation(
-            rt_state.OBS_FACTS,
+            rt_state.OBS_ERROR,
             f"未在 {len(timelines)} 条时间线中匹配到目标（模型原始输出: {data.get('timeline')!r}）",
-            {"facts": {}},
+            {"terminal_reason": "trip_unresolved"},
         )
     logger.info("[runtime] resolve_trip 匹配时间线: %s", matched)
     return rt_state.Observation(

@@ -218,12 +218,11 @@ def _apply_copy_drafted(state: TaskState, obs: Observation) -> None:
 
 
 def _apply_error(state: TaskState, obs: Observation) -> None:
-    """错误观察：记录有界错误清单，供决策与最终说明使用。"""
+    """错误观察：记录失败并以确定性终态停止，避免无进展重复决策。"""
     state.progress.errors.append(obs.summary or "未知错误")
     del state.progress.errors[:-_ERRORS_MAX]
-    terminal_reason = obs.payload.get("terminal_reason")
-    if terminal_reason:
-        state.progress.terminal_reason = str(terminal_reason)
+    terminal_reason = obs.payload.get("terminal_reason") or "capability_failed"
+    state.progress.terminal_reason = str(terminal_reason)
 
 
 _APPLY_RULES: dict[str, typing.Callable[[TaskState, Observation], None]] = {

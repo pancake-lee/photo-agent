@@ -174,15 +174,15 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         self.assertEqual(obs.kind, rt_state.OBS_FACTS)
         self.assertEqual(obs.payload["facts"], {"timeline": "山西旅游"})
 
-    def test_unmatched_returns_empty_facts(self):
+    def test_unmatched_stops_with_trip_reason(self):
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = '{"timeline": "不存在的旅行"}'
         with unittest.mock.patch.object(rt_caps, "_fetch_timelines",
                                         return_value=["山西旅游", "北京街拍"]), \
              unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
             obs = rt_caps._resolve_trip({}, _ctx(_cfg(), question="随便"))
-        self.assertEqual(obs.kind, rt_state.OBS_FACTS)
-        self.assertEqual(obs.payload["facts"], {})
+        self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.payload["terminal_reason"], "trip_unresolved")
 
     def test_match_timeline_name_fuzzy_variants(self):
         self.assertEqual(rt_caps._match_timeline_name("山西旅游 ", ["山西旅游"]), "山西旅游")
@@ -250,6 +250,7 @@ class RetrievalCapabilityTest(unittest.TestCase):
             obs = rt_caps._sql_search({"query": "q"}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertIn("后端挂了", obs.summary)
+        self.assertEqual(obs.payload["terminal_reason"], "capability_execution_failed")
 
 
 class BuildRegistryTest(unittest.TestCase):

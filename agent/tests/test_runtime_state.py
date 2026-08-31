@@ -86,6 +86,7 @@ class ReduceObservationTest(unittest.TestCase):
             ), step_no=i + 1, action="sql_search")
         self.assertEqual(len(task.progress.errors), rt_state._ERRORS_MAX)
         self.assertEqual(task.progress.errors[-1], f"失败{rt_state._ERRORS_MAX + 2}")
+        self.assertEqual(task.progress.terminal_reason, "capability_failed")
 
     def test_terminal_error_stops_runtime_with_reason(self):
         task = self._task()

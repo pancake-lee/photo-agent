@@ -116,6 +116,18 @@ class RunRuntimeLoopTest(unittest.TestCase):
         observation = update["observation"]
         self.assertEqual(observation.kind, rt_state.OBS_ERROR)
         self.assertIn("未知能力", observation.summary)
+        self.assertEqual(observation.payload["terminal_reason"], "invalid_decision")
+
+    def test_invalid_decision_stops_after_one_step_without_budget_exhaustion(self):
+        """无效决策应直接结束，不能反复调用模型至预算耗尽。"""
+        llm = _ScriptedLLM([
+            '{"action": "no_such_capability", "params": {}, "reason": "错误决策"}',
+        ])
+        with unittest.mock.patch.object(rt_graph.llm_factory, "create_llm", return_value=llm):
+            result = rt_graph.run_runtime(_cfg(), "写一篇帖子")
+        self.assertEqual(len(llm.decide_prompts), 1)
+        self.assertIn("未知能力", result["answer"])
+        self.assertNotIn("预算已耗尽", result["answer"])
 
     def test_route_after_check_branches(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "q", {"question": "q"})

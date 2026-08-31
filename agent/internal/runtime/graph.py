@@ -162,7 +162,9 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
     started_at = time.perf_counter()
     if errors:
         observation = rt_state.Observation(
-            rt_state.OBS_ERROR, f"决策无效（{action or '空 action'}）: {'; '.join(errors)}",
+            rt_state.OBS_ERROR,
+            f"决策无效（{action or '空 action'}）: {'; '.join(errors)}",
+            {"terminal_reason": "invalid_decision"},
         )
     else:
         capability = registry.get(action)
