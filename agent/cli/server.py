@@ -2490,11 +2490,13 @@ def _resolve_db_path(cfg: config_mod.Config) -> str:
     return cfg.resolve_path(db_rel).as_posix()
 
 
-def run_server(cfg: config_mod.Config, port: int | None = None) -> None:
+def run_server(
+    cfg: config_mod.Config, port: int | None = None, console_logging: bool = False,
+) -> None:
     """启动 uvicorn 服务器（阻塞调用）。"""
     import uvicorn
 
-    app_logging.configure_service_logging(cfg.project_root)
+    app_logging.configure_service_logging(cfg.project_root, console=console_logging)
 
     actual_port = port or cfg.agent_port
     app = create_app(cfg)

@@ -845,6 +845,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 示例:
   python cli/photo_agent.py -c config.yaml              # 交互式聊天 (CLI)
   python cli/photo_agent.py -c config.yaml --serve      # API 服务（使用 Agent.Addr）
+  python cli/photo_agent.py -c config.yaml --serve -l   # API 服务，控制台文本日志
   python cli/photo_agent.py -c config.yaml --serve 9999 # API 自定义端口
   python cli/photo_agent.py -c config.yaml --eval       # 评估模式
   python cli/photo_agent.py -c config.yaml --usage      # 用量统计
@@ -875,6 +876,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--serve", dest="serve_port", nargs="?", const=0, type=int, default=None,
         metavar="PORT",
         help="启动 HTTP API 服务（默认使用 Agent.Addr，可选覆盖端口）",
+    )
+    parser.add_argument(
+        "-l", dest="console_logging", action="store_true",
+        help="服务模式输出人类可读的控制台日志；JSONL 文件日志始终保留",
     )
     parser.add_argument(
         "--suggest", dest="suggest_mode", action="store_true",
@@ -1018,7 +1023,9 @@ def main() -> None:
     # --serve 模式：启动 API 服务（Agent 和 Chroma/EmbedQueue 在 server 内部初始化）
     if args.serve_port is not None:
         import cli.server as server
-        server.run_server(cfg, port=args.serve_port)
+        server.run_server(
+            cfg, port=args.serve_port, console_logging=args.console_logging,
+        )
         return
 
 

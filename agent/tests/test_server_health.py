@@ -10,6 +10,15 @@ import cli.server as server
 
 
 class ServerHealthTest(unittest.TestCase):
+    def test_cli_log_flag_enables_human_readable_console_output(self):
+        import cli.photo_agent as photo_agent
+
+        args = photo_agent._build_arg_parser().parse_args([
+            "-c", "config.yaml", "--serve", "-l",
+        ])
+
+        self.assertTrue(args.console_logging)
+
     def test_health_reports_pricing_degradation_without_blocking_app_creation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

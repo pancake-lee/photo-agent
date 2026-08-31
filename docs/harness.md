@@ -51,7 +51,7 @@ AI 根据用户在对话中使用的触发词自动切换工作模式。四种�
 
 ### 2.3 Trace 结构化日志
 
-Go（plogger）和 Python（自建）统一输出结构化 JSON 日志，`trace_id` 全链路透传（Go ↔ Python 通过 `X-Trace-Id` header）。大体积 payload（LLM prompt/response 全文）写入独立文件，日志行只记路径引用。
+Go（plogger）和 Python（自建）均保留结构化 JSON 日志，`trace_id` 全链路透传（Go ↔ Python 通过 `X-Trace-Id` header）。Python Agent 以 `-l` 启动时额外输出人类可读的控制台日志，便于开发排查；JSONL 文件日志始终保留，供生产日志平台接入。大体积 payload（LLM prompt/response 全文）写入独立文件，日志行只记路径引用。
 
 ### 2.4 任务关闭与用户验收
 
