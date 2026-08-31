@@ -264,7 +264,7 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 
 **对话**：
 
-- `GET /api/chat/health` — 健康检查
+- `GET /api/chat/health` — 健康检查，包含价格配置是否可用及降级原因
 - `POST /api/chat/sessions` — 创建会话
 - `GET /api/chat/sessions` — 会话列表
 - `GET /api/chat/sessions/:id` — 会话详情

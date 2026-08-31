@@ -53,8 +53,13 @@ class TokenTracker:
 
     def __init__(self, db_path: str, prices: dict[str, dict[str, float]] | None = None):
         self._db_path = db_path
-        self._prices = prices or {}
+        self._prices = prices
         self._init_db()
+
+    @property
+    def pricing_available(self) -> bool:
+        """当前用量记录是否能计算可信成本。"""
+        return self._prices is not None
 
     def _init_db(self) -> None:
         with sqlite3.connect(self._db_path) as conn:
@@ -68,35 +73,45 @@ class TokenTracker:
                     created_at TEXT    DEFAULT (datetime('now', 'localtime'))
                 )
             """)
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(token_usage)")
+            }
+            if "cost_tracked" not in columns:
+                conn.execute(
+                    "ALTER TABLE token_usage "
+                    "ADD COLUMN cost_tracked INTEGER NOT NULL DEFAULT 1"
+                )
             conn.commit()
 
     def record(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """记录一次调用，返回成本。"""
-        price = self._prices.get(model, {})
+        price = (self._prices or {}).get(model, {})
         input_price = price.get("input", 0.0)
         output_price = price.get("output", 0.0)
         cost = (input_tokens / 1_000_000.0) * input_price + (output_tokens / 1_000_000.0) * output_price
 
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
-                "INSERT INTO token_usage (model, input_tokens, output_tokens, cost) "
-                "VALUES (?, ?, ?, ?)",
-                (model, input_tokens, output_tokens, cost),
+                "INSERT INTO token_usage "
+                "(model, input_tokens, output_tokens, cost, cost_tracked) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (model, input_tokens, output_tokens, cost, self.pricing_available),
             )
             conn.commit()
         return cost
 
     def record_embedding(self, model: str, tokens: int) -> float:
         """记录一次 embedding 调用（仅有 total_tokens，无 output）。"""
-        price = self._prices.get(model, {})
+        price = (self._prices or {}).get(model, {})
         input_price = price.get("input", 0.0)
         cost = (tokens / 1_000_000.0) * input_price
 
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
-                "INSERT INTO token_usage (model, input_tokens, output_tokens, cost) "
-                "VALUES (?, ?, ?, ?)",
-                (model, tokens, 0, cost),
+                "INSERT INTO token_usage "
+                "(model, input_tokens, output_tokens, cost, cost_tracked) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (model, tokens, 0, cost, self.pricing_available),
             )
             conn.commit()
         return cost
@@ -111,6 +126,7 @@ class TokenTracker:
                        SUM(input_tokens)  AS total_input,
                        SUM(output_tokens) AS total_output,
                        SUM(cost)          AS total_cost,
+                       MIN(cost_tracked)  AS cost_tracked,
                        COUNT(*)           AS calls
                 FROM token_usage
                 WHERE created_at >= datetime('now', 'localtime', ? || ' days')
@@ -132,6 +148,7 @@ class TokenTracker:
                        SUM(input_tokens)  AS total_input,
                        SUM(output_tokens) AS total_output,
                        SUM(cost)          AS total_cost,
+                       MIN(cost_tracked)  AS cost_tracked,
                        COUNT(*)           AS calls
                 FROM token_usage
                 WHERE created_at >= datetime('now', 'localtime', ? || ' days')

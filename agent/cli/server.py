@@ -449,6 +449,8 @@ class MessageResponse(pydantic.BaseModel):
 class HealthResponse(pydantic.BaseModel):
     status: str
     model: str
+    pricing_available: bool
+    pricing_error: str = ""
 
 
 # ── 黄金用例 Pydantic 模型 ──────────────────────────────
@@ -666,7 +668,13 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
     @app.get("/api/chat/health", response_model=HealthResponse)
     async def health():
-        return {"status": "ok", "model": cfg.llm_model}
+        pricing = app.state.agent.pricing_status
+        return {
+            "status": "ok",
+            "model": cfg.llm_model,
+            "pricing_available": pricing["available"],
+            "pricing_error": pricing["error"],
+        }
 
     @app.post("/api/chat/sessions", response_model=SessionResponse, status_code=201)
     async def create_session(req: fastapi.Request, body: CreateSessionRequest = CreateSessionRequest()):

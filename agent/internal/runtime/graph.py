@@ -92,13 +92,18 @@ class _CostCallback(lc_callbacks.BaseCallbackHandler):
         self._budget_state.add_cost(cost)
 
 
-def _get_runtime_config(config: dict) -> tuple[typing.Any, list, typing.Any]:
+def _get_runtime_config(config: dict) -> tuple[typing.Any, list, typing.Any, bool]:
     """从 LangGraph configurable 中取配置、LLM 回调与 tracer。"""
     configurable = config.get("configurable", {})
     cfg = configurable.get("cfg")
     if cfg is None:
         raise RuntimeError("Config 未注入到 configurable 中")
-    return cfg, list(configurable.get("llm_callbacks") or []), configurable.get("tracer")
+    return (
+        cfg,
+        list(configurable.get("llm_callbacks") or []),
+        configurable.get("tracer"),
+        bool(configurable.get("pricing_available", True)),
+    )
 
 
 def _emit(tracer, event: str, data: dict) -> None:
@@ -109,7 +114,7 @@ def _emit(tracer, event: str, data: dict) -> None:
 
 def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """决策节点：LLM 在能力列表中选择下一动作（程序负责解析与校验）。"""
-    cfg, callbacks, tracer = _get_runtime_config(config)
+    cfg, callbacks, tracer, _ = _get_runtime_config(config)
     registry = _get_registry()
     task = state["task"]
 
@@ -148,7 +153,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
 
 def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """执行节点：程序校验参数并调用能力，异常与无效决策都转为失败观察。"""
-    cfg, callbacks, tracer = _get_runtime_config(config)
+    cfg, callbacks, tracer, _ = _get_runtime_config(config)
     registry = _get_registry()
     decision = state["decision"]
     action = decision.get("action", "")
@@ -184,7 +189,7 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
 
 def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """归约节点：把观察按显式规则合并进 TaskState。"""
-    _, _, tracer = _get_runtime_config(config)
+    _, _, tracer, _ = _get_runtime_config(config)
     observation = state["observation"]
     action = state["decision"].get("action", "")
     task = rt_state.reduce_observation(
@@ -203,13 +208,13 @@ def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
 
 def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """检查节点：程序消耗一步预算并判定完成/停止。"""
-    cfg, _, tracer = _get_runtime_config(config)
+    cfg, _, tracer, pricing_available = _get_runtime_config(config)
     budget_state = state["budget_state"]
     budget_state.consume_step()
     budget = rt_budget.Budget(
         max_steps=cfg.runtime_max_steps,
         timeout_seconds=cfg.runtime_timeout_seconds,
-        cost_limit=cfg.runtime_cost_limit,
+        cost_limit=cfg.runtime_cost_limit if pricing_available else 0,
     )
     stop_reason = rt_budget.check_stop(budget_state, budget)
     completion = rt_completion.check_completion(state["task"])
@@ -228,6 +233,7 @@ def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -
         "stop_reason": stop_reason,
         "elapsed_ms": round(budget_state.elapsed_seconds() * 1000),
         "cost": round(budget_state.cost_used, 6),
+        "cost_budget_enabled": pricing_available,
     })
     return {"stop_reason": stop_reason}
 
@@ -245,7 +251,7 @@ def _route_after_check(state: RuntimeGraphState) -> str:
 
 def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """收尾节点：组装最终输出与照片引用，并输出轨迹摘要。"""
-    cfg, _, tracer = _get_runtime_config(config)
+    cfg, _, tracer, _ = _get_runtime_config(config)
     output = rt_state.build_final_output(state["task"], stop_reason=state.get("stop_reason", ""))
 
     photos: list[dict] = []
@@ -319,6 +325,7 @@ def run_runtime(
     granularity: str = "photo",
     llm_callbacks: list | None = None,
     prices: dict | None = None,
+    pricing_available: bool = True,
     tracer=None,
 ) -> dict:
     """执行一次开放目标任务，返回 {"answer", "photos", "compose_url"}。"""
@@ -345,6 +352,7 @@ def run_runtime(
         "configurable": {
             "cfg": cfg,
             "llm_callbacks": callbacks,
+            "pricing_available": pricing_available,
             "tracer": tracer,
         },
         "recursion_limit": recursion_limit,

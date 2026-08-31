@@ -151,6 +151,30 @@ class RunRuntimeLoopTest(unittest.TestCase):
         callback.on_llm_end(response)
         self.assertEqual(budget_state.cost_used, 2.0)
 
+    def test_price_configuration_failure_disables_only_cost_budget(self):
+        budget_state = rt_budget.BudgetState(cost_used=2.0)
+        state = {
+            "task": rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "q", {"question": "q"}),
+            "budget_state": budget_state,
+            "step_no": 1,
+        }
+        result = rt_graph._check_node(
+            state,
+            {"configurable": {"cfg": _cfg(runtime_cost_limit=1.0), "pricing_available": False}},
+        )
+        self.assertEqual(result["stop_reason"], "")
+
+        tracked_state = {
+            "task": rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "q", {"question": "q"}),
+            "budget_state": rt_budget.BudgetState(cost_used=2.0),
+            "step_no": 1,
+        }
+        tracked_result = rt_graph._check_node(
+            tracked_state,
+            {"configurable": {"cfg": _cfg(runtime_cost_limit=1.0), "pricing_available": True}},
+        )
+        self.assertEqual(tracked_result["stop_reason"], "cost")
+
 
     def test_trace_events_reconstruct_full_trajectory(self):
         """一次开放目标请求的完整轨迹可在 trace 中还原。"""

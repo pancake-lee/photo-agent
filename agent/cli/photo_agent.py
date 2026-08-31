@@ -32,6 +32,7 @@ import langchain_core.messages as lc_messages
 import langchain_core.prompts as lc_prompts
 import langchain_core.runnables as lc_runnables
 import langgraph.graph as lg_graph
+import yaml
 
 # 允许从任意目录直接运行 `python cli/photo_agent.py`。
 _AGENT_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -491,7 +492,8 @@ def _runtime_node(state: RouterState, runtime_config: lc_runnables.RunnableConfi
         cfg, state["question"],
         granularity=state.get("granularity", "photo"),
         llm_callbacks=_get_callbacks(),
-        prices=configurable.get("prices") or {},
+        prices=configurable.get("prices"),
+        pricing_available=bool(configurable.get("pricing_available", True)),
         tracer=configurable.get("tracer"),
     )
     return {
@@ -619,16 +621,21 @@ class PhotoAgent:
         self._app = _get_graph()
 
         # 初始化 Token 追踪
-        prices = {}
-        if cfg.prices_path:
-            prices = token_tracker.load_prices(
+        prices: dict[str, dict[str, float]] | None = None
+        pricing_error = ""
+        try:
+            loaded_prices = token_tracker.load_prices(
                 cfg.resolve_path(cfg.prices_path).as_posix()
             )
             token_tracker.validate_model_prices(
-                prices, cfg.llm_model, cfg.llm_fallback_model, cfg.embedding_model
+                loaded_prices, cfg.llm_model, cfg.llm_fallback_model, cfg.embedding_model
             )
+            prices = loaded_prices
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            pricing_error = str(exc)
         # 价格表同时供 Runtime 预算的成本累加使用
         self._prices = prices
+        self._pricing_error = pricing_error
         db_path = cfg.agent_path("sqlite", "token_usage.db").as_posix()
         db_path = str(pathlib.Path(db_path).resolve())
         pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -645,7 +652,13 @@ class PhotoAgent:
         _log.info("   重试: %s（最多 %d 次）",
                   "开启" if cfg.retry_enabled else "关闭",
                   cfg.retry_max_attempts)
-        _log.info("   Token 追踪: 已加载 %d 个模型单价（人民币元/百万 Token）", len(prices))
+        if pricing_error:
+            _log.warning(
+                "价格配置不可用，已降级：Token 成本不追踪，Runtime 成本预算已停用。原因: %s",
+                pricing_error,
+            )
+        else:
+            _log.info("   Token 追踪: 已加载 %d 个模型单价（人民币元/百万 Token）", len(prices))
 
     def route(
         self,
@@ -677,6 +690,7 @@ class PhotoAgent:
             "configurable": {
                 "cfg": self._cfg,
                 "prices": self._prices,
+                "pricing_available": not self._pricing_error,
                 "tracer": tracer,
             },
         })
@@ -689,6 +703,14 @@ class PhotoAgent:
     @property
     def cfg(self) -> config.Config:
         return self._cfg
+
+    @property
+    def pricing_status(self) -> dict[str, str | bool]:
+        """返回价格配置的当前状态，供服务诊断与健康检查使用。"""
+        return {
+            "available": not self._pricing_error,
+            "error": self._pricing_error,
+        }
 
 
 # ============================================================================
@@ -765,6 +787,7 @@ def _print_usage(tracker: token_tracker.TokenTracker, days: int = 7) -> None:
         return
 
     total_cost = 0.0
+    has_untracked_cost = False
     print()
     print("按模型汇总:")
     for row in summary:
@@ -772,10 +795,17 @@ def _print_usage(tracker: token_tracker.TokenTracker, days: int = 7) -> None:
         print(f"    调用次数: {row['calls']}")
         print(f"    Input:  {row['total_input']:,} tokens")
         print(f"    Output: {row['total_output']:,} tokens")
-        print(f"    费用:   ${row['total_cost']:.6f}")
-        total_cost += row["total_cost"]
-    print(f"  ────────────────────")
-    print(f"  总费用: ${total_cost:.6f}")
+        if row["cost_tracked"]:
+            print(f"    费用:   ${row['total_cost']:.6f}")
+            total_cost += row["total_cost"]
+        else:
+            print("    费用:   未追踪（价格配置不可用）")
+            has_untracked_cost = True
+    print("  ────────────────────")
+    if has_untracked_cost:
+        print("  总费用: 不完整（存在未追踪成本的调用）")
+    else:
+        print(f"  总费用: ${total_cost:.6f}")
     print()
 
     daily = tracker.daily_breakdown(days=days)
@@ -786,9 +816,14 @@ def _print_usage(tracker: token_tracker.TokenTracker, days: int = 7) -> None:
             if row["day"] != current_day:
                 current_day = row["day"]
                 print(f"  {current_day}:")
+            cost_text = (
+                f"${row['total_cost']:.6f}"
+                if row["cost_tracked"]
+                else "未追踪"
+            )
             print(f"    {row['model']}: {row['calls']} 次 "
                   f"| 入 {row['total_input']:,} / 出 {row['total_output']:,} "
-                  f"| ${row['total_cost']:.6f}")
+                  f"| {cost_text}")
     print()
 
 
