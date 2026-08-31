@@ -8,8 +8,8 @@ import logging
 import unittest
 import unittest.mock
 
-import chain.photo_agent as photo_agent
-import tools.openapi_client as openapi_client
+import cli.photo_agent as photo_agent
+import infra.openapi_client as openapi_client
 
 
 class _FakeToolClient:
@@ -40,7 +40,7 @@ class TestToolNodeDiagnostics(unittest.TestCase):
         ), unittest.mock.patch.object(
             photo_agent.llm_factory, "create_llm",
             side_effect=lambda *_args, **_kwargs: _FakeLLM(),
-        ), self.assertLogs("chain.photo_agent", level=logging.INFO) as captured:
+        ), self.assertLogs("cli.photo_agent", level=logging.INFO) as captured:
             result = photo_agent._tool_node(
                 {"question": "列出时间线", "granularity": "photo"},
                 {"configurable": {"cfg": _FakeConfig()}},
@@ -83,7 +83,7 @@ class TestOpenAPIClientDiagnostics(unittest.TestCase):
         with unittest.mock.patch.object(
             openapi_client.http_utils, "create_client",
             return_value=_FakeHTTPClient(),
-        ), self.assertLogs("tools.openapi_client", level=logging.INFO) as captured:
+        ), self.assertLogs("infra.openapi_client", level=logging.INFO) as captured:
             result = client.execute("get_timelines", {})
 
         self.assertEqual(result, '{"timelines":["山西"]}')

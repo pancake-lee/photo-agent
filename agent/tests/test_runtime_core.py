@@ -1,10 +1,10 @@
 import time
 import unittest
 
-import runtime.budget as rt_budget
-import runtime.completion as rt_completion
-import runtime.registry as rt_registry
-import runtime.state as rt_state
+import internal.runtime.budget as rt_budget
+import internal.runtime.completion as rt_completion
+import internal.runtime.registry as rt_registry
+import internal.runtime.state as rt_state
 
 
 class BudgetTest(unittest.TestCase):

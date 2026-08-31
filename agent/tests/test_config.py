@@ -4,7 +4,7 @@ import unittest
 
 import yaml
 
-import config
+import infra.config as config
 
 
 class ConfigTest(unittest.TestCase):

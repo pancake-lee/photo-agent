@@ -1,9 +1,9 @@
 import unittest
 import unittest.mock
 
-import runtime.capabilities as rt_caps
-import runtime.registry as rt_registry
-import runtime.state as rt_state
+import internal.runtime.capabilities as rt_caps
+import internal.runtime.registry as rt_registry
+import internal.runtime.state as rt_state
 
 
 def _cfg(**overrides):

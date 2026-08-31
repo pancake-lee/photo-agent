@@ -12,7 +12,7 @@ import sys
 import pathlib
 
 
-import tools.openapi_client as openapi_client
+import infra.openapi_client as openapi_client
 
 
 # ------------------------------------------------------------------ #

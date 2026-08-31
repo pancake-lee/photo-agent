@@ -9,6 +9,8 @@
 | 状态 | 分组 | 编号 | 任务 | 评估 |
 | ---- | ---- | ---- | ---- | ---- |
 | 待用户验收 | Agent 升级 | AR1 | Agent Runtime V1：状态化多步执行 | |
+| 待用户验收 | 代码治理 | TIDY6 | agent 目录按功能分包重组（方案 B） | |
+| Done | 代码治理 | TIDY5 | agent 目录整理（退役文件移入 bak/ + README） | |
 | 暂缓 | 代码治理 | BQ3 | 未鉴权服务暴露任意 SQL 查询 | |
 | 已取代 | 对话查询 | CQ4 | 创作型查询（Compose）专用管线 | |
 
@@ -73,12 +75,56 @@
       RuntimeTimeoutSeconds: 300
       RuntimeCostLimit: 2.0
     ```
-  - 重启 Python Agent（`make dev` 或 `python chain/photo_agent.py -c ../.local/my-config.yaml --serve`）
+  - 重启 Python Agent（`make dev` 或 `python cli/photo_agent.py -c ../.local/my-config.yaml --serve`）
   - 在对话界面发送原始山西请求：「找山西旅游第一天的照片并生成发布文案」
 - **预期结果**：回复标注「Runtime 多步」标签，包含标题、正文文案和第一天照片（无同连拍组重复照片）；日志出现 `[runtime]` 步骤记录；`data/agent/execution-traces/` 当日 jsonl 含 runtime.decide/execute/observe/check/trace_summary 事件
 - **最小回传**：回复「AR1 已通过」或贴出回复截图/文本；如异常，贴 `[runtime]` 日志片段
 - **AI 自动验证**：166 个单测全量通过（含伪 LLM 驱动的三步闭环、预算停止、轨迹还原）；检索回归 L0/L1 通过
 - **关单方式**：用户回复确认后，AI 在同一轮将任务改为 `Done` 并注明确认日期，不追加核验
+
+### TIDY5 agent 目录整理（退役文件移入 bak/ + README）
+
+- **状态**：Done（2026-08-31，AI 自动验证关单）
+- **背景**：AR1 完成后 agent/ 目录混杂早期学习性 demo、一次性调试脚本与 codegen 脚手架，职责不清晰
+- **动作**：
+  - 新增 `agent/README.md`（列表形式描述各目录与文件职责）与 `agent/bak/`（退役文件暂存，用户后续手动删除）
+  - 移入 bak/：`demo/` 全目录及其配套 `tests/test_query_router.py`（16 个用例仅覆盖已退役的旧路由）、`scripts/debug_pid.py`（一次性 PID 调参）、`chain/test_suggest_smoke.py`（suggest 管线重构后早已过期，运行即报 AttributeError）、backend-sdk 的 codegen 自带 `test/`（87 个文件）与 CI 脚手架（tox.ini/.travis.yml/git_push.sh/test-requirements.txt）
+  - 文档同步：`docs/tech.md` §9 移除 demo/ 条目并指向 agent/README.md；`docs/handbook/eval-guide.md` 移除过期 smoke 命令
+- **AI 自动验证**：`tests/` 全量 166 用例通过；`chain.test_post_studio_smoke` 通过；`chain.server` / `photo_agent` / `eval_engine` / `trace_replay` import 正常
+- **遗留说明**：`make venv` 重建环境后需手动 `uv pip install -e ./backend-sdk`，已写入 agent/README.md
+
+### TIDY6 agent 目录按功能分包重组（方案 B）
+
+- **状态**：待用户验收（2026-08-31 开发完成，AI 自动验证通过）
+- **背景**：现有顶层目录按技术组件命名且无依赖方向约定：`tools/` 与 `utils/` 语义重叠（都是 Go 后端接入或通用封装却分居两处）；`db/`、`tools/`、`vectorstore/` 为单文件目录；`chain/` 混装入口、检索分支、业务管线与横切设施。Python 社区无统一工程结构标准，参照 Go 的功能分包思路（入口 + 业务包 + 基础设施），采用 package by feature。期间用户试过数字前缀分层（`01_photo_agent.py`），因 Python 模块名禁止数字开头导致 import 语法错误、服务与测试 broken，已恢复原名（166 测试恢复全绿）
+- **目标结构**（依赖方向单向：入口 → 功能包 chat/topics/posts/runtime/evals → infra；功能包之间不互相 import，跨功能复用下沉 infra 或经入口编排）：
+  - 顶层入口（自 `chain/` 提出）：`photo_agent.py`（CLI）、`server.py`（FastAPI）、`demo.py`（`--demo` 场景演示）
+  - `chat/`（对话查询线）：`photo_rag.py`、`text_to_sql.py`、`session_store.py`
+  - `topics/`（选题发现线）：`cluster.py`、`suggest.py`
+  - `posts/`（图文工坊线）：`post_studio.py`、`test_post_studio_smoke.py`
+  - `evals/`（评估与观测）：`evaluation.py`、`eval_engine.py`、`trace_replay.py`、`tracer.py`
+  - `infra/`（基础设施）：`openapi_client.py`、`backend_sdk.py`、`http_client.py`、`llm_factory.py`、`streaming_printer.py`、`token_tracker.py`、`sqlite_client.py`、`chroma_client.py`、`embed_queue.py`、`embedding/`（`chunking.py`、`embedder.py`）
+  - 不动：`runtime/`、`config.py`、`tests/`、`scripts/`、`backend-sdk/`、`bak/`、`makefile`、`pyproject.toml`
+  - 删除迁空目录：`chain/`、`tools/`、`utils/`、`db/`、`vectorstore/`、`embedding/`
+- **实施步骤**：
+  - 按映射移动文件，批量更新 import 前缀（`chain.`/`utils.`/`tools.`/`db.`/`vectorstore.`/`embedding.` → 新路径），覆盖 `tests/`、`scripts/eval_regression.py` 与包内互相引用
+  - `makefile` dev 目标改 `python3 photo_agent.py`；`pyproject.toml` 的 `py-modules` 补 `server`/`photo_agent`/`demo`
+  - 重装 editable 包刷新映射：`uv pip install -e .`（backend-sdk 无需重装）
+  - 重写 `agent/README.md` 目录章节（含上述依赖方向规则，作为 agent 目录规范载体）；同步 `docs/tech.md`、`docs/handbook/eval-guide.md` 中路径
+- **AI 自动验证**：166 个单测全绿；`server`/`photo_agent` import 正常；`grep` 无旧前缀残留 import（排除 `bak/`、`backend-sdk/`）；`posts.test_post_studio_smoke` 可执行
+- **实施记录（2026-08-31）**：
+  - 按目标结构完成移动，`chain/`、`tools/`、`utils/`、`db/`、`vectorstore/`、`embedding/` 六个旧目录删除
+  - 执行中用户新增规则：import 风格向 Go 靠拢，项目内模块禁止 `from xxx import <符号>`，统一 `import pkg.module as alias` + 限定调用；规则已补强进 `docs/handbook/coding-conventions.md` 导入规范（含标准库/第三方例外），存量 6 处 `from import`（tests 与各模块 docstring 用法示例）全部转换
+  - `server.py` 日志初始化的硬编码 `getLogger("chain")` 根因修复为按新包名（chat/topics/posts/evals/infra/runtime/入口）逐包挂 handler，模块内 `getLogger(__name__)` 随包名自动生效
+  - `pyproject.toml`：`py-modules` 补 server/photo_agent/demo；`packages.find` 排除 `bak*`（退役代码不得进入 editable 映射）
+  - 文档同步：`agent/README.md` 重写（含目录规范章节：依赖方向单向 + import 风格，作为 agent 目录规范载体）；`docs/tech.md` 架构树与 §9；`docs/handbook/eval-guide.md` 与本文件 AR1 的 CLI 路径
+  - 自动验证结果：166 个单测全绿；`posts.test_post_studio_smoke` 通过；全部新旧模块 import 正常（含 agent 目录外执行，验证 editable 映射）；无 `from <项目模块> import` 与旧前缀残留
+  - 二次追加（同日用户要求：金字塔分层 + tech.md 收敛目录粒度）：五个功能包（chat / topics / posts / runtime / evals）套入父目录 `internal/`（类 Go internal/；候选 internal / features / apps / core 中用户选定 internal），形成 `cli → internal → infra` 三层金字塔；import 路径全部加 `internal.` 前缀，server logger 挂载收敛为 3 个包根名（internal / infra / cli）；`docs/tech.md` agent 子树收敛为目录粒度（文件级职责只在 agent/README.md）
+  - 追加（同日用户追加要求：顶层不放源码）：三个入口文件移入 `cli/`（类似 Go cmd/；命名弃用 `cmd` 因与 Python 标准库模块重名，实测依赖零引用但属长期遮蔽风险），`config.py` 移入 `infra/`，顶层仅剩 makefile / pyproject.toml / uv.lock / README；入口引用统一别名形式 `import cli.photo_agent as photo_agent`；`cli/photo_agent.py` 加 sys.path 引导支持任意目录直接运行；`pyproject.toml` 移除 `py-modules`；修复三处 `assertLogs("photo_agent")` → `"cli.photo_agent"` 与 server logger 挂载列表（收敛为 7 个包根名）；`pip install -e .` 产生的 `photo_agent_ai.egg-info/` 构建残留已清理（`*.egg-info/` 已在 .gitignore）
+- **（用户）验收操作**：`make dev`（或 `python cli/photo_agent.py -c ../.local/my-config.yaml --serve`）启动后在对话页发一条消息冒烟；可顺带执行 AR1 的山西请求（两项验收一次完成）
+- **预期结果**：服务正常启动，对话回复正常，日志 `[chat.xxx]`/`[infra.xxx]` 等新包名 logger 输出正常
+- **最小回传**：回复「TIDY6 已通过」（可与 AR1 验收合并回复）
+- **（用户）验收**：`make dev` 启动后在对话页发一条消息冒烟，回复「TIDY6 已通过」即关单
 
 ## 产品定位决策
 
@@ -100,6 +146,11 @@
 
 ## 决策历史
 
+- **2026-08-31**：TIDY6 三次追加：功能包套父目录 `internal/`，形成 `cli → internal → infra` 三层金字塔（类 Go cmd/internal/pkg 映射），internal 内功能包之间禁止互相 import；tech.md 的 agent 结构记录收敛到目录粒度，文件级职责唯一载体为 agent/README.md。
+- **2026-08-31**：TIDY6 追加顶层净化：入口文件集中到 `cli/`（类 Go cmd；目录名弃 `cmd` 取 `cli`，避免遮蔽 Python 标准库 cmd 模块），`config.py` 下沉 `infra/`，agent 顶层只保留工程管理文件（makefile / pyproject.toml / uv.lock / README）。
+- **2026-08-31**：TIDY6 执行中新增 import 风格规则：项目内模块禁止 `from xxx import <符号>`，统一 Go 式限定调用（`import pkg.module as alias` + `alias.func()`），标准库与第三方例外；规则落在 coding-conventions.md 导入规范，agent/README.md 目录规范章节同步引用。
+- **2026-08-31**：TIDY6 方向确认。agent 目录重组采用 package by feature（chat/topics/posts/runtime/evals/infra + 顶层入口），否决数字前缀方案（Python 模块名禁止数字开头，import 语法错误）；依赖方向规则（入口 → 功能包 → infra 单向）随重组写入 agent/README.md 作为目录规范。
+- **2026-08-31**：TIDY5 agent 目录整理。退役文件（学习性 demo、一次性脚本、过期 smoke、backend-sdk codegen 脚手架）按原相对路径移入 `agent/bak/` 待手动删除，不直接物理删除；新增 `agent/README.md` 作为目录职责总览入口。166 个测试通过，无需用户操作。
 - **2026-08-31**：AR1 开发完成待验收。新增 `agent/runtime/`（框架无关核心 + LangGraph 外壳），入口 classify 增加 runtime 类别承接原 compose 开放目标，CQ4 专用管线删除、其折叠/收缩/深链逻辑迁入 select_photos 能力；预算键落在 Agent 段（RuntimeMaxSteps/TimeoutSeconds/CostLimit，缺省 12/300/2.0）；tracer 增加 runtime 步骤事件与轨迹摘要；前端标签补 runtime。166 个测试全量通过。
 - **2026-08-31**：AR1 规划，Agent 从单发路由升级为 Agent Runtime V1。编排底座定为 LangGraph 只做 Runtime 外壳（decide/execute/reduce/check 循环图），TaskState、状态归约、完成检查、预算、能力注册表保持框架无关；CQ4 compose 专用管线由 AR1 取代关闭，其折叠/收缩/深链逻辑迁移为挑选临时能力，山西案例验收并入 AR1。
 - **2026-08-30**：v1.0.15 归档。完成草稿编辑输入恢复、后端质量治理与关键用户路径闭环、公共文档对齐、工具和运行数据整理、配置契约收敛，共 22 项任务；BQ3、CQ4 继续暂缓，分别受 FR-11 与真实环境验收条件约束。

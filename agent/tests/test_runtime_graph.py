@@ -1,10 +1,10 @@
 import unittest
 import unittest.mock
 
-import chain.photo_agent as photo_agent
-import runtime.budget as rt_budget
-import runtime.graph as rt_graph
-import runtime.state as rt_state
+import cli.photo_agent as photo_agent
+import internal.runtime.budget as rt_budget
+import internal.runtime.graph as rt_graph
+import internal.runtime.state as rt_state
 
 
 def _cfg(**overrides):
@@ -158,7 +158,7 @@ class RunRuntimeLoopTest(unittest.TestCase):
         import pathlib
         import tempfile
 
-        import chain.tracer as tracer_mod
+        import internal.evals.tracer as tracer_mod
 
         llm = _ScriptedLLM([
             '{"action": "resolve_trip", "params": {}, "reason": "先定位旅行"}',

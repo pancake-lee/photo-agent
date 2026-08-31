@@ -3,13 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from chain.session_store import SessionStore
+import internal.chat.session_store as session_store
 
 
 class TestSessionStore(unittest.TestCase):
     def test_message_granularity_is_persisted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            store = SessionStore(str(Path(temp_dir) / "sessions.db"))
+            store = session_store.SessionStore(str(Path(temp_dir) / "sessions.db"))
             session = store.create_session()
             store.add_message(session["session_id"], "assistant", "回答", granularity="fine")
 
@@ -20,12 +20,12 @@ class TestSessionStore(unittest.TestCase):
     def test_last_granularity_is_persisted_on_session(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "sessions.db"
-            store = SessionStore(str(db_path))
+            store = session_store.SessionStore(str(db_path))
             session = store.create_session()
 
             store.update_last_granularity(session["session_id"], "coarse")
 
-            reopened_store = SessionStore(str(db_path))
+            reopened_store = session_store.SessionStore(str(db_path))
             reopened = reopened_store.get_session(session["session_id"])
             self.assertEqual(reopened["last_granularity"], "coarse")
 
@@ -56,7 +56,7 @@ class TestSessionStore(unittest.TestCase):
             conn.commit()
             conn.close()
 
-            store = SessionStore(str(db_path))
+            store = session_store.SessionStore(str(db_path))
 
             messages = store.get_messages("legacy")
             self.assertIsNone(messages[0]["granularity"])

@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import tempfile
 import unittest
 
-from chain import evaluation
-from chain import server
+import internal.evals.evaluation as evaluation
+import cli.server as server
 
 
 class TestEvaluation(unittest.TestCase):

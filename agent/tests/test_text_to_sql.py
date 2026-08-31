@@ -10,9 +10,9 @@ import sys
 import unittest
 
 
-import db.sqlite_client as sqlite_client
-import chain.text_to_sql as text_to_sql
-import chain.photo_rag as photo_rag
+import infra.sqlite_client as sqlite_client
+import internal.chat.text_to_sql as text_to_sql
+import internal.chat.photo_rag as photo_rag
 import langchain_core.prompts as lc_prompts
 import swagger_client as sdk
 

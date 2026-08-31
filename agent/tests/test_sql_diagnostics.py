@@ -12,8 +12,8 @@ import unittest.mock
 import langchain_core.runnables as lc_runnables
 import swagger_client as sdk
 
-import chain.photo_agent as photo_agent
-import chain.text_to_sql as text_to_sql
+import cli.photo_agent as photo_agent
+import internal.chat.text_to_sql as text_to_sql
 
 
 class _FakeConfig:
@@ -48,7 +48,7 @@ class TestGenerateSqlDiagnostics(unittest.TestCase):
         ), unittest.mock.patch.object(
             text_to_sql, "_fetch_attribute_values", return_value={},
         ), _fake_llm_patch("SELECT COUNT(*) AS c FROM photos"), self.assertLogs(
-            "chain.text_to_sql", level=logging.INFO,
+            "internal.chat.text_to_sql", level=logging.INFO,
         ) as captured:
             sql = text_to_sql.generate_sql(_FakeConfig(), "我有多少张照片？")
 
@@ -64,7 +64,7 @@ class TestGenerateSqlDiagnostics(unittest.TestCase):
         )
         with unittest.mock.patch.object(
             text_to_sql.sqlite_client, "QueryClient", return_value=fake_client,
-        ), self.assertLogs("chain.text_to_sql", level=logging.INFO) as captured:
+        ), self.assertLogs("internal.chat.text_to_sql", level=logging.INFO) as captured:
             schema = text_to_sql._fetch_schema("http://backend.example")
 
         self.assertEqual(schema.table_name, "photos")
@@ -76,7 +76,7 @@ class TestGenerateSqlDiagnostics(unittest.TestCase):
         ), unittest.mock.patch.object(
             text_to_sql, "_fetch_attribute_values", return_value={},
         ), _fake_llm_patch("SELECT '无法回答' AS result"), self.assertLogs(
-            "chain.text_to_sql", level=logging.WARNING,
+            "internal.chat.text_to_sql", level=logging.WARNING,
         ) as captured:
             sql = text_to_sql.generate_sql(_FakeConfig(), "写一段文案")
 
@@ -89,7 +89,7 @@ class TestGenerateSqlDiagnostics(unittest.TestCase):
         ), unittest.mock.patch.object(
             text_to_sql, "_fetch_attribute_values", return_value={},
         ), _fake_llm_patch("SELECT id FROM photos WHERE scene = 'street' LIMIT 20"), \
-                self.assertLogs("chain.text_to_sql", level=logging.INFO) as captured:
+                self.assertLogs("internal.chat.text_to_sql", level=logging.INFO) as captured:
             sql = text_to_sql.generate_filter_sql(_FakeConfig(), "街拍照片")
 
         self.assertIn("scene", sql)
@@ -107,7 +107,7 @@ class TestAnswerWithSqlSentinel(unittest.TestCase):
         ), unittest.mock.patch.object(
             text_to_sql, "execute_sql",
         ) as exec_mock, self.assertLogs(
-            "chain.text_to_sql", level=logging.WARNING,
+            "internal.chat.text_to_sql", level=logging.WARNING,
         ) as captured:
             result = text_to_sql.answer_with_sql(_FakeConfig(), "写一段文案")
 
@@ -123,7 +123,7 @@ class TestExecuteSqlDiagnostics(unittest.TestCase):
         fake_result = types.SimpleNamespace(rows=[{"id": "a"}, {"id": "b"}])
         with unittest.mock.patch.object(
             text_to_sql.sqlite_client, "safe_execute", return_value=fake_result,
-        ), self.assertLogs("chain.text_to_sql", level=logging.INFO) as captured:
+        ), self.assertLogs("internal.chat.text_to_sql", level=logging.INFO) as captured:
             rows = text_to_sql.execute_sql(
                 "http://backend.example", "SELECT id FROM photos",
             )
@@ -143,7 +143,7 @@ class TestSqlNodeDiagnostics(unittest.TestCase):
         }
         with unittest.mock.patch.object(
             photo_agent.text_to_sql, "answer_with_sql", return_value=fake_result,
-        ), self.assertLogs("chain.photo_agent", level=logging.INFO) as captured:
+        ), self.assertLogs("cli.photo_agent", level=logging.INFO) as captured:
             state = photo_agent._sql_node(
                 {"question": "我有多少张照片？"},
                 {"configurable": {"cfg": _FakeConfig()}},
@@ -156,7 +156,7 @@ class TestSqlNodeDiagnostics(unittest.TestCase):
         with unittest.mock.patch.object(
             photo_agent.text_to_sql, "answer_with_sql",
             side_effect=RuntimeError("backend down"),
-        ), self.assertLogs("chain.photo_agent", level=logging.ERROR) as captured:
+        ), self.assertLogs("cli.photo_agent", level=logging.ERROR) as captured:
             state = photo_agent._sql_node(
                 {"question": "q"},
                 {"configurable": {"cfg": _FakeConfig()}},

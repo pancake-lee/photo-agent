@@ -91,9 +91,12 @@
 
 ### 导入规范
 
-- 使用**显式包名导入**：`import langchain_openai as lc_openai`，调用时 `lc_openai.ChatOpenAI(...)`
-- **禁止** `from xxx import ClassName` 的直接类导入，确保代码中一眼能看出类的来源包
+- 使用**显式包名导入**（Go 风格限定调用）：`import langchain_openai as lc_openai`，调用时 `lc_openai.ChatOpenAI(...)`；项目内模块同样如此，`import chat.photo_rag as photo_rag`，调用点 `photo_rag.answer_question(...)`
+- **禁止** `from xxx import <符号>` 导入项目内模块的类或函数（如 `from chat.session_store import SessionStore`），符号来源必须在调用点可见
+- 例外：标准库与第三方包按 Python 惯例允许 `from` 导入，如 `from typing import Literal`、`from dataclasses import dataclass`、fastapi 的路由与模型导入、`from __future__ import annotations`
 - 包名过长时允许简写别名，但至少保留一个单词方便阅读，如 `import langchain.schema as lc_schema`、`import langchain_core.prompts as lc_prompts`
+- 别名与原名一致时写裸导入（`import photo_agent`），不要写 `import photo_agent as photo_agent` 式冗余别名
+- 存量 `from import` 已于 2026-08-31（TIDY6）全部转换为限定调用，新增代码不得回退
 
 ### 环境管理（uv）
 

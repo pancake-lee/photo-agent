@@ -96,7 +96,7 @@ cd backend && ./bin/server -c ../.local/my-config.yaml
 
 # 终端 2: Python Agent（:10005）
 cd agent && source .venv/bin/activate
-python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+python cli/photo_agent.py -c ../.local/my-config.yaml --serve
 
 # 终端 3: Web 前端（:10006）
 cd web && pnpm dev

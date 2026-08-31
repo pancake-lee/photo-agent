@@ -27,9 +27,9 @@ PROJECT_ROOT = AGENT_DIR.parent
 if str(AGENT_DIR) not in sys.path:
     sys.path.insert(0, str(AGENT_DIR))
 
-import config  # noqa: E402
-import chain.photo_rag as photo_rag  # noqa: E402
-import vectorstore.chroma_client as chroma_client  # noqa: E402
+import infra.config as config  # noqa: E402
+import internal.chat.photo_rag as photo_rag  # noqa: E402
+import infra.chroma_client as chroma_client  # noqa: E402
 
 
 GRANULARITIES = ("photo", "fine", "coarse")

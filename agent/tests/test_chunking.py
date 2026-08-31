@@ -1,5 +1,5 @@
 """
-    embedding.chunking 单元测试。
+    infra.embedding.chunking 单元测试。
 
     运行方式：
         cd agent && ./venv/bin/python -m unittest tests.test_chunking -v
@@ -10,7 +10,7 @@ import sys
 import unittest
 
 
-import embedding.chunking as chunking
+import infra.embedding.chunking as chunking
 
 
 class TestChunkByNone(unittest.TestCase):

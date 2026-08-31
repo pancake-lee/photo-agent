@@ -17,4 +17,4 @@ venv:
 	uv pip install -e .
 
 dev: .venv
-	source .venv/bin/activate && python3 chain/photo_agent.py -c ../.local/my-config.yaml --serve
+	source .venv/bin/activate && python3 cli/photo_agent.py -c ../.local/my-config.yaml --serve

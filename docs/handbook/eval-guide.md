@@ -221,13 +221,10 @@ grep "AutoSync" logs/backend.log
 cd agent
 
 # 选题建议（需要 venv）
-.venv/bin/python3 chain/photo_agent.py -c ../.local/my-config.yaml --suggest
+.venv/bin/python3 cli/photo_agent.py -c ../.local/my-config.yaml --suggest
 
 # RAG 评估
-.venv/bin/python3 chain/photo_agent.py -c ../.local/my-config.yaml --eval
-
-# 运行 suggest 单元测试
-.venv/bin/python3 chain/test_suggest_smoke.py
+.venv/bin/python3 cli/photo_agent.py -c ../.local/my-config.yaml --eval
 ```
 
 ### Web 页面检查

@@ -394,30 +394,17 @@ photo-agent/
 │   │   └── pkg/                  # db（GORM 模型 + 迁移）、api（Proto 生成代码）等
 │   ├── cmd/fixsize/              # 工具：修正图片尺寸
 │   └── go.mod
-├── agent/                        # Python AI 服务层
-│   ├── chain/                    # LangGraph 编排 + FastAPI 服务
-│   │   ├── photo_agent.py        # LangGraph 主图（入口路由 + 各查询节点）
-│   │   ├── text_to_sql.py        # Text-to-SQL（Schema + Few-shot + 动态属性值）
-│   │   ├── photo_rag.py          # RAG 检索（向量检索 + 聚合 + 断层过滤）
-│   │   ├── server.py             # FastAPI API（对话/聚类/选题/嵌入/黄金用例/图文工坊）
-│   │   ├── cluster.py            # 聚类分析
-│   │   ├── suggest.py            # 选题建议（三阶段编辑视角提案）
-│   │   ├── post_studio.py        # 图文工坊文案生成
-│   │   ├── eval_engine.py        # 启发式规则评估引擎
-│   │   ├── session_store.py      # 会话持久化（SQLite）
-│   │   └── embed_queue.py        # 批量 Embedding 队列
-│   ├── runtime/                  # Agent Runtime（开放目标多步执行）
-│   │   ├── state.py              # TaskState + 显式归约规则（框架无关）
-│   │   ├── budget.py             # 步数/时长/成本预算（框架无关）
-│   │   ├── completion.py         # 确定性完成检查（框架无关）
-│   │   ├── registry.py           # 能力注册表 + 参数校验（框架无关）
-│   │   ├── capabilities.py       # 具体能力（检索/工具/挑选/文案）
-│   │   └── graph.py              # LangGraph 循环图外壳（decide/execute/reduce/check）
-│   ├── embedding/                # 分块策略 + Embedding 客户端
-│   ├── vectorstore/              # ChromaDB 封装
-│   ├── db/                       # Go 后端 HTTP 客户端（schema/sql）
-│   ├── tools/                    # OpenAPI 工具解析（Go 自描述 → LLM Function）
-│   └── scripts/                  # 索引脚本
+├── agent/                        # Python AI 服务层（依赖方向 cli → internal → infra，目录与文件职责详见 agent/README.md）
+│   ├── cli/                      # 入口层（类 Go cmd/）：CLI 编排、FastAPI 服务、场景演示
+│   ├── internal/                 # 业务功能包（类 Go internal/）
+│   │   ├── chat/                 # 对话查询线（RAG / Text-to-SQL / 会话）
+│   │   ├── topics/               # 选题发现线（聚类 / 三阶段提案）
+│   │   ├── posts/                # 图文工坊线（文案生成）
+│   │   ├── runtime/              # Agent Runtime（开放目标多步执行）
+│   │   └── evals/                # 评估与观测（检索评估 / 规则评估 / Trace）
+│   ├── infra/                    # 基础设施：配置、LLM 工厂、HTTP、后端 SDK 与 OpenAPI 工具、Chroma、SQLite、嵌入与队列
+│   ├── scripts/                  # 检索回归脚本
+│   └── tests/                    # 单元测试
 ├── web/                          # Web 前端
 │   └── src/
 │       ├── views/                # 照片管理/时间线/对话/选题/聚类/图文工坊/草稿/设置/导入
@@ -469,7 +456,7 @@ photo-agent/
   - `internal/defaultService/service/file_util.go`：EXIF 提取 + 图片尺寸读取 + ImageMagick 压缩
   - `internal/defaultService/service/timeline.go`：从用户提供的 Markdown 表格解析时间线事件
 - **Python**：
-  - `chain/evaluation.py`：RAG 检索评估（黄金查询 + MRR/P@10 指标）
-  - `demo/`：多个独立演示脚本（text_to_sql/query_router/photo_rag/function_agent/react_agent），用于单独测试各模块
-  - `scripts/`：队列辅助与回归脚本（batch_embed.py、eval_regression.py 等）；照片嵌入由 VLM/Embedding 队列闭环完成
+  - `internal/evals/`：RAG 检索评估（黄金查询 + MRR/P@10 指标）与聚类规则评估
+  - `scripts/`：检索回归脚本；照片嵌入由 VLM/Embedding 队列闭环完成
+  - 目录与文件职责总览见 `agent/README.md`；早期学习性 demo 与一次性脚本已移入 `agent/bak/`（待手动删除）
 - **Dify**：`dify/` 目录保留 Docker 部署配置和 DSL 文件，作为可选验证路径，不作为核心方案维护

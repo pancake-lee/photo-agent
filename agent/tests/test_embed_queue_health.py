@@ -2,16 +2,16 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chain.embed_queue import EmbedQueue
-from chain import photo_rag
+import infra.embed_queue as embed_queue
+import internal.chat.photo_rag as photo_rag
 
 
 class EmbedQueueQualityGateTest(unittest.TestCase):
     def test_has_trusted_description_uses_derived_vlm_status(self):
-        self.assertTrue(EmbedQueue._has_trusted_description({"vlmStatus": "healthy"}))
-        self.assertTrue(EmbedQueue._has_trusted_description({"vlm_status": "healthy"}))
-        self.assertFalse(EmbedQueue._has_trusted_description({"vlmStatus": "review"}))
-        self.assertFalse(EmbedQueue._has_trusted_description({}))
+        self.assertTrue(embed_queue.EmbedQueue._has_trusted_description({"vlmStatus": "healthy"}))
+        self.assertTrue(embed_queue.EmbedQueue._has_trusted_description({"vlm_status": "healthy"}))
+        self.assertFalse(embed_queue.EmbedQueue._has_trusted_description({"vlmStatus": "review"}))
+        self.assertFalse(embed_queue.EmbedQueue._has_trusted_description({}))
 
 
 class _GroupStore:
@@ -28,7 +28,7 @@ class _GroupStore:
 
 class EmbedQueueBurstCollectionTest(unittest.TestCase):
     def test_unassigned_photo_is_written_to_each_selected_burst_collection(self):
-        queue = EmbedQueue.__new__(EmbedQueue)
+        queue = embed_queue.EmbedQueue.__new__(embed_queue.EmbedQueue)
         fine_store = _GroupStore()
         coarse_store = _GroupStore()
         queue._group_stores = {"fine": fine_store, "coarse": coarse_store}

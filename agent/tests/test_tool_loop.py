@@ -14,7 +14,7 @@ import unittest.mock
 
 import langchain_core.messages as lc_messages
 
-import chain.photo_agent as photo_agent
+import cli.photo_agent as photo_agent
 
 
 class _FakeToolClient:

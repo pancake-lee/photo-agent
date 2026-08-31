@@ -1,6 +1,6 @@
 import unittest
 
-import runtime.state as rt_state
+import internal.runtime.state as rt_state
 
 
 class NewTaskTest(unittest.TestCase):
