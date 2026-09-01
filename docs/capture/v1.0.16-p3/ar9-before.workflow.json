@@ -1,0 +1,302 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "约束幻觉：修复前的代码级数据流（山西案例）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "fail-chain",
+        "label": "失败主链",
+        "focus": [
+          "decide",
+          "sql_search",
+          "hybrid_search",
+          "apply_photo_ids",
+          "select_photos",
+          "write_post",
+          "check",
+          "finish"
+        ],
+        "note": "query 从注入到错误交付的完整链路，无任何环节拦截"
+      },
+      {
+        "id": "injection",
+        "label": "注入与清零",
+        "focus": [
+          "decide",
+          "resolve_trip",
+          "apply_facts",
+          "sql_search",
+          "hybrid_search"
+        ],
+        "note": "软叙事如何进入 query，并把候选清零后由全库 RAG 替代"
+      }
+    ],
+    "output": "docs/capture/ar9-before.html"
+  },
+  "lanes": [
+    {
+      "id": "orch",
+      "label": "graph.py 编排决策"
+    },
+    {
+      "id": "cap",
+      "label": "capabilities.py 能力"
+    },
+    {
+      "id": "program",
+      "label": "state.py+completion.py"
+    },
+    {
+      "id": "deliver",
+      "label": "交付输出"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p-decide",
+      "label": "决策与事实",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p-search",
+      "label": "检索与归约",
+      "fromCol": 2,
+      "toCol": 3
+    },
+    {
+      "id": "p-deliver",
+      "label": "挑选与交付",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "groups": [
+    {
+      "id": "g-no-guard",
+      "label": "无范围守护",
+      "lane": "program",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "decide",
+    "sql_search",
+    "hybrid_search",
+    "apply_photo_ids",
+    "select_photos",
+    "write_post",
+    "check",
+    "finish"
+  ],
+  "nodes": [
+    {
+      "id": "decide",
+      "lane": "orch",
+      "col": 0,
+      "type": "backend",
+      "label": "decide 决策",
+      "sublabel": "graph.py 提示词规则",
+      "tag": "✗ 注入点",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "resolve_trip",
+      "lane": "cap",
+      "col": 1,
+      "type": "backend",
+      "label": "resolve_trip",
+      "sublabel": "仅时间线 → OBS_FACTS",
+      "tag": "旧·无范围",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "apply_facts",
+      "lane": "program",
+      "col": 1,
+      "type": "database",
+      "label": "_apply_facts",
+      "sublabel": "timeline 并入摘要",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "sql_search",
+      "lane": "cap",
+      "col": 2,
+      "type": "database",
+      "label": "sql_search",
+      "sublabel": "generate_filter_sql",
+      "tag": "✗ 软变硬",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "hybrid_search",
+      "lane": "cap",
+      "col": 3,
+      "type": "database",
+      "label": "hybrid_search",
+      "sublabel": "空结果 → 回退全库",
+      "tag": "✗ 回退替代",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "apply_photo_ids",
+      "lane": "program",
+      "col": 3,
+      "type": "database",
+      "label": "_apply_photo_ids",
+      "sublabel": "candidate_ids 整体替换",
+      "tag": "✗ 无交集",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "select_photos",
+      "lane": "cap",
+      "col": 4,
+      "type": "backend",
+      "label": "select_photos",
+      "sublabel": "LLM 挑 6 张",
+      "tag": "✗ 未校验",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "write_post",
+      "lane": "cap",
+      "col": 5,
+      "type": "backend",
+      "label": "write_post",
+      "sublabel": "标题「把黄昏留在太原植物园」",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "check",
+      "lane": "program",
+      "col": 5,
+      "type": "security",
+      "label": "check_completion",
+      "sublabel": "bool(selected_ids)",
+      "tag": "✗ 只查非空",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "finish",
+      "lane": "deliver",
+      "col": 5,
+      "type": "frontend",
+      "label": "finish 错误交付",
+      "sublabel": "build_final_output",
+      "tag": "P0 交付",
+      "width": 150,
+      "height": 48
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-hint",
+      "from": "decide",
+      "to": "resolve_trip",
+      "label": "hint=目标",
+      "variant": "default"
+    },
+    {
+      "id": "e-facts",
+      "from": "resolve_trip",
+      "to": "apply_facts",
+      "label": "OBS_FACTS timeline=山西",
+      "variant": "default"
+    },
+    {
+      "id": "e-loop",
+      "from": "apply_facts",
+      "to": "decide",
+      "label": "summarize_state 回环",
+      "variant": "dashed",
+      "role": "return"
+    },
+    {
+      "id": "e-query",
+      "from": "decide",
+      "to": "sql_search",
+      "label": "query 混入全部约束+软叙事",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-retry",
+      "from": "sql_search",
+      "to": "hybrid_search",
+      "label": "rows=0 改混合检索",
+      "variant": "default"
+    },
+    {
+      "id": "e-fallback",
+      "from": "hybrid_search",
+      "to": "apply_photo_ids",
+      "label": "OBS_PHOTO_IDS ids=20 全库",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-candidates",
+      "from": "apply_photo_ids",
+      "to": "select_photos",
+      "label": "candidate_ids=20 无约束",
+      "variant": "default"
+    },
+    {
+      "id": "e-selected",
+      "from": "select_photos",
+      "to": "write_post",
+      "label": "selected_ids=6",
+      "variant": "default"
+    },
+    {
+      "id": "e-copy",
+      "from": "write_post",
+      "to": "check",
+      "label": "OBS_COPY_DRAFTED",
+      "variant": "default"
+    },
+    {
+      "id": "e-pass",
+      "from": "check",
+      "to": "finish",
+      "label": "complete=True",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "根因链（4 段）",
+      "items": [
+        "decide：已确认事实写进 query（注入点）",
+        "sql_search：软叙事全部变 WHERE 硬条件",
+        "hybrid_search：空结果回退全库 RAG 20 张",
+        "check_completion：只查非空即放行"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "山西案例证据",
+      "items": [
+        "query 混入：山西+第一天+傍晚+太原植物园",
+        "WHERE 同时要求全部条件 → rows=0",
+        "全库 20 张候选直接成为任务候选",
+        "交付「把黄昏留在太原植物园」标题"
+      ]
+    }
+  ]
+}

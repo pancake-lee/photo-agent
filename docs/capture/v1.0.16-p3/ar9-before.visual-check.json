@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "visual-check",
+  "evidenceKind": "automated-browser",
+  "status": "fail",
+  "visualReview": "pending",
+  "artifact": {
+    "path": "/root/code/photo-agent/docs/capture/ar9-before.html",
+    "sha256": "feece9f747585cfdba9a0ae1bc90a221f8d93ce01b191b3edcdb0b5fa59725bb",
+    "bytes": 720453
+  },
+  "state": {
+    "detail": "read",
+    "motion": "still"
+  },
+  "chrome": {
+    "status": "available",
+    "executable": "/usr/bin/chromium-browser"
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/visual-check-runtime",
+      "severity": "error",
+      "message": "visual-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/root/code/photo-agent/docs/capture/ar9-before.html"
+      },
+      "evidence": {
+        "reason": "Runtime.evaluate: timed out after 15000ms"
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun visual-check"
+      ]
+    }
+  ],
+  "containment": {
+    "status": "fail",
+    "viewports": []
+  },
+  "readability": {
+    "status": "fail",
+    "minimumProjectedNodeTextPx": 6,
+    "viewports": []
+  },
+  "viewerChrome": {
+    "status": "fail",
+    "viewports": []
+  },
+  "captures": {
+    "status": "fail",
+    "screenshots": [],
+    "contactSheet": null
+  },
+  "sidecars": {
+    "receipt": "ar9-before.visual-check.json",
+    "contactSheet": "ar9-before.visual-check.html"
+  },
+  "error": "Runtime.evaluate: timed out after 15000ms"
+}

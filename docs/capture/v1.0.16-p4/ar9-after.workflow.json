@@ -1,0 +1,321 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "约束幻觉：修复后的代码级数据流（山西案例）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "guard-chain",
+        "label": "守护主链",
+        "focus": [
+          "decide",
+          "resolve_trip",
+          "build_scope_sql",
+          "apply_scope",
+          "hybrid_search",
+          "constrain",
+          "select_photos",
+          "write_post",
+          "check",
+          "finish"
+        ],
+        "note": "范围建立后贯穿检索、挑选与完成检查，每一环都有守护"
+      },
+      {
+        "id": "empty-scope",
+        "label": "空范围终态",
+        "focus": [
+          "apply_scope",
+          "empty_scope",
+          "finish"
+        ],
+        "note": "受限但 0 张时确定性终止，不调全库 RAG，不生成虚构文案"
+      }
+    ],
+    "output": "docs/capture/ar9-after.html"
+  },
+  "lanes": [
+    {
+      "id": "orch",
+      "label": "graph.py 编排决策"
+    },
+    {
+      "id": "cap",
+      "label": "capabilities.py 能力"
+    },
+    {
+      "id": "program",
+      "label": "state.py+completion.py"
+    },
+    {
+      "id": "deliver",
+      "label": "交付输出"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p-decide",
+      "label": "约束解析",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p-search",
+      "label": "范围与检索",
+      "fromCol": 2,
+      "toCol": 3
+    },
+    {
+      "id": "p-deliver",
+      "label": "挑选与交付",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "groups": [
+    {
+      "id": "g-guard",
+      "label": "范围守护链",
+      "lane": "program",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "decide",
+    "resolve_trip",
+    "build_scope_sql",
+    "hybrid_search",
+    "select_photos",
+    "write_post",
+    "check",
+    "finish"
+  ],
+  "nodes": [
+    {
+      "id": "decide",
+      "lane": "orch",
+      "col": 0,
+      "type": "backend",
+      "label": "decide 决策",
+      "sublabel": "graph.py 提示词",
+      "tag": "✓ 先确认范围",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "resolve_trip",
+      "lane": "cap",
+      "col": 1,
+      "type": "backend",
+      "label": "resolve_trip",
+      "sublabel": "LLM 抽取+程序校验",
+      "tag": "✓ 硬软分离",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "build_scope_sql",
+      "lane": "cap",
+      "col": 2,
+      "type": "database",
+      "label": "build_scope_sql",
+      "sublabel": "程序拼装·localtime",
+      "tag": "✓ 不经 LLM",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "apply_scope",
+      "lane": "program",
+      "col": 2,
+      "type": "database",
+      "label": "_apply_scope",
+      "sublabel": "物化权威范围",
+      "tag": "✓ 范围建立",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "hybrid_search",
+      "lane": "cap",
+      "col": 3,
+      "type": "database",
+      "label": "hybrid_search",
+      "sublabel": "软提示·删回退",
+      "tag": "✓ 交集兜底",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "constrain",
+      "lane": "program",
+      "col": 3,
+      "type": "database",
+      "label": "constrain",
+      "sublabel": "候选 ∩ 范围",
+      "tag": "✓ 只排序",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "select_photos",
+      "lane": "cap",
+      "col": 4,
+      "type": "backend",
+      "label": "select_photos",
+      "sublabel": "selection_out_of_scope",
+      "tag": "✓ 归属校验",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "write_post",
+      "lane": "cap",
+      "col": 5,
+      "type": "backend",
+      "label": "write_post",
+      "sublabel": "事实有照片依据",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "check",
+      "lane": "program",
+      "col": 5,
+      "type": "security",
+      "label": "check_completion",
+      "sublabel": "_selected_photos_ready",
+      "tag": "✓ 入选⊆范围",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "finish",
+      "lane": "deliver",
+      "col": 5,
+      "type": "frontend",
+      "label": "finish 正确交付",
+      "sublabel": "build_final_output",
+      "tag": "✓ 交付",
+      "width": 136,
+      "height": 48
+    },
+    {
+      "id": "empty_scope",
+      "lane": "deliver",
+      "col": 4,
+      "type": "security",
+      "label": "empty_scope",
+      "sublabel": "0 张·确定性终止",
+      "tag": "✓ 未命中说明",
+      "width": 136,
+      "height": 48
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-hint",
+      "from": "decide",
+      "to": "resolve_trip",
+      "label": "hint=目标",
+      "variant": "default"
+    },
+    {
+      "id": "e-build",
+      "from": "resolve_trip",
+      "to": "build_scope_sql",
+      "label": "硬约束抽取",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-scope-live",
+      "from": "build_scope_sql",
+      "to": "hybrid_search",
+      "label": "范围=44 张",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-sql",
+      "from": "build_scope_sql",
+      "to": "apply_scope",
+      "label": "OBS_SCOPE",
+      "variant": "default"
+    },
+    {
+      "id": "e-hybrid-main",
+      "from": "hybrid_search",
+      "to": "select_photos",
+      "label": "候选⊆范围",
+      "variant": "default"
+    },
+    {
+      "id": "e-hybrid",
+      "from": "hybrid_search",
+      "to": "constrain",
+      "label": "交集·回落",
+      "variant": "default"
+    },
+    {
+      "id": "e-select",
+      "from": "select_photos",
+      "to": "write_post",
+      "label": "selected_ids=6",
+      "variant": "default"
+    },
+    {
+      "id": "e-copy",
+      "from": "write_post",
+      "to": "check",
+      "label": "OBS_COPY_DRAFTED",
+      "variant": "default"
+    },
+    {
+      "id": "e-pass",
+      "from": "check",
+      "to": "finish",
+      "label": "入选⊆范围",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-empty",
+      "from": "apply_scope",
+      "to": "empty_scope",
+      "label": "受限且 0 张",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e-empty-finish",
+      "from": "empty_scope",
+      "to": "finish",
+      "label": "未命中说明",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "修复要点（4 个 ✓）",
+      "items": [
+        "resolve_trip：LLM 抽取硬约束/软提示",
+        "build_scope_sql：程序拼范围 SQL 不经 LLM",
+        "归约交集：候选 ∩ 范围，软提示只排序",
+        "检查：范围外阻断 + 入选 ⊆ 范围"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "正确语义（山西验证）",
+      "items": [
+        "权威范围=第一天傍晚 44 张（localtime）",
+        "植物园/黄昏只影响排序与文案表达",
+        "软提示零命中回落整个范围，不清空",
+        "最后一天傍晚 0 张 → empty_scope 终止"
+      ]
+    }
+  ]
+}

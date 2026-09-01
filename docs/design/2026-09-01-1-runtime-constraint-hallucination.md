@@ -124,3 +124,16 @@ RAG 只能在权威候选范围内排序，不能在 SQL 为空、交集为空�
 ### 验收记录（2026-09-01）
 
 用户重启 Agent 后以真实请求验收确认通过：山西第一天傍晚请求的候选范围、入选照片与文案符合硬约束，最后一天傍晚请求按空范围确定性终止。AR9 关单，遗留事项见中枢文档下一轮建议（聊天 SQL 管线的 `DATE(shot_at)` 时区语义独立问题）。
+
+## 8. 代码级前后对比图（2026-09-01）
+
+为让本方案在代码层面可直观对照，用 archify skill 制作了两张同框架的 workflow 对比图，交付物在 `docs/capture/`：
+
+- [ar9-before.html](../capture/ar9-before.html)
+- [ar9-after.html](../capture/ar9-after.html)
+
+两图共用框架：四条泳道（graph.py 编排决策 / capabilities.py 能力 / state.py+completion.py 确定性程序层 / 交付输出），六列阶段，节点即方法名（sublabel 标文件定位），边标签承载真实参数与 Observation 类型。HTML 内置明暗主题、缩放、搜索、聚焦与导览视图（前图：失败主链、注入与清零；后图：守护主链、空范围终态）。可编辑源文件为同目录 `ar9-before.workflow.json` 与 `ar9-after.workflow.json`（schema v2，修改后需重新 validate / deliver）。
+
+交付状态：两图 deliver 均通过全部 9 项 artifact 检查（showcase 档，0 错误 0 警告）；自动浏览器检查 visual-check 在本机无头环境超时（skill 自带官方示例同样超时，属环境问题而非图本身的缺陷），改用 1440×900 截图读图核验，两图的标题、图、图例与结论卡片均完整呈现在首屏。
+
+archify 使用情况：skill 安装于 `/root/.agents/skills/archify/`（`.agents/skills/` 路径，非 Claude Code 原生 skill 目录，直接以 CLI 调用）。本次两张图共消耗智谱 118 套餐的 5 小时额度、约 2000 积分。主要成本在布局收敛的多轮迭代：节点宽度与标签长度受桌面可读性约束（8px 文本投影不得低于 6px）、主链从能力层与归约层之字形改为单行主链加状态层侧链、泳道从 5 条压缩到 4 条并压低节点高度以满足 1440×900 首屏呈现。
