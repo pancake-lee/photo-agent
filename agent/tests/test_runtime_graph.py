@@ -25,8 +25,13 @@ def _cfg(**overrides):
 class _ScriptedLLM:
     """伪 LLM：决策提示词消费脚本队列，其余按提示词类型返回固定 JSON。"""
 
-    def __init__(self, decisions: list[str]):
+    def __init__(
+        self,
+        decisions: list[str],
+        constraints: str = '{"timeline": "山西旅游", "day": "", "time_of_day": "", "soft_hints": []}',
+    ):
         self._decisions = list(decisions)
+        self._constraints = constraints
         self.decide_prompts: list[str] = []
 
     def invoke(self, messages):
@@ -35,7 +40,7 @@ class _ScriptedLLM:
             self.decide_prompts.append(text)
             content = self._decisions.pop(0) if self._decisions else "{}"
         elif "时间线列表" in text:
-            content = '{"timeline": "山西旅游"}'
+            content = self._constraints
         else:
             content = '{"selected_ids": ["b", "c"]}'
         resp = unittest.mock.MagicMock()
@@ -122,6 +127,81 @@ class RunRuntimeLoopTest(unittest.TestCase):
         final_steps = step_events[-1]["steps"]
         self.assertEqual([step["title"] for step in final_steps], ["查询照片", "挑选代表照片", "生成发布文案"])
         self.assertTrue(all(step["status"] == "已完成" for step in final_steps))
+
+    def test_scope_protects_candidates_against_soft_hint_zero_match(self):
+        """山西用例：权威范围只由硬约束决定，软提示零命中不能清空或替换范围。"""
+        llm = _ScriptedLLM(
+            [
+                '{"action": "resolve_trip", "params": {}, "reason": "先确认候选范围"}',
+                '{"action": "sql_search", "params": {"query": "太原植物园 植物"}, "reason": "软提示检索"}',
+                '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+                '{"action": "write_post", "params": {}, "reason": "文案"}',
+            ],
+            constraints='{"timeline": "山西旅游", "day": "first", "time_of_day": "傍晚",'
+                        ' "soft_hints": ["太原植物园", "植物"]}',
+        )
+        photos = [
+            {"id": "a", "filename": "a.jpg", "description": "寺庙", "burst_group_id": "g1"},
+            {"id": "b", "filename": "b.jpg", "description": "面馆", "burst_group_id": "g1",
+             "is_burst_cover": True},
+            {"id": "c", "filename": "c.jpg", "description": "山景"},
+        ]
+        scope_sqls: list[str] = []
+
+        def fake_execute(base_url, sql, limit=50):
+            if "timeline = '山西旅游'" in sql:      # 范围 SQL（程序拼装）
+                scope_sqls.append(sql)
+                return ["a", "b", "c"]
+            return []                               # 软提示 SQL 零命中
+
+        patches = self._happy_patches(llm)
+        timelines_patch = unittest.mock.patch.object(
+            rt_graph.rt_capabilities, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
+        )
+        execute_patch = unittest.mock.patch.object(
+            rt_graph.rt_capabilities.text_to_sql, "execute_sql_for_ids",
+            side_effect=fake_execute,
+        )
+        with patches[0], patches[1], execute_patch, patches[3], patches[4], timelines_patch:
+            result = rt_graph.run_runtime(
+                _cfg(), "找山西旅游第一天傍晚的照片并生成发布文案",
+            )
+        # 最终照片全部属于权威范围（a/b 同连拍组折叠为封面 b）
+        self.assertEqual({p["photo_id"] for p in result["photos"]}, {"b", "c"})
+        self.assertIn("# 山西第一天", result["answer"])
+        # 范围 SQL 只含硬约束：天序 + 傍晚小时窗，软提示不入 WHERE
+        self.assertEqual(len(scope_sqls), 1)
+        self.assertIn("MIN(DATE(shot_at, 'localtime'))", scope_sqls[0])
+        self.assertIn("BETWEEN 17 AND 19", scope_sqls[0])
+        self.assertNotIn("植物", scope_sqls[0])
+        # 软提示零命中后候选回落为整个范围，而非空集
+        self.assertIn("候选范围: 山西旅游第一天傍晚（硬约束，共 3 张）", llm.decide_prompts[1])
+
+    def test_empty_scope_stops_without_selection_or_copy(self):
+        """硬范围为空时明确终止：不选片、不写文案、不报预算耗尽。"""
+        llm = _ScriptedLLM(
+            ['{"action": "resolve_trip", "params": {}, "reason": "先确认候选范围"}'],
+            constraints='{"timeline": "山西旅游", "day": "first", "time_of_day": "夜晚",'
+                        ' "soft_hints": []}',
+        )
+        patches = self._happy_patches(llm)
+        timelines_patch = unittest.mock.patch.object(
+            rt_graph.rt_capabilities, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
+        )
+        execute_patch = unittest.mock.patch.object(
+            rt_graph.rt_capabilities.text_to_sql, "execute_sql_for_ids", return_value=[],
+        )
+        with patches[0], patches[1], execute_patch, patches[3], patches[4], timelines_patch:
+            result = rt_graph.run_runtime(
+                _cfg(), "找山西旅游第一天夜晚的照片并生成发布文案",
+            )
+        self.assertIn("未找到符合条件的照片（山西旅游第一天夜晚）", result["answer"])
+        self.assertIn("放宽条件", result["answer"])
+        self.assertEqual(result["photos"], [])
+        self.assertEqual(result["compose_url"], "")
+        # 终止后不再进入下一轮决策，也没有走到文案能力
+        self.assertEqual(len(llm.decide_prompts), 1)
+        self.assertNotIn("预算", result["answer"])
 
     def test_invalid_decision_becomes_error_observation(self):
         """无效决策（编造能力名/参数）转为失败观察，不炸循环。"""

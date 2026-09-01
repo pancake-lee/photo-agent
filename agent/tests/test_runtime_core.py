@@ -86,6 +86,40 @@ class CompletionTest(unittest.TestCase):
         self.assertTrue(result.complete)
         self.assertEqual(result.missing, [])
 
+    def test_selection_out_of_scope_blocks_completion(self):
+        """范围受限时，范围外入选不满足 selected_photos 要件，阻断交付。"""
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_SCOPE, "范围",
+            {"conditions": {"timeline": "山西旅游", "day": "first", "time_of_day": "傍晚"},
+             "restricted": True, "ids": ["a", "b"], "condition_summary": "山西旅游第一天傍晚"},
+        ), step_no=1, action="resolve_trip")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a", "ghost"]},
+        ), step_no=2, action="select_photos")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "标题", "content": "正文"},
+        ), step_no=3, action="write_post")
+        result = rt_completion.check_completion(task)
+        self.assertFalse(result.complete)
+        self.assertEqual(result.missing, ["selected_photos"])
+
+    def test_in_scope_selection_completes_when_restricted(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_SCOPE, "范围",
+            {"conditions": {"timeline": "山西旅游"}, "restricted": True,
+             "ids": ["a", "b"], "condition_summary": "山西旅游"},
+        ), step_no=1, action="resolve_trip")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["b", "a"]},
+        ), step_no=2, action="select_photos")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "标题", "content": "正文"},
+        ), step_no=3, action="write_post")
+        result = rt_completion.check_completion(task)
+        self.assertTrue(result.complete)
+
 
 class CapabilityRegistryTest(unittest.TestCase):
     def _registry(self) -> rt_registry.CapabilityRegistry:

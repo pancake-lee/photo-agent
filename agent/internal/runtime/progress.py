@@ -4,7 +4,7 @@ import copy
 
 
 _ACTION_TITLES = {
-    "resolve_trip": "匹配时间线",
+    "resolve_trip": "确认候选范围",
     "sql_search": "查询照片",
     "rag_search": "查找相似照片",
     "hybrid_search": "综合查询照片",

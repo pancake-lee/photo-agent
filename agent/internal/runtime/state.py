@@ -34,7 +34,7 @@ _REQUIREMENT_LABELS = {
 }
 
 _MILESTONE_LABELS = {
-    "locate": "定位旅行与日期",
+    "locate": "确认候选范围",
     "candidates": "检索候选照片",
     "select": "挑选发布照片",
     "copy": "创作文案",
@@ -42,6 +42,7 @@ _MILESTONE_LABELS = {
 
 # Observation 归约分派键
 OBS_PHOTO_IDS = "photo_ids"
+OBS_SCOPE = "scope_materialized"
 OBS_FACTS = "facts_resolved"
 OBS_PHOTO_DETAILS = "photo_details"
 OBS_PHOTOS_SELECTED = "photos_selected"
@@ -81,6 +82,22 @@ class Artifacts:
 
 
 @dataclasses.dataclass
+class Scope:
+    """权威候选范围：硬约束（时间线/天序/时段）经程序物化后的候选全集。
+
+    restricted 为 True 时候选类观察一律与 photo_ids 求交集，
+    软提示检索零命中的时候选保留整个范围；范围只能由 OBS_SCOPE 归约建立。
+    """
+
+    established: bool = False       # 是否已解析（区分"未建立"与"不受限"）
+    restricted: bool = False        # True = 受硬约束限制；False = 不受限（全库）
+    conditions: dict = dataclasses.field(default_factory=dict)   # {"timeline","day","time_of_day"}
+    condition_summary: str = ""     # 用户可读的范围条件（如"山西旅游第一天傍晚"）
+    photo_ids: list[str] = dataclasses.field(default_factory=list)
+    sql: str = ""                   # 物化范围时执行的 SQL（程序拼装，trace 用）
+
+
+@dataclasses.dataclass
 class Progress:
     """执行进度：待办里程碑 + 有界历史。"""
 
@@ -97,6 +114,7 @@ class TaskState:
     goal: Goal
     constraints: dict = dataclasses.field(default_factory=dict)    # 用户原始约束，入口原样带入
     resolved_facts: dict = dataclasses.field(default_factory=dict)  # 执行中推断出的事实
+    scope: Scope = dataclasses.field(default_factory=Scope)        # 权威候选范围（硬约束物化）
     artifacts: Artifacts = dataclasses.field(default_factory=Artifacts)
     progress: Progress = dataclasses.field(default_factory=Progress)
 
@@ -165,13 +183,65 @@ def reduce_observation(
 
 
 def _apply_photo_ids(state: TaskState, obs: Observation) -> None:
-    """检索类观察：候选集合整体替换（最新一次检索定义候选），去重保序。"""
+    """检索类观察：候选集合整体替换（最新一次检索定义候选），去重保序后与范围求交集。"""
     ids: list[str] = []
     for pid in obs.payload.get("ids") or []:
         if pid and pid not in ids:
             ids.append(pid)
     state.artifacts.candidate_ids = ids
+    _constrain_candidates_to_scope(state)
     _finish_milestone(state, "candidates")
+
+
+def _constrain_candidates_to_scope(state: TaskState) -> None:
+    """范围受限时候选必须落在权威范围内；软提示零命中的时候选保留整个范围。
+
+    软提示（地点/景物/氛围）只影响范围内排序，永远不能清空或替换范围。
+    """
+    if not state.scope.restricted:
+        return
+    scope_set = set(state.scope.photo_ids)
+    kept = [pid for pid in state.artifacts.candidate_ids if pid in scope_set]
+    if kept:
+        state.artifacts.candidate_ids = kept
+    else:
+        state.artifacts.candidate_ids = list(state.scope.photo_ids)
+
+
+def _apply_scope(state: TaskState, obs: Observation) -> None:
+    """范围观察：物化权威候选范围，时间线与软提示并入已确认事实。
+
+    受限但范围为空是确定性终态（empty_scope），禁止后续选片与文案；
+    范围晚于检索建立时，既有候选同样要回到范围内。
+    """
+    restricted = bool(obs.payload.get("restricted"))
+    state.scope.established = True
+    state.scope.restricted = restricted
+    state.scope.conditions = dict(obs.payload.get("conditions") or {})
+    state.scope.condition_summary = str(obs.payload.get("condition_summary") or "")
+    state.scope.sql = str(obs.payload.get("sql") or "")
+    ids: list[str] = []
+    for pid in obs.payload.get("ids") or []:
+        if pid and pid not in ids:
+            ids.append(pid)
+    state.scope.photo_ids = ids if restricted else []
+    facts: dict = {}
+    if state.scope.conditions.get("timeline"):
+        facts["timeline"] = state.scope.conditions["timeline"]
+    if obs.payload.get("soft_hints"):
+        facts["soft_hints"] = [str(h) for h in obs.payload["soft_hints"]]
+    if facts:
+        state.resolved_facts.update(facts)
+    if restricted:
+        if not state.scope.photo_ids:
+            detail = f"未找到符合条件的照片（{state.scope.condition_summary}）" \
+                if state.scope.condition_summary else "权威候选范围为空"
+            state.progress.errors.append(detail)
+            del state.progress.errors[:-_ERRORS_MAX]
+            state.progress.terminal_reason = "empty_scope"
+        else:
+            _constrain_candidates_to_scope(state)
+    _finish_milestone(state, "locate")
 
 
 def _apply_facts(state: TaskState, obs: Observation) -> None:
@@ -241,6 +311,7 @@ def _apply_error(state: TaskState, obs: Observation) -> None:
 
 _APPLY_RULES: dict[str, typing.Callable[[TaskState, Observation], None]] = {
     OBS_PHOTO_IDS: _apply_photo_ids,
+    OBS_SCOPE: _apply_scope,
     OBS_FACTS: _apply_facts,
     OBS_PHOTO_DETAILS: _apply_photo_details,
     OBS_PHOTOS_SELECTED: _apply_photos_selected,
@@ -280,6 +351,15 @@ def _dump(value: typing.Any) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
+def _scope_summary(state: TaskState) -> str:
+    """决策摘要中的范围行：范围未建立/不受限/受限三种形态。"""
+    if not state.scope.established:
+        return "候选范围: 尚未确认"
+    if not state.scope.restricted:
+        return "候选范围: 不受限（全库）"
+    return f"候选范围: {state.scope.condition_summary}（硬约束，共 {len(state.scope.photo_ids)} 张）"
+
+
 def summarize_state(state: TaskState) -> str:
     """把任务状态序列化为决策提示词用的确定性摘要。"""
     done = [milestone_label(m) for m in _MILESTONE_LABELS if m not in state.progress.todo]
@@ -289,6 +369,7 @@ def summarize_state(state: TaskState) -> str:
         f"待办里程碑: {'、'.join(milestone_label(m) for m in state.progress.todo) or '无'}",
         f"用户约束: {_dump(state.constraints)}",
         f"已确认事实: {_dump(state.resolved_facts)}",
+        _scope_summary(state),
         f"候选照片: {_ids_preview(state.artifacts.candidate_ids)}",
         f"已选照片: {_ids_preview(state.artifacts.selected_ids)}",
         f"文案草稿: "
@@ -344,6 +425,16 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
         return {
             "answer": "候选照片过多，请进入图文工坊自选后生成文案。",
             "handoff_url": state.artifacts.handoff_url,
+        }
+
+    if state.progress.terminal_reason == "empty_scope":
+        detail = state.progress.errors[-1] if state.progress.errors else "没有符合条件的照片"
+        return {
+            "answer": (
+                f"{detail}。"
+                "可以放宽条件后重试，例如去掉时段或天数限制，或换成更大的日期范围。"
+            ),
+            "handoff_url": "",
         }
 
     if state.progress.terminal_reason:

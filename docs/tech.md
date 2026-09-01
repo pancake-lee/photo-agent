@@ -108,8 +108,9 @@ flowchart TD
 ```
 
 - **分层**：`agent/runtime/` 中 state（TaskState + 显式归约）、budget（步数/时长/成本）、completion（确定性完成检查）、registry（能力注册表 + 参数校验）为框架无关纯 Python；graph.py 仅用 LangGraph 表达循环图与条件回环
-- **TaskState**：goal（目标类型 + 完成要件）/ constraints（用户原始约束）/ resolved_facts（推断事实）/ artifacts（候选与入选照片 ID、文案草稿，大对象只存引用）/ progress（待办里程碑 + 有界历史）
-- **能力层**：sql_search / rag_search / hybrid_search（检索）、resolve_trip / fetch_photo_details（Go 工具）、select_photos（连拍折叠 + 两级收缩 + 超限深链，迁移自 Compose 管线）/ write_post（复用图文工坊提示词栈）
+- **TaskState**：goal（目标类型 + 完成要件）/ constraints（用户原始约束）/ resolved_facts（推断事实）/ scope（权威候选范围：硬约束条件 + 物化 ID 集 + 是否受限）/ artifacts（候选与入选照片 ID、文案草稿，大对象只存引用）/ progress（待办里程碑 + 有界历史）
+- **权威范围（AR9）**：resolve_trip 先做约束解析（LLM 只抽取，时间线确定性匹配、时段查固定映射表转小时窗），再由程序只按硬约束（时间线 + 天序 + 小时窗，经 `localtime` 统一本地时区）拼装范围 SQL 物化为权威范围；软提示只影响范围内排序，归约层对候选统一求交集、零命中回落整个范围；受限空范围进入 empty_scope 确定性终态
+- **能力层**：sql_search / rag_search / hybrid_search（检索，query 只承载软提示，候选受范围交集约束）、resolve_trip（约束解析 + 范围物化）/ fetch_photo_details（Go 工具）、select_photos（连拍折叠 + 两级收缩 + 超限深链 + 范围归属校验，迁移自 Compose 管线）/ write_post（复用图文工坊提示词栈）
 - **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加
 - **追踪**：tracer 输出 runtime.decide / execute / observe / check 步骤事件与 trace_summary 轨迹摘要（步数、能力调用、里程碑、结束形态）
 

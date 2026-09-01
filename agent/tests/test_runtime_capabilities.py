@@ -127,6 +127,32 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
+    def test_select_out_of_scope_pick_is_blocked(self):
+        """范围外入选被阻断：进入可解释失败，不允许继续生成文案。"""
+        cfg = _cfg()
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "挑照片", {"question": "q"})
+        # 构造不变量被破坏的状态：候选含范围外照片 x，权威范围只有 a
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_SCOPE, "范围",
+            {"conditions": {"timeline": "山西旅游", "day": "first", "time_of_day": "傍晚"},
+             "restricted": True, "ids": ["a"], "condition_summary": "山西旅游第一天傍晚"},
+        ), step_no=1, action="resolve_trip")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "x"]},
+        ), step_no=2, action="sql_search")
+        # 绕过归约交集，直接模拟候选未受限的历史状态
+        task.artifacts.candidate_ids = ["a", "x"]
+        fake_llm = unittest.mock.MagicMock()
+        fake_llm.invoke.return_value.content = '{"selected_ids": ["x"]}'
+        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[
+            {"id": "a", "description": "寺庙"}, {"id": "x", "description": "外地图"},
+        ]), unittest.mock.patch.object(rt_caps.llm_factory, "create_llm",
+                                        return_value=fake_llm):
+            obs = rt_caps._select_photos({}, _ctx(cfg, task))
+        self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.payload["terminal_reason"], "selection_out_of_scope")
+        self.assertEqual(obs.payload["ids"], ["x"])
+
 
 class WritePostCapabilityTest(unittest.TestCase):
     def test_write_post_after_selection_uses_cached_full_details(self):
@@ -190,32 +216,120 @@ class WritePostCapabilityTest(unittest.TestCase):
 
 
 class ResolveTripCapabilityTest(unittest.TestCase):
-    def _mock_http(self, timelines):
-        mock_client = unittest.mock.MagicMock()
-        mock_resp = unittest.mock.MagicMock()
-        mock_resp.json.return_value = {"timelines": timelines}
-        mock_client.__enter__.return_value.get.return_value = mock_resp
-        return mock_client
+    """约束解析能力：抽取 + 程序校验 + 权威范围物化（SQL 不经 LLM）。"""
 
-    def test_matched_timeline_produces_fact(self):
+    def _resolve(self, llm_content: str, question="找山西旅游第一天傍晚的照片",
+                 execute_ids=None):
         fake_llm = unittest.mock.MagicMock()
-        fake_llm.invoke.return_value.content = '{"timeline": "山西旅游"}'
-        with unittest.mock.patch.object(rt_caps, "_fetch_timelines",
-                                        return_value=["山西旅游", "北京街拍"]), \
-             unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
-            obs = rt_caps._resolve_trip({}, _ctx(_cfg(), question="找山西旅游第一天的照片"))
-        self.assertEqual(obs.kind, rt_state.OBS_FACTS)
-        self.assertEqual(obs.payload["facts"], {"timeline": "山西旅游"})
+        fake_llm.invoke.return_value.content = llm_content
+        patches = [
+            unittest.mock.patch.object(rt_caps, "_fetch_timelines",
+                                       return_value=["山西旅游", "北京街拍"]),
+            unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm),
+        ]
+        if execute_ids is not None:
+            patches.append(unittest.mock.patch.object(
+                rt_caps.text_to_sql, "execute_sql_for_ids", return_value=execute_ids,
+            ))
+        for patch in patches:
+            patch.start()
+        self.addCleanup(lambda: [p.stop() for p in reversed(patches)])
+        return rt_caps._resolve_trip({}, _ctx(_cfg(), question=question))
+
+    def test_matched_constraints_materialize_scope_sql(self):
+        """山西用例：范围 SQL 只含硬约束（时间线/天序/小时窗），软提示不入 WHERE。"""
+        obs = self._resolve(
+            '{"timeline": "山西旅游", "day": "first", "time_of_day": "傍晚",'
+            ' "soft_hints": ["太原植物园", "植物"]}',
+            execute_ids=["a", "b"],
+        )
+        self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
+        self.assertTrue(obs.payload["restricted"])
+        self.assertEqual(obs.payload["ids"], ["a", "b"])
+        self.assertEqual(obs.payload["condition_summary"], "山西旅游第一天傍晚")
+        self.assertEqual(obs.payload["soft_hints"], ["太原植物园", "植物"])
+        sql = obs.payload["sql"]
+        self.assertIn("timeline = '山西旅游'", sql)
+        self.assertIn("MIN(DATE(shot_at, 'localtime'))", sql)
+        self.assertIn("BETWEEN 17 AND 19", sql)
+        for soft in ("植物园", "植物"):
+            self.assertNotIn(soft, sql)
+
+    def test_no_hard_constraints_marks_scope_unrestricted(self):
+        """抽不出任何硬约束时范围不受限（全库），不执行范围 SQL。"""
+        obs = self._resolve(
+            '{"timeline": "", "day": "", "time_of_day": "", "soft_hints": ["黄昏氛围"]}',
+            question="挑几张有氛围感的照片发帖",
+        )
+        self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
+        self.assertFalse(obs.payload["restricted"])
+        self.assertEqual(obs.payload["ids"], [])
+        self.assertEqual(obs.payload["soft_hints"], ["黄昏氛围"])
+
+    def test_empty_scope_returns_deterministic_terminal(self):
+        """受限但 0 张时进入 empty_scope 终态，不进入检索/选片。"""
+        obs = self._resolve(
+            '{"timeline": "山西旅游", "day": "first", "time_of_day": "夜晚", "soft_hints": []}',
+            execute_ids=[],
+        )
+        self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.payload["terminal_reason"], "empty_scope")
+        self.assertIn("山西旅游第一天夜晚", obs.summary)
 
     def test_unmatched_stops_with_trip_reason(self):
-        fake_llm = unittest.mock.MagicMock()
-        fake_llm.invoke.return_value.content = '{"timeline": "不存在的旅行"}'
-        with unittest.mock.patch.object(rt_caps, "_fetch_timelines",
-                                        return_value=["山西旅游", "北京街拍"]), \
-             unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
-            obs = rt_caps._resolve_trip({}, _ctx(_cfg(), question="随便"))
+        obs = self._resolve('{"timeline": "不存在的旅行"}', question="随便")
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "trip_unresolved")
+
+    def test_illegal_values_treated_as_no_constraint(self):
+        """非法天序/时段按"无该约束"处理，不终止。"""
+        obs = self._resolve(
+            '{"timeline": "山西旅游", "day": "第二天", "time_of_day": "黄昏", "soft_hints": []}',
+            execute_ids=["a"],
+        )
+        self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
+        self.assertEqual(obs.payload["conditions"], {
+            "timeline": "山西旅游", "day": "", "time_of_day": "",
+        })
+        # 只剩时间线约束，SQL 不带天序与小时窗
+        self.assertNotIn("MIN(DATE", obs.payload["sql"])
+        self.assertNotIn("BETWEEN", obs.payload["sql"])
+
+    def test_validate_day_and_time_variants(self):
+        self.assertEqual(rt_caps._validate_day("first"), "first")
+        self.assertEqual(rt_caps._validate_day("2026-08-02"), "2026-08-02")
+        self.assertEqual(rt_caps._validate_day("2026-13-99"), "")
+        self.assertEqual(rt_caps._validate_day("第二天"), "")
+        self.assertEqual(rt_caps._validate_time_of_day("傍晚"), "傍晚")
+        self.assertEqual(rt_caps._validate_time_of_day("黄昏"), "")
+
+    def test_build_scope_sql_combines_only_hard_constraints(self):
+        sql = rt_caps.build_scope_sql("山西旅游", "last", 19, 23)
+        self.assertIn("timeline = '山西旅游'", sql)
+        self.assertIn(
+            "DATE(shot_at, 'localtime') = (SELECT MAX(DATE(shot_at, 'localtime')) "
+            "FROM photos WHERE timeline = '山西旅游')",
+            sql,
+        )
+        self.assertIn(
+            "CAST(strftime('%H', shot_at, 'localtime') AS INTEGER) BETWEEN 19 AND 23", sql,
+        )
+        date_sql = rt_caps.build_scope_sql("", "2026-08-02", None, None)
+        self.assertEqual(date_sql,
+                         "SELECT id FROM photos WHERE DATE(shot_at, 'localtime') = '2026-08-02' "
+                         "ORDER BY shot_at ASC LIMIT 500")
+        escaped = rt_caps.build_scope_sql("O'rien't", "", None, None)
+        self.assertIn("timeline = 'O''rien''t'", escaped)
+
+    def test_build_scope_sql_day_without_timeline_uses_whole_library(self):
+        """天序无时间线时按全库最早/最晚日期取值，不静默丢弃约束。"""
+        sql = rt_caps.build_scope_sql("", "first", None, None)
+        self.assertEqual(
+            sql,
+            "SELECT id FROM photos WHERE DATE(shot_at, 'localtime') = "
+            "(SELECT MIN(DATE(shot_at, 'localtime')) FROM photos) "
+            "ORDER BY shot_at ASC LIMIT 500",
+        )
 
     def test_match_timeline_name_fuzzy_variants(self):
         self.assertEqual(rt_caps._match_timeline_name("山西旅游 ", ["山西旅游"]), "山西旅游")
@@ -256,7 +370,8 @@ class RetrievalCapabilityTest(unittest.TestCase):
         self.assertEqual(obs.payload["ids"], ["c", "a"])
         self.assertEqual(obs.payload["source"], "hybrid")
 
-    def test_hybrid_search_empty_sql_falls_back_to_rag(self):
+    def test_hybrid_search_empty_sql_keeps_intersection_only(self):
+        """结构化为空时交集为空，不再回退全库 RAG（候选由权威范围兜底）。"""
         with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",
                                         return_value="SQL"), \
              unittest.mock.patch.object(rt_caps.text_to_sql, "execute_sql_for_ids",
@@ -264,8 +379,8 @@ class RetrievalCapabilityTest(unittest.TestCase):
              unittest.mock.patch.object(rt_caps.photo_rag, "retrieve_photo_ids",
                                         return_value=["x", "y"]):
             obs = rt_caps._hybrid_search({"query": "q"}, _ctx(_cfg()))
-        self.assertEqual(obs.payload["ids"], ["x", "y"])
-        self.assertEqual(obs.payload["source"], "hybrid_fallback_rag")
+        self.assertEqual(obs.payload["ids"], [])
+        self.assertEqual(obs.payload["source"], "hybrid")
 
     def test_fetch_photo_details_requires_ids(self):
         obs = rt_caps._fetch_photo_details({}, _ctx(_cfg()))

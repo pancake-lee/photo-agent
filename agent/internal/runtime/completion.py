@@ -20,8 +20,18 @@ class CompletionResult:
 
 
 # 要件名 → 确定性判定函数（消费 TaskState 的具体字段）
+def _selected_photos_ready(s: rt_state.TaskState) -> bool:
+    """入选照片要件：有入选，且范围受限时全部属于权威范围（范围外交付被阻断）。"""
+    if not s.artifacts.selected_ids:
+        return False
+    if not s.scope.restricted:
+        return True
+    scope_set = set(s.scope.photo_ids)
+    return all(pid in scope_set for pid in s.artifacts.selected_ids)
+
+
 _REQUIREMENT_CHECKS: dict[str, typing.Callable[[rt_state.TaskState], bool]] = {
-    "selected_photos": lambda s: bool(s.artifacts.selected_ids),
+    "selected_photos": _selected_photos_ready,
     "copy_draft": lambda s: bool(s.artifacts.copy_draft.get("title"))
     and bool(s.artifacts.copy_draft.get("content")),
 }

@@ -10,9 +10,11 @@
     参数声明与校验由 registry 承担，能力自身不修改 TaskState。
 """
 
+import datetime
 import functools
 import json
 import logging
+import re
 import types
 import typing
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -178,7 +180,7 @@ def _sql_search(params: dict, ctx: rt_registry.RunContext) -> Observation:
 
 @_capability_run
 def _rag_search(params: dict, ctx: rt_registry.RunContext) -> Observation:
-    """语义检索：向量检索 → 候选照片 ID（按相似度排序）。"""
+    """语义检索：向量检索 → 候选照片 ID（按相似度排序，归约层负责与权威范围求交集）。"""
     query = str(params.get("query") or "")
     ids = photo_rag.retrieve_photo_ids(
         ctx.cfg, query,
@@ -199,7 +201,11 @@ def _rag_search(params: dict, ctx: rt_registry.RunContext) -> Observation:
 
 @_capability_run
 def _hybrid_search(params: dict, ctx: rt_registry.RunContext) -> Observation:
-    """混合检索：结构化过滤 ∩ 语义检索，交集为空或过滤过宽时回退语义结果。"""
+    """混合检索：结构化软条件 ∩ 语义检索，按语义顺序返回交集候选。
+
+    不做"空结果/过宽 → 全库 RAG"的替代：候选最终会被归约层限制在权威范围内，
+    交集为空时交由权威范围兜底，软提示检索永远不能清空或替换范围。
+    """
     query = str(params.get("query") or "")
     filter_sql = text_to_sql.generate_filter_sql(ctx.cfg, query)
     sql_ids = text_to_sql.execute_sql_for_ids(ctx.cfg.go_backend_url, filter_sql)
@@ -213,23 +219,14 @@ def _hybrid_search(params: dict, ctx: rt_registry.RunContext) -> Observation:
     if isinstance(rag_ids, tuple):
         rag_ids = rag_ids[0]
 
-    if not sql_ids or len(sql_ids) > 50:
-        logger.info(
-            "[runtime] hybrid_search 结构化过滤为空或过宽（%d），回退语义结果", len(sql_ids),
-        )
-        return rt_state.Observation(
-            rt_state.OBS_PHOTO_IDS,
-            f"结构化过滤为空或过宽（{len(sql_ids)} 条），采用语义检索的 {len(rag_ids)} 个候选",
-            {"ids": rag_ids, "source": "hybrid_fallback_rag", "sql": filter_sql},
-        )
-
     sql_set = set(sql_ids)
     intersection = [pid for pid in rag_ids if pid in sql_set]
     if not intersection:
         return rt_state.Observation(
             rt_state.OBS_PHOTO_IDS,
-            f"结构化与语义交集为空，采用语义检索的 {len(rag_ids)} 个候选",
-            {"ids": rag_ids, "source": "hybrid_fallback_rag", "sql": filter_sql},
+            f"结构化与语义交集为空（结构化 {len(sql_ids)} ∩ 语义 {len(rag_ids)}），"
+            "候选交由权威范围兜底",
+            {"ids": [], "source": "hybrid", "sql": filter_sql},
         )
     return rt_state.Observation(
         rt_state.OBS_PHOTO_IDS,
@@ -241,6 +238,96 @@ def _hybrid_search(params: dict, ctx: rt_registry.RunContext) -> Observation:
 # ============================================================================
 # 工具类能力
 # ============================================================================
+
+# 时段词 → 拍摄小时窗（本地时区，与库内 shot_at 偏移一致），程序内固定映射
+_TIME_OF_DAY_WINDOWS: dict[str, tuple[int, int]] = {
+    "清晨": (5, 8),
+    "上午": (8, 11),
+    "中午": (11, 13),
+    "下午": (13, 17),
+    "傍晚": (17, 19),
+    "夜晚": (19, 23),
+}
+
+_DAY_LABELS = {"first": "第一天", "last": "最后一天"}
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# 范围物化与软提示的规模上限
+_SCOPE_SQL_LIMIT = 500
+_SOFT_HINTS_MAX = 8
+
+_CONSTRAINT_SYSTEM_PROMPT = (
+    "你是照片库检索助手。从用户目标中抽取可验证的硬约束与软提示。\n"
+    '只输出 JSON: {"timeline": "", "day": "", "time_of_day": "", "soft_hints": []}\n'
+    "字段规则:\n"
+    "- timeline: 目标提到的旅行或活动名称，从时间线列表中选最接近的；完全没提到则为空串\n"
+    '- day: 第一天用 "first"，最后一天用 "last"，明确日期用 "YYYY-MM-DD"，没提到则为空串\n'
+    "- time_of_day: 拍摄时段，只能是 清晨/上午/中午/下午/傍晚/夜晚 之一，没明确则为空串\n"
+    "- soft_hints: 其余的地点、景物、氛围等描述（字符串数组），只用于排序，不构成硬性筛选"
+)
+
+
+def _validate_day(raw: str) -> str:
+    """校验 LLM 抽取的天序：first/last/合法日期，非法值按"无该约束"处理。"""
+    value = (raw or "").strip()
+    if value in ("first", "last"):
+        return value
+    if _DATE_RE.match(value):
+        try:
+            datetime.date.fromisoformat(value)
+            return value
+        except ValueError:
+            return ""
+    return ""
+
+
+def _validate_time_of_day(raw: str) -> str:
+    """时段词按固定映射表校验，不在表内的一律视为无该约束（不终止）。"""
+    value = (raw or "").strip()
+    return value if value in _TIME_OF_DAY_WINDOWS else ""
+
+
+def _describe_scope(timeline: str, day: str, time_of_day: str) -> str:
+    """拼出用户可读的范围条件，如"山西旅游第一天傍晚"。"""
+    parts = [timeline] if timeline else []
+    if day in _DAY_LABELS:
+        parts.append(_DAY_LABELS[day])
+    elif day:
+        parts.append(day)
+    if time_of_day:
+        parts.append(time_of_day)
+    return "".join(parts)
+
+
+def build_scope_sql(
+    timeline: str, day: str,
+    hour_start: int | None, hour_end: int | None,
+) -> str:
+    """按校验后的硬约束拼装权威范围 SQL（只含时间线/天序/小时窗，程序拼装不经 LLM）。
+
+    库内 shot_at 混合 UTC(+00:00) 与本地(+08:00) 偏移，天序与小时窗一律经
+    'localtime' 修饰符换算到本地时区再比较，避免两种格式语义漂移。
+    """
+    local_day = "DATE(shot_at, 'localtime')"
+    conds: list[str] = []
+    if timeline:
+        esc = timeline.replace("'", "''")
+        conds.append(f"timeline = '{esc}'")
+    if day in _DAY_LABELS:
+        agg = "MIN" if day == "first" else "MAX"
+        scoped = f" WHERE timeline = '{esc}'" if timeline else ""
+        conds.append(f"{local_day} = (SELECT {agg}({local_day}) FROM photos{scoped})")
+    elif day:
+        conds.append(f"{local_day} = '{day}'")
+    if hour_start is not None and hour_end is not None:
+        conds.append(
+            f"CAST(strftime('%H', shot_at, 'localtime') AS INTEGER) "
+            f"BETWEEN {int(hour_start)} AND {int(hour_end)}"
+        )
+    where = " AND ".join(conds) if conds else "1=1"
+    return f"SELECT id FROM photos WHERE {where} ORDER BY shot_at ASC LIMIT {_SCOPE_SQL_LIMIT}"
+
 
 def _fetch_timelines(cfg) -> list[str]:
     """获取照片库时间线列表。"""
@@ -271,39 +358,71 @@ def _match_timeline_name(candidate: str, timelines: list[str]) -> str:
 
 @_capability_run
 def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> Observation:
-    """把目标中的旅行/活动名称匹配到照片库时间线，产出事实。"""
-    timelines = _fetch_timelines(ctx.cfg)
-    if not timelines:
-        return rt_state.Observation(
-            rt_state.OBS_ERROR,
-            "照片库暂无时间线，无法定位旅行",
-            {"terminal_reason": "trip_unresolved"},
-        )
+    """约束解析：抽取硬约束（时间线/天序/时段）与软提示，物化权威候选范围。
 
+    一次 LLM 调用只负责抽取；时间线沿用确定性名称匹配，时段查固定映射表，
+    范围 SQL 由程序按硬约束拼装（不经 LLM），软提示只保留供检索排序。
+    """
+    timelines = _fetch_timelines(ctx.cfg)
     hint = str(params.get("hint") or ctx.question or "")
     llm = llm_factory.create_llm(
         ctx.cfg, temperature=0.0, callbacks=ctx.llm_callbacks or None,
     )
     response = llm.invoke([
-        lc_messages.SystemMessage(content=(
-            "你是照片库检索助手。把用户目标中提到的旅行或活动匹配到时间线列表。\n"
-            '只输出 JSON: {"timeline": "匹配的时间线全名"}，无匹配时 timeline 为空串。'
+        lc_messages.SystemMessage(content=_CONSTRAINT_SYSTEM_PROMPT),
+        lc_messages.HumanMessage(content=(
+            f"用户目标: {hint}\n\n时间线列表: {'、'.join(timelines) or '（空）'}"
         )),
-        lc_messages.HumanMessage(content=f"用户目标: {hint}\n\n时间线列表: {'、'.join(timelines)}"),
     ])
     data = extract_json_dict(str(response.content)) or {}
-    matched = _match_timeline_name(str(data.get("timeline") or ""), timelines)
-    if not matched:
+    raw_timeline = str(data.get("timeline") or "").strip()
+    matched = _match_timeline_name(raw_timeline, timelines)
+    if raw_timeline and not matched:
         return rt_state.Observation(
             rt_state.OBS_ERROR,
-            f"未在 {len(timelines)} 条时间线中匹配到目标（模型原始输出: {data.get('timeline')!r}）",
+            f"未在 {len(timelines)} 条时间线中匹配到目标（模型原始输出: {raw_timeline!r}）",
             {"terminal_reason": "trip_unresolved"},
         )
-    logger.info("[runtime] resolve_trip 匹配时间线: %s", matched)
+    day = _validate_day(str(data.get("day") or ""))
+    time_of_day = _validate_time_of_day(str(data.get("time_of_day") or ""))
+    soft_hints = [
+        str(item).strip() for item in data.get("soft_hints") or []
+        if str(item).strip()
+    ][:_SOFT_HINTS_MAX]
+    conditions = {"timeline": matched, "day": day, "time_of_day": time_of_day}
+
+    if not (matched or day or time_of_day):
+        logger.info("[runtime] resolve_trip 无硬约束，范围不受限 | soft_hints=%s", soft_hints)
+        return rt_state.Observation(
+            rt_state.OBS_SCOPE,
+            "目标没有可验证的硬约束，候选范围不受限（全库）",
+            {"conditions": conditions, "restricted": False, "ids": [], "soft_hints": soft_hints},
+        )
+
+    hour_start, hour_end = _TIME_OF_DAY_WINDOWS[time_of_day] if time_of_day else (None, None)
+    sql = build_scope_sql(matched, day, hour_start, hour_end)
+    scope_label = _describe_scope(matched, day, time_of_day)
+    ids = text_to_sql.execute_sql_for_ids(ctx.cfg.go_backend_url, sql, limit=_SCOPE_SQL_LIMIT)
+    logger.info(
+        "[runtime] resolve_trip 物化范围: %s → %d 张 | SQL: %s", scope_label, len(ids), sql,
+    )
+    if not ids:
+        return rt_state.Observation(
+            rt_state.OBS_ERROR,
+            f"未找到符合条件的照片（{scope_label}）",
+            {"terminal_reason": "empty_scope", "conditions": conditions, "sql": sql},
+        )
     return rt_state.Observation(
-        rt_state.OBS_FACTS,
-        f"目标匹配到时间线「{matched}」",
-        {"facts": {"timeline": matched}},
+        rt_state.OBS_SCOPE,
+        f"已确认候选范围「{scope_label}」，共 {len(ids)} 张",
+        {
+            "conditions": conditions,
+            "restricted": True,
+            "ids": ids,
+            "sql": sql,
+            "condition_summary": scope_label,
+            "soft_hints": soft_hints,
+        },
     )
 
 
@@ -389,6 +508,16 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> Observation:
     max_photos = params.get("max_photos")
     if isinstance(max_photos, int) and max_photos > 0:
         valid_ids = valid_ids[:max_photos]
+    # 范围归属校验：受限范围外的入选一律阻断，不生成带确定性地点/场景断言的文案
+    if state is not None and state.scope.restricted:
+        scope_set = set(state.scope.photo_ids)
+        out_of_scope = [pid for pid in valid_ids if pid not in scope_set]
+        if out_of_scope:
+            return rt_state.Observation(
+                rt_state.OBS_ERROR,
+                f"挑选结果中有 {len(out_of_scope)} 张不属于权威候选范围，已阻断交付",
+                {"terminal_reason": "selection_out_of_scope", "ids": out_of_scope},
+            )
     if not valid_ids:
         return rt_state.Observation(
             rt_state.OBS_ERROR,
@@ -438,28 +567,31 @@ def build_registry() -> rt_registry.CapabilityRegistry:
     specs: list[tuple[str, str, dict, typing.Callable]] = [
         (
             "sql_search",
-            "按结构化条件（时间线、日期、地点、EXIF 参数）检索照片，返回候选照片 ID 列表。"
-            "需要精确定位某次旅行、某天、某类器材照片时使用。",
+            "按结构化软条件（地点、景物、场景、EXIF 参数）检索照片，返回候选照片 ID 列表。"
+            "query 只写软提示（排序偏好），时间线/天数/时段等硬约束已由权威范围限定，"
+            "候选会被自动限制在范围内。",
             {"query": {"type": "str", "description": "结构化检索条件描述", "required": True}},
             _sql_search,
         ),
         (
             "rag_search",
-            "按画面内容语义（场景、物体、氛围）检索照片，返回候选照片 ID 列表。",
+            "按画面内容语义（场景、物体、氛围）在权威候选范围内排序照片，返回候选照片 ID 列表。"
+            "query 只写软提示。",
             {"query": {"type": "str", "description": "语义检索描述", "required": True}},
             _rag_search,
         ),
         (
             "hybrid_search",
-            "同时包含结构化条件与画面语义时使用，返回两者交集的候选照片 ID 列表。",
+            "同时需要结构化软条件与画面语义时使用，返回两者交集的候选照片 ID 列表；"
+            "交集为空时候选交由权威范围兜底，不会用全库结果替换范围。",
             {"query": {"type": "str", "description": "组合检索描述", "required": True}},
             _hybrid_search,
         ),
         (
             "resolve_trip",
-            "把用户目标中的旅行/活动名称匹配到照片库时间线，产出已确认事实。"
-            "目标涉及某次旅行或活动时先执行。",
-            {"hint": {"type": "str", "description": "匹配提示，缺省用原始请求", "required": False}},
+            "解析用户目标中的硬约束（时间线、第一天/最后一天/具体日期、拍摄时段）与软提示，"
+            "物化为权威候选范围。目标涉及旅行、日期或时段时必须最先执行。",
+            {"hint": {"type": "str", "description": "解析提示，缺省用原始请求", "required": False}},
             _resolve_trip,
         ),
         (

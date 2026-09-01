@@ -51,8 +51,11 @@ _RUNTIME_DECIDE_SYSTEM = (
     "你是照片任务的执行规划器。根据当前任务状态，从能力列表中选择下一步动作。\n"
     '只输出 JSON: {"action": "能力名", "params": {...}, "reason": "一句话理由"}。\n'
     "选择规则:\n"
+    "- 目标涉及旅行、日期或时段时，先执行 resolve_trip 确认权威候选范围，未确认前不要检索\n"
+    "- 权威范围（时间线/天数/时段等硬约束）已由程序物化并自动生效，"
+    "检索 query 只写软提示（地点、景物、氛围等排序偏好），"
+    "不要把时间线名、第一天、傍晚等硬约束或已确认事实写进 query\n"
     "- 优先选择能推进「待办里程碑」的能力，不要重复已完成的里程碑\n"
-    "- 已确认事实（如时间线名称）要写进后续检索条件的 query 里\n"
     "- 检索到候选后先挑选照片，挑选完成后再创作文案\n"
     "- params 必须符合能力声明，不要编造参数名"
 )
@@ -122,7 +125,7 @@ def _progress_details(action: str, params: dict, observation: rt_state.Observati
     if action in {"sql_search", "rag_search", "hybrid_search"} and params.get("query"):
         details["查询条件"] = str(params["query"])
     if action == "resolve_trip" and params.get("hint"):
-        details["匹配提示"] = str(params["hint"])
+        details["解析提示"] = str(params["hint"])
     if action == "select_photos" and isinstance(params.get("max_photos"), int):
         details["最多入选"] = params["max_photos"]
     if action == "write_post" and params.get("style"):
@@ -219,6 +222,16 @@ def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         state["task"], observation, step_no=state["step_no"], action=action,
     )
     facts = []
+    if observation.kind == rt_state.OBS_SCOPE and task.scope.established:
+        if task.scope.restricted:
+            facts.append(
+                f"候选范围：{task.scope.condition_summary}（共 {len(task.scope.photo_ids)} 张）"
+            )
+        else:
+            facts.append("候选范围不受限（全库）")
+        hints = task.resolved_facts.get("soft_hints") or []
+        if hints:
+            facts.append(f"软提示（只用于排序）：{'、'.join(str(h) for h in hints)}")
     for key, value in (observation.payload.get("facts") or {}).items():
         facts.append(f"已确认{key}：{value}")
     _emit(tracer, progress_callback, "runtime.observe", {
