@@ -18,8 +18,6 @@ class CompletionResult:
     complete: bool
     missing: list[str]
 
-
-# 要件名 → 确定性判定函数（消费 TaskState 的具体字段）
 def _selected_photos_ready(s: rt_state.TaskState) -> bool:
     """入选照片要件：有入选，且范围受限时全部属于权威范围（范围外交付被阻断）。"""
     if not s.artifacts.selected_ids:
@@ -30,6 +28,9 @@ def _selected_photos_ready(s: rt_state.TaskState) -> bool:
     return all(pid in scope_set for pid in s.artifacts.selected_ids)
 
 
+# 社交媒体帖子 的任务完成条件由 选好图片 和 文案草稿 两个要件组成。
+# _REQUIREMENT_CHECKS 的意义就是把两个条件最终封装成统一的调用流程
+# _REQUIREMENT_CHECKS.get(name)(state) 直接返回 True/False，方便 check_completion 统一处理。
 _REQUIREMENT_CHECKS: dict[str, typing.Callable[[rt_state.TaskState], bool]] = {
     "selected_photos": _selected_photos_ready,
     "copy_draft": lambda s: bool(s.artifacts.copy_draft.get("title"))

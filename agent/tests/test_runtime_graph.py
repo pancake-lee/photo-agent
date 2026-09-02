@@ -2,7 +2,11 @@ import unittest
 import unittest.mock
 
 import cli.photo_agent as photo_agent
+import internal.chat.text_to_sql as text_to_sql
+import internal.posts.post_studio as post_studio
 import internal.runtime.budget as rt_budget
+import internal.runtime.capabilities.common as caps_common
+import internal.runtime.capabilities.resolve_trip as caps_resolve_trip
 import internal.runtime.graph as rt_graph
 import internal.runtime.state as rt_state
 
@@ -60,15 +64,15 @@ class RunRuntimeLoopTest(unittest.TestCase):
         ]
         return [
             unittest.mock.patch.object(rt_graph.llm_factory, "create_llm", return_value=llm),
-            unittest.mock.patch.object(rt_graph.rt_capabilities.text_to_sql,
+            unittest.mock.patch.object(text_to_sql,
                                       "generate_filter_sql", return_value="SELECT id FROM photos"),
-            unittest.mock.patch.object(rt_graph.rt_capabilities.text_to_sql,
+            unittest.mock.patch.object(text_to_sql,
                                       "execute_sql_for_ids", return_value=["a", "b", "c"]),
-            unittest.mock.patch.object(rt_graph.rt_capabilities, "fetch_photos_batch",
+            unittest.mock.patch.object(caps_common, "fetch_photos_batch",
                                       side_effect=lambda cfg, ids: [
                                           p for p in photos if p.get("id") in ids
                                       ]),
-            unittest.mock.patch.object(rt_graph.rt_capabilities.post_studio, "generate_post",
+            unittest.mock.patch.object(post_studio, "generate_post",
                                       return_value=("山西第一天", "正文内容", [])),
         ]
 
@@ -156,10 +160,10 @@ class RunRuntimeLoopTest(unittest.TestCase):
 
         patches = self._happy_patches(llm)
         timelines_patch = unittest.mock.patch.object(
-            rt_graph.rt_capabilities, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
+            caps_resolve_trip, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
         )
         execute_patch = unittest.mock.patch.object(
-            rt_graph.rt_capabilities.text_to_sql, "execute_sql_for_ids",
+            text_to_sql, "execute_sql_for_ids",
             side_effect=fake_execute,
         )
         with patches[0], patches[1], execute_patch, patches[3], patches[4], timelines_patch:
@@ -186,10 +190,10 @@ class RunRuntimeLoopTest(unittest.TestCase):
         )
         patches = self._happy_patches(llm)
         timelines_patch = unittest.mock.patch.object(
-            rt_graph.rt_capabilities, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
+            caps_resolve_trip, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
         )
         execute_patch = unittest.mock.patch.object(
-            rt_graph.rt_capabilities.text_to_sql, "execute_sql_for_ids", return_value=[],
+            text_to_sql, "execute_sql_for_ids", return_value=[],
         )
         with patches[0], patches[1], execute_patch, patches[3], patches[4], timelines_patch:
             result = rt_graph.run_runtime(
@@ -304,7 +308,7 @@ class RunRuntimeLoopTest(unittest.TestCase):
         ])
         patches = self._happy_patches(llm)
         timelines_patch = unittest.mock.patch.object(
-            rt_graph.rt_capabilities, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
+            caps_resolve_trip, "_fetch_timelines", return_value=["山西旅游", "北京街拍"],
         )
         with tempfile.TemporaryDirectory() as tmp, \
                 patches[0], patches[1], patches[2], patches[3], patches[4], timelines_patch:

@@ -45,7 +45,7 @@ import internal.chat.photo_rag as photo_rag
 import internal.topics.suggest as suggest_mod
 import internal.chat.text_to_sql as text_to_sql
 import infra.config as config
-import internal.runtime.capabilities as rt_capabilities
+import internal.runtime.capabilities.common as caps_common
 import internal.runtime.graph as rt_graph
 import infra.openapi_client as openapi_client
 import infra.llm_factory as llm_factory
@@ -407,7 +407,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
 
         # Step 5: 交集非空 → 获取照片详情并生成回答
         top_ids = intersection_ids[:5]  # 最多展示 5 张
-        photo_details = rt_capabilities.fetch_photos_batch(cfg, top_ids)
+        photo_details = caps_common.fetch_photos_batch(cfg, top_ids)
 
         # 构建上下文
         context_lines: list[str] = []

@@ -26,6 +26,7 @@
 | Done   | Agent 升级 | AR9   | Runtime 检索硬约束失守且未阻止错误交付       |      |
 | Done   | Agent 升级 | AR10  | Runtime 最终回复入选照片展示文件名而非 ID    |      |
 | Done   | 工作流治理 | EVAL1 | 归档前阶段合理性专项检查规则                 |      |
+| Done   | 代码治理   | TIDY7 | agent 调用参数同级同构存量重构               | 9.2  |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 | 已取代 | 对话查询   | CQ4   | 创作型查询（Compose）专用管线                |      |
 
@@ -381,6 +382,20 @@
 - **（用户）验收**：`make dev` 启动后在对话页发一条消息冒烟，回复「TIDY6 已通过」即关单
 - **关单记录（2026-08-31）**：用户确认 TIDY6 已通过。
 
+### TIDY7 agent 调用参数同级同构存量重构
+
+- **状态**：Done（2026-09-02，AI 自动验证关单）
+- **背景**：coding-conventions.md 通用规范新增「同级同构（宽泛指引）」与锚点「调用参数同级同构」后，按用户指令对 agent/ 存量代码执行一次对齐扫描与重构
+- **裁决口径**：修「多行匿名 dict 位置实参 + 同调用还有其他参数」的调用（匿名大块淹没调用行骨架）；不修单行自明小载荷（无论键数）、kwargs 字面量字段（`parameters=`/`params=` 字段名即标签，属声明记录）、`emit(事件名, 载荷)` 两参数惯用法、单实参 `append`；`bak/` 备份目录跳过
+- **动作**（10 处，5 文件）：
+  - `internal/runtime/graph.py`：5 处 `_emit` 事件载荷提取为 `event_data`；`invoke` 的运行配置提取为 `runtime_config`（`recursion_limit` 连同换算注释一并入内）
+  - `internal/runtime/progress.py`：`setdefault` 初始快照提取为 `default_step`
+  - `internal/runtime/capabilities/resolve_trip.py`：范围物化成功的 Observation 载荷提取为 `scope_payload`
+  - `cli/photo_agent.py`：路由表提取为 `route_map`
+  - `internal/evals/tracer.py`：trace 行内容提取为 `entry`
+- **AI 自动验证**：AST 重扫描确认剩余命中均属豁免族；`tests/` 全量 219 用例通过；5 个改动文件 py_compile 通过
+- **遗留说明**：锚点规则豁免条款写的是「单键小字面量」，本次实操将单行多键自明载荷一并豁免（如 `{"ids": ids, "source": "sql", "sql": sql}`），命名后无信息增益；规则文字是否放宽待用户定夺
+
 ## 产品定位决策
 
 **从**：“个人摄影资产 AI 助手”（泛化，容易堆砌技术）
@@ -401,6 +416,7 @@
 
 ## 决策历史
 
+- **2026-09-02**：TIDY7 执行。coding-conventions.md 通用规范新增「同级同构（宽泛指引）」与锚点「调用参数同级同构」（宽泛原则与可执行锚点两层结构，宽泛条目自带作用域限定：只对齐局部、不主动重构存量）；随后按用户指令对 agent/ 存量做一次扫描重构，10 处多行匿名位置 dict 提取命名，219 测试全绿。
 - **2026-08-31**：CFG8 规划。价格表保持严格校验，但其故障隔离为成本追踪降级，不能再阻断主题发现、聊天和检索；Runtime 在价格不可用时停用成本上限，继续以步数和超时保障执行边界。
 - **2026-08-31**：TIDY6 三次追加：功能包套父目录 `internal/`，形成 `cli → internal → infra` 三层金字塔（类 Go cmd/internal/pkg 映射），internal 内功能包之间禁止互相 import；tech.md 的 agent 结构记录收敛到目录粒度，文件级职责唯一载体为 agent/README.md。
 - **2026-08-31**：TIDY6 追加顶层净化：入口文件集中到 `cli/`（类 Go cmd；目录名弃 `cmd` 取 `cli`，避免遮蔽 Python 标准库 cmd 模块），`config.py` 下沉 `infra/`，agent 顶层只保留工程管理文件（makefile / pyproject.toml / uv.lock / README）。

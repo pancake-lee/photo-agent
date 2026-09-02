@@ -79,14 +79,15 @@ class Tracer:
             写入的 JSON 字符串
         """
         now = datetime.datetime.now()
-        line = json.dumps({
+        entry = {
             "ts": now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z",
             "level": level,
             "trace_id": self.trace_id,
             "module": module,
             "event": event,
             "data": data or {},
-        }, ensure_ascii=False, default=str)
+        }
+        line = json.dumps(entry, ensure_ascii=False, default=str)
 
         with self._lock:
             fp = self._trace_log_path()

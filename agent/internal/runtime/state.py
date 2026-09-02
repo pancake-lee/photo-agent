@@ -274,7 +274,7 @@ def _trim_photo_cache(state: TaskState) -> None:
 def _apply_photos_selected(state: TaskState, obs: Observation) -> None:
     """挑选观察：写入入选照片引用，并把入选照片完整详情并入缓存。
 
-    缓存语义是"命中即完整详情"（_cached_photos 据此跳过补拉），
+    缓存语义是"命中即完整详情"（cached_photos 据此跳过补拉），
     因此 payload.photos 必须携带能力手中的完整详情，不能只带 id/filename 摘要。
     """
     state.artifacts.selected_ids = list(obs.payload.get("ids") or [])

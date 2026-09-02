@@ -2,7 +2,8 @@
     Agent Runtime 能力注册表（框架无关纯 Python）。
 
     能力的工具描述回答「何时使用」，参数声明让程序能校验「如何使用」。
-    具体能力实现在 capabilities.py 中注册，本模块只负责登记与校验。
+    一个能力的全部信息聚合在 Capability 定义处（实现、用户标题、决策提示、
+    过程细节），具体能力在 capabilities/ 包中定义，本模块只负责登记与校验。
 """
 
 import dataclasses
@@ -37,18 +38,24 @@ class RunContext:
 
 @dataclasses.dataclass
 class Capability:
-    """一项可被 decide 选中执行的能力。
+    """一项可被 decide 选中执行的能力，全部信息聚合在此定义处。
 
-    name        能力名（decide 返回的 action）
-    description 何时使用该能力（写入决策提示词）
-    parameters  参数声明 {参数名: {"type", "description", "required"}}
-    run         执行函数 (params, ctx) -> Observation
+    name             能力名（decide 返回的 action）
+    title            用户过程面板的步骤标题
+    description      何时使用该能力（写入决策提示词的能力清单）
+    parameters       参数声明 {参数名: {"type", "description", "required"}}
+    run              执行函数 (params, ctx) -> Observation
+    decide_hint      注入决策提示词的选择规则（能力自带的排序约束，可选）
+    progress_details 受控过程细节提取 (params) -> dict，只放可进用户面板的字段（可选）
     """
 
     name: str
+    title: str
     description: str
     parameters: dict[str, dict]
     run: typing.Callable[[dict, RunContext], rt_state.Observation]
+    decide_hint: str = ""
+    progress_details: typing.Callable[[dict], dict] | None = None
 
     def spec(self) -> dict:
         """输出给决策提示词的能力描述。"""
@@ -83,6 +90,15 @@ class CapabilityRegistry:
 
     def specs(self) -> list[dict]:
         return [capability.spec() for capability in self._capabilities.values()]
+
+    def decide_hints(self) -> list[str]:
+        """按登记顺序收集能力自带的选择规则（去重，多个能力可共享同一条）。"""
+        hints: list[str] = []
+        for capability in self._capabilities.values():
+            hint = capability.decide_hint
+            if hint and hint not in hints:
+                hints.append(hint)
+        return hints
 
     def validate_params(self, name: str, params: typing.Any) -> list[str]:
         """校验 decide 返回的参数，返回错误清单（空列表表示通过）。"""

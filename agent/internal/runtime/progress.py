@@ -1,21 +1,13 @@
-"""将 Runtime 的内部事件归约为可安全展示给用户的过程快照。"""
+"""将 Runtime 的内部事件归约为可安全展示给用户的过程快照。
+
+步骤标题来自能力定义（registry.Capability.title），由编排外壳随
+runtime.decide / execute / observe 事件携带；本模块只做展示归约，
+不维护自己的能力名映射，新增能力无需改动此处。
+"""
 
 import copy
 
-
-_ACTION_TITLES = {
-    "resolve_trip": "确认候选范围",
-    "sql_search": "查询照片",
-    "rag_search": "查找相似照片",
-    "hybrid_search": "综合查询照片",
-    "fetch_photo_details": "确认照片信息",
-    "select_photos": "挑选代表照片",
-    "write_post": "生成发布文案",
-}
-
-
-def _title_for(action: str) -> str:
-    return _ACTION_TITLES.get(action, "处理任务")
+_FALLBACK_TITLE = "处理任务"
 
 
 class RuntimeProgressTranslator:
@@ -30,18 +22,18 @@ class RuntimeProgressTranslator:
         if step_no <= 0 or event == "runtime.trace_summary":
             return self.snapshots()
 
-        step = self._steps.setdefault(step_no, {
+        default_step = {
             "step": step_no,
-            "title": _title_for(str(data.get("action") or "")),
+            "title": str(data.get("title") or _FALLBACK_TITLE),
             "status": "进行中",
             "decision": "",
             "result": "",
             "facts": [],
             "details": {},
-        })
-        action = str(data.get("action") or "")
-        if action:
-            step["title"] = _title_for(action)
+        }
+        step = self._steps.setdefault(step_no, default_step)
+        if data.get("title"):
+            step["title"] = str(data["title"])
 
         if event == "runtime.decide":
             step["decision"] = str(data.get("reason") or "正在确定下一步。")

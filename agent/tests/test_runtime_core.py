@@ -126,6 +126,7 @@ class CapabilityRegistryTest(unittest.TestCase):
         registry = rt_registry.CapabilityRegistry()
         registry.register(rt_registry.Capability(
             name="sql_search",
+            title="查询照片",
             description="结构化条件检索照片",
             parameters={
                 "query": {"type": "str", "description": "检索条件描述", "required": True},
@@ -145,14 +146,14 @@ class CapabilityRegistryTest(unittest.TestCase):
         registry = self._registry()
         with self.assertRaises(ValueError):
             registry.register(rt_registry.Capability(
-                name="sql_search", description="", parameters={}, run=lambda p, c: None,
+                name="sql_search", title="查询照片", description="", parameters={}, run=lambda p, c: None,
             ))
 
     def test_invalid_param_type_declaration_raises(self):
         registry = rt_registry.CapabilityRegistry()
         with self.assertRaises(ValueError):
             registry.register(rt_registry.Capability(
-                name="bad", description="",
+                name="bad", title="坏能力", description="",
                 parameters={"x": {"type": "map", "description": "", "required": True}},
                 run=lambda p, c: None,
             ))

@@ -80,10 +80,16 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
   - `test_post_studio_smoke.py`：图文工坊 smoke 测试（直接 `python` 执行）
 - `runtime/` — Agent Runtime（AR1，框架无关）
   - `budget.py`：执行预算（步数 / 超时 / 成本），配置键落在 Agent 段
-  - `capabilities.py`：把检索 / 工具 / 创作实现封装为可注册能力（含 CQ4 迁移来的连拍折叠与两级收缩）
+  - `capabilities/` — 能力包，按 LLM 参与方式分类；每个能力的实现、工具描述、用户标题、决策提示、过程细节聚合在同一代码块，新增能力只加代码块并登记
+    - `common.py`：跨能力共享辅助（执行护栏 / 能力内 LLM 调用入口 / JSON 提取 / 照片详情缓存）
+    - `resolve_trip.py`：约束解析类，能力内 LLM（提示词抽取硬约束）+ 程序物化权威范围
+    - `retrieval.py`：检索类（sql / rag / hybrid），能力自身不调 LLM（SQL 生成封装在 text_to_sql 内）
+    - `photo_tools.py`：程序工具类（Go 后端 HTTP 工具），全程无 LLM
+    - `creation.py`：创作类（select_photos / write_post），能力内 LLM，含 CQ4 迁移来的连拍折叠与两级收缩
   - `completion.py`：任务完成检查
-  - `graph.py`：LangGraph 编排外壳，decide → execute → reduce → check 循环图，业务语义不依赖 LangGraph
-  - `registry.py`：能力注册表
+  - `graph.py`：LangGraph 编排外壳，decide → execute → reduce → check 循环图；decide 是唯一 LLM 决策点（能力清单经提示词提供），其余节点与流转均为程序行为
+  - `progress.py`：Runtime 过程事件归约为用户过程快照（标题由能力定义随事件携带）
+  - `registry.py`：能力注册表（Capability 含 name/title/description/parameters/run/decide_hint/progress_details）
   - `state.py`：TaskState 任务状态与归约规则，开放目标任务的唯一事实源
 - `topics/` — 选题发现线
   - `cluster.py`：照片向量聚类（UMAP 降维 + HDBSCAN），主题发现的聚类基础
@@ -96,3 +102,16 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
 ### tests/ — 单元测试
 
 - `test_*.py`：与各模块对应的 unittest 用例，`.venv/bin/python -m unittest discover -s tests` 全量执行
+
+## notes
+
+@dataclasses.dataclass 自动生成几个数据类的通用方法 `__init__`初始化 `__repr__`打印 `__eq__`比较
+
+dataclasses.field 确保每个实例的列表是独立，而不是共享同一个
+
+@capability_run 本项目自己写的装饰器（位于 `internal/runtime/capabilities/common.py`），
+  所有能力被执行时都由try包住，不要炸掉runtime
+
+@functools.wraps(fn)
+  capability_run里用wrapped函数调用传递进来的fn，打印`fn.__name__`时会变成wrapped，
+  所以 @functools.wraps(fn) 是为了保住`fn.__name__`依然指向原来的函数。

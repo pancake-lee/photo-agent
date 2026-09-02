@@ -2,6 +2,11 @@ import unittest
 import unittest.mock
 
 import internal.runtime.capabilities as rt_caps
+import internal.runtime.capabilities.common as caps_common
+import internal.runtime.capabilities.creation as caps_creation
+import internal.runtime.capabilities.photo_tools as caps_photo_tools
+import internal.runtime.capabilities.resolve_trip as caps_resolve_trip
+import internal.runtime.capabilities.retrieval as caps_retrieval
 import internal.runtime.registry as rt_registry
 import internal.runtime.state as rt_state
 
@@ -26,7 +31,7 @@ class CollapseBurstCandidatesTest(unittest.TestCase):
     """迁移自 CQ4 test_collapses_burst_group_to_cover。"""
 
     def test_collapses_burst_group_to_cover(self):
-        result = rt_caps.collapse_burst_candidates([
+        result = caps_creation.collapse_burst_candidates([
             {"id": "a", "burst_group_id": "g"},
             {"id": "b", "burst_group_id": "g", "is_burst_cover": True},
             {"id": "c"},
@@ -40,14 +45,14 @@ class PrepareSelectCandidatesTest(unittest.TestCase):
 
     def test_two_level_shrink_and_overflow_tokens(self):
         photos = [{"id": str(index), "burst_group_id": f"g{index}"} for index in range(3)]
-        mode, covers = rt_caps.prepare_select_candidates(photos, group_limit=2, cover_limit=3)
+        mode, covers = caps_creation.prepare_select_candidates(photos, group_limit=2, cover_limit=3)
         self.assertEqual(mode, "covers")
         self.assertNotIn("_group_count", covers[0])
-        overflow_mode, overflow = rt_caps.prepare_select_candidates(
+        overflow_mode, overflow = caps_creation.prepare_select_candidates(
             photos, group_limit=1, cover_limit=2,
         )
         self.assertEqual(overflow_mode, "overflow")
-        self.assertEqual(rt_caps.select_token(overflow[0]), "g:g0:0")
+        self.assertEqual(caps_creation.select_token(overflow[0]), "g:g0:0")
 
 
 class SelectPhotosCapabilityTest(unittest.TestCase):
@@ -59,15 +64,15 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         task = rt_state.reduce_observation(task, rt_state.Observation(
             rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b", "c"]},
         ), step_no=1, action="sql_search")
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch",
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch",
                                         return_value=[{"id": "a"}, {"id": "b"}, {"id": "c"}]):
-            obs = rt_caps._select_photos({}, _ctx(cfg, task))
+            obs = caps_creation._select_photos({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_SELECTION_OVERFLOW)
         self.assertEqual(obs.payload["url"], "#/post-studio?photo_ids=a,b,c")
 
     def test_select_without_candidates_returns_error(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "写文案", {"question": "q"})
-        obs = rt_caps._select_photos({}, _ctx(_cfg(), task))
+        obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
 
     def test_select_happy_path_filters_invalid_ids(self):
@@ -83,9 +88,9 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
             {"id": "b", "filename": "b.jpg", "description": "湖面飞鸟"},
             {"id": "c", "filename": "c.jpg", "description": "岸边剪影"},
         ]
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=fetched), \
-             unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
-            obs = rt_caps._select_photos({}, _ctx(cfg, task))
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=fetched), \
+             unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm):
+            obs = caps_creation._select_photos({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_PHOTOS_SELECTED)
         self.assertEqual(obs.payload["ids"], ["b", "a"])
         # 挑选观察必须携带完整详情（含 description），归约写入缓存后 write_post 直接可用
@@ -98,10 +103,10 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         ), step_no=1, action="sql_search")
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = '{"selected_ids": ["a", "b", "c"]}'
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[
             {"id": "a"}, {"id": "b"}, {"id": "c"},
-        ]), unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
-            obs = rt_caps._select_photos({"max_photos": 2}, _ctx(_cfg(), task))
+        ]), unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm):
+            obs = caps_creation._select_photos({"max_photos": 2}, _ctx(_cfg(), task))
         self.assertEqual(obs.payload["ids"], ["a", "b"])
 
     def test_select_empty_pick_returns_error(self):
@@ -111,9 +116,9 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         ), step_no=1, action="sql_search")
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = "模型罢工了，没有 JSON"
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[{"id": "a"}]), \
-             unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm):
-            obs = rt_caps._select_photos({}, _ctx(_cfg(), task))
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[{"id": "a"}]), \
+             unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm):
+            obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "photo_selection_failed")
 
@@ -122,8 +127,8 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         task = rt_state.reduce_observation(task, rt_state.Observation(
             rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a"]},
         ), step_no=1, action="sql_search")
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[]):
-            obs = rt_caps._select_photos({}, _ctx(_cfg(), task))
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[]):
+            obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
@@ -144,11 +149,11 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         task.artifacts.candidate_ids = ["a", "x"]
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = '{"selected_ids": ["x"]}'
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[
             {"id": "a", "description": "寺庙"}, {"id": "x", "description": "外地图"},
-        ]), unittest.mock.patch.object(rt_caps.llm_factory, "create_llm",
+        ]), unittest.mock.patch.object(caps_common.llm_factory, "create_llm",
                                         return_value=fake_llm):
-            obs = rt_caps._select_photos({}, _ctx(cfg, task))
+            obs = caps_creation._select_photos({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "selection_out_of_scope")
         self.assertEqual(obs.payload["ids"], ["x"])
@@ -176,10 +181,10 @@ class WritePostCapabilityTest(unittest.TestCase):
 
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = '{"title": "标题", "content": "正文"}'
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", side_effect=fetch_spy), \
-             unittest.mock.patch.object(rt_caps.post_studio.llm_factory, "create_llm",
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", side_effect=fetch_spy), \
+             unittest.mock.patch.object(caps_creation.post_studio.llm_factory, "create_llm",
                                         return_value=fake_llm):
-            obs = rt_caps._write_post({}, _ctx(cfg, task))
+            obs = caps_creation._write_post({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_COPY_DRAFTED)
         self.assertEqual(obs.payload["title"], "标题")
 
@@ -196,11 +201,11 @@ class WritePostCapabilityTest(unittest.TestCase):
         task.artifacts.photo_cache["b"] = {
             "id": "b", "filename": "b.jpg", "description": "寺庙",
         }
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch",
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch",
                                         return_value=[{"id": "a", "description": "面馆"}]) as fetch, \
-             unittest.mock.patch.object(rt_caps.post_studio, "generate_post",
+             unittest.mock.patch.object(caps_creation.post_studio, "generate_post",
                                         return_value=("山西行记", "正文", ["1 张照片缺少描述"])) as gen:
-            obs = rt_caps._write_post({"style": "文艺"}, _ctx(cfg, task))
+            obs = caps_creation._write_post({"style": "文艺"}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_COPY_DRAFTED)
         self.assertEqual(obs.payload["title"], "山西行记")
         self.assertIn("1 张照片缺少描述", obs.summary)
@@ -211,7 +216,7 @@ class WritePostCapabilityTest(unittest.TestCase):
 
     def test_write_post_without_selection_returns_error(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
-        obs = rt_caps._write_post({}, _ctx(_cfg(), task))
+        obs = caps_creation._write_post({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
 
 
@@ -223,18 +228,18 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = llm_content
         patches = [
-            unittest.mock.patch.object(rt_caps, "_fetch_timelines",
+            unittest.mock.patch.object(caps_resolve_trip, "_fetch_timelines",
                                        return_value=["山西旅游", "北京街拍"]),
-            unittest.mock.patch.object(rt_caps.llm_factory, "create_llm", return_value=fake_llm),
+            unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm),
         ]
         if execute_ids is not None:
             patches.append(unittest.mock.patch.object(
-                rt_caps.text_to_sql, "execute_sql_for_ids", return_value=execute_ids,
+                caps_resolve_trip.text_to_sql, "execute_sql_for_ids", return_value=execute_ids,
             ))
         for patch in patches:
             patch.start()
         self.addCleanup(lambda: [p.stop() for p in reversed(patches)])
-        return rt_caps._resolve_trip({}, _ctx(_cfg(), question=question))
+        return caps_resolve_trip._resolve_trip({}, _ctx(_cfg(), question=question))
 
     def test_matched_constraints_materialize_scope_sql(self):
         """山西用例：范围 SQL 只含硬约束（时间线/天序/小时窗），软提示不入 WHERE。"""
@@ -296,15 +301,15 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         self.assertNotIn("BETWEEN", obs.payload["sql"])
 
     def test_validate_day_and_time_variants(self):
-        self.assertEqual(rt_caps._validate_day("first"), "first")
-        self.assertEqual(rt_caps._validate_day("2026-08-02"), "2026-08-02")
-        self.assertEqual(rt_caps._validate_day("2026-13-99"), "")
-        self.assertEqual(rt_caps._validate_day("第二天"), "")
-        self.assertEqual(rt_caps._validate_time_of_day("傍晚"), "傍晚")
-        self.assertEqual(rt_caps._validate_time_of_day("黄昏"), "")
+        self.assertEqual(caps_resolve_trip._validate_day("first"), "first")
+        self.assertEqual(caps_resolve_trip._validate_day("2026-08-02"), "2026-08-02")
+        self.assertEqual(caps_resolve_trip._validate_day("2026-13-99"), "")
+        self.assertEqual(caps_resolve_trip._validate_day("第二天"), "")
+        self.assertEqual(caps_resolve_trip._validate_time_of_day("傍晚"), "傍晚")
+        self.assertEqual(caps_resolve_trip._validate_time_of_day("黄昏"), "")
 
     def test_build_scope_sql_combines_only_hard_constraints(self):
-        sql = rt_caps.build_scope_sql("山西旅游", "last", 19, 23)
+        sql = caps_resolve_trip.build_scope_sql("山西旅游", "last", 19, 23)
         self.assertIn("timeline = '山西旅游'", sql)
         self.assertIn(
             "DATE(shot_at, 'localtime') = (SELECT MAX(DATE(shot_at, 'localtime')) "
@@ -314,16 +319,16 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         self.assertIn(
             "CAST(strftime('%H', shot_at, 'localtime') AS INTEGER) BETWEEN 19 AND 23", sql,
         )
-        date_sql = rt_caps.build_scope_sql("", "2026-08-02", None, None)
+        date_sql = caps_resolve_trip.build_scope_sql("", "2026-08-02", None, None)
         self.assertEqual(date_sql,
                          "SELECT id FROM photos WHERE DATE(shot_at, 'localtime') = '2026-08-02' "
                          "ORDER BY shot_at ASC LIMIT 500")
-        escaped = rt_caps.build_scope_sql("O'rien't", "", None, None)
+        escaped = caps_resolve_trip.build_scope_sql("O'rien't", "", None, None)
         self.assertIn("timeline = 'O''rien''t'", escaped)
 
     def test_build_scope_sql_day_without_timeline_uses_whole_library(self):
         """天序无时间线时按全库最早/最晚日期取值，不静默丢弃约束。"""
-        sql = rt_caps.build_scope_sql("", "first", None, None)
+        sql = caps_resolve_trip.build_scope_sql("", "first", None, None)
         self.assertEqual(
             sql,
             "SELECT id FROM photos WHERE DATE(shot_at, 'localtime') = "
@@ -332,9 +337,9 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         )
 
     def test_match_timeline_name_fuzzy_variants(self):
-        self.assertEqual(rt_caps._match_timeline_name("山西旅游 ", ["山西旅游"]), "山西旅游")
-        self.assertEqual(rt_caps._match_timeline_name("山西", ["山西旅游", "北京"]), "山西旅游")
-        self.assertEqual(rt_caps._match_timeline_name("都不是", ["山西旅游"]), "")
+        self.assertEqual(caps_resolve_trip._match_timeline_name("山西旅游 ", ["山西旅游"]), "山西旅游")
+        self.assertEqual(caps_resolve_trip._match_timeline_name("山西", ["山西旅游", "北京"]), "山西旅游")
+        self.assertEqual(caps_resolve_trip._match_timeline_name("都不是", ["山西旅游"]), "")
 
 
 class RetrievalCapabilityTest(unittest.TestCase):
@@ -343,16 +348,16 @@ class RetrievalCapabilityTest(unittest.TestCase):
         response.json.return_value = {"photo": {"id": "a", "filename": "a.jpg"}}
         client = unittest.mock.MagicMock()
         client.__enter__.return_value.get.return_value = response
-        with unittest.mock.patch.object(rt_caps.http_utils, "create_client", return_value=client):
-            photos = rt_caps.fetch_photos_batch(_cfg(), ["a"])
+        with unittest.mock.patch.object(caps_common.http_utils, "create_client", return_value=client):
+            photos = caps_common.fetch_photos_batch(_cfg(), ["a"])
         self.assertEqual(photos, [{"id": "a", "filename": "a.jpg"}])
 
     def test_sql_search_returns_photo_ids_observation(self):
-        with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",
+        with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",
                                         return_value="SELECT id FROM photos") as gen, \
-             unittest.mock.patch.object(rt_caps.text_to_sql, "execute_sql_for_ids",
+             unittest.mock.patch.object(caps_retrieval.text_to_sql, "execute_sql_for_ids",
                                         return_value=["a", "b"]) as exec_ids:
-            obs = rt_caps._sql_search({"query": "山西第一天"}, _ctx(_cfg()))
+            obs = caps_retrieval._sql_search({"query": "山西第一天"}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_PHOTO_IDS)
         self.assertEqual(obs.payload["ids"], ["a", "b"])
         self.assertEqual(obs.payload["source"], "sql")
@@ -360,42 +365,42 @@ class RetrievalCapabilityTest(unittest.TestCase):
         exec_ids.assert_called_once_with("http://backend", "SELECT id FROM photos")
 
     def test_hybrid_search_intersects_with_rag_order(self):
-        with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",
+        with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",
                                         return_value="SQL"), \
-             unittest.mock.patch.object(rt_caps.text_to_sql, "execute_sql_for_ids",
+             unittest.mock.patch.object(caps_retrieval.text_to_sql, "execute_sql_for_ids",
                                         return_value=["a", "b", "c"]), \
-             unittest.mock.patch.object(rt_caps.photo_rag, "retrieve_photo_ids",
+             unittest.mock.patch.object(caps_retrieval.photo_rag, "retrieve_photo_ids",
                                         return_value=["c", "a", "d"]):
-            obs = rt_caps._hybrid_search({"query": "蓝调街拍"}, _ctx(_cfg()))
+            obs = caps_retrieval._hybrid_search({"query": "蓝调街拍"}, _ctx(_cfg()))
         self.assertEqual(obs.payload["ids"], ["c", "a"])
         self.assertEqual(obs.payload["source"], "hybrid")
 
     def test_hybrid_search_empty_sql_keeps_intersection_only(self):
         """结构化为空时交集为空，不再回退全库 RAG（候选由权威范围兜底）。"""
-        with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",
+        with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",
                                         return_value="SQL"), \
-             unittest.mock.patch.object(rt_caps.text_to_sql, "execute_sql_for_ids",
+             unittest.mock.patch.object(caps_retrieval.text_to_sql, "execute_sql_for_ids",
                                         return_value=[]), \
-             unittest.mock.patch.object(rt_caps.photo_rag, "retrieve_photo_ids",
+             unittest.mock.patch.object(caps_retrieval.photo_rag, "retrieve_photo_ids",
                                         return_value=["x", "y"]):
-            obs = rt_caps._hybrid_search({"query": "q"}, _ctx(_cfg()))
+            obs = caps_retrieval._hybrid_search({"query": "q"}, _ctx(_cfg()))
         self.assertEqual(obs.payload["ids"], [])
         self.assertEqual(obs.payload["source"], "hybrid")
 
     def test_fetch_photo_details_requires_ids(self):
-        obs = rt_caps._fetch_photo_details({}, _ctx(_cfg()))
+        obs = caps_photo_tools._fetch_photo_details({}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
 
     def test_fetch_photo_details_stops_when_all_details_missing(self):
-        with unittest.mock.patch.object(rt_caps, "fetch_photos_batch", return_value=[]):
-            obs = rt_caps._fetch_photo_details({"ids": ["a"]}, _ctx(_cfg()))
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[]):
+            obs = caps_photo_tools._fetch_photo_details({"ids": ["a"]}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
     def test_capability_exception_becomes_error_observation(self):
-        with unittest.mock.patch.object(rt_caps.text_to_sql, "generate_filter_sql",
+        with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",
                                         side_effect=RuntimeError("后端挂了")):
-            obs = rt_caps._sql_search({"query": "q"}, _ctx(_cfg()))
+            obs = caps_retrieval._sql_search({"query": "q"}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertIn("后端挂了", obs.summary)
         self.assertEqual(obs.payload["terminal_reason"], "capability_execution_failed")
@@ -405,7 +410,7 @@ class BuildRegistryTest(unittest.TestCase):
     def test_registers_all_capabilities_with_valid_params(self):
         registry = rt_caps.build_registry()
         self.assertEqual(registry.names(), [
-            "sql_search", "rag_search", "hybrid_search", "resolve_trip",
+            "resolve_trip", "sql_search", "rag_search", "hybrid_search",
             "fetch_photo_details", "select_photos", "write_post",
         ])
         self.assertEqual(registry.validate_params("sql_search", {"query": "q"}), [])
