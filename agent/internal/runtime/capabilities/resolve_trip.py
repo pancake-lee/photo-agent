@@ -32,6 +32,7 @@ _TIME_OF_DAY_WINDOWS: dict[str, tuple[int, int]] = {
 _DAY_LABELS = {"first": "第一天", "last": "最后一天"}
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_MONTH_DAY_RE = re.compile(r"(?<!\d)(\d{1,2})月(\d{1,2})日")
 
 # 范围物化与软提示的规模上限
 _SCOPE_SQL_LIMIT = 500
@@ -42,7 +43,7 @@ _CONSTRAINT_SYSTEM_PROMPT = (
     '只输出 JSON: {"timeline": "", "day": "", "time_of_day": "", "soft_hints": []}\n'
     "字段规则:\n"
     "- timeline: 目标提到的旅行或活动名称，从时间线列表中选最接近的；完全没提到则为空串\n"
-    '- day: 第一天用 "first"，最后一天用 "last"，明确日期用 "YYYY-MM-DD"，没提到则为空串\n'
+    '- day: 第一天用 "first"，最后一天用 "last"，第N天用 "relative:N"，明确日期用 "YYYY-MM-DD"，没提到则为空串\n'
     "- time_of_day: 拍摄时段，只能是 清晨/上午/中午/下午/傍晚/夜晚 之一，没明确则为空串\n"
     "- soft_hints: 其余的地点、景物、氛围等描述（字符串数组），只用于排序，不构成硬性筛选"
 )
@@ -53,6 +54,12 @@ def _validate_day(raw: str) -> str:
     value = (raw or "").strip()
     if value in ("first", "last"):
         return value
+    if value.startswith("relative:"):
+        try:
+            number = int(value.removeprefix("relative:"))
+        except ValueError:
+            return ""
+        return f"relative:{number}" if number > 0 else ""
     if _DATE_RE.match(value):
         try:
             datetime.date.fromisoformat(value)
@@ -73,6 +80,8 @@ def _describe_scope(timeline: str, day: str, time_of_day: str) -> str:
     parts = [timeline] if timeline else []
     if day in _DAY_LABELS:
         parts.append(_DAY_LABELS[day])
+    elif day.startswith("relative:"):
+        parts.append(f"第{day.removeprefix('relative:')}天")
     elif day:
         parts.append(day)
     if time_of_day:
@@ -105,7 +114,10 @@ def build_scope_sql(
             f"CAST(strftime('%H', shot_at, 'localtime') AS INTEGER) "
             f"BETWEEN {int(hour_start)} AND {int(hour_end)}"
         )
-    where = " AND ".join(conds) if conds else "1=1"
+    # NEF 是与 JPG 同目录的原始附件，不是可检索照片。历史残留记录清理前也
+    # 必须从 Runtime 的权威范围中排除，避免进入选片和文案上下文。
+    conds.insert(0, "LOWER(file_type) != 'nef'")
+    where = " AND ".join(conds)
     return f"SELECT id FROM photos WHERE {where} ORDER BY shot_at ASC LIMIT {_SCOPE_SQL_LIMIT}"
 
 
@@ -116,6 +128,70 @@ def _fetch_timelines(cfg) -> list[str]:
         resp.raise_for_status()
         timelines = resp.json().get("timelines") or []
     return [str(name) for name in timelines if name]
+
+
+def _fetch_timeline_event_date(cfg, timeline: str) -> str:
+    """读取时间线事件的行程首日；缺失事件时返回空串。"""
+    with http_utils.create_client(timeout=5.0) as client:
+        resp = client.get(f"{cfg.go_backend_url}/api/v1/timeline-events")
+        resp.raise_for_status()
+        events = resp.json().get("timelineEventList") or []
+    for item in events:
+        if str(item.get("event") or "") != timeline:
+            continue
+        value = int(item.get("eventDate") or 0)
+        if value > 10_000_000_000:
+            value //= 1000
+        if value:
+            return datetime.datetime.fromtimestamp(value, tz=datetime.timezone.utc).date().isoformat()
+    return ""
+
+
+def _fetch_first_photo_day(cfg, timeline: str) -> str:
+    """读取时间线内首个拍摄日，统一使用本地日期口径。"""
+    escaped = timeline.replace("'", "''")
+    rows = text_to_sql.execute_sql(
+        cfg.go_backend_url,
+        "SELECT MIN(DATE(shot_at, 'localtime')) AS day FROM photos "
+        f"WHERE timeline = '{escaped}'",
+        limit=1,
+    )
+    return str(rows[0].get("day") or "") if rows else ""
+
+
+def _relative_day_dates(event_day: str, photo_day: str, relative_day: str) -> tuple[str, str]:
+    """返回行程首日与首拍日两种口径各自对应的日期。"""
+    offset = int(relative_day.removeprefix("relative:")) - 1
+    event_date = datetime.date.fromisoformat(event_day) if event_day else None
+    photo_date = datetime.date.fromisoformat(photo_day) if photo_day else None
+    return (
+        (event_date + datetime.timedelta(days=offset)).isoformat() if event_date else "",
+        (photo_date + datetime.timedelta(days=offset)).isoformat() if photo_date else "",
+    )
+
+
+def _resolve_date_in_hint(ctx: rt_registry.RunContext, timeline: str, hint: str) -> tuple[str, list[str]]:
+    """确定性解析用户写出的日期；无年份只从已知行程/拍摄年份推断。"""
+    matched = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", hint)
+    if matched:
+        return _validate_day(matched.group(1)), []
+    matched = _MONTH_DAY_RE.search(hint)
+    if not matched or not timeline:
+        return "", []
+    month, day = (int(value) for value in matched.groups())
+    event_day = _fetch_timeline_event_date(ctx.cfg, timeline)
+    photo_day = _fetch_first_photo_day(ctx.cfg, timeline)
+    candidates = []
+    for source_day in (event_day, photo_day):
+        if not source_day:
+            continue
+        try:
+            candidate = datetime.date(datetime.date.fromisoformat(source_day).year, month, day).isoformat()
+        except ValueError:
+            continue
+        if candidate not in candidates:
+            candidates.append(candidate)
+    return (candidates[0], []) if len(candidates) == 1 else ("", candidates)
 
 
 def _match_timeline_name(candidate: str, timelines: list[str]) -> str:
@@ -162,6 +238,39 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
         if str(item).strip()
     ][:_SOFT_HINTS_MAX]
     conditions = {"timeline": matched, "day": day, "time_of_day": time_of_day}
+
+    explicit_day, date_options = _resolve_date_in_hint(ctx, matched, hint)
+    if explicit_day:
+        day = explicit_day
+        conditions["day"] = day
+    elif date_options:
+        message = f"“{_MONTH_DAY_RE.search(hint).group(0)}”可能是 {' 或 '.join(date_options)}，请回复完整日期。"
+        return rt_state.Observation(
+            rt_state.OBS_NEEDS_CLARIFICATION, message,
+            {"message": message, "options": date_options, "timeline": matched},
+        )
+
+    if day.startswith("relative:"):
+        event_day = _fetch_timeline_event_date(ctx.cfg, matched) if matched else ""
+        photo_day = _fetch_first_photo_day(ctx.cfg, matched) if matched else ""
+        event_date, photo_date = _relative_day_dates(event_day, photo_day, day)
+        if event_date and photo_date and event_date != photo_date:
+            message = (
+                f"{event_day} 为行程首日，{photo_day} 为首个拍摄日；"
+                f"第{day.removeprefix('relative:')}天指 {event_date} 还是 {photo_date}？"
+            )
+            return rt_state.Observation(
+                rt_state.OBS_NEEDS_CLARIFICATION, message,
+                {"message": message, "options": [event_date, photo_date], "timeline": matched},
+            )
+        resolved_date = event_date or photo_date
+        if not resolved_date:
+            return rt_state.Observation(
+                rt_state.OBS_NEEDS_CLARIFICATION, "无法确定这次旅行的起始日期，请直接回复完整日期。",
+                {"message": "无法确定这次旅行的起始日期，请直接回复完整日期。", "options": [], "timeline": matched},
+            )
+        day = resolved_date
+        conditions["day"] = day
 
     if not (matched or day or time_of_day):
         logger.info("[runtime] resolve_trip 无硬约束，范围不受限 | soft_hints=%s", soft_hints)

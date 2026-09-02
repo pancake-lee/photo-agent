@@ -39,6 +39,15 @@ _PIPELINE_STEPS = [
     {"event": "suggest.complete",           "stage": 3, "label": "管线完成",        "group": "汇总"},
 ]
 
+_RUNTIME_STEP_LABELS = {
+    "runtime.decide": ("动作决策", "Runtime"),
+    "runtime.llm": ("LLM 输入输出", "Runtime"),
+    "runtime.execute": ("能力执行", "Runtime"),
+    "runtime.observe": ("状态归约与候选", "Runtime"),
+    "runtime.check": ("完成检查", "Runtime"),
+    "runtime.trace_summary": ("执行汇总", "Runtime"),
+}
+
 
 @dataclasses.dataclass
 class PipelineStepSnapshot:
@@ -132,6 +141,11 @@ def _is_trace_expired(project_root: pathlib.Path, trace_id: str) -> bool:
 
 def _get_step_defs(events: list[dict]) -> list[dict]:
     """返回管线步骤定义列表。统一使用三阶段编辑视角提案步骤。"""
+    if any(event.get("event", "").startswith("runtime.") for event in events):
+        return [
+            {"event": event, "stage": 0, "label": label, "group": group}
+            for event, (label, group) in _RUNTIME_STEP_LABELS.items()
+        ]
     return _PIPELINE_STEPS
 
 

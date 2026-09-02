@@ -206,6 +206,7 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
             question=state["question"],
             state=state["task"],
             llm_callbacks=callbacks,
+            tracer=tracer,
         )
         observation = capability.run(decision.get("params"), ctx)
     duration_ms = round((time.perf_counter() - started_at) * 1000)
@@ -255,7 +256,13 @@ def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         "selected_count": len(task.artifacts.selected_ids),
         "facts": facts,
         "details": _progress_details(action, state["decision"].get("params") or {}, observation),
+        "observation": observation.payload,
     }
+    if tracer is not None:
+        event_data["payload_ref"] = tracer.save_payload(
+            f"runtime-step-{state['step_no']}-{action}.json",
+            json.dumps({"decision": state["decision"], "observation": observation.payload}, ensure_ascii=False, default=str),
+        )
     _emit(tracer, progress_callback, "runtime.observe", event_data)
     return {"task": task}
 
@@ -457,4 +464,6 @@ def run_runtime(
         "answer": result.get("answer", ""),
         "photos": result.get("photos", []),
         "compose_url": result.get("compose_url", ""),
+        "terminal_reason": result["task"].progress.terminal_reason,
+        "clarification": result["task"].resolved_facts.get("clarification") or {},
     }

@@ -48,6 +48,7 @@ OBS_PHOTO_DETAILS = "photo_details"
 OBS_PHOTOS_SELECTED = "photos_selected"
 OBS_SELECTION_OVERFLOW = "selection_overflow"
 OBS_COPY_DRAFTED = "copy_drafted"
+OBS_NEEDS_CLARIFICATION = "needs_clarification"
 OBS_ERROR = "error"
 
 # 有界集合上限，防止状态无限膨胀
@@ -68,6 +69,7 @@ class Goal:
     goal_type: str
     description: str
     requirements: tuple[str, ...]
+    delivery_mode: str = "editorial"
 
 
 @dataclasses.dataclass
@@ -138,10 +140,14 @@ def new_goal(goal_type: str, description: str) -> Goal:
     preset = _GOAL_PRESETS.get(goal_type)
     if preset is None:
         raise ValueError(f"未知的目标类型: {goal_type!r}，可用: {sorted(_GOAL_PRESETS)}")
+    candidate_mode = any(term in description for term in ("尽可能多", "二次挑选", "二次选择", "自己再挑"))
     return Goal(
         goal_type=goal_type,
         description=description,
+        # 候选交付只是放宽选片（不再由 LLM 精选），不是放弃发布文案。
+        # 两种交付都必须经过 write_post，才能保证标题和正文完整返回。
         requirements=preset["requirements"],
+        delivery_mode="candidate" if candidate_mode else "editorial",
     )
 
 
@@ -301,6 +307,12 @@ def _apply_copy_drafted(state: TaskState, obs: Observation) -> None:
     _finish_milestone(state, "copy")
 
 
+def _apply_needs_clarification(state: TaskState, obs: Observation) -> None:
+    """澄清观察：停止当前运行，等待会话层保存目标并接收用户短回复。"""
+    state.resolved_facts["clarification"] = dict(obs.payload)
+    state.progress.terminal_reason = "needs_clarification"
+
+
 def _apply_error(state: TaskState, obs: Observation) -> None:
     """错误观察：记录失败并以确定性终态停止，避免无进展重复决策。"""
     state.progress.errors.append(obs.summary or "未知错误")
@@ -317,6 +329,7 @@ _APPLY_RULES: dict[str, typing.Callable[[TaskState, Observation], None]] = {
     OBS_PHOTOS_SELECTED: _apply_photos_selected,
     OBS_SELECTION_OVERFLOW: _apply_selection_overflow,
     OBS_COPY_DRAFTED: _apply_copy_drafted,
+    OBS_NEEDS_CLARIFICATION: _apply_needs_clarification,
     OBS_ERROR: _apply_error,
 }
 
@@ -365,6 +378,7 @@ def summarize_state(state: TaskState) -> str:
     done = [milestone_label(m) for m in _MILESTONE_LABELS if m not in state.progress.todo]
     lines = [
         f"目标类型: {state.goal.goal_type}（{state.goal.description}）",
+        f"交付模式: {'候选照片供二次挑选' if state.goal.delivery_mode == 'candidate' else '编辑精选发布'}",
         f"已完成里程碑: {'、'.join(done) if done else '无'}",
         f"待办里程碑: {'、'.join(milestone_label(m) for m in state.progress.todo) or '无'}",
         f"用户约束: {_dump(state.constraints)}",
@@ -415,6 +429,14 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
 
     completion = rt_completion.check_completion(state)
     if completion.complete:
+        if state.goal.delivery_mode == "candidate":
+            draft = state.artifacts.copy_draft
+            return {
+                "answer": f"# {draft.get('title', '')}\n\n{draft.get('content', '')}\n\n"
+                f"已保留 {len(state.artifacts.selected_ids)} 张候选照片，供你二次挑选。\n\n"
+                f"候选照片：{'、'.join(_selected_photo_labels(state))}",
+                "handoff_url": "",
+            }
         draft = state.artifacts.copy_draft
         answer = f"# {draft.get('title', '')}\n\n{draft.get('content', '')}"
         if state.artifacts.selected_ids:
@@ -425,6 +447,13 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
         return {
             "answer": "候选照片过多，请进入图文工坊自选后生成文案。",
             "handoff_url": state.artifacts.handoff_url,
+        }
+
+    if state.progress.terminal_reason == "needs_clarification":
+        clarification = state.resolved_facts.get("clarification") or {}
+        return {
+            "answer": str(clarification.get("message") or "需要你确认日期后才能继续。"),
+            "handoff_url": "",
         }
 
     if state.progress.terminal_reason == "empty_scope":

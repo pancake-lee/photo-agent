@@ -116,6 +116,10 @@ function handleGranularityChange(value: Granularity) {
   })
 }
 
+function openTrace(traceId: string) {
+  window.open(`${getAgentBase()}/api/chat/traces/${encodeURIComponent(traceId)}`, '_blank', 'noopener')
+}
+
 // ── 发送消息 ──
 
 async function handleSend() {
@@ -424,6 +428,13 @@ const hasMessages = computed(() => messages.value.length > 0)
                 <NTag v-if="msg.trace_id" :bordered="false" size="tiny" type="default">
                   轨迹 {{ msg.trace_id }}
                 </NTag>
+                <NButton
+                  v-if="msg.trace_id"
+                  size="tiny"
+                  text
+                  title="查看完整诊断记录"
+                  @click="openTrace(msg.trace_id)"
+                >查看诊断</NButton>
                 <NButton
                   v-if="canSaveAsGoldenQuery(msg)"
                   size="tiny"

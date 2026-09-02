@@ -140,8 +140,9 @@ func (s *PhotoServer) SearchPhotos(
 		params.PageSize = 100
 	}
 
-	// NEF 基础名集合，用于在 JPG 上标记「有对应原始文件」。查询失败时集合为空，仅不显示标识。
-	nefSet, _ := data.PhotoDAO.GetNefBaseNames(ctx)
+	// NEF 只是与 JPG 同目录的原始附件，不建照片记录。列表按当前原图目录
+	// 动态检测同名 .nef（扩展名不区分大小写），只用于图片管理卡片角标。
+	nefSet := adjacentNefSet(photos)
 
 	// 连拍组信息，用于拼装 burst_cover/burst_count。查询失败时映射为空，仅不显示角标。
 	// burst 字段按本次请求的档位取对应分组列（缺省精细档）。
@@ -150,7 +151,7 @@ func (s *PhotoServer) SearchPhotos(
 	items := make([]*api.PhotoItem, len(photos))
 	for i, p := range photos {
 		items[i] = photoDO2Item(p)
-		items[i].HasNef = nefSet[data.BaseNameOf(p.Filename)]
+		items[i].HasNef = nefSet[photoBasePath(p.FilePath)]
 		groupID := p.BurstGroupID
 		if req.BurstProfile == "coarse" {
 			groupID = p.BurstGroupCoarseID
@@ -413,7 +414,7 @@ func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 
 // UploadPhotoHandler 上传图片。
 // JPG 流程：保存到 photo_src → 压缩到 photo_path → 读 EXIF → 匹配时间线 → 入库。
-// NEF 流程：保存到 photo_src → 入库（跳过压缩/VLM/Embedding）。
+// NEF 流程：仅保存到 photo_src，作为同名 JPG 的原始附件。
 func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	req := kctx.Request()
 	plogger.Infof("upload request: %s %s", req.Method, req.URL.Path)
@@ -451,20 +452,27 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 	ctx := papp.NewAppCtx(_ctx)
 
 	isNEF := ext == ".nef"
+	if isNEF {
+		status, err := s.storeNefUpload(file, targetFilename, folder, conflictResolution, fileMtime)
+		if err != nil {
+			return fmt.Errorf("store NEF file failed: %w", err)
+		}
+		result := map[string]any{"status": status, "photo_id": ""}
+		if status == "conflict" {
+			result["conflict"] = nefConflictInfo(targetFilename, newShotAt)
+		}
+		return kctx.Result(200, result)
+	}
 
 	// 检查冲突
 	existingPhoto, _ := data.PhotoDAO.GetByFilename(ctx, targetFilename)
 	if existingPhoto != nil {
-		return s.handleConflict(kctx, ctx, file, targetFilename, existingPhoto, newShotAt, conflictResolution, folder, isNEF, fileMtime)
+		return s.handleConflict(kctx, ctx, file, targetFilename, existingPhoto, newShotAt, conflictResolution, folder, fileMtime)
 	}
 
 	// 无冲突：保存 → 入库
 	var photoID string
-	if isNEF {
-		photoID, err = s.doNefUpload(ctx, file, targetFilename, folder, fileMtime)
-	} else {
-		photoID, err = s.doUpload(ctx, file, targetFilename, folder, newShotAt, fileMtime)
-	}
+	photoID, err = s.doUpload(ctx, file, targetFilename, folder, newShotAt, fileMtime)
 	if err != nil {
 		return fmt.Errorf("store photo failed: %w", err)
 	}
@@ -480,7 +488,7 @@ func (s *PhotoServer) handleConflict(
 	kctx khttp.Context, ctx *papp.AppCtx,
 	file interface{ io.Reader }, targetFilename string,
 	existingPhoto *data.PhotoDO, newShotAt *time.Time,
-	resolution string, folder string, isNEF bool, fileMtime *time.Time,
+	resolution string, folder string, fileMtime *time.Time,
 ) error {
 	if resolution == "" {
 		return kctx.Result(200, map[string]any{
@@ -499,24 +507,22 @@ func (s *PhotoServer) handleConflict(
 		if err := saveUploadedFile(file, targetFilename, destDir, fileMtime); err != nil {
 			return err
 		}
-		if !isNEF {
-			srcPath := filepath.Join(destDir, targetFilename)
-			maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
-			thumbDir := conf.C.Storage.PhotoPath
-			if folder != "" {
-				thumbDir = filepath.Join(thumbDir, folder)
-			}
-			if err := processToPhotoPath(srcPath, targetFilename, thumbDir, maxBytes, fileMtime); err != nil {
-				return err
-			}
-			// 删除旧缩略图
-			oldPath := filepath.Join(conf.C.Storage.PhotoPath, existingPhoto.FilePath)
-			newThumbPath := filepath.Join(thumbDir, targetFilename)
-			if oldPath != newThumbPath {
-				_ = os.Remove(oldPath)
-			}
+		srcPath := filepath.Join(destDir, targetFilename)
+		maxBytes := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
+		thumbDir := conf.C.Storage.PhotoPath
+		if folder != "" {
+			thumbDir = filepath.Join(thumbDir, folder)
 		}
-		if err := overwritePhoto(ctx, existingPhoto.ID, targetFilename, folder, newShotAt, isNEF); err != nil {
+		if err := processToPhotoPath(srcPath, targetFilename, thumbDir, maxBytes, fileMtime); err != nil {
+			return err
+		}
+		// 删除旧缩略图
+		oldPath := filepath.Join(conf.C.Storage.PhotoPath, existingPhoto.FilePath)
+		newThumbPath := filepath.Join(thumbDir, targetFilename)
+		if oldPath != newThumbPath {
+			_ = os.Remove(oldPath)
+		}
+		if err := overwritePhoto(ctx, existingPhoto.ID, targetFilename, folder, newShotAt); err != nil {
 			return fmt.Errorf("update overwritten photo failed: %w", err)
 		}
 		return kctx.Result(200, map[string]any{
@@ -534,11 +540,7 @@ func (s *PhotoServer) handleConflict(
 		newFilename := addSuffix(targetFilename)
 		var photoID string
 		var err error
-		if isNEF {
-			photoID, err = s.doNefUpload(ctx, file, newFilename, folder, fileMtime)
-		} else {
-			photoID, err = s.doUpload(ctx, file, newFilename, folder, newShotAt, fileMtime)
-		}
+		photoID, err = s.doUpload(ctx, file, newFilename, folder, newShotAt, fileMtime)
 		if err != nil {
 			return fmt.Errorf("store photo failed: %w", err)
 		}
@@ -585,24 +587,45 @@ func (s *PhotoServer) doUpload(
 	return photoID, nil
 }
 
-// doNefUpload 执行 NEF 上传流程（仅保存源文件 + 入库，不压缩不生成缩略图）
-func (s *PhotoServer) doNefUpload(
-	ctx *papp.AppCtx, file io.Reader, filename string,
-	folder string, fileMtime *time.Time,
+// storeNefUpload 将 NEF 原始文件保存到与 JPG 相同的源目录，不创建照片记录。
+func (s *PhotoServer) storeNefUpload(
+	file io.Reader, filename string, folder string, resolution string, fileMtime *time.Time,
 ) (string, error) {
 	srcDir := conf.C.Storage.PhotoSrc
 	if folder != "" {
 		srcDir = filepath.Join(srcDir, folder)
 	}
+	existing, err := caseInsensitiveFileName(srcDir, filename)
+	if err != nil {
+		return "", err
+	}
+	if existing != "" {
+		switch resolution {
+		case "":
+			return "conflict", nil
+		case "skip":
+			return "skipped", nil
+		case "overwrite":
+			filename = existing
+		case "keep_both":
+			for candidate := addSuffix(filename); ; candidate = addSuffix(candidate) {
+				found, lookupErr := caseInsensitiveFileName(srcDir, candidate)
+				if lookupErr != nil {
+					return "", lookupErr
+				}
+				if found == "" {
+					filename = candidate
+					break
+				}
+			}
+		default:
+			return "", perr.ErrParamInvalid
+		}
+	}
 	if err := saveUploadedFile(file, filename, srcDir, fileMtime); err != nil {
 		return "", err
 	}
-	photoID, err := createPhotoRecord(ctx, filename, folder, "nef", nil)
-	if err != nil {
-		_ = os.Remove(filepath.Join(srcDir, filename))
-		return "", err
-	}
-	return photoID, nil
+	return "stored", nil
 }
 
 // ================================================================
@@ -624,6 +647,50 @@ func burstGroupIDsOf(photos []*data.PhotoDO, profile string) []string {
 		}
 	}
 	return idList
+}
+
+// adjacentNefSet 扫描当前页照片所在目录，建立「相对目录 + 小写基础名」集合。
+// NEF 文件本身不是数据库实体，因此角标始终以原图目录的实时状态为准。
+func adjacentNefSet(photos []*data.PhotoDO) map[string]bool {
+	dirs := make(map[string]bool)
+	for _, photo := range photos {
+		dirs[filepath.Dir(photo.FilePath)] = true
+	}
+	set := make(map[string]bool)
+	for dir := range dirs {
+		entries, err := os.ReadDir(filepath.Join(conf.C.Storage.PhotoSrc, dir))
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".nef") {
+				continue
+			}
+			set[photoBasePath(filepath.Join(dir, entry.Name()))] = true
+		}
+	}
+	return set
+}
+
+func photoBasePath(relPath string) string {
+	return filepath.ToSlash(filepath.Join(filepath.Dir(relPath), data.BaseNameOf(filepath.Base(relPath))))
+}
+
+// caseInsensitiveFileName 返回目录内与 filename 忽略大小写匹配的实际文件名。
+func caseInsensitiveFileName(dir, filename string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.EqualFold(entry.Name(), filename) {
+			return entry.Name(), nil
+		}
+	}
+	return "", nil
 }
 
 func photoDO2Item(do *data.PhotoDO) *api.PhotoItem {
@@ -715,6 +782,20 @@ func buildConflictInfo(existing *data.PhotoDO, newShotAt *time.Time) map[string]
 	}
 }
 
+func nefConflictInfo(filename string, newShotAt *time.Time) map[string]any {
+	newShotAtStr := ""
+	if newShotAt != nil {
+		newShotAtStr = newShotAt.UTC().Format(time.RFC3339)
+	}
+	return map[string]any{
+		"existing_photo_id":  "",
+		"existing_filename":  filename,
+		"existing_image_url": "",
+		"existing_shot_at":   "",
+		"new_shot_at":        newShotAtStr,
+	}
+}
+
 func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileType string, shotAt *time.Time) (string, error) {
 	relPath := filename
 	if folder != "" {
@@ -783,7 +864,7 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 	return photoDO.ID, nil
 }
 
-func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, shotAt *time.Time, isNEF bool) error {
+func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, shotAt *time.Time) error {
 	relPath := filename
 	if folder != "" {
 		relPath = filepath.Join(folder, filename)
@@ -809,10 +890,7 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 		timeline = findEventByTime(*resolvedShotAt, entries, conf.C.Storage.TimelineWindowDays)
 	}
 
-	width, height := 0, 0
-	if !isNEF {
-		width, height = getImageSize(srcPath)
-	}
+	width, height := getImageSize(srcPath)
 
 	updates := map[string]any{"description": "", "file_path": relPath}
 	if timeline != "" {

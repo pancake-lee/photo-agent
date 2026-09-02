@@ -68,6 +68,8 @@ class RouterState(typing.TypedDict):
     answer: str
     photos: list[dict]
     compose_url: str        # Runtime 兜底深链（候选超限时引导进图文工坊）
+    runtime_terminal_reason: str
+    runtime_clarification: dict
 
 
 CLASSIFY_SYSTEM = (
@@ -504,6 +506,8 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
         "answer": result["answer"],
         "photos": result["photos"],
         "compose_url": result.get("compose_url", ""),
+        "runtime_terminal_reason": result.get("terminal_reason", ""),
+        "runtime_clarification": result.get("clarification", {}),
     }
 
 
@@ -690,6 +694,8 @@ class PhotoAgent:
             "answer": "",
             "photos": [],
             "compose_url": "",
+            "runtime_terminal_reason": "",
+            "runtime_clarification": {},
         }
         result = self._app.invoke(initial, {
             "configurable": {

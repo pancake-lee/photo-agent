@@ -198,22 +198,25 @@ func TestPhotoUploadDeleteAndVlmWriteback(t *testing.T) {
 	}
 	conf.C.Storage.PhotoPath = thumbDir
 
-	photoID, err := server.doNefUpload(ctx, strings.NewReader("raw-photo"), "photo.nef", "", nil)
+	status, err := server.storeNefUpload(strings.NewReader("raw-photo"), "photo.nef", "", "", nil)
 	if err != nil {
 		t.Fatalf("upload NEF: %v", err)
+	}
+	if status != "stored" {
+		t.Fatalf("NEF upload status = %q, want stored", status)
 	}
 	if _, err := os.Stat(filepath.Join(conf.C.Storage.PhotoSrc, "photo.nef")); err != nil {
 		t.Fatalf("source file missing after upload: %v", err)
 	}
-	if _, err := data.PhotoDAO.GetByID(ctx, photoID); err != nil {
-		t.Fatalf("photo record missing after upload: %v", err)
+	var nefRecords int64
+	if err := pdb.GetGormDB().Table("photos").Where("file_type = ?", "nef").Count(&nefRecords).Error; err != nil {
+		t.Fatalf("count NEF records: %v", err)
 	}
-
-	if _, err := server.DeletePhoto(context.Background(), &api.DeletePhotoRequest{Id: photoID}); err != nil {
-		t.Fatalf("delete photo: %v", err)
+	if nefRecords != 0 {
+		t.Fatalf("NEF must not create a photo record, got %d", nefRecords)
 	}
-	if _, err := os.Stat(filepath.Join(conf.C.Storage.PhotoSrc, "photo.nef")); !os.IsNotExist(err) {
-		t.Fatalf("source file remains after delete: %v", err)
+	if status, err := server.storeNefUpload(strings.NewReader("new"), "PHOTO.NEF", "", "", nil); err != nil || status != "conflict" {
+		t.Fatalf("case-insensitive NEF conflict = (%q, %v), want (conflict, nil)", status, err)
 	}
 
 	photo := &data.PhotoDO{ID: "vlm-photo", Filename: "vlm.jpg", FilePath: "vlm.jpg", FileType: "jpg"}
@@ -256,6 +259,32 @@ func TestPhotoUploadDeleteAndVlmWriteback(t *testing.T) {
 	}
 	if failedCount != 1 {
 		t.Fatalf("failed history count = %d", failedCount)
+	}
+}
+
+func TestAdjacentNefSetUsesSourceFilesNotDatabaseRows(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	if err := os.MkdirAll(filepath.Join(conf.C.Storage.PhotoSrc, "trip"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, "trip", "DSC_001.NEF"), []byte("raw"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	photos := []*data.PhotoDO{
+		{ID: "jpg", Filename: "DSC_001.jpg", FilePath: filepath.Join("trip", "DSC_001.jpg"), FileType: "jpg"},
+		{ID: "other", Filename: "DSC_002.jpg", FilePath: filepath.Join("trip", "DSC_002.jpg"), FileType: "jpg"},
+	}
+	set := adjacentNefSet(photos)
+	if !set[photoBasePath(photos[0].FilePath)] || set[photoBasePath(photos[1].FilePath)] {
+		t.Fatalf("adjacent NEF set = %#v", set)
+	}
+	// 写入历史 NEF 行不影响动态文件角标来源。
+	if err := data.PhotoDAO.Add(ctx, &data.PhotoDO{ID: "legacy-nef", Filename: "orphan.nef", FilePath: "orphan.nef", FileType: "nef"}); err != nil {
+		t.Fatal(err)
+	}
+	set = adjacentNefSet(photos)
+	if !set[photoBasePath(photos[0].FilePath)] || set[photoBasePath(photos[1].FilePath)] {
+		t.Fatalf("dynamic NEF set changed by database row: %#v", set)
 	}
 }
 

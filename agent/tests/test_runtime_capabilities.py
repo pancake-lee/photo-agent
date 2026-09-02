@@ -109,6 +109,21 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
             obs = caps_creation._select_photos({"max_photos": 2}, _ctx(_cfg(), task))
         self.assertEqual(obs.payload["ids"], ["a", "b"])
 
+    def test_candidate_delivery_keeps_collapsed_candidates_without_llm_selection(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b", "c"]},
+        ), step_no=1, action="sql_search")
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[
+            {"id": "a", "burst_group_id": "g"},
+            {"id": "b", "burst_group_id": "g", "is_burst_cover": True},
+            {"id": "c"},
+        ]), unittest.mock.patch.object(caps_common.llm_factory, "create_llm") as create_llm:
+            obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
+        self.assertEqual(obs.kind, rt_state.OBS_PHOTOS_SELECTED)
+        self.assertEqual(obs.payload["ids"], ["b", "c"])
+        create_llm.assert_not_called()
+
     def test_select_empty_pick_returns_error(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "挑照片", {"question": "q"})
         task = rt_state.reduce_observation(task, rt_state.Observation(
@@ -308,6 +323,32 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         self.assertEqual(caps_resolve_trip._validate_time_of_day("傍晚"), "傍晚")
         self.assertEqual(caps_resolve_trip._validate_time_of_day("黄昏"), "")
 
+    def test_relative_day_with_different_starts_needs_clarification(self):
+        fake_llm = unittest.mock.MagicMock()
+        fake_llm.invoke.return_value.content = (
+            '{"timeline": "山西旅游", "day": "relative:2", "time_of_day": "", "soft_hints": []}'
+        )
+        with unittest.mock.patch.object(caps_resolve_trip, "_fetch_timelines", return_value=["山西旅游"]), \
+             unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm), \
+             unittest.mock.patch.object(caps_resolve_trip, "_fetch_timeline_event_date", return_value="2026-08-01"), \
+             unittest.mock.patch.object(caps_resolve_trip, "_fetch_first_photo_day", return_value="2026-08-02"):
+            obs = caps_resolve_trip._resolve_trip({}, _ctx(_cfg(), question="找山西旅游第二天的照片"))
+        self.assertEqual(obs.kind, rt_state.OBS_NEEDS_CLARIFICATION)
+        self.assertEqual(obs.payload["options"], ["2026-08-02", "2026-08-03"])
+
+    def test_month_day_uses_timeline_year_instead_of_model_guess(self):
+        fake_llm = unittest.mock.MagicMock()
+        fake_llm.invoke.return_value.content = (
+            '{"timeline": "山西旅游", "day": "2025-08-03", "time_of_day": "", "soft_hints": []}'
+        )
+        with unittest.mock.patch.object(caps_resolve_trip, "_fetch_timelines", return_value=["山西旅游"]), \
+             unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm), \
+             unittest.mock.patch.object(caps_resolve_trip, "_fetch_timeline_event_date", return_value="2026-08-01"), \
+             unittest.mock.patch.object(caps_resolve_trip, "_fetch_first_photo_day", return_value="2026-08-02"), \
+             unittest.mock.patch.object(caps_resolve_trip.text_to_sql, "execute_sql_for_ids", return_value=["a"]):
+            obs = caps_resolve_trip._resolve_trip({}, _ctx(_cfg(), question="找山西旅游8月3日的照片"))
+        self.assertEqual(obs.payload["conditions"]["day"], "2026-08-03")
+
     def test_build_scope_sql_combines_only_hard_constraints(self):
         sql = caps_resolve_trip.build_scope_sql("山西旅游", "last", 19, 23)
         self.assertIn("timeline = '山西旅游'", sql)
@@ -321,7 +362,7 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         )
         date_sql = caps_resolve_trip.build_scope_sql("", "2026-08-02", None, None)
         self.assertEqual(date_sql,
-                         "SELECT id FROM photos WHERE DATE(shot_at, 'localtime') = '2026-08-02' "
+                         "SELECT id FROM photos WHERE LOWER(file_type) != 'nef' AND DATE(shot_at, 'localtime') = '2026-08-02' "
                          "ORDER BY shot_at ASC LIMIT 500")
         escaped = caps_resolve_trip.build_scope_sql("O'rien't", "", None, None)
         self.assertIn("timeline = 'O''rien''t'", escaped)
@@ -331,7 +372,7 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         sql = caps_resolve_trip.build_scope_sql("", "first", None, None)
         self.assertEqual(
             sql,
-            "SELECT id FROM photos WHERE DATE(shot_at, 'localtime') = "
+            "SELECT id FROM photos WHERE LOWER(file_type) != 'nef' AND DATE(shot_at, 'localtime') = "
             "(SELECT MIN(DATE(shot_at, 'localtime')) FROM photos) "
             "ORDER BY shot_at ASC LIMIT 500",
         )

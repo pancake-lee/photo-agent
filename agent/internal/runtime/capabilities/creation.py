@@ -88,6 +88,21 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
         "[runtime] select_photos 候选=%d，折叠=%d，收缩模式=%s",
         len(candidates), len(collapsed), mode,
     )
+    if state is not None and state.goal.delivery_mode == "candidate":
+        # 二次挑选交付不经代表性选片 LLM，完整保留连拍折叠后的候选。
+        if mode == "overflow":
+            tokens = ",".join(select_token(item) for item in collapsed)
+            return rt_state.Observation(
+                rt_state.OBS_SELECTION_OVERFLOW,
+                f"候选照片过多（折叠后 {len(collapsed)} 项），转图文工坊自选",
+                {"url": f"#/post-studio?photo_ids={tokens}", "candidate_count": len(collapsed)},
+            )
+        selected_ids = [str(photo.get("id") or "") for photo in collapsed if photo.get("id")]
+        return rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED,
+            f"已保留 {len(selected_ids)} 张连拍折叠后的候选照片，供二次挑选",
+            {"ids": selected_ids, "photos": [dict(photo) for photo in collapsed]},
+        )
     if mode == "overflow":
         tokens = ",".join(select_token(item) for item in collapsed)
         return rt_state.Observation(
@@ -149,7 +164,7 @@ SELECT_PHOTOS = rt_registry.Capability(
     name="select_photos",
     title="挑选代表照片",
     description=(
-        "从候选照片中挑选适合发布的照片（自动折叠连拍组并按阈值收缩；"
+        "从候选照片中挑选适合发布的照片（候选交付模式下保留折叠候选，不调用选片模型；自动折叠连拍组并按阈值收缩；"
         "候选过多时返回图文工坊自选链接）。候选就绪后使用。"
     ),
     parameters={

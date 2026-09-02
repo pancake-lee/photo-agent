@@ -64,6 +64,14 @@ class Tracer:
         except ValueError:
             return str(p)
 
+    def trace_file_ref(self) -> str:
+        """返回当前 Trace 当天 JSONL 的项目相对位置，不创建文件。"""
+        return self._relative(self.agent_data_dir / "execution-traces" / f"{self._today_str()}.jsonl")
+
+    def payload_dir_ref(self) -> str:
+        """返回当前 Trace payload 目录的项目相对位置，不创建目录。"""
+        return self._relative(self.agent_data_dir / "execution-traces" / "payloads" / self._today_str())
+
     # ── 核心 API ──
 
     def emit(self, event: str, data: dict | None = None, level: str = "INFO", module: str = "") -> str:
@@ -111,14 +119,18 @@ class Tracer:
         """
         payload_dir = self._payload_dir()
         # 文件名加 trace_id 前缀避免冲突
-        safe_name = f"{self.trace_id}-{filename}"
+        stem = pathlib.Path(filename).stem
+        suffix = pathlib.Path(filename).suffix or ".txt"
+        safe_name = f"{self.trace_id}-{time.time_ns()}-{stem}{suffix}"
         fp = payload_dir / safe_name
         try:
             fp.write_text(content, encoding="utf-8")
         except OSError as e:
             logger.warning("tracer: 写入 payload 失败 %s: %s", fp, e)
             return ""
-        return self._relative(fp)
+        payload_ref = self._relative(fp)
+        logger.info("[trace] payload 文件: %s", payload_ref)
+        return payload_ref
 
     # ── 工具 ──
 

@@ -316,22 +316,6 @@ func BaseNameOf(name string) string {
 	return strings.ToLower(strings.TrimSuffix(name, ext))
 }
 
-// GetNefBaseNames 返回所有 NEF 文件的小写基础名集合，用于判断 JPG 是否有对应原始文件。
-func (*photoDAO) GetNefBaseNames(ctx *papp.AppCtx) (map[string]bool, error) {
-	q := db.GetQuery().Photo
-	var filenames []string
-	if err := q.WithContext(ctx).
-		Where(q.FileType.Eq("nef")).
-		Pluck(q.Filename, &filenames); err != nil {
-		return nil, ctx.Log.LogErr(err)
-	}
-	set := make(map[string]bool, len(filenames))
-	for _, name := range filenames {
-		set[BaseNameOf(name)] = true
-	}
-	return set, nil
-}
-
 // GetExistingFilenames 返回 names 中已存在于数据库的 filename 集合（精确匹配）。
 func (*photoDAO) GetExistingFilenames(ctx *papp.AppCtx, names []string) (map[string]bool, error) {
 	if len(names) == 0 {

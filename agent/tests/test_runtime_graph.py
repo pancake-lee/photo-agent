@@ -343,6 +343,30 @@ class RunRuntimeLoopTest(unittest.TestCase):
         self.assertEqual(observes[1]["candidate_count"], 3)
         self.assertEqual(observes[2]["selected_count"], 2)
 
+    def test_runtime_trace_replay_includes_payload_references(self):
+        """AR13：Runtime trace 可从 trace_id 重放，并关联每步诊断 payload。"""
+        import pathlib
+        import tempfile
+
+        import internal.evals.trace_replay as trace_replay
+        import internal.evals.tracer as tracer_mod
+
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+            '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+            '{"action": "write_post", "params": {}, "reason": "文案"}',
+        ])
+        patches = self._happy_patches(llm)
+        with tempfile.TemporaryDirectory() as tmp, patches[0], patches[1], patches[2], patches[3], patches[4]:
+            tracer = tracer_mod.Tracer(project_root=tmp, agent_data_dir="data/agent")
+            rt_graph.run_runtime(_cfg(), "找山西旅游的照片并生成发布文案", tracer=tracer)
+            steps, expired = trace_replay.replay_trace(tmp, tracer.trace_id)
+            self.assertFalse(expired)
+            self.assertTrue(any(step.event == "runtime.observe" for step in steps))
+            payload_refs = [step.payload_ref for step in steps if step.payload_ref]
+            self.assertTrue(payload_refs)
+            self.assertTrue(all((pathlib.Path(tmp) / ref).exists() for ref in payload_refs))
+
 
 class EntryRoutingTest(unittest.TestCase):
     """入口分类分流：开放目标进 Runtime，query_type 标注 runtime。"""

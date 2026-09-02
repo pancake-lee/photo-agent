@@ -17,6 +17,11 @@ class NewTaskTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             rt_state.new_task("unknown_goal", "描述")
 
+    def test_candidate_delivery_still_requires_copy_draft(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
+        self.assertEqual(task.goal.delivery_mode, "candidate")
+        self.assertEqual(task.goal.requirements, ("selected_photos", "copy_draft"))
+
 
 class ReduceObservationTest(unittest.TestCase):
     def _task(self) -> rt_state.TaskState:
@@ -248,6 +253,19 @@ class BuildFinalOutputTest(unittest.TestCase):
         self.assertIn("正文", output["answer"])
         self.assertIn("入选照片：a、b", output["answer"])
         self.assertEqual(output["handoff_url"], "")
+
+    def test_candidate_delivery_output_keeps_copy_draft(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "保留候选", {"ids": ["a", "b"]},
+        ), step_no=1, action="select_photos")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "候选标题", "content": "候选正文"},
+        ), step_no=2, action="write_post")
+        output = rt_state.build_final_output(task)
+        self.assertIn("# 候选标题", output["answer"])
+        self.assertIn("候选正文", output["answer"])
+        self.assertIn("供你二次挑选", output["answer"])
 
     def test_complete_output_prefers_filenames_and_falls_back_to_ids(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})

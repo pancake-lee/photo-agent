@@ -66,7 +66,14 @@ def invoke_structured_llm(
         lc_messages.SystemMessage(content=system_prompt),
         lc_messages.HumanMessage(content=user_prompt),
     ])
-    return str(response.content)
+    response_text = str(response.content)
+    if ctx.tracer is not None:
+        payload_ref = ctx.tracer.save_payload(
+            "runtime-llm.json",
+            json.dumps({"system": system_prompt, "user": user_prompt, "response": response_text}, ensure_ascii=False),
+        )
+        ctx.tracer.emit("runtime.llm", {"payload_ref": payload_ref}, module="runtime")
+    return response_text
 
 
 def extract_json_dict(text: str) -> dict | None:

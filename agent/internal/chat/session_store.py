@@ -84,6 +84,13 @@ class SessionStore:
 
                     CREATE INDEX IF NOT EXISTS idx_messages_session
                         ON messages(session_id, id);
+
+                    CREATE TABLE IF NOT EXISTS runtime_pending_clarifications (
+                        session_id TEXT PRIMARY KEY,
+                        original_goal TEXT NOT NULL,
+                        clarification_json TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                    );
                 """)
 
                 # 迁移：添加 photos 列（若不存在）
@@ -268,9 +275,56 @@ class SessionStore:
             try:
                 # 先删消息再删会话（虽然设置了 ON DELETE CASCADE，但显式操作更安全）
                 conn.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+                conn.execute("DELETE FROM runtime_pending_clarifications WHERE session_id=?", (session_id,))
                 cur = conn.execute("DELETE FROM sessions WHERE id=?", (session_id,))
                 conn.commit()
                 return cur.rowcount > 0
+            finally:
+                conn.close()
+
+    def save_runtime_clarification(self, session_id: str, original_goal: str, clarification: dict) -> None:
+        """保存 Runtime 等待澄清的原始目标，下一条短回复据此续跑。"""
+        import json
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute(
+                    """INSERT INTO runtime_pending_clarifications
+                       (session_id, original_goal, clarification_json, created_at)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(session_id) DO UPDATE SET
+                       original_goal=excluded.original_goal,
+                       clarification_json=excluded.clarification_json,
+                       created_at=excluded.created_at""",
+                    (session_id, original_goal, json.dumps(clarification, ensure_ascii=False), _now_iso()),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_runtime_clarification(self, session_id: str) -> dict | None:
+        """读取会话等待中的 Runtime 澄清状态。"""
+        import json
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT original_goal, clarification_json FROM runtime_pending_clarifications WHERE session_id=?",
+                    (session_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                return {"original_goal": row["original_goal"], "clarification": json.loads(row["clarification_json"] or "{}")}
+            finally:
+                conn.close()
+
+    def clear_runtime_clarification(self, session_id: str) -> None:
+        """清除已完成或确定性失败的 Runtime 澄清状态。"""
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute("DELETE FROM runtime_pending_clarifications WHERE session_id=?", (session_id,))
+                conn.commit()
             finally:
                 conn.close()
 

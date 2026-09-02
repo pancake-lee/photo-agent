@@ -31,3 +31,15 @@ class ConsoleFormatterTest(unittest.TestCase):
         line = json.loads(app_logging.JsonLineFormatter().format(record))
 
         self.assertEqual(line["source"], "cli/server.py:77")
+
+    def test_json_formatter_keeps_trace_id_without_trace_file_fields(self):
+        trace_token = app_logging.trace_id_var.set("trace-123")
+        try:
+            record = logging.LogRecord("cli.server", logging.INFO, "/workspace/agent/cli/server.py", 77, "已完成", (), None)
+            line = json.loads(app_logging.JsonLineFormatter().format(record))
+        finally:
+            app_logging.trace_id_var.reset(trace_token)
+
+        self.assertEqual(line["trace_id"], "trace-123")
+        self.assertNotIn("trace_file_ref", line)
+        self.assertNotIn("trace_payload_dir_ref", line)

@@ -34,6 +34,7 @@ class RunContext:
     question: str = ""
     state: typing.Any = None
     llm_callbacks: list = dataclasses.field(default_factory=list)
+    tracer: typing.Any = None
 
 
 @dataclasses.dataclass

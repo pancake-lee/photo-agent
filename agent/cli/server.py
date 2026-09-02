@@ -628,6 +628,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             request_trace = tracer_mod.Tracer(cfg.project_root, cfg.agent_data_dir)
             request.state.tracer = request_trace
             token = app_logging.trace_id_var.set(request_trace.trace_id)
+            logger.info(
+                "[trace] 请求开始: trace=%s, 事件文件=%s, payload目录=%s",
+                request_trace.trace_id, request_trace.trace_file_ref(), request_trace.payload_dir_ref(),
+            )
         started = time.perf_counter()
         try:
             response = await call_next(request)
@@ -643,6 +647,11 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     "duration_ms": round((time.perf_counter() - started) * 1000, 2),
                 },
             )
+            if request_trace is not None:
+                logger.info(
+                    "[trace] 请求结束: trace=%s, 事件文件=%s",
+                    request_trace.trace_id, request_trace.trace_file_ref(),
+                )
             if token is not None:
                 app_logging.trace_id_var.reset(token)
 
@@ -758,6 +767,15 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="会话不存在")
         return s.get_messages(session_id)
 
+    @app.get("/api/chat/traces/{trace_id}")
+    async def get_trace(trace_id: str, req: fastapi.Request):
+        """按 trace_id 读取可复盘的运行记录，供对话与日志入口跳转。"""
+        import internal.evals.trace_replay as trace_replay
+        steps, expired = trace_replay.replay_trace(req.app.state.cfg.project_root, trace_id)
+        if expired:
+            raise fastapi.HTTPException(status_code=404, detail="诊断记录不存在或已过期")
+        return {"trace_id": trace_id, "steps": [step.__dict__ for step in steps]}
+
     @app.post("/api/chat/sessions/{session_id}/messages")
     async def send_message(session_id: str, body: SendMessageRequest, req: fastapi.Request):
         s: session_store.SessionStore = req.app.state.store
@@ -771,6 +789,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         if not question:
             raise fastapi.HTTPException(status_code=400, detail="问题不能为空")
 
+        pending = s.get_runtime_clarification(session_id)
+        routed_question = question
+        if pending is not None:
+            routed_question = f"{pending['original_goal']}\n用户确认日期：{question}"
         is_first_message = s.is_first_message(session_id)
         # 保存用户消息
         s.add_message(session_id, "user", question)
@@ -789,7 +811,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         def execute() -> None:
             try:
                 result = agent_inst.route(
-                    question, granularity=body.granularity, tracer=tracer,
+                    routed_question, granularity=body.granularity, tracer=tracer,
                     progress_callback=collect_steps,
                 )
                 answer = result.get("answer", "") or "未能获取回答。"
@@ -800,6 +822,14 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 )
                 tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
                 tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
+                terminal_reason = result.get("runtime_terminal_reason", "")
+                if terminal_reason == "needs_clarification":
+                    s.save_runtime_clarification(
+                        session_id, pending["original_goal"] if pending else question,
+                        result.get("runtime_clarification", {}),
+                    )
+                elif pending is not None and query_type == "runtime":
+                    s.clear_runtime_clarification(session_id)
                 msg_id = s.add_message(
                     session_id, "assistant", answer, query_type=query_type,
                     trace_id=tracer.trace_id, granularity=body.granularity,
