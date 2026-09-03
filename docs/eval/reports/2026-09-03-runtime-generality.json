@@ -1,0 +1,25 @@
+{
+  "report_id": "2026-09-03-runtime-generality",
+  "backlog_id": "AR15",
+  "created_at": "2026-09-03T16:30:00+08:00",
+  "target": "Agent Runtime V1 框架通用性专项评估（回答：窄在能力数量还是框架本身）",
+  "overall": 4.9,
+  "per_task": {},
+  "dimension_scores": {
+    "编排外壳通用性": 8.5,
+    "任务空间通用性": 3.5,
+    "入口开放性": 4.0,
+    "能力层丰富度与抽象层级": 5.0,
+    "可靠性纵深": 6.5
+  },
+  "findings_for_backlog": [
+    "AR15：Runtime 任务空间一维化。入口分类器把 runtime 定义为『挑照片并创作发布内容』，run_runtime 硬编码 GOAL_SOCIAL_POST，TaskState 的 Scope/Artifacts 字段、9 种观察归约、完成检查表和最终输出组装全部为发帖语义特化；新增能力无法让第二种开放目标（如对比分析、整理归类）经 Runtime 正确执行，必须改写 state.py 核心层。影响：与演进文档 V3『新请求靠复用而非新增管线』的目标冲突，hub 下一轮建议『接入第二个开放目标类型』的实施成本被核心层耦合放大。"
+  ],
+  "verification_runtime": [
+    "agent Runtime 相关单测 98/98 通过（test_runtime_core/graph/state/progress/capabilities）",
+    "代码走查：graph.py / state.py / completion.py / registry.py / capabilities/* / photo_agent.py 入口路由"
+  ],
+  "verification_commits": {
+    "AR系列实现": "74aa397（最新）至 b38ed16（AR8 流式）"
+  }
+}

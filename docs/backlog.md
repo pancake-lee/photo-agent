@@ -8,6 +8,14 @@
 
 | 状态   | 分组       | 编号  | 任务                                         | 评估 |
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
+| 已规划 | Agent Runtime | AR2-1 | SQL 校验器根因修复（接受 WITH 只读查询） |      |
+| 已规划 | Agent Runtime | AR2-2 | Observation 状态分类（六态）              |      |
+| 已规划 | Agent Runtime | AR2-3 | Guardrail 恢复策略与重试预算              |      |
+| 已规划 | Agent Runtime | AR2-4 | 无进展检测（状态签名）                    |      |
+| 已规划 | Agent Runtime | AR2-5 | 语义 evaluator（选片+文案质量门）         |      |
+| 已规划 | Agent Runtime | AR2-6 | Ask vs Act 扩展（多匹配澄清）             |      |
+| 已规划 | Agent Runtime | AR2-7 | 故障注入回归集与 V2 指标基线              |      |
+| 待规划 | Agent Runtime | AR15 | Runtime 任务空间一维化（发帖 goal 特化）  |      |
 | 待规划 | 对话查询   | CQ7   | 聊天 SQL 日期过滤未换算本地时区              |      |
 | 待规划 | 图片交互   | DL1   | 图片管理与对话结果的批量下载                 |      |
 | Done | Agent Runtime | AR11 | 相对旅行日歧义与会话内澄清               | 实际请求验收通过 |
@@ -21,6 +29,66 @@
 > v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](archive/v1.0.15.md)。
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
 > 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design/2099-01-01-future-requirements.md)。
+
+### AR2-1 SQL 校验器根因修复（接受 WITH 只读查询）
+
+- **状态**：已规划（2026-09-03）
+- **背景**：trace 中 hybrid_search 生成的合法 `WITH ... SELECT` 只读 CTE 查询被「必须以 SELECT 开头」的安全校验误杀，任务以 capability_execution_failed 终态。属校验器根因缺陷，非模型输出问题。
+- **方案**：`agent/infra/sqlite_client.py` 的 `validate_select_only` 接受 WITH 开头的只读查询，危险关键字拦截不变；聊天 SQL 链路与 Runtime 检索能力同步受益。详见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) 决策 5。
+- **验收**：CTE 只读查询通过校验；INSERT/DELETE/DROP 等危险语句仍拦截；聊天 SQL 与 Runtime 相关单测全绿。
+
+### AR2-2 Observation 状态分类（六态）
+
+- **状态**：已规划（2026-09-03）
+- **背景**：当前观察只有 kind（归约分派键），失败一律 OBS_ERROR 加 terminal_reason，AR7 的防循环代价是一次失败即终局，V2 需要失败可分类。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.2。
+- **方案**：观察新增 status 维度，六态：success / empty / invalid_input / temporary_error / permanent_error / low_confidence，kind 语义不变。能力执行护栏按异常类型归类（网络超时类 → temporary，其余默认 permanent），能力作者对语义结果（空结果、低置信）显式声明状态；既有终态（empty_scope、candidate_overflow、needs_clarification、trip_unresolved 等）映射为对应状态的默认策略。涉及 `agent/internal/runtime/state.py` 与 `capabilities/*`。
+- **验收**：七个能力对六态有明确映射；现有全量单测不回归（本阶段终态行为不变，仅补分类维度）。
+
+### AR2-3 Guardrail 恢复策略与重试预算
+
+- **状态**：已规划（2026-09-03），依赖 AR2-2
+- **背景**：恢复策略当前不存在：后端断连等瞬时故障（trace 1 次）直接终态；invalid_decision 一次 JSON 失误任务死亡；选片空结果（trace 10 次）无重试机会。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.1、§4.4。
+- **方案**：execute 与 reduce 之间插入 guardrail 程序节点：确定性验证 → 按能力声明触发语义评估（AR2-5 接入）→ 查「状态 → 策略」映射表。策略：temporary 同能力同参数有界重试；defect 带失败反馈修复重执行；fallback 以建议注入 decide 不强制改写；invalid 错误摘要进再决策上下文，均有界计数。BudgetState 增加单能力重试计数，guardrail 内重试不消耗外层步数但计入时长与成本；配置模板补重试预算键。恢复动作输出过程面板事件（沿用 AR8 机制，前端无新交互）。
+- **验收**：注入 temporary 故障后重试成功或正确停止；invalid 决策经反馈重新决策成功（有界）；permanent 正确停止且回复文案可行动；重试不绕过时长/成本预算。
+- **（用户）可选取证**：暂停 Go 后端后发一次 Runtime 请求，确认回复为可行动的停止说明而非裸错误。
+
+### AR2-4 无进展检测（状态签名）
+
+- **状态**：已规划（2026-09-03），依赖 AR2-3
+- **背景**：恢复机制引入后，「每步都成功但状态不变」的振荡成为新风险；AR7 时代靠终态硬停，guardrail 时代需要显式无进展判定。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.4。
+- **方案**：check 节点计算状态签名（已确认事实键、候选集合摘要、完成要件状态、最近错误类别），连续若干步签名不变时强制换策略或停止。
+- **验收**：构造签名不变的连续步骤（mock 能力恒返同结果），系统换策略或停止；正常推进路径签名变化不受影响。
+
+### AR2-5 语义 evaluator（选片+文案质量门）
+
+- **状态**：已规划（2026-09-03），依赖 AR2-3
+- **背景**：V1 完成检查刻意不含语义质量，避免过早引入 Judge。全量 V2 引入两个质量门：选片代表性（覆盖场景与时段、避免近重复）与文案事实依据（事实断言有照片依据，不虚构）。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.3。
+- **方案**：评估接口输入产物与评价维度，输出「通过 / 不通过 + 具体反馈」；guardrail 在确定性检查通过后按能力声明触发；不通过时反馈进入带反馈修复环（有界），修复耗尽以质量未达标终态停止。evaluator 是接受前的质量门，不改变完成要件（selected_photos + copy_draft）。
+- **验收**：构造含虚构事实的文案被拒并带反馈重写后通过；正常文案样本不误杀；修复环有界。
+
+### AR2-6 Ask vs Act 扩展（多匹配澄清）
+
+- **状态**：已规划（2026-09-03）
+- **背景**：`resolve_trip` 的时间线名称多条匹配时静默选第一条，两次同名旅行会选出完全不同的照片，猜错影响大。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.5。
+- **方案**：时间线名称多条匹配时走 needs_clarification，复用 AR11 会话澄清与续跑管道，仅扩充触发条件；数量类可回退歧义（选几张、风格）沿用默认值并在 resolved_facts 记录假设，不询问。
+- **验收**：两条相似时间线触发澄清而非静默选择（确定性单测，mock 时间线列表）；单匹配路径不受影响；AR11 澄清续跑链路不回归。
+
+### AR2-7 故障注入回归集与 V2 指标基线
+
+- **状态**：已规划（2026-09-03），依赖 AR2-1 至 AR2-6
+- **背景**：architecture/04 的 V2 验收要求故障注入集与恢复指标，当前测试只覆盖成功路径与确定性终态。
+- **方案**：七类注入故障（SQL 空结果、RAG 低置信、工具超时、重复旅行歧义、photo_id 失效、异常输出结构、连续无新信息）各建确定性单测，mock 能力不依赖真实 LLM；在注入集上统计恢复成功率、正确停止率、无谓重试率，写入 `docs/eval/baseline.md` 作为 V2 基线。
+- **验收**：七类注入各有恢复路径断言；三项指标有基线数字；Agent 全量单测与前端构建通过。
+- **（用户）验收操作**：真实环境发原始山西请求，确认照片、标题、文案正常交付，V2 系列整体无回归。
+- **最小回传**：回复「AR2 系列已通过」。
+
+### AR15 Runtime 任务空间一维化（发帖 goal 特化）
+
+- **状态**：待规划
+- **背景**：Runtime 通用性专项评估（[2026-09-03 报告](eval/reports/2026-09-03-runtime-generality.md)）确认「窄在框架而非能力数量」：入口分类器把 runtime 定义为「挑选照片并生成发布文案等创作内容」，`run_runtime` 硬编码 `GOAL_SOCIAL_POST`，TaskState 的 Scope/Artifacts 字段、9 种观察归约、完成要件表和最终输出组装全部为发帖语义特化。新增能力无法让第二种开放目标（对比分析、整理归类、废片标记等）经 Runtime 正确执行，这类请求会被分进 rag/combined 固定管线只得到检索结果。
+- **影响**：与演进文档 V3「新组合请求靠复用而非新增管线」的目标在核心层冲突；「接入第二个开放目标类型」（hub 下一轮建议）当前不是加一条预设，而是重写 state.py 的 schema、归约表、摘要与输出组装。`new_goal` 对 description 的关键词匹配（「尽可能多」「二次挑选」）还使目标语义与用户措辞形状耦合。
+- **严重程度**：P1，阻塞演进线 V3/V4 的通用化目标，不影响现有发帖链路可用性。
+- **边界**：V1 设计目标本身即为单 goal（03 文档「V1 只解决一个问题」），本条目不否定 V1 交付质量（历史复评 8.2），只登记通用化升级前需要面对的结构性债务。
 
 ### CQ7 聊天 SQL 日期过滤未换算本地时区
 
