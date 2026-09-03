@@ -2,6 +2,8 @@
     创作类能力：select_photos / write_post（能力内 LLM，提示词驱动）。
 
     含迁移自 CQ4 compose 管线的挑选辅助（连拍折叠 / 两级收缩 / 超限令牌）。
+    两个能力声明语义质量门（AR2-5）：选片代表性 / 文案事实依据，
+    以及各自可经带反馈修复重执行解决的输出缺陷（AR2-3 修复环）。
 """
 
 import logging
@@ -9,6 +11,7 @@ import types
 
 import internal.posts.post_studio as post_studio
 import internal.runtime.capabilities.common as common
+import internal.runtime.evaluators as rt_evaluators
 import internal.runtime.registry as rt_registry
 import internal.runtime.state as rt_state
 
@@ -120,9 +123,13 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
         for i, p in enumerate(collapsed, 1)
     )
     note = str(params.get("note") or "")
+    # 修复环反馈（护栏注入）：上次挑选缺陷/质量问题的具体原因，置于请求之前确保被读到
+    feedback_prefix = ""
+    if params.get("feedback"):
+        feedback_prefix = f"上次挑选未通过：{params['feedback']}\n请修正以上问题后重新挑选。\n\n"
     response_text = common.invoke_structured_llm(
         ctx, _SELECT_SYSTEM_PROMPT,
-        f"用户请求: {ctx.question}\n{note}\n\n候选:\n{context}",
+        f"{feedback_prefix}用户请求: {ctx.question}\n{note}\n\n候选:\n{context}",
         temperature=0.3,
     )
     data = common.extract_json_dict(response_text) or {}
@@ -181,9 +188,12 @@ SELECT_PHOTOS = rt_registry.Capability(
     parameters={
         "max_photos": {"type": "int", "description": "入选数量上限", "required": False},
         "note": {"type": "str", "description": "挑选偏好说明", "required": False},
+        "feedback": {"type": "str", "description": "护栏注入的上次失败反馈，修复重执行时携带，决策不要填写", "required": False},
     },
     run=_select_photos,
     progress_details=_select_progress_details,
+    repairable_reasons=("photo_selection_failed", "selection_out_of_scope"),
+    evaluator=rt_evaluators.evaluate_selection,
 )
 
 # --------------------------------------------------
@@ -205,6 +215,9 @@ def _write_post(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
     style = str(params.get("style") or "自由")
     note = str(params.get("note") or "")
     user_prompt = ctx.question + (f"\n备注：{note}" if note else "")
+    # 修复环反馈（护栏注入）：上次文案的质量问题（如事实无依据），要求修正后重写
+    if params.get("feedback"):
+        user_prompt += f"\n上次文案未通过质量检查：{params['feedback']}，请修正以上问题后重新创作。"
     title, content, warnings = post_studio.generate_post(ctx.cfg, photos, style, user_prompt)
     summary = f"文案已生成（标题「{title}」）"
     if warnings:
@@ -231,9 +244,11 @@ WRITE_POST = rt_registry.Capability(
     parameters={
         "style": {"type": "str", "description": "文案风格（自由/文艺/纪实/轻松/攻略）", "required": False},
         "note": {"type": "str", "description": "文案额外要求", "required": False},
+        "feedback": {"type": "str", "description": "护栏注入的上次失败反馈，修复重执行时携带，决策不要填写", "required": False},
     },
     run=_write_post,
     progress_details=_write_post_progress_details,
+    evaluator=rt_evaluators.evaluate_copy,
 )
 
 # --------------------------------------------------

@@ -10,6 +10,7 @@
 
 import copy
 import dataclasses
+import hashlib
 import json
 import typing
 
@@ -401,6 +402,30 @@ def _dump(value: typing.Any) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
+def state_signature(state: TaskState) -> str:
+    """无进展检测用的状态签名（AR2-4）：选取若干语义维度压缩成可比较摘要。
+
+    维度：已确认事实键、候选集合摘要、完成要件缺口、最近错误。
+    连续多步签名不变说明执行在振荡（每步都"成功"但状态不推进），
+    由 check 节点据此强制换策略或停止。签名只用于逐步比较，不含语义信息本身。
+    """
+    import internal.runtime.completion as rt_completion
+
+    candidates_digest = hashlib.md5(
+        "、".join(state.artifacts.candidate_ids).encode("utf-8")
+    ).hexdigest()[:8]
+    completion = rt_completion.check_completion(state)
+    parts = [
+        ",".join(sorted(state.resolved_facts)),
+        candidates_digest,
+        f"sel={len(state.artifacts.selected_ids)}",
+        f"copy={int(bool(state.artifacts.copy_draft.get('title') and state.artifacts.copy_draft.get('content')))}",
+        ",".join(completion.missing),
+        (state.progress.errors[-1] if state.progress.errors else "")[:60],
+    ]
+    return "|".join(parts)
+
+
 def _scope_summary(state: TaskState) -> str:
     """决策摘要中的范围行：范围未建立/不受限/受限三种形态。"""
     if not state.scope.established:
@@ -507,6 +532,19 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
         last_error = state.progress.errors[-1] if state.progress.errors else "关键能力执行失败"
         return {
             "answer": f"任务未能完成：{last_error}。",
+            "handoff_url": "",
+        }
+
+    if stop_reason == "no_progress":
+        done = [milestone_label(m) for m in _MILESTONE_LABELS if m not in state.progress.todo]
+        missing = "、".join(requirement_label(r) for r in completion.missing) or "无"
+        return {
+            "answer": (
+                "任务未能完成：连续多步状态没有任何新进展，已自动停止。\n\n"
+                f"已完成：{'、'.join(done) if done else '无'}\n"
+                f"仍缺少：{missing}\n\n"
+                "可以更换说法（如明确日期、地点或时段）后重新发起。"
+            ),
             "handoff_url": "",
         }
 

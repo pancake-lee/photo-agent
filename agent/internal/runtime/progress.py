@@ -3,6 +3,10 @@
 步骤标题来自能力定义（registry.Capability.title），由编排外壳随
 runtime.decide / execute / observe 事件携带；本模块只做展示归约，
 不维护自己的能力名映射，新增能力无需改动此处。
+
+护栏恢复事件（runtime.guardrail）作为独立条目插入对应步骤之后：
+「重试/修复重试/重新决策/调整策略/停止」瞬时完成，直接以已完成形态展示，
+条目主键为 "步骤号-序号"，保证同一步内多次恢复按发生顺序排列。
 """
 
 import copy
@@ -10,16 +14,34 @@ import copy
 _FALLBACK_TITLE = "处理任务"
 
 
+def _step_key(step_no: int, suffix: str = "") -> str:
+    """步骤条目主键：零填充步骤号 + 可选后缀，字典序即展示序。"""
+    return f"{step_no:04d}{suffix}"
+
+
 class RuntimeProgressTranslator:
     """消费真实 Runtime 事件，输出轻量、无内部日志的步骤快照。"""
 
     def __init__(self):
-        self._steps: dict[int, dict] = {}
+        self._steps: dict[str, dict] = {}
 
     def consume(self, event: str, data: dict) -> list[dict]:
         """归约一条 runtime.* 事件，返回当前完整步骤列表。"""
         step_no = int(data.get("step") or 0)
         if step_no <= 0 or event == "runtime.trace_summary":
+            return self.snapshots()
+
+        if event == "runtime.guardrail":
+            ordinal = int(data.get("ordinal") or 0)
+            self._steps[_step_key(step_no, f"-g{ordinal}")] = {
+                "step": step_no,
+                "title": str(data.get("title") or _FALLBACK_TITLE),
+                "status": "已完成",
+                "decision": "",
+                "result": str(data.get("reason") or ""),
+                "facts": [],
+                "details": {},
+            }
             return self.snapshots()
 
         default_step = {
@@ -31,7 +53,7 @@ class RuntimeProgressTranslator:
             "facts": [],
             "details": {},
         }
-        step = self._steps.setdefault(step_no, default_step)
+        step = self._steps.setdefault(_step_key(step_no), default_step)
         if data.get("title"):
             step["title"] = str(data["title"])
 

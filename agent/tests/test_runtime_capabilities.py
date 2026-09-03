@@ -255,6 +255,67 @@ class WritePostCapabilityTest(unittest.TestCase):
         self.assertEqual(obs.status, rt_state.STATUS_INVALID_INPUT)
 
 
+class RepairFeedbackTest(unittest.TestCase):
+    """AR2-3/AR2-5 修复环：护栏注入的失败反馈进入能力重执行提示词。"""
+
+    def _task_with_candidates(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "发帖"})
+        return rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b"]},
+        ), step_no=1, action="sql_search")
+
+    def test_select_photos_feedback_enters_llm_prompt(self):
+        task = self._task_with_candidates()
+        prompts: list[str] = []
+
+        def fake_invoke(ctx, system_prompt, user_prompt, temperature):
+            prompts.append(user_prompt)
+            return '{"selected_ids": ["a", "b"]}'
+
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch",
+                                        return_value=[{"id": "a"}, {"id": "b"}]), \
+             unittest.mock.patch.object(caps_common, "invoke_structured_llm",
+                                        side_effect=fake_invoke):
+            obs = caps_creation._select_photos(
+                {"feedback": "入选三张同一场景近重复，请覆盖不同时段"}, _ctx(_cfg(), task),
+            )
+        self.assertEqual(obs.kind, rt_state.OBS_PHOTOS_SELECTED)
+        self.assertEqual(len(prompts), 1)
+        self.assertIn("上次挑选未通过", prompts[0])
+        self.assertIn("近重复", prompts[0])
+
+    def test_select_photos_without_feedback_prompt_unchanged(self):
+        task = self._task_with_candidates()
+        prompts: list[str] = []
+
+        def fake_invoke(ctx, system_prompt, user_prompt, temperature):
+            prompts.append(user_prompt)
+            return '{"selected_ids": ["a", "b"]}'
+
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch",
+                                        return_value=[{"id": "a"}, {"id": "b"}]), \
+             unittest.mock.patch.object(caps_common, "invoke_structured_llm",
+                                        side_effect=fake_invoke):
+            caps_creation._select_photos({}, _ctx(_cfg(), task))
+        self.assertNotIn("上次挑选未通过", prompts[0])
+
+    def test_write_post_feedback_enters_user_prompt(self):
+        task = self._task_with_candidates()
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a"], "photos": [{"id": "a"}]},
+        ), step_no=2, action="select_photos")
+        with unittest.mock.patch.object(caps_common, "fetch_photos_batch",
+                                        return_value=[]), \
+             unittest.mock.patch.object(caps_creation.post_studio, "generate_post",
+                                        return_value=("标题", "正文", [])) as gen:
+            caps_creation._write_post(
+                {"feedback": "提到的大雁塔不在照片中"}, _ctx(_cfg(), task),
+            )
+        user_prompt = gen.call_args[0][3]
+        self.assertIn("上次文案未通过质量检查", user_prompt)
+        self.assertIn("大雁塔", user_prompt)
+
+
 class ResolveTripCapabilityTest(unittest.TestCase):
     """约束解析能力：抽取 + 程序校验 + 权威范围物化（SQL 不经 LLM）。"""
 
@@ -597,6 +658,16 @@ class ExceptionClassificationTest(unittest.TestCase):
             obs = caps_retrieval._sql_search({"query": "q"}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertEqual(obs.status, rt_state.STATUS_TEMPORARY_ERROR)
+
+    def test_sdk_connection_failure_classified_temporary(self):
+        """SDK（swagger/urllib3 栈）连接失败是真实后端断连的异常形态，同样归瞬时。"""
+        import urllib3.exceptions
+        self.assertEqual(
+            caps_common.classify_exception(urllib3.exceptions.MaxRetryError(
+                None, "/", None,
+            )),
+            rt_state.STATUS_TEMPORARY_ERROR,
+        )
 
 
 class BuildRegistryTest(unittest.TestCase):

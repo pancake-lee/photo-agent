@@ -1,6 +1,8 @@
 import unittest
 import unittest.mock
 
+import httpx
+
 import cli.photo_agent as photo_agent
 import internal.chat.text_to_sql as text_to_sql
 import internal.posts.post_studio as post_studio
@@ -21,22 +23,32 @@ def _cfg(**overrides):
         "runtime_max_steps": 6,
         "runtime_timeout_seconds": 300.0,
         "runtime_cost_limit": 2.0,
+        "runtime_retry_max": 2,
+        "runtime_repair_max": 2,
+        "runtime_redecide_max": 2,
     }
     attrs.update(overrides)
     return type("Config", (), attrs)()
 
 
 class _ScriptedLLM:
-    """伪 LLM：决策提示词消费脚本队列，其余按提示词类型返回固定 JSON。"""
+    """伪 LLM：决策提示词消费脚本队列，其余按提示词类型返回固定 JSON。
+
+    quality 是语义质量门评委的回答序列（按调用次序消费，耗尽后按通过处理）：
+    依次对应选片代表性评委、文案事实依据评委及其修复重评。
+    """
 
     def __init__(
         self,
         decisions: list[str],
         constraints: str = '{"timeline": "山西旅游", "day": "", "time_of_day": "", "soft_hints": []}',
+        quality: list[str] | None = None,
     ):
         self._decisions = list(decisions)
         self._constraints = constraints
+        self._quality = list(quality or [])
         self.decide_prompts: list[str] = []
+        self.judge_prompts: list[str] = []
 
     def invoke(self, messages):
         text = "".join(str(getattr(m, "content", m)) for m in messages)
@@ -45,6 +57,9 @@ class _ScriptedLLM:
             content = self._decisions.pop(0) if self._decisions else "{}"
         elif "时间线列表" in text:
             content = self._constraints
+        elif "评委" in text:
+            self.judge_prompts.append(text)
+            content = self._quality.pop(0) if self._quality else '{"passed": true, "feedback": ""}'
         else:
             content = '{"selected_ids": ["b", "c"]}'
         resp = unittest.mock.MagicMock()
@@ -222,16 +237,178 @@ class RunRuntimeLoopTest(unittest.TestCase):
         self.assertIn("未知能力", observation.summary)
         self.assertEqual(observation.payload["terminal_reason"], "invalid_decision")
 
-    def test_invalid_decision_stops_after_one_step_without_budget_exhaustion(self):
-        """无效决策应直接结束，不能反复调用模型至预算耗尽。"""
+    def test_invalid_decision_redecides_with_feedback_then_succeeds(self):
+        """AR2-3：无效决策经反馈重新决策成功，反馈进入决策提示词（有界）。"""
+        llm = _ScriptedLLM([
+            '{"action": "no_such_capability", "params": {}, "reason": "错误决策"}',
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+            '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+            '{"action": "write_post", "params": {}, "reason": "文案"}',
+        ])
+        patches = self._happy_patches(llm)
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            result = rt_graph.run_runtime(_cfg(), "写一篇帖子")
+        self.assertIn("# 山西第一天", result["answer"])
+        # 第二次决策提示词包含护栏反馈的无效决策摘要
+        self.assertIn("上一决策无效", llm.decide_prompts[1])
+        self.assertIn("no_such_capability", llm.decide_prompts[1])
+
+    def test_invalid_decision_redecide_is_bounded(self):
+        """连续无效决策在再决策预算耗尽后正确停止，不烧完步数预算。"""
         llm = _ScriptedLLM([
             '{"action": "no_such_capability", "params": {}, "reason": "错误决策"}',
         ])
         with unittest.mock.patch.object(rt_graph.llm_factory, "create_llm", return_value=llm):
             result = rt_graph.run_runtime(_cfg(), "写一篇帖子")
-        self.assertEqual(len(llm.decide_prompts), 1)
-        self.assertIn("未知能力", result["answer"])
+        # 初次决策 + 2 次再决策（脚本耗尽后决策为空 action 同样无效）
+        self.assertEqual(len(llm.decide_prompts), 3)
+        self.assertIn("连续多次决策无效", result["answer"])
         self.assertNotIn("预算已耗尽", result["answer"])
+
+    def test_temporary_failure_retries_then_succeeds(self):
+        """AR2-3：后端瞬时故障同能力同参数有界重试，恢复后任务继续完成。"""
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+            '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+            '{"action": "write_post", "params": {}, "reason": "文案"}',
+        ])
+        patches = self._happy_patches(llm)
+        calls: list[str] = []
+
+        def flaky_execute(base_url, sql, limit=50):
+            calls.append(sql)
+            if len(calls) == 1:
+                raise httpx.ConnectError("backend down")
+            return ["a", "b", "c"]
+
+        execute_patch = unittest.mock.patch.object(
+            text_to_sql, "execute_sql_for_ids", side_effect=flaky_execute,
+        )
+        with patches[0], patches[1], execute_patch, patches[3], patches[4]:
+            result = rt_graph.run_runtime(_cfg(), "找山西旅游的照片并生成发布文案")
+        self.assertIn("# 山西第一天", result["answer"])
+        # 重试不重新决策：同一步内 execute 再次执行且第二次成功
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(llm.decide_prompts), 3)
+
+    def test_temporary_failure_exhausts_retry_and_stops_actionably(self):
+        """AR2-3：后端持续不可达时重试耗尽，回复是可行动的停止说明而非裸错误。"""
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+        ])
+        with unittest.mock.patch.object(
+            text_to_sql, "generate_filter_sql", return_value="SELECT id FROM photos",
+        ), unittest.mock.patch.object(
+            text_to_sql, "execute_sql_for_ids",
+            side_effect=httpx.ConnectError("backend down"),
+        ), unittest.mock.patch.object(
+            rt_graph.llm_factory, "create_llm", return_value=llm,
+        ):
+            result = rt_graph.run_runtime(_cfg(), "找山西旅游的照片并生成发布文案")
+        self.assertEqual(result["terminal_reason"], "retry_exhausted")
+        self.assertIn("已重试 2 次", result["answer"])
+        self.assertIn("确认相关服务", result["answer"])
+        self.assertNotIn("预算已耗尽", result["answer"])
+        # 重试期间不再消耗决策：模型只被调用一次决策
+        self.assertEqual(len(llm.decide_prompts), 1)
+
+    def test_recovery_events_appear_in_progress_steps(self):
+        """AR2-3：恢复动作作为过程面板条目展示（重试条目紧随原步骤）。"""
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+            '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+            '{"action": "write_post", "params": {}, "reason": "文案"}',
+        ])
+        patches = self._happy_patches(llm)
+        events = []
+        calls: list[str] = []
+
+        def flaky_execute(base_url, sql, limit=50):
+            calls.append(sql)
+            if len(calls) == 1:
+                raise httpx.ConnectError("backend down")
+            return ["a", "b", "c"]
+
+        execute_patch = unittest.mock.patch.object(
+            text_to_sql, "execute_sql_for_ids", side_effect=flaky_execute,
+        )
+        with patches[0], patches[1], execute_patch, patches[3], patches[4]:
+            rt_graph.run_runtime(
+                _cfg(), "找山西旅游的照片并生成发布文案",
+                progress_callback=lambda event, data: events.append((event, data)),
+            )
+        final_steps = [data for event, data in events
+                       if event == "runtime.step"][-1]["steps"]
+        titles = [step["title"] for step in final_steps]
+        self.assertIn("重试：查询照片", titles)
+        retry_entry = next(step for step in final_steps if step["title"] == "重试：查询照片")
+        self.assertEqual(retry_entry["status"], "已完成")
+        self.assertIn("瞬时故障", retry_entry["result"])
+
+    def test_no_progress_injects_strategy_feedback_then_stops(self):
+        """AR2-4：连续无进展先注入换策略反馈，仍无进展才停止，不无限循环。"""
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+        ] * 8)
+        with unittest.mock.patch.object(
+            rt_graph.llm_factory, "create_llm", return_value=llm,
+        ), unittest.mock.patch.object(
+            text_to_sql, "generate_filter_sql", return_value="SELECT id FROM photos",
+        ), unittest.mock.patch.object(
+            text_to_sql, "execute_sql_for_ids", return_value=["a", "b", "c"],
+        ), unittest.mock.patch.object(
+            caps_common, "fetch_photos_batch",
+            side_effect=lambda cfg, ids: [],
+        ):
+            result = rt_graph.run_runtime(_cfg(), "找山西旅游的照片并生成发布文案")
+        # 第 3 步检出无进展注入反馈，第 4 步仍无进展停止
+        self.assertIn("没有任何变化", llm.decide_prompts[3])
+        self.assertIn("没有任何新进展", result["answer"])
+        self.assertNotIn("预算已耗尽", result["answer"])
+
+    def test_no_progress_does_not_affect_normal_progress(self):
+        """AR2-4：正常推进路径签名逐步变化，不触发换策略反馈。"""
+        llm = _ScriptedLLM([
+            '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+            '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+            '{"action": "write_post", "params": {}, "reason": "文案"}',
+        ])
+        patches = self._happy_patches(llm)
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            result = rt_graph.run_runtime(_cfg(), "找山西旅游的照片并生成发布文案")
+        self.assertIn("# 山西第一天", result["answer"])
+        self.assertTrue(all("没有任何变化" not in prompt for prompt in llm.decide_prompts))
+
+    def test_quality_gate_rejects_and_repairs_with_feedback(self):
+        """AR2-5：虚构事实的文案被评委拒绝，带反馈重写通过后正常交付。"""
+        llm = _ScriptedLLM(
+            [
+                '{"action": "sql_search", "params": {"query": "山西"}, "reason": "检索"}',
+                '{"action": "select_photos", "params": {}, "reason": "挑选"}',
+                '{"action": "write_post", "params": {}, "reason": "文案"}',
+            ],
+            quality=[
+                '{"passed": true, "feedback": ""}',                       # 选片代表性
+                '{"passed": false, "feedback": "提到的大雁塔不在照片中"}',  # 文案首次被拒
+                '{"passed": true, "feedback": ""}',                       # 修复重写后通过
+            ],
+        )
+        patches = self._happy_patches(llm)
+        post_calls: list[str] = []
+        generate_patch = unittest.mock.patch.object(
+            post_studio, "generate_post",
+            side_effect=lambda cfg, photos, style, prompt: (
+                post_calls.append(prompt) or ("山西第一天", "正文内容", [])
+            ),
+        )
+        with patches[0], patches[1], patches[2], patches[3], generate_patch:
+            result = rt_graph.run_runtime(_cfg(), "找山西旅游的照片并生成发布文案")
+        self.assertIn("# 山西第一天", result["answer"])
+        # 修复环重写了文案，且反馈进入重写提示词
+        self.assertEqual(len(post_calls), 2)
+        self.assertIn("大雁塔", post_calls[1])
+        # 修复不重新决策：决策仍只有三次
+        self.assertEqual(len(llm.decide_prompts), 3)
 
     def test_route_after_check_branches(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "q", {"question": "q"})

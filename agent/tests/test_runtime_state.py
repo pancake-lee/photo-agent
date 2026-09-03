@@ -368,6 +368,68 @@ class BuildFinalOutputTest(unittest.TestCase):
         self.assertIn("无法获取候选照片详情", output["answer"])
         self.assertNotIn("预算已耗尽", output["answer"])
 
+    def test_no_progress_stop_advises_rephrasing(self):
+        """AR2-4：无进展停止说明原因并给出可行动建议，不误报预算耗尽。"""
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        output = rt_state.build_final_output(task, stop_reason="no_progress")
+        self.assertIn("没有任何新进展", output["answer"])
+        self.assertIn("更换说法", output["answer"])
+        self.assertIn("仍缺少", output["answer"])
+        self.assertNotIn("预算已耗尽", output["answer"])
+
+
+class StateSignatureTest(unittest.TestCase):
+    """AR2-4 无进展检测的状态签名：推进可感知，振荡可识别。"""
+
+    def test_signature_stable_for_unchanged_state(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        self.assertEqual(rt_state.state_signature(task), rt_state.state_signature(task))
+
+    def test_signature_changes_when_candidates_change(self):
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        before = rt_state.state_signature(task)
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b"]},
+        ), step_no=1, action="sql_search")
+        after_search = rt_state.state_signature(task)
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "再检索", {"ids": ["a", "b"]},
+        ), step_no=2, action="sql_search")
+        # 候选不变 → 签名不变（重复检索是振荡）
+        self.assertEqual(after_search, rt_state.state_signature(task))
+        self.assertNotEqual(before, after_search)
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b", "c"]},
+        ), step_no=3, action="sql_search")
+        self.assertNotEqual(after_search, rt_state.state_signature(task))
+
+    def test_signature_changes_on_selection_copy_facts_and_error(self):
+        base = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        base = rt_state.reduce_observation(base, rt_state.Observation(
+            rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b"]},
+        ), step_no=1, action="sql_search")
+
+        selected = rt_state.reduce_observation(base, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a"]},
+        ), step_no=2, action="select_photos")
+        self.assertNotEqual(rt_state.state_signature(base), rt_state.state_signature(selected))
+
+        drafted = rt_state.reduce_observation(selected, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "t", "content": "c"},
+        ), step_no=3, action="write_post")
+        self.assertNotEqual(rt_state.state_signature(selected), rt_state.state_signature(drafted))
+
+        with_facts = rt_state.reduce_observation(base, rt_state.Observation(
+            rt_state.OBS_FACTS, "事实", {"facts": {"timeline": "山西旅游"}},
+        ), step_no=2, action="resolve_trip")
+        self.assertNotEqual(rt_state.state_signature(base), rt_state.state_signature(with_facts))
+
+        errored = rt_state.reduce_observation(base, rt_state.Observation(
+            rt_state.OBS_ERROR, "后端连接失败", {"terminal_reason": "x"},
+            status=rt_state.STATUS_TEMPORARY_ERROR,
+        ), step_no=2, action="sql_search")
+        self.assertNotEqual(rt_state.state_signature(base), rt_state.state_signature(errored))
+
 
 if __name__ == "__main__":
     unittest.main()

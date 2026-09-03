@@ -1,19 +1,23 @@
 """
     Agent Runtime 编排外壳（LangGraph）。
 
-    LangGraph 只承担编排：decide → execute → reduce → check 循环图与条件回环，
-    换取节点执行、条件路由与 checkpoint 就绪能力。业务语义全部在框架无关的
-    runtime 核心模块中（state / budget / completion / registry / capabilities）。
+    LangGraph 只承担编排：decide → execute → guardrail → reduce → check 循环图
+    与条件回环，换取节点执行、条件路由与 checkpoint 就绪能力。业务语义全部在
+    框架无关的 runtime 核心模块中（state / budget / completion / registry /
+    capabilities / guardrail / evaluators）。
 
     节点与流转按「是否需要 LLM」分类：
-        - decide   LLM 决策点（唯一）：模型在能力清单中选择下一动作和参数，
-                   能力清单与各能力的选择规则以提示词提供（registry.specs + decide_hint）
-        - execute  程序节点：参数校验 + 能力调用（能力内是否用 LLM 见 capabilities/ 分类）
-        - reduce   程序节点：把观察按显式规则归约进 TaskState
-        - check    程序节点：预算消耗与完成/停止判定
-        - finish   程序节点：最终输出组装
-        - 节点间流转全部是程序行为：固定边 decide→execute→reduce→check，
-          条件路由 _route_after_check 决定回环或收尾，不经 LLM
+        - decide    LLM 决策点（唯一）：模型在能力清单中选择下一动作和参数，
+                    能力清单与各能力的选择规则以提示词提供（registry.specs + decide_hint）
+        - execute   程序节点：参数校验 + 能力调用（能力内是否用 LLM 见 capabilities/ 分类）
+        - guardrail 程序节点：确定性验证 + 按能力声明语义评估 + 状态到策略映射，
+                    恢复动作（重试/修复）回 execute、再决策回 decide、接受进 reduce；
+                    语义评估的能力内 LLM 评委在能力声明中（evaluators）
+        - reduce    程序节点：把观察按显式规则归约进 TaskState
+        - check     程序节点：预算消耗、无进展检测与完成/停止判定
+        - finish    程序节点：最终输出组装
+        - 节点间流转全部是程序行为：固定边 decide→execute→guardrail→reduce→check，
+          条件路由 _route_after_guardrail / _route_after_check 决定回环或收尾，不经 LLM
 """
 
 import json
@@ -30,6 +34,7 @@ import internal.runtime.budget as rt_budget
 import internal.runtime.capabilities as rt_capabilities
 import internal.runtime.capabilities.common as caps_common
 import internal.runtime.completion as rt_completion
+import internal.runtime.guardrail as rt_guardrail
 import internal.runtime.progress as rt_progress
 import internal.runtime.registry as rt_registry
 import internal.runtime.state as rt_state
@@ -46,12 +51,17 @@ class RuntimeGraphState(typing.TypedDict):
     task: rt_state.TaskState
     decision: dict             # {action, params, reason}
     observation: rt_state.Observation
-    budget_state: rt_budget.BudgetState   # 就地消耗（步数/成本累加），不整体替换
+    budget_state: rt_budget.BudgetState   # 就地消耗（步数/成本/恢复计数累加），不整体替换
     step_no: int
-    stop_reason: str           # 预算停止原因（check 填写）
+    stop_reason: str           # 停止原因（check 填写：预算/无进展；guardrail 可直填预算）
     answer: str
     photos: list[dict]
     compose_url: str
+    decision_feedback: str     # 决策反馈通道：guardrail（再决策/换策略）与 check（无进展）写入，decide 消费后清空
+    guardrail_action: str      # 最近一次护栏结论动作，驱动 _route_after_guardrail
+    guardrail_ordinal: int     # 恢复事件序号（过程面板区分同一步内的多次恢复条目）
+    signatures: list[str]      # 最近若干步的状态签名（无进展检测窗口）
+    no_progress_hinted: bool   # 无进展已提示过换策略（第二次检出即停止）
 
 
 # --------------------------------------------------
@@ -144,17 +154,22 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
     registry = _get_registry()
     task = state["task"]
 
+    # 决策反馈通道（guardrail 再决策/换策略建议、无进展换策略提示），消费即清空
+    feedback = str(state.get("decision_feedback") or "")
     missing = rt_completion.check_completion(task).missing
     llm = llm_factory.create_llm(cfg, temperature=0.0, callbacks=callbacks or None)
     started_at = time.perf_counter()
+    human_content = (
+        f"能力列表:\n{json.dumps(registry.specs(), ensure_ascii=False)}\n\n"
+        f"当前任务状态:\n{rt_state.summarize_state(task)}\n\n"
+        f"完成要件缺口: {'、'.join(missing) if missing else '无'}\n\n"
+    )
+    if feedback:
+        human_content += f"上一决策反馈: {feedback}\n\n"
+    human_content += "选择下一步动作。"
     response = llm.invoke([
         lc_messages.SystemMessage(content=_decide_system_prompt(registry)),
-        lc_messages.HumanMessage(content=(
-            f"能力列表:\n{json.dumps(registry.specs(), ensure_ascii=False)}\n\n"
-            f"当前任务状态:\n{rt_state.summarize_state(task)}\n\n"
-            f"完成要件缺口: {'、'.join(missing) if missing else '无'}\n\n"
-            "选择下一步动作。"
-        )),
+        lc_messages.HumanMessage(content=human_content),
     ])
     duration_ms = round((time.perf_counter() - started_at) * 1000)
     parsed = caps_common.extract_json_dict(str(response.content)) or {}
@@ -164,8 +179,9 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         "reason": str(parsed.get("reason") or ""),
     }
     logger.info(
-        "[runtime] 第 %d 步决策: action=%s, params=%s",
+        "[runtime] 第 %d 步决策: action=%s, params=%s%s",
         state["step_no"] + 1, decision["action"], decision["params"],
+        f"（反馈: {feedback}）" if feedback else "",
     )
     event_data = {
         "step": state["step_no"] + 1,
@@ -176,7 +192,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         "duration_ms": duration_ms,
     }
     _emit(tracer, progress_callback, "runtime.decide", event_data)
-    return {"decision": decision, "step_no": state["step_no"] + 1}
+    return {"decision": decision, "step_no": state["step_no"] + 1, "decision_feedback": ""}
 
 
 # --------------------------------------------------
@@ -227,6 +243,91 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
     return {"observation": observation}
 
 
+# --------------------------------------------------
+# guardrail 节点 — 程序节点（确定性验证 + 按能力声明语义评估 + 恢复决策）
+# --------------------------------------------------
+
+# 恢复动作 → 过程面板条目标题前缀（沿用 AR8 过程面板机制，前端无新交互）
+_RECOVERY_TITLES = {
+    rt_guardrail.ACTION_RETRY: "重试",
+    rt_guardrail.ACTION_REPAIR: "修复重试",
+    rt_guardrail.ACTION_REDECIDE: "重新决策",
+    rt_guardrail.ACTION_FALLBACK: "调整策略",
+    rt_guardrail.ACTION_STOP: "停止",
+    rt_guardrail.ACTION_BUDGET_STOP: "停止",
+}
+
+
+def _guardrail_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
+    """护栏节点：验证观察并决定接受/重试/修复/再决策/停止（策略表驱动，无提示词约定）。"""
+    cfg, callbacks, tracer, pricing_available, progress_callback = _get_runtime_config(config)
+    registry = _get_registry()
+    observation = state["observation"]
+    decision = state["decision"]
+    action = decision.get("action", "")
+    capability = registry.get(action)
+    budget_state = state["budget_state"]
+    budget = rt_budget.Budget(
+        max_steps=cfg.runtime_max_steps,
+        timeout_seconds=cfg.runtime_timeout_seconds,
+        cost_limit=cfg.runtime_cost_limit if pricing_available else 0,
+    )
+    ctx = rt_registry.RunContext(
+        cfg=cfg,
+        granularity=state.get("granularity", "photo"),
+        question=state["question"],
+        state=state["task"],
+        llm_callbacks=callbacks,
+        tracer=tracer,
+    )
+    verdict = rt_guardrail.run_guardrail(
+        observation, capability, ctx, budget_state,
+        rt_guardrail.recovery_budget_from_config(cfg), budget,
+    )
+    logger.info(
+        "[runtime] 第 %d 步护栏: %s → %s（%s）",
+        state["step_no"], observation.status, verdict.action, verdict.reason,
+    )
+
+    update: dict = {"guardrail_action": verdict.action}
+    if verdict.action != rt_guardrail.ACTION_ACCEPT:
+        ordinal = state.get("guardrail_ordinal", 0) + 1
+        update["guardrail_ordinal"] = ordinal
+        _emit(tracer, progress_callback, "runtime.guardrail", {
+            "step": state["step_no"],
+            "ordinal": ordinal,
+            "action": action,
+            "recovery": verdict.action,
+            "title": f"{_RECOVERY_TITLES[verdict.action]}：{_capability_title(action)}",
+            "reason": verdict.reason,
+            "feedback": verdict.feedback,
+        })
+
+    if verdict.action == rt_guardrail.ACTION_ACCEPT:
+        return update
+    if verdict.action == rt_guardrail.ACTION_FALLBACK:
+        # 换策略建议注入决策上下文，由 decide 采纳，不强制改写；观察本身接受
+        update["decision_feedback"] = verdict.feedback
+        return update
+    if verdict.action == rt_guardrail.ACTION_RETRY:
+        return update  # 决策不变，回 execute 同能力同参数重试
+    if verdict.action == rt_guardrail.ACTION_REPAIR:
+        params = dict(decision.get("params") or {})
+        params["feedback"] = verdict.feedback
+        update["decision"] = {**decision, "params": params}
+        return update
+    if verdict.action == rt_guardrail.ACTION_REDECIDE:
+        update["decision_feedback"] = verdict.feedback
+        update["decision"] = {}
+        return update
+    if verdict.action == rt_guardrail.ACTION_BUDGET_STOP:
+        update["stop_reason"] = verdict.stop_reason
+        return update
+    # ACTION_STOP：以可行动文案的终态观察替换原观察，归约后正确停止
+    update["observation"] = verdict.replacement
+    return update
+
+
 def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
     """归约节点：把观察按显式规则合并进 TaskState。"""
     _, _, tracer, _, progress_callback = _get_runtime_config(config)
@@ -269,8 +370,13 @@ def _reduce_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
     return {"task": task}
 
 
+# 无进展检测窗口：连续 _NO_PROGRESS_WINDOW 步状态签名不变视为振荡（AR2-4）。
+# 两级响应：首次检出注入换策略反馈继续执行，提示后仍无进展才停止。
+_NO_PROGRESS_WINDOW = 3
+
+
 def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
-    """检查节点：程序消耗一步预算并判定完成/停止。"""
+    """检查节点：程序消耗一步预算，做无进展检测并判定完成/停止。"""
     cfg, _, tracer, pricing_available, progress_callback = _get_runtime_config(config)
     budget_state = state["budget_state"]
     budget_state.consume_step()
@@ -281,7 +387,38 @@ def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -
     )
     stop_reason = rt_budget.check_stop(budget_state, budget)
     completion = rt_completion.check_completion(state["task"])
-    if stop_reason:
+
+    # 无进展检测（AR2-4）：签名窗口不变说明每步都"成功"但状态不推进
+    update: dict = {}
+    task = state["task"]
+    signature = rt_state.state_signature(task)
+    signatures = list(state.get("signatures") or [])
+    hinted = bool(state.get("no_progress_hinted"))
+    previous = signatures[-1] if signatures else None
+    if previous is not None and signature != previous:
+        hinted = False  # 状态重新推进，换策略提示标志复位
+    signatures.append(signature)
+    del signatures[:-_NO_PROGRESS_WINDOW]
+    stalled = (
+        len(signatures) == _NO_PROGRESS_WINDOW
+        and len(set(signatures)) == 1
+        and not completion.complete
+        and not task.progress.terminal_reason
+        and not stop_reason
+    )
+    if stalled:
+        if not hinted:
+            hinted = True
+            update["decision_feedback"] = (
+                f"最近{_NO_PROGRESS_WINDOW}步任务状态没有任何变化，"
+                "请更换策略（换一种检索方式或调整参数），不要重复同一动作"
+            )
+            logger.warning("[runtime] 检测到无进展，注入换策略反馈: signature=%s", signature)
+        else:
+            stop_reason = "no_progress"
+            logger.warning("[runtime] 换策略反馈后仍无进展，停止任务: signature=%s", signature)
+
+    if stop_reason and stop_reason != "no_progress":
         logger.warning(
             "[runtime] 预算耗尽停止: reason=%s, steps=%d, elapsed=%.1fs, cost=%.4f",
             stop_reason, budget_state.steps_used,
@@ -292,14 +429,20 @@ def _check_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -
         "steps_used": budget_state.steps_used,
         "complete": completion.complete,
         "missing": completion.missing,
-        "terminal_reason": state["task"].progress.terminal_reason,
+        "terminal_reason": task.progress.terminal_reason,
         "stop_reason": stop_reason,
+        "signature": signature,
         "elapsed_ms": round(budget_state.elapsed_seconds() * 1000),
         "cost": round(budget_state.cost_used, 6),
         "cost_budget_enabled": pricing_available,
     }
     _emit(tracer, progress_callback, "runtime.check", event_data)
-    return {"stop_reason": stop_reason}
+    update.update({
+        "stop_reason": stop_reason,
+        "signatures": signatures,
+        "no_progress_hinted": hinted,
+    })
+    return update
 
 
 def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) -> dict:
@@ -330,6 +473,7 @@ def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
     event_data = {
         "steps_used": state["budget_state"].steps_used,
         "capability_calls": capability_calls,
+        "recovery_used": dict(state["budget_state"].recovery_used),
         "milestones_done": [m for m in ("locate", "candidates", "select", "copy")
                             if m not in task.progress.todo],
         "todo_left": list(task.progress.todo),
@@ -351,8 +495,21 @@ def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
 # 条件路由 — 程序判定（不经 LLM）
 # --------------------------------------------------
 
+def _route_after_guardrail(state: RuntimeGraphState) -> str:
+    """护栏结论路由：重试/修复 → execute，再决策 → decide，预算停止 → finish，其余 → reduce。"""
+    action = state.get("guardrail_action", rt_guardrail.ACTION_ACCEPT)
+    if action in (rt_guardrail.ACTION_RETRY, rt_guardrail.ACTION_REPAIR):
+        return "execute"
+    if action == rt_guardrail.ACTION_REDECIDE:
+        return "decide"
+    if action == rt_guardrail.ACTION_BUDGET_STOP:
+        return "finish"
+    # accept / fallback / stop：观察（或替换后的终态观察）进入归约
+    return "reduce"
+
+
 def _route_after_check(state: RuntimeGraphState) -> str:
-    """条件回环：完成 / 兜底终止 / 预算停止 → finish，否则 → decide。"""
+    """条件回环：完成 / 兜底终止 / 停止（预算/无进展）→ finish，否则 → decide。"""
     if state.get("stop_reason"):
         return "finish"
     if state["task"].progress.terminal_reason:
@@ -400,12 +557,17 @@ def _get_runtime_graph():
         g = lg_graph.StateGraph(RuntimeGraphState)
         g.add_node("decide", _decide_node)
         g.add_node("execute", _execute_node)
+        g.add_node("guardrail", _guardrail_node)
         g.add_node("reduce", _reduce_node)
         g.add_node("check", _check_node)
         g.add_node("finish", _finish_node)
         g.add_edge(lg_graph.START, "decide")
         g.add_edge("decide", "execute")
-        g.add_edge("execute", "reduce")
+        g.add_edge("execute", "guardrail")
+        g.add_conditional_edges(
+            "guardrail", _route_after_guardrail,
+            {"execute": "execute", "decide": "decide", "reduce": "reduce", "finish": "finish"},
+        )
         g.add_edge("reduce", "check")
         g.add_conditional_edges(
             "check", _route_after_check,
@@ -449,8 +611,15 @@ def run_runtime(
         "answer": "",
         "photos": [],
         "compose_url": "",
+        "decision_feedback": "",
+        "guardrail_action": "reduce",
+        "guardrail_ordinal": 0,
+        "signatures": [],
+        "no_progress_hinted": False,
     }
-    # 每步迭代消耗 4 个图节点，递归上限按预算步数放大并留出收尾余量
+    # 每步迭代消耗 5 个图节点（decide/execute/guardrail/reduce/check）；
+    # 恢复回环（重试/修复每次 2 节点、再决策每次 3 节点）按恢复预算放大上限
+    recovery = rt_guardrail.recovery_budget_from_config(cfg)
     runtime_config = {
         "configurable": {
             "cfg": cfg,
@@ -459,7 +628,11 @@ def run_runtime(
             "tracer": tracer,
             "progress_callback": emit_progress,
         },
-        "recursion_limit": max(50, cfg.runtime_max_steps * 5),
+        "recursion_limit": max(
+            100,
+            cfg.runtime_max_steps * (5 + 2 * (recovery.retry_max + recovery.repair_max))
+            + 3 * recovery.redecide_max + 10,
+        ),
     }
     result = _get_runtime_graph().invoke(initial, runtime_config)
     return {

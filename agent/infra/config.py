@@ -69,6 +69,9 @@ class Config:
         self.runtime_max_steps = 12
         self.runtime_timeout_seconds = 300.0
         self.runtime_cost_limit = 2.0
+        self.runtime_retry_max = 2
+        self.runtime_repair_max = 2
+        self.runtime_redecide_max = 2
         self.eval_reports_dir = ""
         self.evaluation_config_path = ""
         self.prices_path = ""
@@ -162,6 +165,17 @@ class Config:
         )
         self.runtime_cost_limit = _require_number(
             self._optional(data, "Agent", "RuntimeCostLimit", 2.0), "Agent.RuntimeCostLimit", 0
+        )
+        # Runtime 恢复预算：guardrail 内重试/修复（按能力独立计数）与再决策（全局计数）的上限，
+        # 0 表示关闭该恢复动作；恢复不消耗外层步数，但计入时长与成本
+        self.runtime_retry_max = _require_int(
+            self._optional(data, "Agent", "RuntimeRetryMax", 2), "Agent.RuntimeRetryMax", 0
+        )
+        self.runtime_repair_max = _require_int(
+            self._optional(data, "Agent", "RuntimeRepairMax", 2), "Agent.RuntimeRepairMax", 0
+        )
+        self.runtime_redecide_max = _require_int(
+            self._optional(data, "Agent", "RuntimeRedecideMax", 2), "Agent.RuntimeRedecideMax", 0
         )
 
         self.prices_path = self._require(data, "Prices", "Path")

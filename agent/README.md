@@ -79,18 +79,20 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
   - `post_studio.py`：图文工坊文案生成（VLM 描述组织为四层提示词）
   - `test_post_studio_smoke.py`：图文工坊 smoke 测试（直接 `python` 执行）
 - `runtime/` — Agent Runtime（AR1，框架无关）
-  - `budget.py`：执行预算（步数 / 超时 / 成本），配置键落在 Agent 段
+  - `budget.py`：执行预算（步数 / 超时 / 成本）与恢复预算（重试 / 修复 / 再决策计数），配置键落在 Agent 段
   - `capabilities/` — 能力包，按 LLM 参与方式分类；每个能力的实现、工具描述、用户标题、决策提示、过程细节聚合在同一代码块，新增能力只加代码块并登记
-    - `common.py`：跨能力共享辅助（执行护栏 / 能力内 LLM 调用入口 / JSON 提取 / 照片详情缓存）
+    - `common.py`：跨能力共享辅助（执行护栏 / 异常六态归类 / 能力内 LLM 调用入口 / JSON 提取 / 照片详情缓存）
     - `resolve_trip.py`：约束解析类，能力内 LLM（提示词抽取硬约束）+ 程序物化权威范围
     - `retrieval.py`：检索类（sql / rag / hybrid），能力自身不调 LLM（SQL 生成封装在 text_to_sql 内）
     - `photo_tools.py`：程序工具类（Go 后端 HTTP 工具），全程无 LLM
     - `creation.py`：创作类（select_photos / write_post），能力内 LLM，含 CQ4 迁移来的连拍折叠与两级收缩
   - `completion.py`：任务完成检查
-  - `graph.py`：LangGraph 编排外壳，decide → execute → reduce → check 循环图；decide 是唯一 LLM 决策点（能力清单经提示词提供），其余节点与流转均为程序行为
-  - `progress.py`：Runtime 过程事件归约为用户过程快照（标题由能力定义随事件携带）
-  - `registry.py`：能力注册表（Capability 含 name/title/description/parameters/run/decide_hint/progress_details）
-  - `state.py`：TaskState 任务状态与归约规则，开放目标任务的唯一事实源
+  - `evaluators.py`：语义质量门（选片代表性 / 文案事实依据），接受前的质量门，不改变完成要件
+  - `graph.py`：LangGraph 编排外壳，decide → execute → guardrail → reduce → check 循环图；decide 是唯一 LLM 决策点（能力清单经提示词提供），其余节点与流转均为程序行为
+  - `guardrail.py`：护栏与恢复策略，「状态 → 策略」映射表（重试 / 修复 / 再决策 / 换策略建议 / 正确停止），恢复有界且不绕过时长成本预算
+  - `progress.py`：Runtime 过程事件归约为用户过程快照（标题由能力定义随事件携带，恢复动作作为独立条目）
+  - `registry.py`：能力注册表（Capability 含 name/title/description/parameters/run/decide_hint/progress_details/repairable_reasons/evaluator）
+  - `state.py`：TaskState 任务状态、归约规则与状态签名（无进展检测），开放目标任务的唯一事实源
 - `topics/` — 选题发现线
   - `cluster.py`：照片向量聚类（UMAP 降维 + HDBSCAN），主题发现的聚类基础
   - `suggest.py`：选题建议三阶段管线（直觉生成 / 扩选 / 提案）

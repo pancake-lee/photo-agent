@@ -99,20 +99,24 @@ flowchart TD
 flowchart TD
     S["START 开放目标"] --> DC["decide<br>LLM 在能力列表中选择下一动作"]
     DC --> EX["execute<br>程序校验参数并调用能力"]
-    EX --> RD["reduce<br>观察归约进 TaskState"]
-    RD --> CK["check<br>完成检查 + 预算判定"]
+    EX --> GR["guardrail<br>确定性验证 + 语义质量门<br>+ 状态到策略映射"]
+    GR -->|"接受"| RD["reduce<br>观察归约进 TaskState"]
+    GR -->|"瞬时重试 / 带反馈修复"| EX
+    GR -->|"无效决策再决策"| DC
+    RD --> CK["check<br>完成检查 + 预算判定<br>+ 无进展检测"]
     CK -->|"要件未齐且预算可用"| DC
     CK -->|"要件齐备"| FN["finish<br>标题文案 + 入选照片引用"]
     CK -->|"候选超限兜底"| FH["finish<br>图文工坊深链"]
-    CK -->|"预算耗尽"| FS["finish<br>说明已完成与缺口"]
+    CK -->|"预算耗尽 / 无进展"| FS["finish<br>说明已完成与缺口"]
 ```
 
-- **分层**：`agent/runtime/` 中 state（TaskState + 显式归约）、budget（步数/时长/成本）、completion（确定性完成检查）、registry（能力注册表 + 参数校验）为框架无关纯 Python；graph.py 仅用 LangGraph 表达循环图与条件回环
+- **分层**：`agent/runtime/` 中 state（TaskState + 显式归约 + 状态签名）、budget（步数/时长/成本 + 恢复计数）、completion（确定性完成检查）、registry（能力注册表 + 参数校验 + 质量门/可修复声明）、guardrail（恢复策略表）、evaluators（语义质量门）为框架无关纯 Python；graph.py 仅用 LangGraph 表达循环图与条件回环
 - **TaskState**：goal（目标类型 + 完成要件）/ constraints（用户原始约束）/ resolved_facts（推断事实）/ scope（权威候选范围：硬约束条件 + 物化 ID 集 + 是否受限）/ artifacts（候选与入选照片 ID、文案草稿，大对象只存引用）/ progress（待办里程碑 + 有界历史）
 - **权威范围（AR9）**：resolve_trip 先做约束解析（LLM 只抽取，时间线确定性匹配、时段查固定映射表转小时窗），再由程序只按硬约束（时间线 + 天序 + 小时窗，经 `localtime` 统一本地时区）拼装范围 SQL 物化为权威范围；软提示只影响范围内排序，归约层对候选统一求交集、零命中回落整个范围；受限空范围进入 empty_scope 确定性终态
 - **能力层**：sql_search / rag_search / hybrid_search（检索，query 只承载软提示，候选受范围交集约束）、resolve_trip（约束解析 + 范围物化）/ fetch_photo_details（Go 工具）、select_photos（连拍折叠 + 两级收缩 + 超限深链 + 范围归属校验，迁移自 Compose 管线）/ write_post（复用图文工坊提示词栈）
-- **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加
-- **追踪**：tracer 输出 runtime.decide / execute / observe / check 步骤事件与 trace_summary 轨迹摘要（步数、能力调用、里程碑、结束形态）
+- **护栏与恢复（AR2-3/4/5）**：guardrail 按「状态 → 策略」映射执行恢复，temporary 同能力同参数有界重试、invalid 决策侧摘要反馈再决策 / 能力侧（能力声明可修复）带反馈修复、permanent 确定性终态、恢复耗尽以可行动文案停止；语义质量门（选片代表性 / 文案事实依据）在确定性检查通过后按能力声明触发，不通过进修复环；无进展检测以状态签名（事实键 + 候选摘要 + 要件缺口 + 最近错误）连续不变判定，先注入换策略反馈、仍无进展才停止
+- **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加；恢复预算 `RuntimeRetryMax / RuntimeRepairMax / RuntimeRedecideMax`（重试/修复按能力独立计数，再决策全局计数），恢复不消耗步数但计入时长与成本
+- **追踪**：tracer 输出 runtime.decide / execute / guardrail（恢复动作）/ observe / check 步骤事件与 trace_summary 轨迹摘要（步数、能力调用、恢复计数、里程碑、结束形态）
 
 ### 3.3 Combined 组合查询详解
 

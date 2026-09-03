@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
 import langchain_core.messages as lc_messages
+import urllib3.exceptions
 
 import infra.http_client as http_utils
 import infra.llm_factory as llm_factory
@@ -30,9 +31,15 @@ logger = logging.getLogger(__name__)
 # 执行护栏
 # --------------------------------------------------
 
-# 瞬时异常族：网络传输/超时类（httpx.TransportError 覆盖连接失败与读写超时）。
-# SDK、LLM、解析等其余异常默认按 permanent 归类，宁可正确停止也不盲目重试。
-_TEMPORARY_EXCEPTION_TYPES = (httpx.TransportError, TimeoutError)
+# 瞬时异常族：网络传输/超时类。httpx.TransportError 覆盖详情/直连的连接失败与
+# 读写超时；urllib3.MaxRetryError 是 Go 后端 SDK（swagger/urllib3 栈）连接失败
+# 与读超时的统一外层（DNS 解析失败、连接拒绝重试耗尽都落在它上面）。
+# LLM、解析等其余异常默认按 permanent 归类，宁可正确停止也不盲目重试。
+_TEMPORARY_EXCEPTION_TYPES = (
+    httpx.TransportError,
+    TimeoutError,
+    urllib3.exceptions.MaxRetryError,
+)
 
 
 def classify_exception(exc: Exception) -> str:

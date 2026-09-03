@@ -10,12 +10,12 @@
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
 | Done | Agent Runtime | AR2-1 | SQL 校验器根因修复（接受 WITH 只读查询） | 自动验证通过 |
 | Done | Agent Runtime | AR2-2 | Observation 状态分类（六态）              | 自动验证通过 |
-| 已规划 | Agent Runtime | AR2-3 | Guardrail 恢复策略与重试预算              |      |
-| 已规划 | Agent Runtime | AR2-4 | 无进展检测（状态签名）                    |      |
-| 已规划 | Agent Runtime | AR2-5 | 语义 evaluator（选片+文案质量门）         |      |
+| Done | Agent Runtime | AR2-3 | Guardrail 恢复策略与重试预算              | 自动验证通过 |
+| Done | Agent Runtime | AR2-4 | 无进展检测（状态签名）                    | 自动验证通过 |
+| Done | Agent Runtime | AR2-5 | 语义 evaluator（选片+文案质量门）         | 自动验证通过 |
 | Done | Agent Runtime | AR2-6 | Ask vs Act 扩展（多匹配澄清）             | 自动验证通过 |
 | 已规划 | Agent Runtime | AR2-7 | 故障注入回归集与 V2 指标基线              |      |
-| 待规划 | Agent Runtime | AR15 | Runtime 任务空间一维化（发帖 goal 特化）  |      |
+| 暂缓 | Agent Runtime | AR15 | Runtime 任务空间一维化（发帖 goal 特化）  |      |
 | 待规划 | 对话查询   | CQ7   | 聊天 SQL 日期过滤未换算本地时区              |      |
 | 待规划 | 图片交互   | DL1   | 图片管理与对话结果的批量下载                 |      |
 | Done | Agent Runtime | AR11 | 相对旅行日歧义与会话内澄清               | 实际请求验收通过 |
@@ -50,25 +50,31 @@
 
 ### AR2-3 Guardrail 恢复策略与重试预算
 
-- **状态**：已规划（2026-09-03），依赖 AR2-2
+- **状态**：Done（2026-09-03，AI 自动验收）
 - **背景**：恢复策略当前不存在：后端断连等瞬时故障（trace 1 次）直接终态；invalid_decision 一次 JSON 失误任务死亡；选片空结果（trace 10 次）无重试机会。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.1、§4.4。
 - **方案**：execute 与 reduce 之间插入 guardrail 程序节点：确定性验证 → 按能力声明触发语义评估（AR2-5 接入）→ 查「状态 → 策略」映射表。策略：temporary 同能力同参数有界重试；defect 带失败反馈修复重执行；fallback 以建议注入 decide 不强制改写；invalid 错误摘要进再决策上下文，均有界计数。BudgetState 增加单能力重试计数，guardrail 内重试不消耗外层步数但计入时长与成本；配置模板补重试预算键。恢复动作输出过程面板事件（沿用 AR8 机制，前端无新交互）。
 - **验收**：注入 temporary 故障后重试成功或正确停止；invalid 决策经反馈重新决策成功（有界）；permanent 正确停止且回复文案可行动；重试不绕过时长/成本预算。
-- **（用户）可选取证**：暂停 Go 后端后发一次 Runtime 请求，确认回复为可行动的停止说明而非裸错误。
+- **实施记录**：新增 `internal/runtime/guardrail.py`（状态到策略映射 + 有界恢复骨架，恢复前预算先行检查），graph 在 execute 与 reduce 之间插入 guardrail 节点并条件路由（重试/修复回 execute、再决策回 decide、预算停止直收尾）；BudgetState 新增 recovery_used 计数（重试/修复按能力独立、再决策全局），配置键 `RuntimeRetryMax/RuntimeRepairMax/RuntimeRedecideMax`（默认 2，0 关闭）；修复环经能力声明的 `feedback` 参数注入重执行提示词（select_photos 声明 photo_selection_failed/selection_out_of_scope 可修复）；再决策走 decision_feedback 通道（guardrail 写入、decide 消费后清空）；恢复动作以 runtime.guardrail 事件输出过程面板独立条目（重试/修复重试/重新决策/调整策略/停止）；恢复耗尽的终态（retry/repair/redecide_exhausted）携带可行动建议文案。实施中发现并修复异常归类缺口：SQL 执行走 Go 后端 SDK（urllib3 栈），真实断连形态是 `urllib3.MaxRetryError` 而非 httpx 异常，已补入瞬时异常族（否则后端断连仍会被归 permanent 一次终局）。
+- **AI 自动验证**：新增 guardrail 策略表/质量门/评委/配置单测 26 项与图级恢复回归（瞬时故障重试后成功、重试耗尽可行动停止、无效决策反馈再决策成功且有界、恢复事件进过程面板）；Agent 全量单测 282/282 通过。
+- **（用户）可选取证**（未执行，可选）：暂停 Go 后端后发一次 Runtime 请求，确认回复为可行动的停止说明而非裸错误。
 
 ### AR2-4 无进展检测（状态签名）
 
-- **状态**：已规划（2026-09-03），依赖 AR2-3
+- **状态**：Done（2026-09-03，AI 自动验收）
 - **背景**：恢复机制引入后，「每步都成功但状态不变」的振荡成为新风险；AR7 时代靠终态硬停，guardrail 时代需要显式无进展判定。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.4。
 - **方案**：check 节点计算状态签名（已确认事实键、候选集合摘要、完成要件状态、最近错误类别），连续若干步签名不变时强制换策略或停止。
 - **验收**：构造签名不变的连续步骤（mock 能力恒返同结果），系统换策略或停止；正常推进路径签名变化不受影响。
+- **实施记录**：`state.state_signature` 以四维（事实键集合、候选 ID 摘要、完成要件缺口、最近错误）生成可比较摘要；check 节点维护 3 步签名窗口，两级响应：首次检出经 decision_feedback 注入换策略反馈继续执行，提示后仍无进展以 no_progress 停止（状态重新推进时提示标志复位）；最终输出 no_progress 分支说明已完成/仍缺少并建议更换说法，不误报预算耗尽。
+- **AI 自动验证**：新增签名稳定性/推进可感知（候选、选片、文案、事实、错误各自改变签名）与图级无进展回归（重复同结果检索先收换策略反馈、仍无进展停止、正常三步路径不触发反馈）；Agent 全量单测 282/282 通过。
 
 ### AR2-5 语义 evaluator（选片+文案质量门）
 
-- **状态**：已规划（2026-09-03），依赖 AR2-3
+- **状态**：Done（2026-09-03，AI 自动验收）
 - **背景**：V1 完成检查刻意不含语义质量，避免过早引入 Judge。全量 V2 引入两个质量门：选片代表性（覆盖场景与时段、避免近重复）与文案事实依据（事实断言有照片依据，不虚构）。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.3。
 - **方案**：评估接口输入产物与评价维度，输出「通过 / 不通过 + 具体反馈」；guardrail 在确定性检查通过后按能力声明触发；不通过时反馈进入带反馈修复环（有界），修复耗尽以质量未达标终态停止。evaluator 是接受前的质量门，不改变完成要件（selected_photos + copy_draft）。
 - **验收**：构造含虚构事实的文案被拒并带反馈重写后通过；正常文案样本不误杀；修复环有界。
+- **实施记录**：新增 `internal/runtime/evaluators.py`：evaluate_selection（入选近重复与场景/时段多样性，证据为入选详情 + 候选规模）与 evaluate_copy（文案事实断言 vs 入选照片缓存描述），评委输出 JSON「passed + feedback」，输出不可解析时按通过处理（不误杀正常产物）；Capability 新增 evaluator 声明，guardrail 在确定性状态 success 且能力声明时触发，不通过走修复环（与能力侧缺陷共享每能力修复预算），修复耗尽以 quality_gate_failed 终态停止并给出可调整建议；完成要件判定不变；候选交付模式与非主成功观察（超限深链等）不做质量门。
+- **AI 自动验证**：新增评委接口单测（终态路径跳过、候选模式跳过、证据与文案进提示词、虚构事实被拒带反馈、不可解析输出不误杀）与图级质量门回归（虚构大雁塔文案被拒、反馈进入重写提示词、重写通过后正常交付且不重新决策）；Agent 全量单测 282/282 通过。
 
 ### AR2-6 Ask vs Act 扩展（多匹配澄清）
 
@@ -211,6 +217,7 @@
 
 ## 决策历史
 
+- **2026-09-03**：V2 第二批开发关单（AR2-3、AR2-4、AR2-5，均为 AI 自动验收）。guardrail 落地为 execute 与 reduce 之间的程序节点，按「状态 → 策略」映射执行有界恢复（重试/修复/再决策，恢复预算键 RuntimeRetryMax/RepairMax/RedecideMax），恢复不消耗步数但计入时长成本且预算先行检查；无进展检测以四维状态签名 3 步窗口两级响应（先换策略反馈、仍无进展停止）；语义质量门（选片代表性 + 文案事实依据）在确定性检查通过后按能力声明触发，不通过带反馈修复、耗尽以 quality_gate_failed 停止，完成要件不变；SDK（urllib3）连接失败补入瞬时异常族。Agent 全量单测 282/282 通过。
 - **2026-09-03**：V2 第一批开发关单（AR2-1、AR2-2、AR2-6，均为 AI 自动验收）。SQL 校验器接受 WITH 只读 CTE 查询；观察新增六态 status 维度且失败观察强制显式归类；时间线多匹配走澄清并复用 AR11 续跑管道。Agent 全量单测 239/239 通过。
 - **2026-09-02**：v1.0.16 归档。完成 Agent Runtime 多步执行全链路（AR 系列 11 项）、agent 工程治理（TIDY5–TIDY7）、价格配置故障隔离（CFG8）、过程反馈与日志 Trace 关联（AR8/OBS1）、黄金用例语义收紧（GQ1）、导航恢复（NAV1）与归档前检查规则（EVAL1），共 20 项任务；聊天 SQL 时区漂移登记为 CQ7 待规划；BQ3 继续暂缓，CQ4 已取代关闭。
 - **2026-09-02**：TIDY7 执行。coding-conventions.md 通用规范新增「同级同构（宽泛指引）」与锚点「调用参数同级同构」（宽泛原则与可执行锚点两层结构，宽泛条目自带作用域限定：只对齐局部、不主动重构存量）；随后按用户指令对 agent/ 存量做一次扫描重构，10 处多行匿名位置 dict 提取命名，219 测试全绿。

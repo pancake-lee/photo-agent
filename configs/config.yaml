@@ -72,6 +72,11 @@ Agent:
   RuntimeMaxSteps: 12
   RuntimeTimeoutSeconds: 300
   RuntimeCostLimit: 2.0
+  # Runtime 恢复预算：瞬时重试 / 带反馈修复按能力独立计数，再决策全局计数；
+  # 0 关闭该恢复动作。恢复不消耗步数，但计入时长与成本。
+  RuntimeRetryMax: 2
+  RuntimeRepairMax: 2
+  RuntimeRedecideMax: 2
 
 Web:
   Addr: "0.0.0.0:10006"
