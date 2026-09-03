@@ -359,10 +359,10 @@ def _validate_sql_safe(sql: str) -> None:
     """
     校验 SQL 安全性，不安全则抛出 ValueError。
 
-    仅允许 SELECT 查询。
+    仅允许只读查询（SELECT 或 WITH ... SELECT）。
     """
     if not sqlite_client.validate_select_only(sql):
-        raise ValueError(f"生成的 SQL 未通过安全校验（仅允许 SELECT）: {sql[:200]}")
+        raise ValueError(f"生成的 SQL 未通过安全校验（仅允许只读查询）: {sql[:200]}")
 
 
 def _log_generated_sql(question: str, raw_text: str, sql: str, elapsed_ms: int) -> None:

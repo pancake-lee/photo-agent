@@ -45,7 +45,7 @@ class QueryClient:
         执行 SELECT 查询。
 
         参数:
-            sql:   SQL 查询字符串（必须是 SELECT）
+            sql:   SQL 查询字符串（SELECT 或 WITH ... SELECT 只读查询）
             limit: 最大返回行数
 
         返回:
@@ -56,7 +56,7 @@ class QueryClient:
             Exception: SDK 调用失败
         """
         if not validate_select_only(sql):
-            raise ValueError(f"SQL 校验失败: 仅允许 SELECT 查询。SQL: {sql[:100]}")
+            raise ValueError(f"SQL 校验失败: 仅允许只读查询（SELECT / WITH ... SELECT）。SQL: {sql[:100]}")
 
         req = sdk.ApiExecuteSQLRequest(sql=sql, limit=limit)
         return self._api.query_service_execute_sql(req)
@@ -99,8 +99,9 @@ def validate_select_only(sql: str) -> bool:
     校验 SQL 是否仅为 SELECT 查询。
 
     检查点:
-        1. 去除前后空白后必须以 SELECT 开头（不区分大小写）
+        1. 去除前后空白后必须以 SELECT 或 WITH 开头（不区分大小写，WITH 承载 CTE 只读查询）
         2. 不包含危险关键字: INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, REPLACE, ATTACH, DETACH, PRAGMA
+           （WITH 前缀同样可以修饰 DELETE/INSERT 等，由关键字拦截兜住）
 
     参数:
         sql: SQL 字符串
@@ -134,9 +135,9 @@ def validate_select_only(sql: str) -> bool:
             first_line = line
             break
 
-    # 必须以 SELECT 开头
+    # 必须以 SELECT 或 WITH 开头（CTE 只读查询以 WITH 开头）
     upper = first_line.upper()
-    if not upper.startswith("SELECT"):
+    if not (upper.startswith("SELECT") or upper.startswith("WITH")):
         return False
 
     # 禁止危险关键字（全词匹配）
@@ -184,7 +185,7 @@ def safe_execute(
         Exception: SDK 调用失败
     """
     if not validate_select_only(sql):
-        raise ValueError(f"SQL 校验失败: 仅允许 SELECT 查询。SQL: {sql[:100]}")
+        raise ValueError(f"SQL 校验失败: 仅允许只读查询（SELECT / WITH ... SELECT）。SQL: {sql[:100]}")
 
     client = QueryClient(base_url)
     return client.query(sql, limit=limit)

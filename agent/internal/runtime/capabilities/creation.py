@@ -72,6 +72,7 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
     if not candidates:
         return rt_state.Observation(
             rt_state.OBS_ERROR, "没有候选照片，请先用检索能力获取候选",
+            status=rt_state.STATUS_INVALID_INPUT,
         )
 
     photos = common.cached_photos(ctx, candidates)
@@ -80,6 +81,8 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
             rt_state.OBS_ERROR,
             f"无法获取候选照片详情（0/{len(candidates)} 张），无法继续挑选",
             {"terminal_reason": "photo_details_unavailable", "ids": candidates},
+            # 详情拉取失败以 Go 后端不可达/超时为主，按瞬时故障归类（有界重试后停止）
+            status=rt_state.STATUS_TEMPORARY_ERROR,
         )
     mode, collapsed = prepare_select_candidates(
         photos, ctx.cfg.compose_group_limit, ctx.cfg.compose_cover_limit,
@@ -137,19 +140,27 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
                 rt_state.OBS_ERROR,
                 f"挑选结果中有 {len(out_of_scope)} 张不属于权威候选范围，已阻断交付",
                 {"terminal_reason": "selection_out_of_scope", "ids": out_of_scope},
+                # 模型输出越界属能力侧输出缺陷，带失败反馈修复重执行（AR2-3）
+                status=rt_state.STATUS_INVALID_INPUT,
             )
     if not valid_ids:
         return rt_state.Observation(
             rt_state.OBS_ERROR,
             "挑选结果为空或均不在候选内，无法继续生成文案",
             {"terminal_reason": "photo_selection_failed"},
+            # 挑选空结果是最高频的模型输出缺陷，带失败反馈修复重执行（AR2-3）
+            status=rt_state.STATUS_INVALID_INPUT,
         )
     photo_by_id = {p.get("id"): p for p in photos}
     selected_details = [dict(photo_by_id[pid]) for pid in valid_ids]
+    # 数量类可回退歧义：未指定张数时沿用默认档位并记录假设，不询问用户（Ask vs Act）
+    payload = {"ids": valid_ids, "photos": selected_details}
+    if not isinstance(params.get("max_photos"), int):
+        payload["assumption"] = "未指定入选数量，按默认 4-9 张挑选"
     return rt_state.Observation(
         rt_state.OBS_PHOTOS_SELECTED,
         f"已挑选 {len(valid_ids)} 张发布照片",
-        {"ids": valid_ids, "photos": selected_details},
+        payload,
     )
 
 
@@ -187,6 +198,7 @@ def _write_post(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
     if not selected:
         return rt_state.Observation(
             rt_state.OBS_ERROR, "尚未挑选照片，请先执行 select_photos",
+            status=rt_state.STATUS_INVALID_INPUT,
         )
 
     photos = [types.SimpleNamespace(**p) for p in common.cached_photos(ctx, selected)]
@@ -198,8 +210,12 @@ def _write_post(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
     if warnings:
         summary += "；" + "；".join(warnings)
     logger.info("[runtime] write_post 完成: 标题=%r, 正文 %d 字", title, len(content))
+    payload = {"title": title, "content": content}
+    # 风格类可回退歧义：未指定风格时沿用默认并记录假设，不询问用户（Ask vs Act）
+    if not params.get("style"):
+        payload["assumption"] = "未指定文案风格，默认「自由」"
     return rt_state.Observation(
-        rt_state.OBS_COPY_DRAFTED, summary, {"title": title, "content": content},
+        rt_state.OBS_COPY_DRAFTED, summary, payload,
     )
 
 

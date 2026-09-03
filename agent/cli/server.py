@@ -792,7 +792,10 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
         pending = s.get_runtime_clarification(session_id)
         routed_question = question
         if pending is not None:
-            routed_question = f"{pending['original_goal']}\n用户确认日期：{question}"
+            # 澄清回复类型决定续跑提示的标签（日期/时间线），避免把时间线名误标成日期
+            confirm_kind = (pending.get("clarification") or {}).get("confirm_kind", "date")
+            label = "时间线" if confirm_kind == "timeline" else "日期"
+            routed_question = f"{pending['original_goal']}\n用户确认{label}：{question}"
         is_first_message = s.is_first_message(session_id)
         # 保存用户消息
         s.add_message(session_id, "user", question)

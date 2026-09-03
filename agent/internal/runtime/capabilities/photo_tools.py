@@ -14,13 +14,18 @@ def _fetch_photo_details(params: dict, ctx: rt_registry.RunContext) -> rt_state.
     """获取指定照片的详情（文件名、拍摄时间、描述、连拍组）。"""
     ids = [str(pid) for pid in params.get("ids") or []]
     if not ids:
-        return rt_state.Observation(rt_state.OBS_ERROR, "未指定要获取详情的照片 ID")
+        return rt_state.Observation(
+            rt_state.OBS_ERROR, "未指定要获取详情的照片 ID",
+            status=rt_state.STATUS_INVALID_INPUT,
+        )
     photos = common.cached_photos(ctx, ids)
     if not photos:
         return rt_state.Observation(
             rt_state.OBS_ERROR,
             f"无法获取候选照片详情（0/{len(ids)} 张），无法继续挑选",
             {"terminal_reason": "photo_details_unavailable", "ids": ids},
+            # 详情拉取失败以 Go 后端不可达/超时为主，按瞬时故障归类（有界重试后停止）
+            status=rt_state.STATUS_TEMPORARY_ERROR,
         )
     return rt_state.Observation(
         rt_state.OBS_PHOTO_DETAILS,

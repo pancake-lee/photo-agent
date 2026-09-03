@@ -51,6 +51,17 @@ OBS_COPY_DRAFTED = "copy_drafted"
 OBS_NEEDS_CLARIFICATION = "needs_clarification"
 OBS_ERROR = "error"
 
+# Observation 恢复状态（六态）：kind 回答「观察对任务状态意味着什么」（归约分派），
+# status 回答「系统应如何反应」（接受/重试/修复/换策略/再决策/停止）。
+# 语义性结果（空结果、契约违规、低置信）由能力作者显式声明，
+# 能力异常在执行护栏处按异常类型归类（网络超时类 → temporary，其余默认 permanent）。
+STATUS_SUCCESS = "success"                  # 接受，进入归约
+STATUS_EMPTY = "empty"                      # 语义空结果：有兜底时是合法观察，无兜底给换策略建议
+STATUS_INVALID_INPUT = "invalid_input"      # 参数或输出不符合契约：决策侧反馈 decide，能力侧带反馈修复
+STATUS_TEMPORARY_ERROR = "temporary_error"  # 瞬时故障（网络、超时、限流）：同能力同参数有界重试
+STATUS_PERMANENT_ERROR = "permanent_error"  # 前置不满足或确定性失败：正确停止，文案可行动
+STATUS_LOW_CONFIDENCE = "low_confidence"    # 有结果但证据不足：触发语义评估或补充检索（AR2-5 接入）
+
 # 有界集合上限，防止状态无限膨胀
 _HISTORY_MAX = 50
 _ERRORS_MAX = 10
@@ -125,14 +136,21 @@ class TaskState:
 class Observation:
     """能力执行的结构化观察，归约的唯一输入。
 
-    kind    归约分派键（OBS_* 常量）
+    kind    归约分派键（OBS_* 常量）：观察对任务状态意味着什么
     summary 给决策与轨迹的一句话摘要
     payload 归约所需的数据
+    status  恢复状态（STATUS_* 常量）：系统应如何反应，恢复策略的唯一触发输入
     """
 
     kind: str
     summary: str
     payload: dict = dataclasses.field(default_factory=dict)
+    status: str = STATUS_SUCCESS
+
+    def __post_init__(self) -> None:
+        # 错误观察不允许默认 success：失败必须显式归类，否则恢复层会误按「接受」处理
+        if self.kind == OBS_ERROR and self.status == STATUS_SUCCESS:
+            raise ValueError("OBS_ERROR 观察必须显式携带非 success 的 status（STATUS_* 常量）")
 
 
 def new_goal(goal_type: str, description: str) -> Goal:
@@ -289,6 +307,7 @@ def _apply_photos_selected(state: TaskState, obs: Observation) -> None:
         if pid:
             state.artifacts.photo_cache[pid] = photo
     _trim_photo_cache(state)
+    _record_assumption(state, obs)
     _finish_milestone(state, "select")
 
 
@@ -304,7 +323,25 @@ def _apply_copy_drafted(state: TaskState, obs: Observation) -> None:
         "title": str(obs.payload.get("title") or ""),
         "content": str(obs.payload.get("content") or ""),
     }
+    _record_assumption(state, obs)
     _finish_milestone(state, "copy")
+
+
+# 可回退歧义的默认值假设上限（数量、风格各一条即可覆盖重选/重写场景）
+_ASSUMPTIONS_MAX = 5
+
+
+def _record_assumption(state: TaskState, obs: Observation) -> None:
+    """可回退歧义的默认值假设（未指定数量/风格）记入已确认事实，不询问用户。
+
+    假设对决策摘要与最终输出可见，用户事后可要求调整；只记录、不触发任何交互。
+    """
+    assumption = obs.payload.get("assumption")
+    if not assumption:
+        return
+    assumptions = state.resolved_facts.setdefault("assumptions", [])
+    assumptions.append(str(assumption))
+    del assumptions[:-_ASSUMPTIONS_MAX]
 
 
 def _apply_needs_clarification(state: TaskState, obs: Observation) -> None:

@@ -8,12 +8,12 @@
 
 | 状态   | 分组       | 编号  | 任务                                         | 评估 |
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
-| 已规划 | Agent Runtime | AR2-1 | SQL 校验器根因修复（接受 WITH 只读查询） |      |
-| 已规划 | Agent Runtime | AR2-2 | Observation 状态分类（六态）              |      |
+| Done | Agent Runtime | AR2-1 | SQL 校验器根因修复（接受 WITH 只读查询） | 自动验证通过 |
+| Done | Agent Runtime | AR2-2 | Observation 状态分类（六态）              | 自动验证通过 |
 | 已规划 | Agent Runtime | AR2-3 | Guardrail 恢复策略与重试预算              |      |
 | 已规划 | Agent Runtime | AR2-4 | 无进展检测（状态签名）                    |      |
 | 已规划 | Agent Runtime | AR2-5 | 语义 evaluator（选片+文案质量门）         |      |
-| 已规划 | Agent Runtime | AR2-6 | Ask vs Act 扩展（多匹配澄清）             |      |
+| Done | Agent Runtime | AR2-6 | Ask vs Act 扩展（多匹配澄清）             | 自动验证通过 |
 | 已规划 | Agent Runtime | AR2-7 | 故障注入回归集与 V2 指标基线              |      |
 | 待规划 | Agent Runtime | AR15 | Runtime 任务空间一维化（发帖 goal 特化）  |      |
 | 待规划 | 对话查询   | CQ7   | 聊天 SQL 日期过滤未换算本地时区              |      |
@@ -32,17 +32,21 @@
 
 ### AR2-1 SQL 校验器根因修复（接受 WITH 只读查询）
 
-- **状态**：已规划（2026-09-03）
+- **状态**：Done（2026-09-03，AI 自动验收）
 - **背景**：trace 中 hybrid_search 生成的合法 `WITH ... SELECT` 只读 CTE 查询被「必须以 SELECT 开头」的安全校验误杀，任务以 capability_execution_failed 终态。属校验器根因缺陷，非模型输出问题。
 - **方案**：`agent/infra/sqlite_client.py` 的 `validate_select_only` 接受 WITH 开头的只读查询，危险关键字拦截不变；聊天 SQL 链路与 Runtime 检索能力同步受益。详见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) 决策 5。
 - **验收**：CTE 只读查询通过校验；INSERT/DELETE/DROP 等危险语句仍拦截；聊天 SQL 与 Runtime 相关单测全绿。
+- **实施记录**：校验器首词检查放宽为 SELECT 或 WITH 开头；WITH 前缀可修饰 DELETE/INSERT 的旁路由既有全词危险关键字拦截兜住；校验失败提示文案同步为「仅允许只读查询（SELECT / WITH ... SELECT）」。
+- **AI 自动验证**：新增 9 个 CTE 校验单测（合法 CTE 通过、WITH 修饰 DELETE/INSERT/DROP/CREATE 拦截、大小写与注释前缀）；Agent 全量单测 239/239 通过。
 
 ### AR2-2 Observation 状态分类（六态）
 
-- **状态**：已规划（2026-09-03）
+- **状态**：Done（2026-09-03，AI 自动验收）
 - **背景**：当前观察只有 kind（归约分派键），失败一律 OBS_ERROR 加 terminal_reason，AR7 的防循环代价是一次失败即终局，V2 需要失败可分类。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.2。
 - **方案**：观察新增 status 维度，六态：success / empty / invalid_input / temporary_error / permanent_error / low_confidence，kind 语义不变。能力执行护栏按异常类型归类（网络超时类 → temporary，其余默认 permanent），能力作者对语义结果（空结果、低置信）显式声明状态；既有终态（empty_scope、candidate_overflow、needs_clarification、trip_unresolved 等）映射为对应状态的默认策略。涉及 `agent/internal/runtime/state.py` 与 `capabilities/*`。
 - **验收**：七个能力对六态有明确映射；现有全量单测不回归（本阶段终态行为不变，仅补分类维度）。
+- **实施记录**：Observation 新增 status 字段（默认 success）并在构造时强制「OBS_ERROR 必须显式携带非 success 状态」；能力执行护栏新增 `classify_exception`（httpx 传输/超时类 → temporary，其余默认 permanent）与 `retrieval_status`（检索空结果 → empty）；七个能力全部产出点显式声明状态：empty_scope → empty、trip_unresolved → permanent、检索空结果 → empty、详情不可用 → temporary、参数/输出契约违规（含挑选空结果、越界、决策顺序错误、invalid_decision）→ invalid_input、设计内终态（澄清、超限深链）→ success。low_confidence 常量就位，待 AR2-5 evaluator 接入时产生首个生产者。
+- **AI 自动验证**：新增/扩展六态与异常归类单测 14 项；Agent 全量单测 239/239 通过，终态行为无回归。
 
 ### AR2-3 Guardrail 恢复策略与重试预算
 
@@ -68,10 +72,12 @@
 
 ### AR2-6 Ask vs Act 扩展（多匹配澄清）
 
-- **状态**：已规划（2026-09-03）
+- **状态**：Done（2026-09-03，AI 自动验收）
 - **背景**：`resolve_trip` 的时间线名称多条匹配时静默选第一条，两次同名旅行会选出完全不同的照片，猜错影响大。设计见 [V2 设计](design/2026-09-03-1-agent-runtime-v2-design.md) §4.5。
 - **方案**：时间线名称多条匹配时走 needs_clarification，复用 AR11 会话澄清与续跑管道，仅扩充触发条件；数量类可回退歧义（选几张、风格）沿用默认值并在 resolved_facts 记录假设，不询问。
 - **验收**：两条相似时间线触发澄清而非静默选择（确定性单测，mock 时间线列表）；单匹配路径不受影响；AR11 澄清续跑链路不回归。
+- **实施记录**：名称匹配改为「精确 → 去空白等价 → 包含」三层各返回全部命中，多条命中产出 `needs_clarification`（payload 带 confirm_kind=timeline 与候选名称清单），单命中与精确命中行为不变；澄清 payload 统一携带 confirm_kind，会话续跑前缀按其区分「用户确认日期/时间线」；select_photos 未指定数量、write_post 未指定风格时沿用默认并在归约时记入 resolved_facts.assumptions（有界），不询问。
+- **AI 自动验证**：新增多匹配澄清、精确命中优先、单匹配不受影响、默认值假设记录等确定性单测 8 项；Agent 全量单测 239/239 通过，AR11 相对日澄清用例不回归。
 
 ### AR2-7 故障注入回归集与 V2 指标基线
 
@@ -205,6 +211,7 @@
 
 ## 决策历史
 
+- **2026-09-03**：V2 第一批开发关单（AR2-1、AR2-2、AR2-6，均为 AI 自动验收）。SQL 校验器接受 WITH 只读 CTE 查询；观察新增六态 status 维度且失败观察强制显式归类；时间线多匹配走澄清并复用 AR11 续跑管道。Agent 全量单测 239/239 通过。
 - **2026-09-02**：v1.0.16 归档。完成 Agent Runtime 多步执行全链路（AR 系列 11 项）、agent 工程治理（TIDY5–TIDY7）、价格配置故障隔离（CFG8）、过程反馈与日志 Trace 关联（AR8/OBS1）、黄金用例语义收紧（GQ1）、导航恢复（NAV1）与归档前检查规则（EVAL1），共 20 项任务；聊天 SQL 时区漂移登记为 CQ7 待规划；BQ3 继续暂缓，CQ4 已取代关闭。
 - **2026-09-02**：TIDY7 执行。coding-conventions.md 通用规范新增「同级同构（宽泛指引）」与锚点「调用参数同级同构」（宽泛原则与可执行锚点两层结构，宽泛条目自带作用域限定：只对齐局部、不主动重构存量）；随后按用户指令对 agent/ 存量做一次扫描重构，10 处多行匿名位置 dict 提取命名，219 测试全绿。
 - **2026-08-31**：CFG8 规划。价格表保持严格校验，但其故障隔离为成本追踪降级，不能再阻断主题发现、聊天和检索；Runtime 在价格不可用时停用成本上限，继续以步数和超时保障执行边界。

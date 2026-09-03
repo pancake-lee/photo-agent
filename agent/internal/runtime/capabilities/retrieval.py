@@ -44,6 +44,7 @@ def _sql_search(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
         rt_state.OBS_PHOTO_IDS,
         f"结构化检索（SQL）返回 {len(ids)} 个候选照片",
         {"ids": ids, "source": "sql", "sql": sql},
+        status=common.retrieval_status(ids),
     )
 
 
@@ -85,6 +86,7 @@ def _rag_search(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
         rt_state.OBS_PHOTO_IDS,
         f"语义检索（RAG）返回 {len(ids)} 个候选照片",
         {"ids": ids, "source": "rag"},
+        status=common.retrieval_status(ids),
     )
 
 
@@ -135,11 +137,13 @@ def _hybrid_search(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
             f"结构化与语义交集为空（结构化 {len(sql_ids)} ∩ 语义 {len(rag_ids)}），"
             "候选交由权威范围兜底",
             {"ids": [], "source": "hybrid", "sql": filter_sql},
+            status=common.retrieval_status(intersection),
         )
     return rt_state.Observation(
         rt_state.OBS_PHOTO_IDS,
         f"混合检索返回 {len(intersection)} 个候选照片（结构化 {len(sql_ids)} ∩ 语义 {len(rag_ids)}）",
         {"ids": intersection, "source": "hybrid", "sql": filter_sql},
+        status=common.retrieval_status(intersection),
     )
 
 

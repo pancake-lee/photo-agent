@@ -194,22 +194,23 @@ def _resolve_date_in_hint(ctx: rt_registry.RunContext, timeline: str, hint: str)
     return (candidates[0], []) if len(candidates) == 1 else ("", candidates)
 
 
-def _match_timeline_name(candidate: str, timelines: list[str]) -> str:
-    """确定性名称匹配：精确 → 去空白等价 → 包含。"""
+def _match_timeline_names(candidate: str, timelines: list[str]) -> list[str]:
+    """确定性名称匹配：精确 → 去空白等价 → 包含，返回首个命中层级的全部匹配。
+
+    多条命中不是确定匹配：两条相似旅行会选出完全不同的照片，猜错影响大
+    且不可逆（Ask vs Act 判据），由调用方走澄清而非静默选第一条。
+    """
     candidate = (candidate or "").strip()
     if not candidate:
-        return ""
-    for name in timelines:
-        if name == candidate:
-            return name
+        return []
+    exact = [name for name in timelines if name == candidate]
+    if exact:
+        return exact
     compact = candidate.replace(" ", "")
-    for name in timelines:
-        if name.replace(" ", "") == compact:
-            return name
-    for name in timelines:
-        if candidate in name or name in candidate:
-            return name
-    return ""
+    compact_matches = [name for name in timelines if name.replace(" ", "") == compact]
+    if compact_matches:
+        return compact_matches
+    return [name for name in timelines if candidate in name or name in candidate]
 
 
 @common.capability_run
@@ -224,13 +225,23 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
     )
     data = common.extract_json_dict(response_text) or {}
     raw_timeline = str(data.get("timeline") or "").strip()
-    matched = _match_timeline_name(raw_timeline, timelines)
-    if raw_timeline and not matched:
+    matches = _match_timeline_names(raw_timeline, timelines)
+    if raw_timeline and not matches:
         return rt_state.Observation(
             rt_state.OBS_ERROR,
             f"未在 {len(timelines)} 条时间线中匹配到目标（模型原始输出: {raw_timeline!r}）",
             {"terminal_reason": "trip_unresolved"},
+            status=rt_state.STATUS_PERMANENT_ERROR,
         )
+    if len(matches) > 1:
+        # 多条匹配：静默选第一条会猜错整段旅行的照片，走澄清（复用 AR11 续跑管道）
+        listed = "、".join(matches)
+        message = f"「{raw_timeline}」匹配到 {len(matches)} 条时间线：{listed}，请回复完整名称。"
+        return rt_state.Observation(
+            rt_state.OBS_NEEDS_CLARIFICATION, message,
+            {"message": message, "options": matches, "confirm_kind": "timeline"},
+        )
+    matched = matches[0] if matches else ""
     day = _validate_day(str(data.get("day") or ""))
     time_of_day = _validate_time_of_day(str(data.get("time_of_day") or ""))
     soft_hints = [
@@ -247,7 +258,7 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
         message = f"“{_MONTH_DAY_RE.search(hint).group(0)}”可能是 {' 或 '.join(date_options)}，请回复完整日期。"
         return rt_state.Observation(
             rt_state.OBS_NEEDS_CLARIFICATION, message,
-            {"message": message, "options": date_options, "timeline": matched},
+            {"message": message, "options": date_options, "timeline": matched, "confirm_kind": "date"},
         )
 
     if day.startswith("relative:"):
@@ -261,13 +272,13 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
             )
             return rt_state.Observation(
                 rt_state.OBS_NEEDS_CLARIFICATION, message,
-                {"message": message, "options": [event_date, photo_date], "timeline": matched},
+                {"message": message, "options": [event_date, photo_date], "timeline": matched, "confirm_kind": "date"},
             )
         resolved_date = event_date or photo_date
         if not resolved_date:
             return rt_state.Observation(
                 rt_state.OBS_NEEDS_CLARIFICATION, "无法确定这次旅行的起始日期，请直接回复完整日期。",
-                {"message": "无法确定这次旅行的起始日期，请直接回复完整日期。", "options": [], "timeline": matched},
+                {"message": "无法确定这次旅行的起始日期，请直接回复完整日期。", "options": [], "timeline": matched, "confirm_kind": "date"},
             )
         day = resolved_date
         conditions["day"] = day
@@ -292,6 +303,8 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
             rt_state.OBS_ERROR,
             f"未找到符合条件的照片（{scope_label}）",
             {"terminal_reason": "empty_scope", "conditions": conditions, "sql": sql},
+            # 范围物化 0 张是语义空结果（empty 状态），empty_scope 是它在 V2 前的确定性终态
+            status=rt_state.STATUS_EMPTY,
         )
     scope_payload = {
         "conditions": conditions,

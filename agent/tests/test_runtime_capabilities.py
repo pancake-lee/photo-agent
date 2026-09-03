@@ -68,12 +68,16 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
                                         return_value=[{"id": "a"}, {"id": "b"}, {"id": "c"}]):
             obs = caps_creation._select_photos({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_SELECTION_OVERFLOW)
+        # 超限转图文工坊是设计内终态，不是失败
+        self.assertEqual(obs.status, rt_state.STATUS_SUCCESS)
         self.assertEqual(obs.payload["url"], "#/post-studio?photo_ids=a,b,c")
 
     def test_select_without_candidates_returns_error(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "写文案", {"question": "q"})
         obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 先选片后挑选属决策侧顺序问题（invalid_input）
+        self.assertEqual(obs.status, rt_state.STATUS_INVALID_INPUT)
 
     def test_select_happy_path_filters_invalid_ids(self):
         cfg = _cfg(compose_group_limit=20, compose_cover_limit=40)
@@ -95,6 +99,8 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         self.assertEqual(obs.payload["ids"], ["b", "a"])
         # 挑选观察必须携带完整详情（含 description），归约写入缓存后 write_post 直接可用
         self.assertEqual(obs.payload["photos"], [fetched[1], fetched[0]])
+        # 未指定数量时沿用默认档位并记录假设（AR2-6 可回退歧义不询问）
+        self.assertEqual(obs.payload["assumption"], "未指定入选数量，按默认 4-9 张挑选")
 
     def test_select_respects_max_photos(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "挑照片", {"question": "q"})
@@ -108,6 +114,8 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         ]), unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm):
             obs = caps_creation._select_photos({"max_photos": 2}, _ctx(_cfg(), task))
         self.assertEqual(obs.payload["ids"], ["a", "b"])
+        # 显式指定数量时不产生假设
+        self.assertNotIn("assumption", obs.payload)
 
     def test_candidate_delivery_keeps_collapsed_candidates_without_llm_selection(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
@@ -135,6 +143,8 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
              unittest.mock.patch.object(caps_common.llm_factory, "create_llm", return_value=fake_llm):
             obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 挑选空结果是模型输出缺陷（invalid_input），AR2-3 带反馈修复
+        self.assertEqual(obs.status, rt_state.STATUS_INVALID_INPUT)
         self.assertEqual(obs.payload["terminal_reason"], "photo_selection_failed")
 
     def test_select_without_photo_details_stops_deterministically(self):
@@ -145,6 +155,8 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[]):
             obs = caps_creation._select_photos({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 详情拉取失败以网络/后端不可达为主，按瞬时故障归类
+        self.assertEqual(obs.status, rt_state.STATUS_TEMPORARY_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
     def test_select_out_of_scope_pick_is_blocked(self):
@@ -170,6 +182,8 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
                                         return_value=fake_llm):
             obs = caps_creation._select_photos({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 越界入选是模型输出缺陷（invalid_input），AR2-3 带反馈修复
+        self.assertEqual(obs.status, rt_state.STATUS_INVALID_INPUT)
         self.assertEqual(obs.payload["terminal_reason"], "selection_out_of_scope")
         self.assertEqual(obs.payload["ids"], ["x"])
 
@@ -202,6 +216,8 @@ class WritePostCapabilityTest(unittest.TestCase):
             obs = caps_creation._write_post({}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_COPY_DRAFTED)
         self.assertEqual(obs.payload["title"], "标题")
+        # 未指定风格时沿用默认「自由」并记录假设（AR2-6 可回退歧义不询问）
+        self.assertEqual(obs.payload["assumption"], "未指定文案风格，默认「自由」")
 
     def test_write_post_uses_selected_photos_and_post_studio(self):
         cfg = _cfg()
@@ -223,6 +239,8 @@ class WritePostCapabilityTest(unittest.TestCase):
             obs = caps_creation._write_post({"style": "文艺"}, _ctx(cfg, task))
         self.assertEqual(obs.kind, rt_state.OBS_COPY_DRAFTED)
         self.assertEqual(obs.payload["title"], "山西行记")
+        # 显式指定风格时不产生假设
+        self.assertNotIn("assumption", obs.payload)
         self.assertIn("1 张照片缺少描述", obs.summary)
         fetch.assert_called_once_with(cfg, ["a"])
         photos_arg = gen.call_args[0][1]
@@ -233,6 +251,8 @@ class WritePostCapabilityTest(unittest.TestCase):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
         obs = caps_creation._write_post({}, _ctx(_cfg(), task))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 先文案后选片属决策侧顺序问题（invalid_input）
+        self.assertEqual(obs.status, rt_state.STATUS_INVALID_INPUT)
 
 
 class ResolveTripCapabilityTest(unittest.TestCase):
@@ -293,12 +313,16 @@ class ResolveTripCapabilityTest(unittest.TestCase):
             execute_ids=[],
         )
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 范围物化 0 张是语义空结果（empty），empty_scope 是其确定性终态
+        self.assertEqual(obs.status, rt_state.STATUS_EMPTY)
         self.assertEqual(obs.payload["terminal_reason"], "empty_scope")
         self.assertIn("山西旅游第一天夜晚", obs.summary)
 
     def test_unmatched_stops_with_trip_reason(self):
         obs = self._resolve('{"timeline": "不存在的旅行"}', question="随便")
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 时间线无法匹配是确定性失败，正确停止并建议换策略
+        self.assertEqual(obs.status, rt_state.STATUS_PERMANENT_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "trip_unresolved")
 
     def test_illegal_values_treated_as_no_constraint(self):
@@ -334,6 +358,8 @@ class ResolveTripCapabilityTest(unittest.TestCase):
              unittest.mock.patch.object(caps_resolve_trip, "_fetch_first_photo_day", return_value="2026-08-02"):
             obs = caps_resolve_trip._resolve_trip({}, _ctx(_cfg(), question="找山西旅游第二天的照片"))
         self.assertEqual(obs.kind, rt_state.OBS_NEEDS_CLARIFICATION)
+        # 澄清是设计内确定性停止，不是失败，恢复层不得重试
+        self.assertEqual(obs.status, rt_state.STATUS_SUCCESS)
         self.assertEqual(obs.payload["options"], ["2026-08-02", "2026-08-03"])
 
     def test_month_day_uses_timeline_year_instead_of_model_guess(self):
@@ -377,10 +403,68 @@ class ResolveTripCapabilityTest(unittest.TestCase):
             "ORDER BY shot_at ASC LIMIT 500",
         )
 
-    def test_match_timeline_name_fuzzy_variants(self):
-        self.assertEqual(caps_resolve_trip._match_timeline_name("山西旅游 ", ["山西旅游"]), "山西旅游")
-        self.assertEqual(caps_resolve_trip._match_timeline_name("山西", ["山西旅游", "北京"]), "山西旅游")
-        self.assertEqual(caps_resolve_trip._match_timeline_name("都不是", ["山西旅游"]), "")
+    def test_match_timeline_names_fuzzy_variants(self):
+        self.assertEqual(
+            caps_resolve_trip._match_timeline_names("山西旅游 ", ["山西旅游"]), ["山西旅游"],
+        )
+        self.assertEqual(
+            caps_resolve_trip._match_timeline_names("山西", ["山西旅游", "北京"]), ["山西旅游"],
+        )
+        self.assertEqual(caps_resolve_trip._match_timeline_names("都不是", ["山西旅游"]), [])
+        self.assertEqual(caps_resolve_trip._match_timeline_names("", ["山西旅游"]), [])
+
+    def test_match_timeline_names_exact_beats_similar_names(self):
+        """时间线库里有相似名称时，精确命中仍是唯一确定匹配，不澄清。"""
+        matches = caps_resolve_trip._match_timeline_names(
+            "山西旅游", ["山西旅游", "山西旅游2025"],
+        )
+        self.assertEqual(matches, ["山西旅游"])
+
+    def test_match_timeline_names_multi_containment_returns_all(self):
+        """包含层级多条命中必须全部返回，供调用方触发澄清。"""
+        matches = caps_resolve_trip._match_timeline_names(
+            "山西", ["山西旅游", "山西旅拍", "北京街拍"],
+        )
+        self.assertEqual(matches, ["山西旅游", "山西旅拍"])
+
+    def test_multi_match_timeline_triggers_clarification_not_silent_pick(self):
+        """AR2-6：两条相似时间线时走澄清，不静默选第一条。"""
+        fake_llm = unittest.mock.MagicMock()
+        fake_llm.invoke.return_value.content = (
+            '{"timeline": "山西", "day": "", "time_of_day": "", "soft_hints": []}'
+        )
+        with unittest.mock.patch.object(
+            caps_resolve_trip, "_fetch_timelines",
+            return_value=["山西旅游", "山西旅拍"],
+        ), unittest.mock.patch.object(caps_common.llm_factory, "create_llm",
+                                     return_value=fake_llm):
+            obs = caps_resolve_trip._resolve_trip(
+                {}, _ctx(_cfg(), question="找山西的照片发帖"),
+            )
+        self.assertEqual(obs.kind, rt_state.OBS_NEEDS_CLARIFICATION)
+        self.assertEqual(obs.status, rt_state.STATUS_SUCCESS)
+        self.assertEqual(obs.payload["confirm_kind"], "timeline")
+        self.assertEqual(obs.payload["options"], ["山西旅游", "山西旅拍"])
+        self.assertIn("山西旅游、山西旅拍", obs.payload["message"])
+
+    def test_single_match_timeline_still_resolves_directly(self):
+        """单匹配路径不受多匹配澄清影响（确定性自证）。"""
+        fake_llm = unittest.mock.MagicMock()
+        fake_llm.invoke.return_value.content = (
+            '{"timeline": "山西", "day": "", "time_of_day": "", "soft_hints": []}'
+        )
+        with unittest.mock.patch.object(
+            caps_resolve_trip, "_fetch_timelines", return_value=["山西旅游"],
+        ), unittest.mock.patch.object(caps_common.llm_factory, "create_llm",
+                                     return_value=fake_llm), \
+             unittest.mock.patch.object(caps_resolve_trip.text_to_sql, "execute_sql_for_ids",
+                                        return_value=["a"]) as exec_ids:
+            obs = caps_resolve_trip._resolve_trip(
+                {}, _ctx(_cfg(), question="找山西的照片发帖"),
+            )
+        self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
+        self.assertEqual(obs.payload["conditions"]["timeline"], "山西旅游")
+        exec_ids.assert_called_once()
 
 
 class RetrievalCapabilityTest(unittest.TestCase):
@@ -400,10 +484,28 @@ class RetrievalCapabilityTest(unittest.TestCase):
                                         return_value=["a", "b"]) as exec_ids:
             obs = caps_retrieval._sql_search({"query": "山西第一天"}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_PHOTO_IDS)
+        self.assertEqual(obs.status, rt_state.STATUS_SUCCESS)
         self.assertEqual(obs.payload["ids"], ["a", "b"])
         self.assertEqual(obs.payload["source"], "sql")
         gen.assert_called_once()
         exec_ids.assert_called_once_with("http://backend", "SELECT id FROM photos")
+
+    def test_sql_search_empty_result_declares_empty_status(self):
+        """SQL 检索 0 命中是合法空观察（候选由权威范围兜底），不是失败。"""
+        with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",
+                                        return_value="SELECT id FROM photos"), \
+             unittest.mock.patch.object(caps_retrieval.text_to_sql, "execute_sql_for_ids",
+                                        return_value=[]):
+            obs = caps_retrieval._sql_search({"query": "q"}, _ctx(_cfg()))
+        self.assertEqual(obs.kind, rt_state.OBS_PHOTO_IDS)
+        self.assertEqual(obs.status, rt_state.STATUS_EMPTY)
+
+    def test_rag_search_empty_result_declares_empty_status(self):
+        with unittest.mock.patch.object(caps_retrieval.photo_rag, "retrieve_photo_ids",
+                                        return_value=[]):
+            obs = caps_retrieval._rag_search({"query": "q"}, _ctx(_cfg()))
+        self.assertEqual(obs.kind, rt_state.OBS_PHOTO_IDS)
+        self.assertEqual(obs.status, rt_state.STATUS_EMPTY)
 
     def test_hybrid_search_intersects_with_rag_order(self):
         with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",
@@ -427,15 +529,20 @@ class RetrievalCapabilityTest(unittest.TestCase):
             obs = caps_retrieval._hybrid_search({"query": "q"}, _ctx(_cfg()))
         self.assertEqual(obs.payload["ids"], [])
         self.assertEqual(obs.payload["source"], "hybrid")
+        self.assertEqual(obs.status, rt_state.STATUS_EMPTY)
 
     def test_fetch_photo_details_requires_ids(self):
         obs = caps_photo_tools._fetch_photo_details({}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 空参数列表是调用契约违规（invalid_input）
+        self.assertEqual(obs.status, rt_state.STATUS_INVALID_INPUT)
 
     def test_fetch_photo_details_stops_when_all_details_missing(self):
         with unittest.mock.patch.object(caps_common, "fetch_photos_batch", return_value=[]):
             obs = caps_photo_tools._fetch_photo_details({"ids": ["a"]}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        # 详情拉取失败以网络/后端不可达为主，按瞬时故障归类
+        self.assertEqual(obs.status, rt_state.STATUS_TEMPORARY_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "photo_details_unavailable")
 
     def test_capability_exception_becomes_error_observation(self):
@@ -444,7 +551,52 @@ class RetrievalCapabilityTest(unittest.TestCase):
             obs = caps_retrieval._sql_search({"query": "q"}, _ctx(_cfg()))
         self.assertEqual(obs.kind, rt_state.OBS_ERROR)
         self.assertIn("后端挂了", obs.summary)
+        # 非网络类异常默认按永久失败归类
+        self.assertEqual(obs.status, rt_state.STATUS_PERMANENT_ERROR)
         self.assertEqual(obs.payload["terminal_reason"], "capability_execution_failed")
+
+
+# --------------------------------------------------------------------------- #
+# 异常归类测试 — AR2-2（网络超时类 temporary，其余默认 permanent）
+# --------------------------------------------------------------------------- #
+
+class ExceptionClassificationTest(unittest.TestCase):
+
+    def test_network_exceptions_classified_temporary(self):
+        import httpx
+        self.assertEqual(
+            caps_common.classify_exception(httpx.ConnectError("后端不可达")),
+            rt_state.STATUS_TEMPORARY_ERROR,
+        )
+        self.assertEqual(
+            caps_common.classify_exception(httpx.ReadTimeout("读取超时")),
+            rt_state.STATUS_TEMPORARY_ERROR,
+        )
+        self.assertEqual(
+            caps_common.classify_exception(TimeoutError("超时")),
+            rt_state.STATUS_TEMPORARY_ERROR,
+        )
+
+    def test_other_exceptions_classified_permanent(self):
+        self.assertEqual(
+            caps_common.classify_exception(RuntimeError("解析失败")),
+            rt_state.STATUS_PERMANENT_ERROR,
+        )
+        self.assertEqual(
+            caps_common.classify_exception(ValueError("输出契约违规")),
+            rt_state.STATUS_PERMANENT_ERROR,
+        )
+
+    def test_capability_network_exception_carries_temporary_status(self):
+        """真实场景：Go 后端断连应归类瞬时故障（AR2-3 有界重试的触发条件）。"""
+        import httpx
+        with unittest.mock.patch.object(
+            caps_retrieval.text_to_sql, "generate_filter_sql",
+            side_effect=httpx.ConnectError("后端不可达"),
+        ):
+            obs = caps_retrieval._sql_search({"query": "q"}, _ctx(_cfg()))
+        self.assertEqual(obs.kind, rt_state.OBS_ERROR)
+        self.assertEqual(obs.status, rt_state.STATUS_TEMPORARY_ERROR)
 
 
 class BuildRegistryTest(unittest.TestCase):

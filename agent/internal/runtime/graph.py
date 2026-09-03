@@ -197,6 +197,8 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
             rt_state.OBS_ERROR,
             f"决策无效（{action or '空 action'}）: {'; '.join(errors)}",
             {"terminal_reason": "invalid_decision"},
+            # 决策侧契约违规：错误摘要反馈给 decide 再决策（AR2-3 接入）
+            status=rt_state.STATUS_INVALID_INPUT,
         )
     else:
         capability = registry.get(action)

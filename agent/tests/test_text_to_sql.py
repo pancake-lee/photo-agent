@@ -113,6 +113,66 @@ class TestValidateSelectOnly(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------- #
+# WITH（CTE）只读查询测试 — AR2-1
+# --------------------------------------------------------------------------- #
+
+class TestValidateWithQueries(unittest.TestCase):
+    """WITH 开头的 CTE 只读查询校验测试（AR2-1：接受合法 CTE，危险语句仍拦截）。"""
+
+    def test_valid_with_cte(self):
+        sql = (
+            "WITH recent AS (SELECT id, shot_at FROM photos ORDER BY shot_at DESC LIMIT 10) "
+            "SELECT id FROM recent"
+        )
+        self.assertTrue(sqlite_client.validate_select_only(sql))
+
+    def test_valid_with_lowercase(self):
+        sql = "with t as (select id from photos) select id from t"
+        self.assertTrue(sqlite_client.validate_select_only(sql))
+
+    def test_valid_with_multiline_and_comment(self):
+        sql = (
+            "-- 混合检索候选\n"
+            "WITH scoped AS (\n"
+            "    SELECT id FROM photos WHERE timeline = '山西'\n"
+            ")\n"
+            "SELECT id FROM scoped ORDER BY shot_at"
+        )
+        self.assertTrue(sqlite_client.validate_select_only(sql))
+
+    def test_with_multiple_ctes(self):
+        sql = (
+            "WITH a AS (SELECT id FROM photos), "
+            "b AS (SELECT id FROM a WHERE iso > 100) "
+            "SELECT id FROM b"
+        )
+        self.assertTrue(sqlite_client.validate_select_only(sql))
+
+    def test_reject_with_delete(self):
+        # WITH 前缀在 SQLite 中可以修饰 DELETE，必须被关键字拦截
+        sql = "WITH old AS (SELECT id FROM photos) DELETE FROM photos WHERE id IN (SELECT id FROM old)"
+        self.assertFalse(sqlite_client.validate_select_only(sql))
+
+    def test_reject_with_insert(self):
+        sql = "WITH src AS (SELECT id FROM photos) INSERT INTO photos SELECT * FROM src"
+        self.assertFalse(sqlite_client.validate_select_only(sql))
+
+    def test_reject_with_drop(self):
+        sql = "WITH t AS (SELECT 1) DROP TABLE photos"
+        self.assertFalse(sqlite_client.validate_select_only(sql))
+
+    def test_reject_with_create(self):
+        sql = "WITH t AS (SELECT 1) CREATE TABLE x AS SELECT * FROM t"
+        self.assertFalse(sqlite_client.validate_select_only(sql))
+
+    def test_query_client_accepts_cte_before_http(self):
+        """QueryClient 对合法 CTE 不再抛校验 ValueError（真实 trace 的误杀场景）。"""
+        self.assertTrue(sqlite_client.validate_select_only(
+            "WITH t AS (SELECT id FROM photos LIMIT 5) SELECT id FROM t"
+        ))
+
+
+# --------------------------------------------------------------------------- #
 # SQL 提取测试
 # --------------------------------------------------------------------------- #
 

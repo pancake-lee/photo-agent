@@ -1,7 +1,9 @@
 """
     Agent Runtime 能力共享辅助（跨能力复用，不含具体能力）。
 
-    - capability_run        执行护栏装饰器：能力异常转为 OBS_ERROR，不炸循环
+    - capability_run        执行护栏装饰器：能力异常按类型归类为六态观察，不炸循环
+    - classify_exception    异常 → 恢复状态归类（网络超时类 temporary，其余 permanent）
+    - retrieval_status      检索类观察的空结果/有结果状态
     - invoke_structured_llm 能力内 LLM 调用的统一入口（提示词驱动，返回原始文本）
     - extract_json_dict     从模型输出提取首个 JSON 对象
     - fetch_photos_batch    并行批量拉取照片详情（Go 后端，按传入顺序返回）
@@ -13,6 +15,7 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import httpx
 import langchain_core.messages as lc_messages
 
 import infra.http_client as http_utils
@@ -27,8 +30,25 @@ logger = logging.getLogger(__name__)
 # 执行护栏
 # --------------------------------------------------
 
+# 瞬时异常族：网络传输/超时类（httpx.TransportError 覆盖连接失败与读写超时）。
+# SDK、LLM、解析等其余异常默认按 permanent 归类，宁可正确停止也不盲目重试。
+_TEMPORARY_EXCEPTION_TYPES = (httpx.TransportError, TimeoutError)
+
+
+def classify_exception(exc: Exception) -> str:
+    """异常 → 恢复状态：网络/超时类 temporary_error，其余默认 permanent_error。"""
+    if isinstance(exc, _TEMPORARY_EXCEPTION_TYPES):
+        return rt_state.STATUS_TEMPORARY_ERROR
+    return rt_state.STATUS_PERMANENT_ERROR
+
+
+def retrieval_status(ids: list[str]) -> str:
+    """检索类观察的状态：范围内的空结果是合法空观察（候选由权威范围兜底）。"""
+    return rt_state.STATUS_EMPTY if not ids else rt_state.STATUS_SUCCESS
+
+
 def capability_run(fn):
-    """能力执行护栏：异常转为结构化失败观察，不让单次能力失败炸掉整个循环。"""
+    """能力执行护栏：异常转为带恢复状态的失败观察，不让单次能力失败炸掉整个循环。"""
 
     @functools.wraps(fn)
     def wrapped(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observation:
@@ -40,6 +60,7 @@ def capability_run(fn):
                 rt_state.OBS_ERROR,
                 f"{fn.__name__} 执行失败: {exc}",
                 {"terminal_reason": "capability_execution_failed"},
+                status=classify_exception(exc),
             )
 
     return wrapped

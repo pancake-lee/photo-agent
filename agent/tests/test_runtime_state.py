@@ -23,6 +23,29 @@ class NewTaskTest(unittest.TestCase):
         self.assertEqual(task.goal.requirements, ("selected_photos", "copy_draft"))
 
 
+class ObservationStatusTest(unittest.TestCase):
+    """观察六态维度（AR2-2）：status 与 kind 分离，失败观察必须显式归类。"""
+
+    def test_six_status_constants(self):
+        self.assertEqual(
+            {
+                rt_state.STATUS_SUCCESS, rt_state.STATUS_EMPTY,
+                rt_state.STATUS_INVALID_INPUT, rt_state.STATUS_TEMPORARY_ERROR,
+                rt_state.STATUS_PERMANENT_ERROR, rt_state.STATUS_LOW_CONFIDENCE,
+            },
+            {"success", "empty", "invalid_input",
+             "temporary_error", "permanent_error", "low_confidence"},
+        )
+
+    def test_observation_status_defaults_to_success(self):
+        obs = rt_state.Observation(rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a"]})
+        self.assertEqual(obs.status, rt_state.STATUS_SUCCESS)
+
+    def test_error_observation_requires_explicit_non_success_status(self):
+        with self.assertRaises(ValueError):
+            rt_state.Observation(rt_state.OBS_ERROR, "失败")
+
+
 class ReduceObservationTest(unittest.TestCase):
     def _task(self) -> rt_state.TaskState:
         return rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "发帖"})
@@ -171,6 +194,29 @@ class ScopeReductionTest(unittest.TestCase):
         self.assertEqual(task.artifacts.copy_draft["title"], "山西行记")
         self.assertEqual(task.progress.todo, ["locate", "candidates"])
 
+    def test_default_assumptions_recorded_into_facts(self):
+        """AR2-6：数量/风格默认值假设记入 resolved_facts，不触发询问。"""
+        task = self._task()
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中",
+            {"ids": ["a"], "assumption": "未指定入选数量，按默认 4-9 张挑选"},
+        ), step_no=1, action="select_photos")
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "文案",
+            {"title": "t", "content": "c", "assumption": "未指定文案风格，默认「自由」"},
+        ), step_no=2, action="write_post")
+        self.assertEqual(task.resolved_facts["assumptions"], [
+            "未指定入选数量，按默认 4-9 张挑选",
+            "未指定文案风格，默认「自由」",
+        ])
+
+    def test_assumption_absent_when_payload_has_none(self):
+        task = self._task()
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a"]},
+        ), step_no=1, action="select_photos")
+        self.assertNotIn("assumptions", task.resolved_facts)
+
     def test_selection_overflow_sets_terminal_and_handoff(self):
         task = self._task()
         task = rt_state.reduce_observation(task, rt_state.Observation(
@@ -185,6 +231,7 @@ class ScopeReductionTest(unittest.TestCase):
         for i in range(rt_state._ERRORS_MAX + 3):
             task = rt_state.reduce_observation(task, rt_state.Observation(
                 rt_state.OBS_ERROR, f"失败{i}", {"action": "sql_search"},
+                status=rt_state.STATUS_PERMANENT_ERROR,
             ), step_no=i + 1, action="sql_search")
         self.assertEqual(len(task.progress.errors), rt_state._ERRORS_MAX)
         self.assertEqual(task.progress.errors[-1], f"失败{rt_state._ERRORS_MAX + 2}")
@@ -193,8 +240,9 @@ class ScopeReductionTest(unittest.TestCase):
     def test_terminal_error_stops_runtime_with_reason(self):
         task = self._task()
         task = rt_state.reduce_observation(task, rt_state.Observation(
-            rt_state.OBS_ERROR, "无法获取候选照片详情", 
+            rt_state.OBS_ERROR, "无法获取候选照片详情",
             {"terminal_reason": "photo_details_unavailable"},
+            status=rt_state.STATUS_TEMPORARY_ERROR,
         ), step_no=1, action="fetch_photo_details")
         self.assertEqual(task.progress.terminal_reason, "photo_details_unavailable")
 
@@ -312,8 +360,9 @@ class BuildFinalOutputTest(unittest.TestCase):
     def test_terminal_error_output_does_not_claim_budget_exhaustion(self):
         task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
         task = rt_state.reduce_observation(task, rt_state.Observation(
-            rt_state.OBS_ERROR, "无法获取候选照片详情", 
+            rt_state.OBS_ERROR, "无法获取候选照片详情",
             {"terminal_reason": "photo_details_unavailable"},
+            status=rt_state.STATUS_TEMPORARY_ERROR,
         ), step_no=1, action="fetch_photo_details")
         output = rt_state.build_final_output(task)
         self.assertIn("无法获取候选照片详情", output["answer"])
