@@ -1,7 +1,9 @@
 # 文档审阅规范
 
+<!-- harness:begin src=pancake/30-Tools/harness/common/handbook-doc-review.md 公共骨架：由 pancake 统一同步，勿在此修改；改动请编辑 pancake 后运行 sync.sh push -->
 > 定期执行文档治理，确保各文档各司其职、不冗余、不越界、与代码实现一致。
 > 用户按需触发，每次自行判断采用第一版或第二版。
+> 公共骨架块由 pancake/30-Tools/harness 统一同步（以 harness marker 标记），勿在 marker 内直接修改。
 
 ---
 
@@ -34,7 +36,7 @@
 4. **信息冲突**：同一事实在不同文档中描述矛盾
 5. **过时残留**：已变更的决策或架构仍在文档中作为当前状态描述
 
-**审阅顺序**：CLAUDE.md/AGENTS.md → README.md → PRD → TECH → TASK → note → backlog → USAGE
+**审阅顺序**：CLAUDE.md/AGENTS.md → README → docs/prd.md → docs/tech.md → note → backlog → 其余项目文档
 （先审高层，低层服从高层约束）
 
 **审阅后输出**：
@@ -77,4 +79,11 @@
 ## 非项目文档（排除范围）
 
 - `.claude/skills/*`：Claude Code 技能文件，独立维护
+- 其余项目自定的非项目文档，在下方「本项目补充」节中列出
+<!-- harness:end src=pancake/30-Tools/harness/common/handbook-doc-review.md -->
+
+---
+
+## 非项目文档（本项目补充）
+
 - `.local/learning/*`：个人学习笔记，不受项目文档层级约束

@@ -39,7 +39,7 @@ flowchart LR
 
 - **Web 前端**：Vue 3 (Composition API + TypeScript) + NaiveUI + Vite
 - **Python Agent**：FastAPI + LangChain + LangGraph + ChromaDB + httpx
-- **Go 后端**：Gin + GORM + SQLite + ImageMagick
+- **Go 后端**：Kratos v2 + GORM + SQLite + ImageMagick
 - **AI 模型**：GPT-4o-mini / Qwen / 火山引擎 Doubao（LLM + VLM + Embedding）
 
 ---

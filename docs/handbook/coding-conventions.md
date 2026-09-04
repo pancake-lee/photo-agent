@@ -1,6 +1,8 @@
 # 编码规范
 
+<!-- harness:begin src=pancake/30-Tools/harness/common/handbook-coding-conventions.md 公共骨架：由 pancake 统一同步，勿在此修改；改动请编辑 pancake 后运行 sync.sh push -->
 > 按语言/模块分节。AI 在对应目录下工作时读取相关节。
+> 公共骨架块由 pancake/30-Tools/harness 统一同步（以 harness marker 标记），勿在 marker 内直接修改。
 
 ---
 
@@ -39,14 +41,7 @@
 
 ---
 
-## Go（backend/）
-
-### 优先复用 pgo 代码库
-
-- `/root/code/pgo` 是本人维护的 Go 代码库，`pkg/` 下包含大量日常封装
-- 本项目通过 `go.work` 直接引用本地 pgo，而非 import GitHub 版本
-- 优先使用已有封装：`pconfig`（配置管理）、`plogger`（日志）、`putil`（HTTP/字符串/路径/时间工具）、`papp`（Runner 模式）
-- 如发现 `pgo` 封装有缺陷或需扩展，可以同步维护 `pgo`
+## Go
 
 ### 命名规范
 
@@ -71,6 +66,29 @@
 - 非复杂场景优先用基础类型组合，仅在复用明显或封装语义明确时抽象 `type`
 - **接口代理模式**：基础类通过接口代理支持子类覆盖，子类初始化后调用 `BindProvider(self)`
 
+### 测试
+
+- 编写集成测试验证 Service 层逻辑
+- 使用 `defer` + 清理函数移除测试数据
+- **禁止**在测试中修改表结构，差异应正常报错以提醒升级注意
+
+### Go 工具链
+
+- Always set `GOTOOLCHAIN=local` before running any `go` command
+- 当 `go.mod` 的 `go` directive 高于系统 Go 版本时，不要依赖 auto-download，修复 go.mod directive 或更新系统 Go
+<!-- harness:end src=pancake/30-Tools/harness/common/handbook-coding-conventions.md -->
+
+---
+
+## Go（本项目补充）
+
+### 优先复用 pgo 代码库
+
+- `/root/code/pgo` 是本人维护的 Go 代码库，`pkg/` 下包含大量日常封装
+- 本项目通过 `go.work` 直接引用本地 pgo，而非 import GitHub 版本
+- 优先使用已有封装：`pconfig`（配置管理）、`plogger`（日志）、`putil`（HTTP/字符串/路径/时间工具）、`papp`（Runner 模式）
+- 如发现 `pgo` 封装有缺陷或需扩展，可以同步维护 `pgo`
+
 ### 数据访问边界
 
 - ORM、生成查询对象、原始 SQL 和只读数据库连接只允许出现在 `internal/defaultService/data/`；Service 负责业务编排，不直接查表或写表
@@ -78,22 +96,11 @@
 - 不为减少少量重复而新增泛化 DAO、可传入任意条件的查询接口或由 Service 拼接查询条件。字段投影、筛选和排序由 `data` 层以已知业务用法收敛
 - 新增或调整数据访问时，同步为有业务规则的 DAO 行为补充临时 SQLite 测试；Service 测试只通过公开行为断言结果
 
-### 测试
-
-- 编写集成测试验证 Service 层逻辑
-- 使用 `defer` + 清理函数移除测试数据
-- **禁止**在测试中修改表结构，差异应正常报错以提醒升级注意
-
 ### 禁忌
 
 - 不要直接 `go build` 到根目录
 - `bootCheck` 的 MySQL 检查不允许执行 `DROP`、`TRUNCATE`、`ALTER ... MODIFY/CHANGE/RENAME`、删索引、删主键等危险 SQL
 - 数据库结构不能 drop，仅代码层面废弃，实际数据清理由用户自行操作
-
-### Go 工具链
-
-- Always set `GOTOOLCHAIN=local` before running any `go` command
-- 当 `go.mod` 的 `go` directive 高于系统 Go 版本时，不要依赖 auto-download，修复 go.mod directive 或更新系统 Go
 
 ---
 

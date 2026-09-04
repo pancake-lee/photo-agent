@@ -24,11 +24,21 @@
 | Done | Agent Runtime | AR14 | 候选交付文案与 NEF 原始文件隔离            |      |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 | 已取代 | 对话查询   | CQ4   | 创作型查询（Compose）专用管线                |      |
+| Done | Harness 工程 | HARN1 | 公共 Harness 抽离完整性修复 | 自动验证通过 |
 
 > v1.0.16 已归档：AR、AR1–AR10、TIDY5–TIDY7、CFG8、NAV1、OBS1、GQ1、EVAL1，详见 [v1.0.16](archive/v1.0.16.md)。
 > v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](archive/v1.0.15.md)。
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
 > 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design/2099-01-01-future-requirements.md)。
+
+### HARN1 公共 Harness 抽离完整性修复
+
+- **状态**：Done（2026-09-05，AI 自动验收）
+- **背景**：公共规则抽离到 pancake 后，回归检查丢失 Photo Agent 的 P@10/MRR 显著下降阈值；全局协作文件仍索引已迁移的未来需求旧路径。
+- **方案**：在 `eval-guide.md` 的本项目专项中恢复回归判定阈值；将 `AGENTS.md` 和 `CLAUDE.md` 的未来需求索引同步为现存文档路径。
+- **验收**：回归阈值可在本项目手册中查到；两份协作文件内容同步且索引目标存在；pancake 公共块同步校验通过。
+- **实施记录**：已恢复「P@10 与 MRR 较历史基线下降超过 10%」的显著下降判定，并将未来需求索引改为 `design/2099-01-01-future-requirements.md`。
+- **AI 自动验证**：目标文件存在；`AGENTS.md` 与 `CLAUDE.md` 除标题外内容一致；`sync.sh check photo-agent` 通过，16 个公共块均与 pancake 基准一致。
 
 ### AR2-1 SQL 校验器根因修复（接受 WITH 只读查询）
 

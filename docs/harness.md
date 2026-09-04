@@ -59,6 +59,15 @@ Go（plogger）和 Python（自建）均保留结构化 JSON 日志，`trace_id`
 
 验证流是单向的：生成器在交付验收前必须穷尽自身可执行的自动验证（回归测试、脚本、Trace/日志自查），`待用户验收` 只承接 AI 无法自动执行的最后一环，并给出单一操作和预期结果。用户确认后即终态，生成器在同一轮将任务回写为 Done，不反向核验用户的结论，也不要求用户导出或提交系统已有的记录。完整规则和 backlog 模板见 [工作模式手册](handbook/work-modes.md#任务关闭与用户验收)。
 
+### 2.5 协作规则中央化（pancake 同步）
+
+CLAUDE.md、AGENTS.md 与 `docs/handbook/` 中跨项目通用的内容，以 harness marker（HTML 注释标记块）包裹，基准统一维护在 pancake 仓库 `30-Tools/harness/common/`。pancake 是唯一事实源：
+
+- 改公共规则：编辑 pancake 中的基准 → `bash 30-Tools/harness/sync.sh diff` 审阅 → `push` 同步到各项目
+- 项目内 marker 块禁止手改，`sync.sh check` 检测漂移
+- 项目专有内容（本项目的「Design 文档门槛」「表间不用数据库外键」、eval-guide 的工具箱与后端专项等）写在 marker 之外，保持独立
+- 适用项目与完整说明见 pancake 仓库 `30-Tools/harness/README.md`
+
 ## 3. 文档索引
 
 ### 流程与规范

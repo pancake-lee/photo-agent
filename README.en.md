@@ -116,7 +116,7 @@ See [`docs/tech.md`](docs/tech.md) for detailed architecture.
 
 - **Web Frontend**: Vue 3 + NaiveUI — photo management, chat interface, cluster browsing, golden case management
 - **Python Inference**: FastAPI + LangChain/LangGraph + ChromaDB — agent orchestration, vector search, Text-to-SQL, cluster analysis
-- **Go Backend**: Gin + GORM + SQLite — photo metadata management, file serving, VLM preprocessing, Embedding proxy
+- **Go Backend**: Kratos v2 + GORM + SQLite — photo metadata management, file serving, VLM preprocessing, Embedding proxy
 
 **Why Not a Single Framework?**
 

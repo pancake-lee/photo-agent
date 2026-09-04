@@ -116,7 +116,7 @@ flowchart TD
 
 - **Web 前端**：Vue 3 + NaiveUI — 照片管理、对话界面、聚类浏览、黄金用例管理
 - **Python 推理层**：FastAPI + LangChain/LangGraph + ChromaDB — Agent 编排、向量检索、Text-to-SQL、聚类分析
-- **Go 后端**：Gin + GORM + SQLite — 照片元数据管理、文件服务、VLM 预处理、Embedding 代理
+- **Go 后端**：Kratos v2 + GORM + SQLite — 照片元数据管理、文件服务、VLM 预处理、Embedding 代理
 
 **为什么不用单一框架？**
 
