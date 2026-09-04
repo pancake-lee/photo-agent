@@ -47,7 +47,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "question": "2024 年 3 月拍的照片数量",
-        "sql": "SELECT COUNT(*) AS count FROM photos WHERE strftime('%Y-%m', shot_at) = '2024-03'",
+        "sql": "SELECT COUNT(*) AS count FROM photos WHERE strftime('%Y-%m', shot_at, 'localtime') = '2024-03'",
     },
     {
         "question": "ISO 大于 1600 的高感光度照片",
@@ -95,7 +95,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "question": "山西旅游第一天拍的照片",
-        "sql": "SELECT id, filename, description, shot_at FROM photos WHERE timeline = '山西' AND DATE(shot_at) = (SELECT MIN(DATE(shot_at)) FROM photos WHERE timeline = '山西') ORDER BY shot_at ASC LIMIT 20",
+        "sql": "SELECT id, filename, description, shot_at FROM photos WHERE timeline = '山西' AND DATE(shot_at, 'localtime') = (SELECT MIN(DATE(shot_at, 'localtime')) FROM photos WHERE timeline = '山西') ORDER BY shot_at ASC LIMIT 20",
     },
 ]
 
@@ -114,7 +114,7 @@ SQL_SYSTEM_PROMPT_TEMPLATE = (
     "1. 仅生成 SELECT 查询语句\n"
     "2. 字段名必须严格匹配表结构\n"
     "3. 字符串值用单引号包裹\n"
-    "4. 时间比较使用 strftime 函数\n"
+    "4. 时间过滤一律按本地时区比较：日期使用 DATE(shot_at, 'localtime')，年月或时分使用 strftime(..., shot_at, 'localtime')；不得使用裸 DATE(shot_at) 或裸 strftime(..., shot_at)\n"
     "5. JSON 标签字段 tags 用 LIKE 匹配\n"
     "6. 结果限制在 20 条以内，除非用户明确要求更多\n"
     "7. 如果问题无法从表中回答，返回: SELECT '无法回答' AS result\n"
@@ -257,7 +257,7 @@ FIELD_DESCRIPTIONS: dict[str, str] = {
     "lighting": "光线类型（英文枚举，见属性值列表）",
     "mood": "情绪氛围（英文枚举，见属性值列表）",
     "composition": "构图特点（英文枚举，见属性值列表）",
-    "shot_at": "拍摄时间，ISO8601 格式（如 2026-08-02T08:31:28+08:00），日期比较用 DATE(shot_at)",
+    "shot_at": "拍摄时间，ISO8601 格式（如 2026-08-02T08:31:28+08:00），日期比较用 DATE(shot_at, 'localtime')，年月或时分比较的 strftime 也须传入 'localtime'",
     "width": "图片宽度（像素）",
     "height": "图片高度（像素）",
     "brand": "相机品牌（如 NIKON）",

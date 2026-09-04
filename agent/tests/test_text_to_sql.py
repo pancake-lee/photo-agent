@@ -208,6 +208,24 @@ class TestExtractSqlFromResponse(unittest.TestCase):
 # Schema 格式化测试
 # --------------------------------------------------------------------------- #
 
+class TestTimezoneAwareSqlPrompt(unittest.TestCase):
+    """聊天 SQL 的日期语义必须与 Runtime 的 localtime 范围一致（CQ7）。"""
+
+    def test_date_filtering_examples_and_rules_use_localtime(self):
+        examples = {example["question"]: example["sql"] for example in text_to_sql.FEW_SHOT_EXAMPLES}
+
+        self.assertIn(
+            "strftime('%Y-%m', shot_at, 'localtime')",
+            examples["2024 年 3 月拍的照片数量"],
+        )
+        self.assertIn(
+            "DATE(shot_at, 'localtime')",
+            examples["山西旅游第一天拍的照片"],
+        )
+        self.assertIn("不得使用裸 DATE(shot_at)", text_to_sql.SQL_SYSTEM_PROMPT_TEMPLATE)
+        self.assertIn("strftime(..., shot_at, 'localtime')", text_to_sql.SQL_SYSTEM_PROMPT_TEMPLATE)
+
+
 class TestFormatSchema(unittest.TestCase):
     """Schema 格式化测试。"""
 
@@ -236,6 +254,20 @@ class TestFormatSchema(unittest.TestCase):
         )
         text = text_to_sql._format_schema(schema_data)
         self.assertIn("Timeline (TEXT): 列名 = timeline，时间线活动名称", text)
+
+    def test_shot_at_semantics_require_localtime(self):
+        """日期过滤提示必须统一换算本地时区，避免跨午夜漂移（CQ7）。"""
+        schema_data = sdk.ApiGetPhotoSchemaResponse(
+            table_name="photos",
+            fields=[
+                sdk.ApiSchemaField(
+                    name="ShotAt", sql_type="TEXT", json_tag="shot_at", nullable=False,
+                ),
+            ],
+        )
+        text = text_to_sql._format_schema(schema_data)
+        self.assertIn("DATE(shot_at, 'localtime')", text)
+        self.assertIn("strftime 也须传入 'localtime'", text)
 
     def test_unknown_field_has_no_semantics(self):
         schema_data = sdk.ApiGetPhotoSchemaResponse(

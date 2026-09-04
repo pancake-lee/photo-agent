@@ -7,7 +7,7 @@
 
 - **目标**：让开放的“选片并创作”请求以状态化多步执行完成，不再为每个组合需求新增专用管线。
 - **当前完成度**：AR、AR1–AR14 均已用户验收关单（AR9 随 v1.0.16 于 2026-09-02 归档）。
-- **当前遗留**：现有聊天 SQL 管线的 few-shot 仍用裸 `DATE(shot_at)`（库内 shot_at 混合 UTC/本地偏移），跨午夜日期有 8 小时语义漂移，属聊天链路独立问题，未随 AR9 改动；已登记为 backlog CQ7（待规划）。
+- **当前遗留**：CQ7 已于 2026-09-05 完成；AR2-7 仍待用户在真实环境回归验收，AR15 作为后续通用化债务暂缓规划。
 
 ## 2. 关联文档索引
 
@@ -60,9 +60,9 @@
 - 2026-09-03：V2 第二批实现完成并关单（AR2-3、AR2-4、AR2-5，均为 AI 自动验收）：guardrail 落地为 execute 与 reduce 之间的程序节点，按「状态 → 策略」映射执行有界恢复（temporary 重试、声明可修复的 invalid 带反馈修复、决策侧 invalid 摘要再决策、permanent 确定性终态、恢复耗尽可行动停止；恢复预算 RuntimeRetryMax/RepairMax/RedecideMax，恢复不消耗步数但预算先行检查）；无进展检测以四维状态签名 3 步窗口两级响应；语义质量门（选片代表性 + 文案事实依据）按能力声明在确定性检查通过后触发，不通过带反馈修复、耗尽 quality_gate_failed 停止。实施中补齐异常归类缺口：Go 后端 SDK（urllib3）断连形态 MaxRetryError 归入瞬时族。Agent 全量单测 282/282 通过。剩余 AR2-7（故障注入回归集与 V2 指标基线，依赖全系列，含用户真实环境验收）。
 - 2026-09-03：AR2-7 实现完成，V2 系列代码交付齐备，待用户真实环境验收：新增 `agent/tests/test_runtime_fault_injection.py` 九个图级故障注入场景（七类，SQL 空结果与工具超时各拆两形态），每场景声明注入器 Ground Truth 并程序化分类结局；RAG 低置信因当前无能力自然产出该状态，经复制注册表替换 rag_search 注入。`run_runtime` 返回值透传 `stop_reason` 与 `recovery_used`。V2 指标基线写入[评估基线](../eval/baseline.md)：恢复成功率 100%（5/5）、正确停止率 100%（4/4）、无谓重试率 0%（0/5），由单测锚定、`--metrics` 可重复生成。Agent 全量单测 292/292、Web 构建通过。
 - 2026-09-04：用户验收（方案 B：正常山西请求回归）失败，回复「预算已耗尽（时长）」。trace `2df4adc0106b` 定位：选片质量门 3 次拒绝正常选片（反馈均为「时段未知/描述信息不足」），修复环重执行把 300 秒时长预算烧完。根因是 Runtime 与 Go 后端的照片详情字段契约错位：后端 `shotAt`（Unix 秒，驼峰）被当 `shot_at`（ISO，蛇形）读，全程 None；`description` 是视觉模型完整 JSON，评委截断后不可读。既有单测 mock 数据沿用了错误契约，注入集因此未拦截。修复：`fetch_photos_batch` 归一化 `shotAt → shot_at`（本地 ISO），评委优先读后端已解析的 `objects/scene/mood`、退回 `overall_summary`；补真实契约回归测试 4 项，Agent 全量单测 296/296。待用户重启服务后重新回归。
+- 2026-09-05：CQ7 完成。聊天 text-to-SQL 的日期过滤提示与 Runtime 范围 SQL 对齐：年月与时间线首日 few-shot、系统规则及 `shot_at` 字段说明统一要求 SQLite `localtime` 换算；提示词回归测试锁定约束。
 
 ## 4. 下一轮建议
 
-- 聊天 SQL 管线的 `DATE(shot_at)` 时区语义与库内混合偏移不一致，已登记为 CQ7，规划时可参考 AR9 的 `localtime` 修正方式。
 - 再次出现新的开放目标类型时，先为其定义完成要件、失败终态和可重复用户用例，再接入 Runtime。
 - 后续 Runtime 需求以实际用户请求验收结果为准，沿用 Trace 文件位置引用排查链路。
