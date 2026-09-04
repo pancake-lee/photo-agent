@@ -6,10 +6,11 @@
     - retrieval_status      检索类观察的空结果/有结果状态
     - invoke_structured_llm 能力内 LLM 调用的统一入口（提示词驱动，返回原始文本）
     - extract_json_dict     从模型输出提取首个 JSON 对象
-    - fetch_photos_batch    并行批量拉取照片详情（Go 后端，按传入顺序返回）
+    - fetch_photos_batch    并行批量拉取照片详情（Go 后端，按传入顺序返回，字段契约归一化）
     - cached_photos         按顺序取详情：优先 TaskState 缓存，缺失部分批量补拉
 """
 
+import datetime
 import functools
 import json
 import logging
@@ -121,6 +122,27 @@ def extract_json_dict(text: str) -> dict | None:
 # 照片详情获取（批量拉取 + 状态缓存）
 # --------------------------------------------------
 
+def _normalize_photo(photo: dict) -> dict:
+    """字段契约归一化：后端 shotAt（Unix 秒，驼峰）→ shot_at（本地 ISO 时间）。
+
+    Runtime 链路（选片 context、语义评委、文案生成）统一消费蛇形 shot_at 的
+    ISO 字符串；拍摄时间缺失或为 0（EXIF 无数据）时置空串，评委按「未知时段」
+    呈现，不伪装成 1970 年。其余字段保持后端原样。
+    """
+    normalized = dict(photo)
+    if normalized.get("shot_at"):
+        return normalized
+    raw = normalized.get("shotAt")
+    is_seconds = isinstance(raw, int) or (isinstance(raw, str) and raw.strip().isdigit())
+    if is_seconds and int(raw) > 0:
+        normalized["shot_at"] = datetime.datetime.fromtimestamp(
+            int(raw),
+        ).isoformat(timespec="seconds")
+    else:
+        normalized["shot_at"] = ""
+    return normalized
+
+
 def fetch_photos_batch(cfg, photo_ids: list[str]) -> list[dict]:
     """批量获取照片详情（并行请求 Go 后端，按传入顺序返回）。"""
     if not photo_ids:
@@ -138,7 +160,7 @@ def fetch_photos_batch(cfg, photo_ids: list[str]) -> list[dict]:
                 if not isinstance(photo, dict) or not photo.get("id"):
                     logger.warning("[runtime] 照片详情响应缺少 photo.id: id=%s", pid)
                     return None
-                return photo
+                return _normalize_photo(photo)
         except Exception as exc:
             logger.warning("[runtime] 获取照片详情失败: id=%s, error=%s", pid, exc)
             return None

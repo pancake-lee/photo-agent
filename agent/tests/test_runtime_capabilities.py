@@ -1,3 +1,4 @@
+import datetime
 import unittest
 import unittest.mock
 
@@ -536,7 +537,46 @@ class RetrievalCapabilityTest(unittest.TestCase):
         client.__enter__.return_value.get.return_value = response
         with unittest.mock.patch.object(caps_common.http_utils, "create_client", return_value=client):
             photos = caps_common.fetch_photos_batch(_cfg(), ["a"])
-        self.assertEqual(photos, [{"id": "a", "filename": "a.jpg"}])
+        self.assertEqual(photos, [{"id": "a", "filename": "a.jpg", "shot_at": ""}])
+
+    def _fetch_with_photo(self, photo: dict) -> dict:
+        response = unittest.mock.MagicMock()
+        response.json.return_value = {"photo": photo}
+        client = unittest.mock.MagicMock()
+        client.__enter__.return_value.get.return_value = response
+        with unittest.mock.patch.object(caps_common.http_utils, "create_client", return_value=client):
+            photos = caps_common.fetch_photos_batch(_cfg(), ["a"])
+        return photos[0]
+
+    def test_fetch_photos_batch_normalizes_shotat_unix_seconds(self):
+        """后端真实契约：shotAt 是 Unix 秒（字符串或整数），归一化为本地 ISO 的 shot_at。
+
+        回归背景：2026-09-04 山西请求中选片 context 与评委全程读到 shot_at=None
+        （时段未知），评委持续拒绝导致修复环耗尽时长预算。
+        """
+        photo = self._fetch_with_photo({
+            "id": "a", "filename": "a.jpg", "shotAt": "1785894484",
+        })
+        expected = datetime.datetime.fromtimestamp(1785894484).isoformat(timespec="seconds")
+        self.assertEqual(photo["shot_at"], expected)
+        self.assertEqual(photo["shotAt"], "1785894484")   # 原字段保留，其余字段不动
+
+        photo = self._fetch_with_photo({
+            "id": "a", "filename": "a.jpg", "shotAt": 1785894484,
+        })
+        self.assertEqual(photo["shot_at"], expected)
+
+    def test_fetch_photos_batch_keeps_existing_shot_at(self):
+        photo = self._fetch_with_photo({
+            "id": "a", "filename": "a.jpg", "shot_at": "2026-08-01T18:00:00+08:00",
+        })
+        self.assertEqual(photo["shot_at"], "2026-08-01T18:00:00+08:00")
+
+    def test_fetch_photos_batch_marks_missing_or_zero_shotat_unknown(self):
+        """拍摄时间缺失或 0（EXIF 无数据）置空串，不伪装成 1970 年。"""
+        for raw in ("", "0", 0, None):
+            photo = self._fetch_with_photo({"id": "a", "filename": "a.jpg", "shotAt": raw})
+            self.assertEqual(photo["shot_at"], "", f"shotAt={raw!r}")
 
     def test_sql_search_returns_photo_ids_observation(self):
         with unittest.mock.patch.object(caps_retrieval.text_to_sql, "generate_filter_sql",

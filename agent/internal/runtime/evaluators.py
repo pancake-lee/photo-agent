@@ -64,11 +64,30 @@ def _time_bucket(shot_at: str) -> str:
     return f"{hour_str}时" if hour_str.isdigit() else "未知时段"
 
 
+def _photo_subject(photo: dict) -> str:
+    """照片内容摘要，供评委阅读。
+
+    优先取后端已解析的结构化字段（objects/scene/mood，人读短语）；缺失时退回
+    description JSON 里的 overall_summary；再退回原始描述前缀。绝不把 JSON
+    原文截断后当摘要（评委无法阅读，会以信息不足为由拒绝正常产物）。
+    """
+    structured = "，".join(
+        str(photo.get(key)).strip()
+        for key in ("objects", "scene", "mood")
+        if str(photo.get(key) or "").strip()
+    )
+    if structured:
+        return structured[:_FEEDBACK_MAX_CHARS]
+    data = caps_common.extract_json_dict(str(photo.get("description") or ""))
+    if isinstance(data, dict) and str(data.get("overall_summary") or "").strip():
+        return str(data["overall_summary"]).strip()[:60]
+    return str(photo.get("description") or "无描述")[:60]
+
+
 def _photo_line(photo: dict) -> str:
     return (
         f"- {photo.get('filename') or photo.get('id')}"
-        f"（{_time_bucket(str(photo.get('shot_at') or ''))}）："
-        f"{str(photo.get('description') or '无描述')[:60]}"
+        f"（{_time_bucket(str(photo.get('shot_at') or ''))}）：{_photo_subject(photo)}"
     )
 
 

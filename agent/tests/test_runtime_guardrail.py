@@ -298,6 +298,37 @@ class EvaluatorTest(unittest.TestCase):
             verdict = rt_evaluators.evaluate_selection(ctx, observation)
         self.assertTrue(verdict.passed)
 
+    def test_selection_judge_reads_real_backend_contract(self):
+        """真实后端契约回归：评委读到结构化摘要与归一化时段，而非 JSON 原文截断。
+
+        回归背景：2026-09-04 山西请求中照片详情携带 JSON description 与
+        shotAt，评委拿到「未知时段 + JSON 前缀」信息不足，持续拒绝正常选片。
+        """
+        task = self._task_with_selection()
+        ctx, prompts, fake = self._capture_ctx(task)
+        observation = rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "已挑选 2 张",
+            {"ids": ["a", "b"], "photos": [
+                {"id": "a", "filename": "DSC_1630.jpg", "shot_at": "2026-08-05T09:48:04",
+                 "description": '```json\n{"subject": {"main_objects": ["石雕佛像"]}}\n```',
+                 "objects": "石雕佛造像", "scene": "石窟洞窟内部", "mood": "肃穆"},
+                {"id": "b", "filename": "DSC_1655.jpg", "shot_at": "2026-08-05T17:20:00",
+                 "description": '```json\n{"overall_summary": "傍晚的石窟外景"}\n```',
+                 "objects": "", "scene": "", "mood": ""},
+            ]},
+        )
+        with unittest.mock.patch.object(rt_evaluators.caps_common, "invoke_structured_llm",
+                                        side_effect=fake):
+            rt_evaluators.evaluate_selection(ctx, observation)
+        _, user_prompt = prompts[0]
+        # 结构化字段优先，未提供时退回 overall_summary；时段来自归一化 shot_at
+        self.assertIn("石雕佛造像，石窟洞窟内部，肃穆", user_prompt)
+        self.assertIn("傍晚的石窟外景", user_prompt)
+        self.assertIn("09时", user_prompt)
+        self.assertIn("17时", user_prompt)
+        self.assertNotIn("未知时段", user_prompt)
+        self.assertNotIn("main_objects", user_prompt)   # JSON 原文不进评委提示词
+
     def test_copy_judge_skips_non_copy_kind(self):
         ctx, prompts, fake = self._capture_ctx()
         with unittest.mock.patch.object(rt_evaluators.caps_common, "invoke_structured_llm",

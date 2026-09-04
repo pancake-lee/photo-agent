@@ -58,6 +58,8 @@
 - 2026-09-03：任务编号规范调整——版本系列任务直接平铺进任务总览（AR2-x 为 V2 系列，后续 V3 用 AR3-x），不再用单一父条目内嵌子任务。
 - 2026-09-03：V2 第一批（可自动验收、无依赖项）实现完成并关单：AR2-1 SQL 校验器接受 WITH 只读 CTE；AR2-2 观察六态分类（status 与 kind 分离，异常归类 + 能力显式声明，OBS_ERROR 强制显式状态）；AR2-6 时间线多匹配澄清（复用 AR11 续跑管道，confirm_kind 区分回复类型，数量/风格默认值记入 resolved_facts.assumptions）。Agent 全量单测 239/239 通过。剩余 AR2-3（依赖 AR2-2）→ AR2-4/AR2-5（依赖 AR2-3）→ AR2-7（依赖全系列，含用户真实环境验收）。
 - 2026-09-03：V2 第二批实现完成并关单（AR2-3、AR2-4、AR2-5，均为 AI 自动验收）：guardrail 落地为 execute 与 reduce 之间的程序节点，按「状态 → 策略」映射执行有界恢复（temporary 重试、声明可修复的 invalid 带反馈修复、决策侧 invalid 摘要再决策、permanent 确定性终态、恢复耗尽可行动停止；恢复预算 RuntimeRetryMax/RepairMax/RedecideMax，恢复不消耗步数但预算先行检查）；无进展检测以四维状态签名 3 步窗口两级响应；语义质量门（选片代表性 + 文案事实依据）按能力声明在确定性检查通过后触发，不通过带反馈修复、耗尽 quality_gate_failed 停止。实施中补齐异常归类缺口：Go 后端 SDK（urllib3）断连形态 MaxRetryError 归入瞬时族。Agent 全量单测 282/282 通过。剩余 AR2-7（故障注入回归集与 V2 指标基线，依赖全系列，含用户真实环境验收）。
+- 2026-09-03：AR2-7 实现完成，V2 系列代码交付齐备，待用户真实环境验收：新增 `agent/tests/test_runtime_fault_injection.py` 九个图级故障注入场景（七类，SQL 空结果与工具超时各拆两形态），每场景声明注入器 Ground Truth 并程序化分类结局；RAG 低置信因当前无能力自然产出该状态，经复制注册表替换 rag_search 注入。`run_runtime` 返回值透传 `stop_reason` 与 `recovery_used`。V2 指标基线写入[评估基线](../eval/baseline.md)：恢复成功率 100%（5/5）、正确停止率 100%（4/4）、无谓重试率 0%（0/5），由单测锚定、`--metrics` 可重复生成。Agent 全量单测 292/292、Web 构建通过。
+- 2026-09-04：用户验收（方案 B：正常山西请求回归）失败，回复「预算已耗尽（时长）」。trace `2df4adc0106b` 定位：选片质量门 3 次拒绝正常选片（反馈均为「时段未知/描述信息不足」），修复环重执行把 300 秒时长预算烧完。根因是 Runtime 与 Go 后端的照片详情字段契约错位：后端 `shotAt`（Unix 秒，驼峰）被当 `shot_at`（ISO，蛇形）读，全程 None；`description` 是视觉模型完整 JSON，评委截断后不可读。既有单测 mock 数据沿用了错误契约，注入集因此未拦截。修复：`fetch_photos_batch` 归一化 `shotAt → shot_at`（本地 ISO），评委优先读后端已解析的 `objects/scene/mood`、退回 `overall_summary`；补真实契约回归测试 4 项，Agent 全量单测 296/296。待用户重启服务后重新回归。
 
 ## 4. 下一轮建议
 

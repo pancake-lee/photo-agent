@@ -14,7 +14,7 @@
 | Done | Agent Runtime | AR2-4 | 无进展检测（状态签名）                    | 自动验证通过 |
 | Done | Agent Runtime | AR2-5 | 语义 evaluator（选片+文案质量门）         | 自动验证通过 |
 | Done | Agent Runtime | AR2-6 | Ask vs Act 扩展（多匹配澄清）             | 自动验证通过 |
-| 已规划 | Agent Runtime | AR2-7 | 故障注入回归集与 V2 指标基线              |      |
+| 待用户验收 | Agent Runtime | AR2-7 | 故障注入回归集与 V2 指标基线              |      |
 | 暂缓 | Agent Runtime | AR15 | Runtime 任务空间一维化（发帖 goal 特化）  |      |
 | 待规划 | 对话查询   | CQ7   | 聊天 SQL 日期过滤未换算本地时区              |      |
 | 待规划 | 图片交互   | DL1   | 图片管理与对话结果的批量下载                 |      |
@@ -87,10 +87,13 @@
 
 ### AR2-7 故障注入回归集与 V2 指标基线
 
-- **状态**：已规划（2026-09-03），依赖 AR2-1 至 AR2-6
+- **状态**：待用户验收（2026-09-03），依赖 AR2-1 至 AR2-6
 - **背景**：architecture/04 的 V2 验收要求故障注入集与恢复指标，当前测试只覆盖成功路径与确定性终态。
 - **方案**：七类注入故障（SQL 空结果、RAG 低置信、工具超时、重复旅行歧义、photo_id 失效、异常输出结构、连续无新信息）各建确定性单测，mock 能力不依赖真实 LLM；在注入集上统计恢复成功率、正确停止率、无谓重试率，写入 `docs/eval/baseline.md` 作为 V2 基线。
 - **验收**：七类注入各有恢复路径断言；三项指标有基线数字；Agent 全量单测与前端构建通过。
+- **实施记录**：新增 `agent/tests/test_runtime_fault_injection.py`，9 个图级确定性场景（SQL 空结果拆硬范围/软提示、工具超时拆瞬时/持续，其余五类各一）跑完整 `run_runtime` 循环；每场景声明注入器 Ground Truth（是否可恢复 + 合理恢复清单），结局程序化分类（完成/正确停止/未按预期）。RAG 低置信经复制注册表替换 `rag_search` 能力注入（当前无能力自然产出该状态，注入是唯一触发方式）。`run_runtime` 返回值补充 `stop_reason` 与 `recovery_used`（finish 节点 trace 摘要既有字段的透传），使 no_progress 停止与恢复计数可程序化判读。指标基线（恢复成功率 100%、正确停止率 100%、无谓重试率 0%）由 `V2MetricsBaselineTest` 锚定，`--metrics` 入口可重复打印，数字已写入 [评估基线](eval/baseline.md)。
+- **回归修复（2026-09-04）**：用户验收发真实山西请求失败（预算已耗尽（时长）），trace `2df4adc0106b` 定位根因：Runtime 消费的照片详情字段与后端契约错位，`shotAt`（Unix 秒，驼峰）被当成 `shot_at`（ISO，蛇形）读取，全程为 None；`description` 是视觉模型的完整 JSON，评委截断后拿到不可读前缀。两者叠加使选片评委以「时段未知、信息不足」持续拒绝正常选片，修复环 3 次重执行耗尽 300 秒时长预算。修复采用统一字段契约：`fetch_photos_batch` 归一化 `shotAt → shot_at`（本地 ISO，缺失/0 置空不伪装 1970）；评委 `_photo_line` 优先读后端已解析的 `objects/scene/mood`，退回 description JSON 的 `overall_summary`，不再喂 JSON 原文。既有单测 mock 数据沿用了错误契约（蛇形 + 人读描述），已补真实契约回归测试。
+- **AI 自动验证**：故障注入集 10/10 通过（七类恢复路径断言 + 指标锚定）；Agent 全量单测 296/296 通过（含字段契约归一化 3 项、评委真实契约 1 项）；Web 前端构建（vue-tsc + vite）通过。
 - **（用户）验收操作**：真实环境发原始山西请求，确认照片、标题、文案正常交付，V2 系列整体无回归。
 - **最小回传**：回复「AR2 系列已通过」。
 

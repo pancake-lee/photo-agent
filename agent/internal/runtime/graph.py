@@ -640,5 +640,7 @@ def run_runtime(
         "photos": result.get("photos", []),
         "compose_url": result.get("compose_url", ""),
         "terminal_reason": result["task"].progress.terminal_reason,
+        "stop_reason": result.get("stop_reason", ""),
+        "recovery_used": dict(result["budget_state"].recovery_used),
         "clarification": result["task"].resolved_facts.get("clarification") or {},
     }
