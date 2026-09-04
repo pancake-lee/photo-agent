@@ -20,6 +20,7 @@ import type { PhotoDetail as PhotoDetailType } from '../types/photo'
 import type { SegmentMode } from '../utils/segment'
 import type { ConflictResolution } from '../types/upload'
 import { getAgentBase, getApiBase } from '../config'
+import { downloadPhotos } from '../utils/downloadPhotos'
 
 const message = useMessage()
 const router = useRouter()
@@ -94,6 +95,7 @@ async function confirmBatchRepair() {
   }
 }
 const selectedIds = ref<Set<string>>(new Set())
+const downloadLoading = ref(false)
 const selectedCount = computed(() => selectedIds.value.size)
 // 恰好选中 2 张时显示「区间选择」按钮
 const showIntervalSelect = computed(() => selectedIds.value.size === 2)
@@ -134,6 +136,18 @@ function selectAllVisible() {
 
 function clearSelection() {
   selectedIds.value = new Set()
+}
+
+async function downloadSelection() {
+  downloadLoading.value = true
+  try {
+    await downloadPhotos([...selectedIds.value])
+    message.success(`已开始下载 ${selectedIds.value.size} 张照片的 ZIP`)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '照片打包下载失败')
+  } finally {
+    downloadLoading.value = false
+  }
 }
 
 // 区间选择：勾选两张已选照片之间（按拍摄时间排序）的所有照片
@@ -244,9 +258,9 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         v-model:search-filename="searchFilename" v-model:filter-timeline="filterTimeline" v-model:filter-shot-at-start="filterShotAtStart" v-model:filter-shot-at-end="filterShotAtEnd"
         :total="total" :stats="stats" :embed-stats="embedStats" :timelines="timelines" :burst-view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :sort-order="sortOrder"
         :vlm-running="vlmStatus.running" :vlm-completed="vlmStatus.completed" :vlm-total="vlmStatus.total" :embed-running="embedStatus.running" :embed-completed="embedStatus.completed" :embed-total="embedStatus.total" :burst-running="burstStatus.running" :burst-processed="burstStatus.processed" :burst-total="burstStatus.total"
-        :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect"
+        :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect" :download-loading="downloadLoading"
         @apply-filters="applyFilters" @reset-filters="resetFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
-        @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @go-to-post-studio="goToPostStudio"
+        @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @download-selection="downloadSelection" @go-to-post-studio="goToPostStudio"
       />
     </NLayoutHeader>
     <NLayoutContent><div class="content-wrapper">

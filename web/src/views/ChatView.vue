@@ -16,7 +16,7 @@ import {
   NRadioButton,
   useMessage,
 } from 'naive-ui'
-import { TrashOutline, SendOutline, BookmarkOutline } from '@vicons/ionicons5'
+import { TrashOutline, SendOutline, BookmarkOutline, DownloadOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
 import { getAgentBase, getApiBase } from '../config'
@@ -28,10 +28,25 @@ import RuntimeProcessPanel from '../components/RuntimeProcessPanel.vue'
 import { photoApi } from '../backend-sdk-client'
 import type { ApiSearchPhotosResponse } from '../../backend-sdk/api'
 import { canSaveAsGoldenQuery } from '../utils/goldenQuery'
+import { downloadPhotos } from '../utils/downloadPhotos'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const downloadLoading = ref(false)
+
+async function downloadChatPhotos(photos: PhotoRef[]) {
+  const ids = photos.map((photo) => photo.photo_id).filter(Boolean)
+  downloadLoading.value = true
+  try {
+    await downloadPhotos(ids)
+    message.success(`已开始下载 ${ids.length} 张照片的 ZIP`)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '照片打包下载失败')
+  } finally {
+    downloadLoading.value = false
+  }
+}
 
 const {
   currentSession,
@@ -454,7 +469,7 @@ const hasMessages = computed(() => messages.value.length > 0)
                 v-if="msg.role === 'assistant' && msg.photos && msg.photos.length"
                 class="photo-attachments"
               >
-                <div class="attachments-header">📎 相关照片 ({{ msg.photos.length }})</div>
+                <div class="attachments-header">📎 相关照片 ({{ msg.photos.length }}) <NButton size="tiny" :loading="downloadLoading" @click="downloadChatPhotos(msg.photos)"><template #icon><NIcon><DownloadOutline /></NIcon></template>下载 ZIP</NButton></div>
 
                 <PhotoThumbList
                   :photos="msg.photos"

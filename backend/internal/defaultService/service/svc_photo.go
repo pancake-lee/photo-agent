@@ -87,6 +87,7 @@ func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 		r := httpSrv.Route("/")
 		// 静态路由必须在生成的 /photos/{id} 之前注册，否则会被当成照片 ID。
 		r.GET("/api/v1/photos/ai-audit", s.AIAuditHandler)
+		r.POST("/api/v1/photos/download", s.DownloadPhotosHandler)
 		// 手动注册的上传/图片路由
 		r.GET("/api/v1/photos/{id}/image", s.GetPhotoImageHandler)
 		r.POST("/api/v1/photos/upload", s.UploadPhotoHandler)

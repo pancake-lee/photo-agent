@@ -16,6 +16,7 @@ import {
   CheckboxOutline,
   CloudUploadOutline,
   CloseOutline,
+  DownloadOutline,
   GridOutline,
   ImagesOutline,
   InformationCircleOutline,
@@ -46,6 +47,7 @@ const props = defineProps<{
   selectionMode: boolean
   selectedCount: number
   showIntervalSelect: boolean
+  downloadLoading: boolean
 }>()
 
 const searchFilename = defineModel<string>('searchFilename', { required: true })
@@ -69,6 +71,7 @@ const emit = defineEmits<{
   selectAll: []
   clearSelection: []
   intervalSelect: []
+  downloadSelection: []
   goToPostStudio: []
 }>()
 
@@ -262,6 +265,7 @@ onBeforeUnmount(() => {
       <NButton @click="$emit('selectAll')">全选</NButton>
       <NButton :disabled="selectedCount === 0" @click="$emit('clearSelection')">取消全选</NButton>
       <NButton v-if="showIntervalSelect" @click="$emit('intervalSelect')">区间选择</NButton>
+      <NButton :disabled="selectedCount === 0" :loading="downloadLoading" @click="$emit('downloadSelection')"><template #icon><NIcon><DownloadOutline /></NIcon></template>下载 ZIP</NButton>
       <NButton type="primary" :disabled="selectedCount === 0" @click="$emit('goToPostStudio')"><template #icon><NIcon><ImagesOutline /></NIcon></template>图文工坊</NButton>
       <NButton @click="$emit('toggleSelectionMode')"><template #icon><NIcon><CloseOutline /></NIcon></template>退出选择</NButton>
     </NSpace>
