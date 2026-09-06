@@ -84,7 +84,7 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - **L2** `README.md`（及 `README.en.md`，如存在）— 项目简介、核心价值、快速开始、文档索引。禁区：详细技术方案、任务拆解
 - **L3** `docs/prd.md` — 产品"做什么"：功能范围、用户故事、验收标准、优先级。禁区：API 设计、数据模型、部署命令
 - **L4** `docs/tech.md` — "怎么做"：架构设计、API 契约、数据模型、技术选型。禁区：任务拆分、估时
-- **L4** `docs/harness.md` — Harness 工程架构索引：工作模式、评估系统、Trace 日志的高层概览和文档入口。禁区：实现细节
+- **L4** `docs/harness.md` — 本项目 Harness 工程的架构索引：工作模式、验证/评估、可观测性和文档入口。没有独立评估或 Trace 子系统时，明确写出当前替代机制与后续触发条件。禁区：实现细节、需求池
 - **L5** `docs/design/*-hub.md` — 专题中枢文档：串联同一需求及其衍生需求在多次评估/规划/生成轮次中散落的所有文档、评估报告、backlog 条目、提交记录。是专题的唯一入口
 - **L6** `docs/eval/baseline.md` — 量化评估基线
 - **L7** `docs/backlog.md` — 需求池、演进路线图、Plan → Generate 交接；归档后只保留未完成条目。禁区：API 设计、数据模型
@@ -92,6 +92,8 @@ AI 根据触发词自动切换模式。触发后，读取 `docs/handbook/work-mo
 - **L9** 代码实现 — 最终事实来源
 
 > 项目专属文档层级（如 `docs/note.md`、`docs/reference.md`、`docs/ui-rules.md` 等）在下方「本项目附加层级」小节中补充，编号沿用对应 L 层。
+>
+> 文件名、各文档的最小结构、backlog 状态与归档规则以 `pancake/30-Tools/harness/common/document-governance.md` 为准。`docs/changelog.md` 不是标准文档：版本完成后写入 `docs/archive/vX.Y.Z.md`，不要新建或保留独立 changelog。
 <!-- harness:end src=pancake/30-Tools/harness/common/claude-doc-levels.md -->
 
 ### 本项目附加层级
