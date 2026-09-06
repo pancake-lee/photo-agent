@@ -1,5 +1,14 @@
 # 评估基线
 
+## 2026-09-07 — Agent Runtime V3 组合轨迹基线（AR3-5）
+
+- **离线口径**：仅使用 `agent/tests/test_runtime_v3_contracts.py` 的替身照片与替身 LLM；不读取真实照片、不调用真实 LLM。
+- **Capability Selection Accuracy**：目标契约只暴露适用能力；跨期对比目标拒绝 `write_post` 等发帖专属观察（1/1）。
+- **Capability Reuse Rate**：跨期目标复用 Runtime 状态、Guardrail、范围/检索/详情 Tool，新增 1 个对比 Skill；主题发现复用既有三阶段 Workflow（2/2 组合入口）。
+- **New-Pipeline Rate**：0；第二目标与主题发现均经统一 Runtime Capability Registry 接入，未增加顶层聊天 Pipeline。
+- **Contract Failure Rate**：0/3（显式交付变体、目标不适用观察、两组证据对比均被离线断言）。
+- **Task Success / Cost**：离线替身组合用例 2/2 成功；成本为 0（无真实 LLM 调用）。
+
 > 量化评估指标，跟踪各模块质量趋势。每次运行评估后更新。
 >
 > 指标来源：`agent/chain/evaluation.py` + `data/agent/retrieval-golden-queries.json`

@@ -47,6 +47,7 @@ import internal.chat.text_to_sql as text_to_sql
 import infra.config as config
 import internal.runtime.capabilities.common as caps_common
 import internal.runtime.graph as rt_graph
+import internal.runtime.state as rt_state
 import infra.openapi_client as openapi_client
 import infra.llm_factory as llm_factory
 import infra.token_tracker as token_tracker
@@ -70,6 +71,7 @@ class RouterState(typing.TypedDict):
     compose_url: str        # Runtime 兜底深链（候选超限时引导进图文工坊）
     runtime_terminal_reason: str
     runtime_clarification: dict
+    runtime_goal_type: str
 
 
 CLASSIFY_SYSTEM = (
@@ -133,7 +135,10 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     logging.getLogger(__name__).info(
         "[路由] 「%s」 → %s（模型原始分类=%r）", state["question"], query_type, raw,
     )
-    return {"query_type": query_type}
+    goal_type = rt_state.GOAL_SOCIAL_POST
+    if query_type == "runtime" and any(term in state["question"] for term in ("对比", "进步", "变化", "跨年", "跨期")):
+        goal_type = rt_state.GOAL_PHOTO_COMPARISON
+    return {"query_type": query_type, "runtime_goal_type": goal_type}
 
 
 def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
@@ -501,6 +506,7 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
         pricing_available=bool(configurable.get("pricing_available", True)),
         tracer=configurable.get("tracer"),
         progress_callback=progress_callback,
+        goal_type=state.get("runtime_goal_type", rt_state.GOAL_SOCIAL_POST),
     )
     return {
         "answer": result["answer"],
@@ -696,6 +702,7 @@ class PhotoAgent:
             "compose_url": "",
             "runtime_terminal_reason": "",
             "runtime_clarification": {},
+            "runtime_goal_type": rt_state.GOAL_SOCIAL_POST,
         }
         result = self._app.invoke(initial, {
             "configurable": {

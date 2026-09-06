@@ -14,9 +14,11 @@
 """
 
 import internal.runtime.capabilities.creation as creation
+import internal.runtime.capabilities.comparison as comparison
 import internal.runtime.capabilities.photo_tools as photo_tools
 import internal.runtime.capabilities.resolve_trip as resolve_trip
 import internal.runtime.capabilities.retrieval as retrieval
+import internal.runtime.capabilities.workflows as workflows
 import internal.runtime.registry as rt_registry
 
 
@@ -31,6 +33,8 @@ def build_registry() -> rt_registry.CapabilityRegistry:
         photo_tools.FETCH_PHOTO_DETAILS,
         creation.SELECT_PHOTOS,
         creation.WRITE_POST,
+        comparison.COMPARE_PHOTO_PERIODS,
+        workflows.DISCOVER_TOPICS,
     ]
     for capability in capabilities:
         registry.register(capability)

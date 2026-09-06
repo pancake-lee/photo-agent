@@ -75,6 +75,13 @@ class TopicSuggestion:
     intuition_source: list[str] = dataclasses.field(default_factory=list)  # Stage 1 启发照片 ID
 
 
+def _photo_id(photo: object) -> str:
+    """兼容 API 字典和内部照片对象，提取范围过滤用的 ID。"""
+    if isinstance(photo, dict):
+        return str(photo.get("id") or "")
+    return str(getattr(photo, "id", "") or "")
+
+
 # ============================================================================
 # 常量
 # ============================================================================
@@ -1052,6 +1059,7 @@ def run_suggest(
     go_backend_url: str,
     cluster_dir: pathlib.Path | None = None,
     tracer: tracer_mod.Tracer | None = None,
+    scope_photo_ids: list[str] | None = None,
 ) -> tuple[list[TopicSuggestion], dict]:
     """
     执行潜在主题识别，返回选题建议列表和元信息。
@@ -1097,6 +1105,12 @@ def run_suggest(
         logger.warning("照片库为空，无法生成选题建议")
         return [], {**meta, "error": "照片库为空"}
 
+    if scope_photo_ids is not None:
+        scope_set = set(scope_photo_ids)
+        photos = [photo for photo in photos if _photo_id(photo) in scope_set]
+        if not photos:
+            return [], {**meta, "error": "指定照片范围为空"}
+        meta["scope_photo_ids"] = list(scope_photo_ids)
     meta["total_photos"] = len(photos)
 
     try:

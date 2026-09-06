@@ -341,6 +341,11 @@ RESOLVE_TRIP = rt_registry.Capability(
         "目标涉及旅行、日期或时段时，先执行 resolve_trip 确认权威候选范围，未确认前不要检索"
     ),
     progress_details=_progress_details,
+    level="skill",
+    applicable_when="目标含旅行、日期或时段等范围约束时",
+    not_applicable_when="目标不需要限定照片范围时",
+    output_description="权威照片范围、已解析事实与软提示",
+    error_semantics="歧义返回澄清观察，空范围返回 empty_scope，网络失败可重试",
 )
 
 # --------------------------------------------------

@@ -14,6 +14,7 @@ import internal.runtime.state as rt_state
 
 # 参数声明允许的类型（用于提示词描述与程序校验）
 _PARAM_TYPES = ("str", "int", "float", "bool", "list", "dict")
+_CAPABILITY_LEVELS = ("tool", "skill", "workflow")
 
 
 @dataclasses.dataclass
@@ -63,6 +64,12 @@ class Capability:
     progress_details: typing.Callable[[dict], dict] | None = None
     repairable_reasons: tuple[str, ...] = ()
     evaluator: typing.Callable[[RunContext, rt_state.Observation], typing.Any] | None = None
+    level: str = "tool"
+    applicable_when: str = "满足能力描述中的前置条件时"
+    not_applicable_when: str = "不满足能力描述中的前置条件时"
+    output_description: str = "结构化 Observation，具体字段见能力描述"
+    error_semantics: str = "以 Observation.status 返回可恢复或终止错误"
+    side_effects: str = "none"
 
     def spec(self) -> dict:
         """输出给决策提示词的能力描述。"""
@@ -70,6 +77,12 @@ class Capability:
             "name": self.name,
             "description": self.description,
             "parameters": self.parameters,
+            "level": self.level,
+            "applicable_when": self.applicable_when,
+            "not_applicable_when": self.not_applicable_when,
+            "output": self.output_description,
+            "errors": self.error_semantics,
+            "side_effects": self.side_effects,
         }
 
 
@@ -82,6 +95,11 @@ class CapabilityRegistry:
     def register(self, capability: Capability) -> None:
         if capability.name in self._capabilities:
             raise ValueError(f"能力重复注册: {capability.name!r}")
+        if capability.level not in _CAPABILITY_LEVELS:
+            raise ValueError(f"能力 {capability.name!r} 层级必须是 {_CAPABILITY_LEVELS}")
+        if not all((capability.applicable_when, capability.not_applicable_when,
+                    capability.output_description, capability.error_semantics)):
+            raise ValueError(f"能力 {capability.name!r} 缺少完整契约字段")
         for param_name, param in capability.parameters.items():
             if param.get("type") not in _PARAM_TYPES:
                 raise ValueError(
@@ -95,23 +113,30 @@ class CapabilityRegistry:
     def names(self) -> list[str]:
         return list(self._capabilities)
 
-    def specs(self) -> list[dict]:
-        return [capability.spec() for capability in self._capabilities.values()]
+    def specs(self, allowed_names: tuple[str, ...] | None = None) -> list[dict]:
+        allowed = set(allowed_names or ())
+        return [capability.spec() for capability in self._capabilities.values()
+                if not allowed or capability.name in allowed]
 
-    def decide_hints(self) -> list[str]:
+    def decide_hints(self, allowed_names: tuple[str, ...] | None = None) -> list[str]:
         """按登记顺序收集能力自带的选择规则（去重，多个能力可共享同一条）。"""
         hints: list[str] = []
+        allowed = set(allowed_names or ())
         for capability in self._capabilities.values():
+            if allowed and capability.name not in allowed:
+                continue
             hint = capability.decide_hint
             if hint and hint not in hints:
                 hints.append(hint)
         return hints
 
-    def validate_params(self, name: str, params: typing.Any) -> list[str]:
+    def validate_params(self, name: str, params: typing.Any, allowed_names: tuple[str, ...] | None = None) -> list[str]:
         """校验 decide 返回的参数，返回错误清单（空列表表示通过）。"""
         capability = self._capabilities.get(name)
         if capability is None:
             return [f"未知能力: {name!r}，可用: {', '.join(self._capabilities) or '无'}"]
+        if allowed_names and name not in allowed_names:
+            return [f"能力不适用于当前目标: {name!r}"]
         if params is None:
             params = {}
         if not isinstance(params, dict):

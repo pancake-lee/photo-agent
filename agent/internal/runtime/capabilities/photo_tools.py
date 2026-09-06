@@ -42,6 +42,11 @@ FETCH_PHOTO_DETAILS = rt_registry.Capability(
         "ids": {"type": "list", "description": "照片 ID 列表", "required": True},
     },
     run=_fetch_photo_details,
+    level="tool",
+    applicable_when="已有待核实的照片 ID 时",
+    not_applicable_when="尚无照片 ID 或不需照片证据时",
+    output_description="照片元数据与描述详情",
+    error_semantics="详情不可获取返回可重试的 temporary_error",
 )
 
 # --------------------------------------------------

@@ -18,7 +18,7 @@ class NewTaskTest(unittest.TestCase):
             rt_state.new_task("unknown_goal", "描述")
 
     def test_candidate_delivery_still_requires_copy_draft(self):
-        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "给我照片", delivery_mode="candidate")
         self.assertEqual(task.goal.delivery_mode, "candidate")
         self.assertEqual(task.goal.requirements, ("selected_photos", "copy_draft"))
 
@@ -303,7 +303,7 @@ class BuildFinalOutputTest(unittest.TestCase):
         self.assertEqual(output["handoff_url"], "")
 
     def test_candidate_delivery_output_keeps_copy_draft(self):
-        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "给我照片", delivery_mode="candidate")
         task = rt_state.reduce_observation(task, rt_state.Observation(
             rt_state.OBS_PHOTOS_SELECTED, "保留候选", {"ids": ["a", "b"]},
         ), step_no=1, action="select_photos")

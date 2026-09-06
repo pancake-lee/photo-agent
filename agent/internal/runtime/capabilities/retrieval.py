@@ -43,7 +43,7 @@ def _sql_search(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
     return rt_state.Observation(
         rt_state.OBS_PHOTO_IDS,
         f"结构化检索（SQL）返回 {len(ids)} 个候选照片",
-        {"ids": ids, "source": "sql", "sql": sql},
+        {"ids": ids, "source": "sql", "sql": sql, "period": params.get("period")},
         status=common.retrieval_status(ids),
     )
 
@@ -58,10 +58,16 @@ SQL_SEARCH = rt_registry.Capability(
     ),
     parameters={
         "query": {"type": "str", "description": "结构化检索条件描述", "required": True},
+        "period": {"type": "str", "description": "跨期对比的 earlier 或 later 证据组", "required": False},
     },
     run=_sql_search,
     decide_hint=_SEARCH_DECIDE_HINT,
     progress_details=_search_progress_details,
+    level="tool",
+    applicable_when="需要按可结构化表达的条件查询照片时",
+    not_applicable_when="只需语义相似检索或尚未确认硬范围时",
+    output_description="按条件排序的照片 ID 候选",
+    error_semantics="空结果为 empty，查询错误以 Observation 状态返回",
 )
 
 # --------------------------------------------------
@@ -85,7 +91,7 @@ def _rag_search(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
     return rt_state.Observation(
         rt_state.OBS_PHOTO_IDS,
         f"语义检索（RAG）返回 {len(ids)} 个候选照片",
-        {"ids": ids, "source": "rag"},
+        {"ids": ids, "source": "rag", "period": params.get("period")},
         status=common.retrieval_status(ids),
     )
 
@@ -99,10 +105,16 @@ RAG_SEARCH = rt_registry.Capability(
     ),
     parameters={
         "query": {"type": "str", "description": "语义检索描述", "required": True},
+        "period": {"type": "str", "description": "跨期对比的 earlier 或 later 证据组", "required": False},
     },
     run=_rag_search,
     decide_hint=_SEARCH_DECIDE_HINT,
     progress_details=_search_progress_details,
+    level="tool",
+    applicable_when="需要按画面语义检索照片时",
+    not_applicable_when="仅有结构化条件或尚未确认硬范围时",
+    output_description="按语义相关度排序的照片 ID 候选",
+    error_semantics="低置信或空结果以 Observation 状态返回",
 )
 
 # --------------------------------------------------
@@ -160,6 +172,11 @@ HYBRID_SEARCH = rt_registry.Capability(
     run=_hybrid_search,
     decide_hint=_SEARCH_DECIDE_HINT,
     progress_details=_search_progress_details,
+    level="tool",
+    applicable_when="同时需要结构化软条件和画面语义时",
+    not_applicable_when="单一检索维度已能满足需要时",
+    output_description="两种检索交集中的照片 ID 候选",
+    error_semantics="交集为空返回 empty，由目标范围决定后续策略",
 )
 
 # --------------------------------------------------

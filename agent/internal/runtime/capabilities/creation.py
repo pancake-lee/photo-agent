@@ -196,6 +196,11 @@ SELECT_PHOTOS = rt_registry.Capability(
     run=_select_photos,
     progress_details=_select_progress_details,
     repairable_reasons=("photo_selection_failed", "selection_out_of_scope"),
+    level="skill",
+    applicable_when="发帖目标已有候选照片时",
+    not_applicable_when="非发帖目标，或候选尚未收集时",
+    output_description="代表照片 ID、理由及完整照片证据",
+    error_semantics="输出越界或为空可带反馈修复；超限返回工坊深链",
 )
 
 # --------------------------------------------------
@@ -251,6 +256,11 @@ WRITE_POST = rt_registry.Capability(
     run=_write_post,
     progress_details=_write_post_progress_details,
     evaluator=rt_evaluators.evaluate_copy,
+    level="skill",
+    applicable_when="发帖目标已有入选照片时",
+    not_applicable_when="未选照片或目标不要求发布草稿时",
+    output_description="含标题和正文的发布草稿",
+    error_semantics="事实依据不足可带反馈重写，其他失败返回 Observation 错误",
 )
 
 # --------------------------------------------------

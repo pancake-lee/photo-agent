@@ -28,6 +28,15 @@ def _selected_photos_ready(s: rt_state.TaskState) -> bool:
     return all(pid in scope_set for pid in s.artifacts.selected_ids)
 
 
+def _comparison_report_ready(s: rt_state.TaskState) -> bool:
+    report = s.artifacts.comparison_report
+    return bool(report.get("summary") and report.get("periods") and report.get("photo_ids"))
+
+
+def _topic_candidates_ready(s: rt_state.TaskState) -> bool:
+    return bool(s.artifacts.topic_candidates)
+
+
 # 社交媒体帖子 的任务完成条件由 选好图片 和 文案草稿 两个要件组成。
 # _REQUIREMENT_CHECKS 的意义就是把两个条件最终封装成统一的调用流程
 # _REQUIREMENT_CHECKS.get(name)(state) 直接返回 True/False，方便 check_completion 统一处理。
@@ -35,6 +44,8 @@ _REQUIREMENT_CHECKS: dict[str, typing.Callable[[rt_state.TaskState], bool]] = {
     "selected_photos": _selected_photos_ready,
     "copy_draft": lambda s: bool(s.artifacts.copy_draft.get("title"))
     and bool(s.artifacts.copy_draft.get("content")),
+    "comparison_report": _comparison_report_ready,
+    "topic_candidates": _topic_candidates_ready,
 }
 
 

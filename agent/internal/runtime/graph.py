@@ -131,18 +131,19 @@ def _progress_details(action: str, params: dict, observation: rt_state.Observati
 _RUNTIME_DECIDE_RULES = (
     "- 优先选择能推进「待办里程碑」的能力，不要重复已完成的里程碑\n"
     "- 检索到候选后先挑选照片，挑选完成后再创作文案\n"
+    "- 跨期对比先以 period=earlier 与 period=later 分别收集两期证据，再执行 compare_photo_periods\n"
     "- params 必须符合能力声明，不要编造参数名"
 )
 
 
-def _decide_system_prompt(registry: rt_registry.CapabilityRegistry) -> str:
+def _decide_system_prompt(registry: rt_registry.CapabilityRegistry, task: rt_state.TaskState) -> str:
     """组装决策系统提示词：通用规则 + 各能力自带的选择规则。"""
     rules = _RUNTIME_DECIDE_RULES
-    hints = registry.decide_hints()
+    hints = registry.decide_hints(task.goal.allowed_capabilities)
     if hints:
         rules += "\n" + "\n".join(f"- {hint}" for hint in hints)
     return (
-        "你是照片任务的执行规划器。根据当前任务状态，从能力列表中选择下一步动作。\n"
+        "你是照片任务的执行规划器。根据当前任务状态，从当前目标允许的能力列表中选择下一步动作。\n"
         '只输出 JSON: {"action": "能力名", "params": {...}, "reason": "一句话理由"}。\n'
         f"选择规则:\n{rules}"
     )
@@ -160,7 +161,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
     llm = llm_factory.create_llm(cfg, temperature=0.0, callbacks=callbacks or None)
     started_at = time.perf_counter()
     human_content = (
-        f"能力列表:\n{json.dumps(registry.specs(), ensure_ascii=False)}\n\n"
+        f"能力列表:\n{json.dumps(registry.specs(task.goal.allowed_capabilities), ensure_ascii=False)}\n\n"
         f"当前任务状态:\n{rt_state.summarize_state(task)}\n\n"
         f"完成要件缺口: {'、'.join(missing) if missing else '无'}\n\n"
     )
@@ -168,7 +169,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         human_content += f"上一决策反馈: {feedback}\n\n"
     human_content += "选择下一步动作。"
     response = llm.invoke([
-        lc_messages.SystemMessage(content=_decide_system_prompt(registry)),
+        lc_messages.SystemMessage(content=_decide_system_prompt(registry, task)),
         lc_messages.HumanMessage(content=human_content),
     ])
     duration_ms = round((time.perf_counter() - started_at) * 1000)
@@ -206,7 +207,7 @@ def _execute_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig)
     decision = state["decision"]
     action = decision.get("action", "")
 
-    errors = registry.validate_params(action, decision.get("params"))
+    errors = registry.validate_params(action, decision.get("params"), state["task"].goal.allowed_capabilities)
     started_at = time.perf_counter()
     if errors:
         observation = rt_state.Observation(
@@ -451,7 +452,10 @@ def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
     output = rt_state.build_final_output(state["task"], stop_reason=state.get("stop_reason", ""))
 
     photos: list[dict] = []
-    for photo in caps_common.fetch_photos_batch(cfg, state["task"].artifacts.selected_ids):
+    photo_ids = list(state["task"].artifacts.selected_ids)
+    if state["task"].artifacts.comparison_report:
+        photo_ids = list(state["task"].artifacts.comparison_report.get("photo_ids") or [])
+    for photo in caps_common.fetch_photos_batch(cfg, photo_ids):
         pid = photo.get("id", "")
         photos.append({
             "photo_id": pid,
@@ -474,7 +478,7 @@ def _finish_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         "steps_used": state["budget_state"].steps_used,
         "capability_calls": capability_calls,
         "recovery_used": dict(state["budget_state"].recovery_used),
-        "milestones_done": [m for m in ("locate", "candidates", "select", "copy")
+        "milestones_done": [m for m in rt_state._GOAL_PRESETS[task.goal.goal_type]["milestones"]
                             if m not in task.progress.todo],
         "todo_left": list(task.progress.todo),
         "complete": completion.complete,
@@ -587,6 +591,8 @@ def run_runtime(
     pricing_available: bool = True,
     tracer=None,
     progress_callback: typing.Callable[[str, dict], None] | None = None,
+    goal_type: str = rt_state.GOAL_SOCIAL_POST,
+    delivery_mode: str = "editorial",
 ) -> dict:
     """执行一次开放目标任务，返回 {"answer", "photos", "compose_url"}。"""
     budget_state = rt_budget.BudgetState()
@@ -601,7 +607,7 @@ def run_runtime(
         "question": question,
         "granularity": granularity,
         "task": rt_state.new_task(
-            rt_state.GOAL_SOCIAL_POST, question, {"question": question},
+            goal_type, question, {"question": question}, delivery_mode=delivery_mode,
         ),
         "decision": {},
         "observation": rt_state.Observation("", ""),

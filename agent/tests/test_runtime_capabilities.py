@@ -119,7 +119,7 @@ class SelectPhotosCapabilityTest(unittest.TestCase):
         self.assertNotIn("assumption", obs.payload)
 
     def test_candidate_delivery_keeps_collapsed_candidates_without_llm_selection(self):
-        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "尽可能多给我照片，我会二次挑选")
+        task = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "给我照片", delivery_mode="candidate")
         task = rt_state.reduce_observation(task, rt_state.Observation(
             rt_state.OBS_PHOTO_IDS, "检索", {"ids": ["a", "b", "c"]},
         ), step_no=1, action="sql_search")
@@ -715,7 +715,7 @@ class BuildRegistryTest(unittest.TestCase):
         registry = rt_caps.build_registry()
         self.assertEqual(registry.names(), [
             "resolve_trip", "sql_search", "rag_search", "hybrid_search",
-            "fetch_photo_details", "select_photos", "write_post",
+            "fetch_photo_details", "select_photos", "write_post", "compare_photo_periods", "discover_topics",
         ])
         self.assertEqual(registry.validate_params("sql_search", {"query": "q"}), [])
         self.assertTrue(registry.validate_params("sql_search", {}))

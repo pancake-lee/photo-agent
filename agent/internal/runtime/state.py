@@ -20,12 +20,22 @@ import typing
 # ============================================================================
 
 GOAL_SOCIAL_POST = "social_post"
+GOAL_PHOTO_COMPARISON = "photo_comparison"
+GOAL_TOPIC_DISCOVERY = "topic_discovery"
 
 # goal_type → 预设（完成要件 + 初始待办里程碑）
 _GOAL_PRESETS: dict[str, dict] = {
     GOAL_SOCIAL_POST: {
         "requirements": ("selected_photos", "copy_draft"),
         "milestones": ("locate", "candidates", "select", "copy"),
+    },
+    GOAL_PHOTO_COMPARISON: {
+        "requirements": ("comparison_report",),
+        "milestones": ("locate", "candidates", "compare"),
+    },
+    GOAL_TOPIC_DISCOVERY: {
+        "requirements": ("topic_candidates",),
+        "milestones": ("locate", "topics"),
     },
 }
 
@@ -39,6 +49,8 @@ _MILESTONE_LABELS = {
     "candidates": "检索候选照片",
     "select": "挑选发布照片",
     "copy": "创作文案",
+    "compare": "形成跨期对比",
+    "topics": "发现选题",
 }
 
 # Observation 归约分派键
@@ -49,6 +61,8 @@ OBS_PHOTO_DETAILS = "photo_details"
 OBS_PHOTOS_SELECTED = "photos_selected"
 OBS_SELECTION_OVERFLOW = "selection_overflow"
 OBS_COPY_DRAFTED = "copy_drafted"
+OBS_COMPARISON_REPORTED = "comparison_reported"
+OBS_TOPICS_DISCOVERED = "topics_discovered"
 OBS_NEEDS_CLARIFICATION = "needs_clarification"
 OBS_ERROR = "error"
 
@@ -82,6 +96,9 @@ class Goal:
     description: str
     requirements: tuple[str, ...]
     delivery_mode: str = "editorial"
+    # 目标契约拥有可选能力和可接受观察；Runtime 循环只按此通用契约工作。
+    allowed_capabilities: tuple[str, ...] = ()
+    accepted_observations: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass
@@ -93,6 +110,9 @@ class Artifacts:
     copy_draft: dict = dataclasses.field(default_factory=dict)     # {"title", "content"}
     photo_cache: dict[str, dict] = dataclasses.field(default_factory=dict)
     handoff_url: str = ""
+    comparison_report: dict = dataclasses.field(default_factory=dict)
+    topic_candidates: list[dict] = dataclasses.field(default_factory=list)
+    comparison_photo_ids: dict[str, list[str]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -154,25 +174,43 @@ class Observation:
             raise ValueError("OBS_ERROR 观察必须显式携带非 success 的 status（STATUS_* 常量）")
 
 
-def new_goal(goal_type: str, description: str) -> Goal:
+_GOAL_CAPABILITIES = {
+    GOAL_SOCIAL_POST: ("resolve_trip", "sql_search", "rag_search", "hybrid_search", "fetch_photo_details", "select_photos", "write_post"),
+    GOAL_PHOTO_COMPARISON: ("resolve_trip", "sql_search", "rag_search", "hybrid_search", "fetch_photo_details", "compare_photo_periods"),
+    GOAL_TOPIC_DISCOVERY: ("resolve_trip", "discover_topics"),
+}
+
+_GOAL_OBSERVATIONS = {
+    GOAL_SOCIAL_POST: (OBS_SCOPE, OBS_FACTS, OBS_PHOTO_IDS, OBS_PHOTO_DETAILS, OBS_PHOTOS_SELECTED, OBS_SELECTION_OVERFLOW, OBS_COPY_DRAFTED, OBS_NEEDS_CLARIFICATION, OBS_ERROR),
+    GOAL_PHOTO_COMPARISON: (OBS_SCOPE, OBS_FACTS, OBS_PHOTO_IDS, OBS_PHOTO_DETAILS, OBS_COMPARISON_REPORTED, OBS_NEEDS_CLARIFICATION, OBS_ERROR),
+    GOAL_TOPIC_DISCOVERY: (OBS_SCOPE, OBS_TOPICS_DISCOVERED, OBS_NEEDS_CLARIFICATION, OBS_ERROR),
+}
+
+
+def new_goal(goal_type: str, description: str, delivery_mode: str = "editorial") -> Goal:
     """按预设构造目标，未知目标类型直接报错（编程错误而非运行时分支）。"""
     preset = _GOAL_PRESETS.get(goal_type)
     if preset is None:
         raise ValueError(f"未知的目标类型: {goal_type!r}，可用: {sorted(_GOAL_PRESETS)}")
-    candidate_mode = any(term in description for term in ("尽可能多", "二次挑选", "二次选择", "自己再挑"))
+    if goal_type != GOAL_SOCIAL_POST and delivery_mode != "editorial":
+        raise ValueError(f"目标 {goal_type!r} 不支持交付变体 {delivery_mode!r}")
+    if delivery_mode not in ("editorial", "candidate"):
+        raise ValueError(f"未知交付变体: {delivery_mode!r}")
     return Goal(
         goal_type=goal_type,
         description=description,
         # 候选交付只是放宽选片（不再由 LLM 精选），不是放弃发布文案。
         # 两种交付都必须经过 write_post，才能保证标题和正文完整返回。
         requirements=preset["requirements"],
-        delivery_mode="candidate" if candidate_mode else "editorial",
+        delivery_mode=delivery_mode,
+        allowed_capabilities=_GOAL_CAPABILITIES[goal_type],
+        accepted_observations=_GOAL_OBSERVATIONS[goal_type],
     )
 
 
-def new_task(goal_type: str, description: str, constraints: dict | None = None) -> TaskState:
+def new_task(goal_type: str, description: str, constraints: dict | None = None, delivery_mode: str = "editorial") -> TaskState:
     """入口构造初始任务状态，待办里程碑来自目标预设。"""
-    goal = new_goal(goal_type, description)
+    goal = new_goal(goal_type, description, delivery_mode)
     preset = _GOAL_PRESETS[goal_type]
     return TaskState(
         goal=goal,
@@ -196,6 +234,10 @@ def reduce_observation(
     归约规则按 obs.kind 显式分派，未知 kind 直接报错。
     """
     next_state = copy.deepcopy(state)
+    if obs.kind not in _APPLY_RULES:
+        raise KeyError(obs.kind)
+    if obs.kind not in next_state.goal.accepted_observations:
+        raise ValueError(f"目标 {next_state.goal.goal_type!r} 不接受观察: {obs.kind!r}")
     _APPLY_RULES[obs.kind](next_state, obs)
     next_state.progress.history.append({
         "step": step_no,
@@ -214,6 +256,9 @@ def _apply_photo_ids(state: TaskState, obs: Observation) -> None:
         if pid and pid not in ids:
             ids.append(pid)
     state.artifacts.candidate_ids = ids
+    period = str(obs.payload.get("period") or "")
+    if period in ("earlier", "later"):
+        state.artifacts.comparison_photo_ids[period] = list(ids)
     _constrain_candidates_to_scope(state)
     _finish_milestone(state, "candidates")
 
@@ -328,6 +373,26 @@ def _apply_copy_drafted(state: TaskState, obs: Observation) -> None:
     _finish_milestone(state, "copy")
 
 
+def _apply_comparison_reported(state: TaskState, obs: Observation) -> None:
+    report = dict(obs.payload.get("report") or {})
+    if not report.get("summary"):
+        raise ValueError("comparison_reported 观察必须携带 report.summary")
+    state.artifacts.comparison_report = report
+    for photo in obs.payload.get("photos") or []:
+        if photo.get("id"):
+            state.artifacts.photo_cache[photo["id"]] = photo
+    _trim_photo_cache(state)
+    _finish_milestone(state, "compare")
+
+
+def _apply_topics_discovered(state: TaskState, obs: Observation) -> None:
+    topics = list(obs.payload.get("topics") or [])
+    if not topics:
+        raise ValueError("topics_discovered 观察必须携带非空 topics")
+    state.artifacts.topic_candidates = topics
+    _finish_milestone(state, "topics")
+
+
 # 可回退歧义的默认值假设上限（数量、风格各一条即可覆盖重选/重写场景）
 _ASSUMPTIONS_MAX = 5
 
@@ -367,6 +432,8 @@ _APPLY_RULES: dict[str, typing.Callable[[TaskState, Observation], None]] = {
     OBS_PHOTOS_SELECTED: _apply_photos_selected,
     OBS_SELECTION_OVERFLOW: _apply_selection_overflow,
     OBS_COPY_DRAFTED: _apply_copy_drafted,
+    OBS_COMPARISON_REPORTED: _apply_comparison_reported,
+    OBS_TOPICS_DISCOVERED: _apply_topics_discovered,
     OBS_NEEDS_CLARIFICATION: _apply_needs_clarification,
     OBS_ERROR: _apply_error,
 }
@@ -420,6 +487,8 @@ def state_signature(state: TaskState) -> str:
         candidates_digest,
         f"sel={len(state.artifacts.selected_ids)}",
         f"copy={int(bool(state.artifacts.copy_draft.get('title') and state.artifacts.copy_draft.get('content')))}",
+        f"comparison={int(bool(state.artifacts.comparison_report.get('summary')))}",
+        f"topics={len(state.artifacts.topic_candidates)}",
         ",".join(completion.missing),
         (state.progress.errors[-1] if state.progress.errors else "")[:60],
     ]
@@ -440,7 +509,7 @@ def summarize_state(state: TaskState) -> str:
     done = [milestone_label(m) for m in _MILESTONE_LABELS if m not in state.progress.todo]
     lines = [
         f"目标类型: {state.goal.goal_type}（{state.goal.description}）",
-        f"交付模式: {'候选照片供二次挑选' if state.goal.delivery_mode == 'candidate' else '编辑精选发布'}",
+        f"交付变体: {state.goal.delivery_mode}",
         f"已完成里程碑: {'、'.join(done) if done else '无'}",
         f"待办里程碑: {'、'.join(milestone_label(m) for m in state.progress.todo) or '无'}",
         f"用户约束: {_dump(state.constraints)}",
@@ -451,6 +520,8 @@ def summarize_state(state: TaskState) -> str:
         f"文案草稿: "
         + (f"已有（标题「{state.artifacts.copy_draft.get('title', '')}」）"
            if state.artifacts.copy_draft else "无"),
+        f"对比报告: {'已有' if state.artifacts.comparison_report else '无'}",
+        f"主题候选: {len(state.artifacts.topic_candidates)} 个",
     ]
     if state.progress.terminal_reason:
         lines.append(f"终止形态: {state.progress.terminal_reason}")
@@ -491,6 +562,16 @@ def build_final_output(state: TaskState, stop_reason: str = "") -> dict:
 
     completion = rt_completion.check_completion(state)
     if completion.complete:
+        if state.goal.goal_type == GOAL_PHOTO_COMPARISON:
+            report = state.artifacts.comparison_report
+            photo_ids = report.get("photo_ids") or []
+            return {
+                "answer": f"# 跨期拍摄对比\n\n{report.get('summary', '')}\n\n照片依据：{'、'.join(photo_ids)}",
+                "handoff_url": "",
+            }
+        if state.goal.goal_type == GOAL_TOPIC_DISCOVERY:
+            lines = [f"- {item.get('title', '未命名主题')}：{item.get('reason', '')}" for item in state.artifacts.topic_candidates]
+            return {"answer": "# 主题候选\n\n" + "\n".join(lines), "handoff_url": ""}
         if state.goal.delivery_mode == "candidate":
             draft = state.artifacts.copy_draft
             return {
