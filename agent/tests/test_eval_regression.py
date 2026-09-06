@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from scripts import eval_regression
+from scripts.regression import standard as eval_regression
 
 
 class TestEvalRegressionGoldenCases(unittest.TestCase):

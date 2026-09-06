@@ -10,7 +10,7 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
   - `cli/photo_agent.py -c <config> --serve`：启动 FastAPI 服务（正式入口）
   - `cli/photo_agent.py -c <config> --suggest`：选题建议管线
   - `cli/photo_agent.py -c <config> --eval`：RAG 检索评估
-  - `scripts/eval_regression.py -c <config>`：三层检索回归（L0 数据态 / L1 函数 / L2 HTTP）
+  - `scripts/regression/standard.py -c <config>`：三层检索回归（L0 数据态 / L1 函数 / L2 HTTP）
 
 ## 目录规范
 
@@ -99,7 +99,7 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
 
 ### scripts/ — 运维与回归脚本
 
-- `eval_regression.py`：三层检索回归 CLI，评估与验收的标准入口
+- `regression/standard.py`：三层检索回归 CLI，评估与验收的标准入口；`regression/live/` 存放仅经用户授权执行的真实 LLM 回归
 
 ### tests/ — 单元测试
 

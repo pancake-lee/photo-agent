@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 _SELECT_SYSTEM_PROMPT = (
     "你是摄影编辑。从候选照片中挑选最适合发布的一组照片，兼顾画面质量与叙事连贯。\n"
     "候选已按连拍组折叠（组内封面代表整组），同组照片不要再重复入选。\n"
-    "只输出 JSON: {\"selected_ids\": [\"照片id\", ...]}，入选数量通常 4 到 9 张。"
+    "优先覆盖不同场景；候选缺少足够多样性时宁可少选，不要用相似画面凑数量。\n"
+    "只输出 JSON: {\"selected_ids\": [\"照片id\", ...]}，入选数量为 1 到指定上限张。"
 )
 
 
@@ -134,7 +135,9 @@ def _select_photos(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
     )
     data = common.extract_json_dict(response_text) or {}
     collapsed_ids = [p.get("id") for p in collapsed]
-    valid_ids = [pid for pid in data.get("selected_ids") or [] if pid in collapsed_ids]
+    valid_ids = list(dict.fromkeys(
+        pid for pid in data.get("selected_ids") or [] if pid in collapsed_ids
+    ))
     max_photos = params.get("max_photos")
     if isinstance(max_photos, int) and max_photos > 0:
         valid_ids = valid_ids[:max_photos]
@@ -193,7 +196,6 @@ SELECT_PHOTOS = rt_registry.Capability(
     run=_select_photos,
     progress_details=_select_progress_details,
     repairable_reasons=("photo_selection_failed", "selection_out_of_scope"),
-    evaluator=rt_evaluators.evaluate_selection,
 )
 
 # --------------------------------------------------
@@ -223,7 +225,7 @@ def _write_post(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observati
     if warnings:
         summary += "；" + "；".join(warnings)
     logger.info("[runtime] write_post 完成: 标题=%r, 正文 %d 字", title, len(content))
-    payload = {"title": title, "content": content}
+    payload = {"title": title, "content": content, "style": style}
     # 风格类可回退歧义：未指定风格时沿用默认并记录假设，不询问用户（Ask vs Act）
     if not params.get("style"):
         payload["assumption"] = "未指定文案风格，默认「自由」"

@@ -3,14 +3,14 @@
 > 本文档记录当前评估基建的单元测试与三层回归 CLI 用例逻辑。
 > 指标基线见 [baseline.md](baseline.md)。
 > 实现入口：[agent/chain/evaluation.py](../../agent/chain/evaluation.py)、
-> [agent/scripts/eval_regression.py](../../agent/scripts/eval_regression.py)。
+> [agent/scripts/regression/standard.py](../../agent/scripts/regression/standard.py)。
 
 ## 0. 称呼约定
 
-- **「回归测试」**（regression）：指这套三层 CLI，即 `agent/scripts/eval_regression.py`。用 L0 数据态、L1 函数级检索、L2 HTTP 契约三层断言定位失败层级，无 LLM、无浏览器。对话中说「跑回归测试」即在本目录执行：
+- **普通回归测试**（regression）：指这套三层 CLI，即 `agent/scripts/regression/standard.py`。用 L0 数据态、L1 函数级检索、L2 HTTP 契约三层断言定位失败层级，无 LLM、无浏览器。对话中说「跑回归测试」即在本目录执行：
   ```bash
   cd agent
-  .venv/bin/python scripts/eval_regression.py -c ../.local/my-config.yaml --level all
+  .venv/bin/python scripts/regression/standard.py -c ../.local/my-config.yaml --level all
   ```
 - **「评估」**：指黄金用例打分链路（`agent/chain/evaluation.py` + `eval_engine.py`），产出维度评分与报告。
 - 两者共用同一份黄金用例；仅配置文件 `configs/evaluation.yaml` 标记的黄金用例进入三层回归。评估衡量效果，回归验证闭环；回归失败会直接指向 L0/L1/L2 中的具体层级。

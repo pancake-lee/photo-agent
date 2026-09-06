@@ -14,7 +14,9 @@
 
 import dataclasses
 import logging
+import types
 
+import internal.posts.post_studio as post_studio
 import internal.runtime.capabilities.common as caps_common
 import internal.runtime.registry as rt_registry
 import internal.runtime.state as rt_state
@@ -121,34 +123,47 @@ def evaluate_selection(
 # --------------------------------------------------
 
 _COPY_JUDGE_SYSTEM_PROMPT = (
-    "你是事实核查评委。给你一组照片的客观描述（来自视觉模型，是唯一事实来源）"
-    "和一篇发布文案。逐条核对文案中的事实性断言（地点、景物、人物、事件、时间）：\n"
-    "- 照片描述中有依据的断言视为成立\n"
-    "- 描述中不存在的具体事实（编造的地名、店名、日期、事件）视为无依据\n"
+    "你是事实核查评委。给你一组照片的客观描述和用户原始请求，以及一篇发布文案。"
+    "逐条核对文案中的事实性断言（地点、景物、人物、事件、时间）：\n"
+    "- 照片素材中有依据的断言视为成立\n"
+    "- 用户请求中的旅行名称、相对日期等上下文也是允许使用的事实；"
+    "不要因照片本身未呈现这些信息而拒绝\n"
+    "- 两类证据中均不存在的具体事实（编造的地名、店名、日期、事件）视为无依据\n"
     "- 合理的抒情、感叹、模糊表述不算事实断言\n"
     "只输出 JSON: {\"passed\": true, \"feedback\": \"\"}。\n"
-    "通过时 feedback 留空；不通过时指出哪句断言没有照片证据。"
+    "通过时 feedback 留空；不通过时指出哪句断言缺少上述证据。"
 )
+
+
+def _copy_photo_context(state: rt_state.TaskState, style: str) -> str:
+    """构造与图文工坊生成器完全相同的照片证据上下文。"""
+    photos = [
+        types.SimpleNamespace(**state.artifacts.photo_cache[pid])
+        for pid in state.artifacts.selected_ids
+        if pid in state.artifacts.photo_cache
+        and str(state.artifacts.photo_cache[pid].get("description") or "").strip()
+    ]
+    return post_studio.build_photo_context(photos, style)
 
 
 def evaluate_copy(
     ctx: rt_registry.RunContext, observation: rt_state.Observation,
 ) -> QualityVerdict:
-    """文案事实依据质量门：只评估成功文案观察，证据来自入选照片的缓存详情。"""
+    """文案事实依据质量门：评委与生成器共享照片事实边界。"""
     if observation.kind != rt_state.OBS_COPY_DRAFTED:
         return QualityVerdict(True)
     title = str(observation.payload.get("title") or "")
     content = str(observation.payload.get("content") or "")
-    evidence: list[str] = []
-    if ctx.state is not None:
-        cache = ctx.state.artifacts.photo_cache
-        for pid in ctx.state.artifacts.selected_ids:
-            if pid in cache:
-                evidence.append(_photo_line(cache[pid]))
+    if ctx.state is None:
+        return QualityVerdict(True)
+    style = str(observation.payload.get("style") or "自由")
+    evidence = _copy_photo_context(ctx.state, style)
     if not evidence:
         return QualityVerdict(True)
     user_prompt = (
-        "照片证据：\n" + "\n".join(evidence) + "\n\n"
+        "照片证据（与文案生成器实际使用的素材一致）：\n" + evidence + "\n\n"
+        "用户请求上下文（仅旅行名称、相对日期等不要求由照片证明）：\n"
+        + ctx.question + "\n\n"
         f"待核查文案：\n标题：{title}\n正文：{content}\n\n"
         "核查这篇文案的事实依据。"
     )

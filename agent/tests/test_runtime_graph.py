@@ -34,8 +34,7 @@ def _cfg(**overrides):
 class _ScriptedLLM:
     """伪 LLM：决策提示词消费脚本队列，其余按提示词类型返回固定 JSON。
 
-    quality 是语义质量门评委的回答序列（按调用次序消费，耗尽后按通过处理）：
-    依次对应选片代表性评委、文案事实依据评委及其修复重评。
+    quality 是文案事实依据评委的回答序列（按调用次序消费，耗尽后按通过处理）。
     """
 
     def __init__(
@@ -111,6 +110,33 @@ class RunRuntimeLoopTest(unittest.TestCase):
         # 收尾照片引用带图片 URL（a 与 b 同连拍组被折叠，入选为 b、c）
         self.assertEqual(len(result["photos"]), 2)
         self.assertEqual(result["photos"][0]["image_url"], "http://backend/api/v1/photos/b/image")
+
+    def test_shanxi_day4_conversation_regression_completes(self):
+        """真实验收输入必须完整交付，不能因摘要级近重复误判耗尽修复预算。"""
+        question = "找山西旅游第4天的照片并生成发布文案"
+        llm = _ScriptedLLM(
+            [
+                '{"action": "resolve_trip", "params": {}, "reason": "确认旅行日"}',
+                '{"action": "select_photos", "params": {"max_photos": 6}, "reason": "挑选"}',
+                '{"action": "write_post", "params": {}, "reason": "生成文案"}',
+            ],
+            constraints='{"timeline": "山西", "day": "relative:4", "time_of_day": "", "soft_hints": []}',
+        )
+        patches = self._happy_patches(llm)
+        timelines_patch = unittest.mock.patch.object(
+            caps_resolve_trip, "_fetch_timelines", return_value=["山西"],
+        )
+        event_day_patch = unittest.mock.patch.object(
+            caps_resolve_trip, "_fetch_timeline_event_date", return_value="2026-08-02",
+        )
+        first_day_patch = unittest.mock.patch.object(
+            caps_resolve_trip, "_fetch_first_photo_day", return_value="2026-08-02",
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4], timelines_patch, event_day_patch, first_day_patch:
+            result = rt_graph.run_runtime(_cfg(), question)
+        self.assertEqual(result["terminal_reason"], "")
+        self.assertEqual(result["stop_reason"], "")
+        self.assertIn("# 山西第一天", result["answer"])
 
     def test_budget_stop_reports_progress_and_missing(self):
         """缺要件且预算耗尽时，明确说明已完成与仍缺少的内容。"""
@@ -388,7 +414,6 @@ class RunRuntimeLoopTest(unittest.TestCase):
                 '{"action": "write_post", "params": {}, "reason": "文案"}',
             ],
             quality=[
-                '{"passed": true, "feedback": ""}',                       # 选片代表性
                 '{"passed": false, "feedback": "提到的大雁塔不在照片中"}',  # 文案首次被拒
                 '{"passed": true, "feedback": ""}',                       # 修复重写后通过
             ],

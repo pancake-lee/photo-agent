@@ -28,8 +28,8 @@ def _capability(name="sql_search", repairable=(), evaluator=None):
     )
 
 
-def _ctx(state=None):
-    return rt_registry.RunContext(cfg=_cfg(), question="q", state=state)
+def _ctx(state=None, question="q"):
+    return rt_registry.RunContext(cfg=_cfg(), question=question, state=state)
 
 
 def _run(observation, capability=None, budget_state=None, recovery=None, budget=None, ctx=None):
@@ -365,6 +365,34 @@ class EvaluatorTest(unittest.TestCase):
         _, user_prompt = prompts[0]
         self.assertIn("寺庙", user_prompt)       # 照片证据来自入选缓存
         self.assertIn("大雁塔下", user_prompt)    # 待核查文案进入提示词
+
+    def test_copy_judge_reuses_generator_context_and_request_facts(self):
+        """真实山西回归：评委不得拒绝生成器可见的细节或用户已给出的旅行事实。"""
+        task = self._task_with_selection()
+        task = rt_state.reduce_observation(task, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a"], "photos": [{
+                "id": "a", "filename": "DSC_1460.jpg", "shot_at": "2026-08-05T09:48:04",
+                "description": (
+                    '```json {"subject": {"main_objects": ["石雕佛像"], '
+                    '"attributes": {"pose/action": "右手抬起掌心朝前"}}, '
+                    '"scene": {"setting": "山体石窟"}, '
+                    '"overall_summary": "石窟佛像"} ```'
+                ),
+            }]},
+        ), step_no=2, action="select_photos")
+        ctx, prompts, fake = self._capture_ctx(task)
+        ctx.question = "找山西旅游第4天的照片并生成发布文案"
+        observation = rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "文案已生成",
+            {"title": "山西第四天", "content": "佛像右手抬起掌心朝前。", "style": "自由"},
+        )
+        with unittest.mock.patch.object(rt_evaluators.caps_common, "invoke_structured_llm",
+                                        side_effect=fake):
+            rt_evaluators.evaluate_copy(ctx, observation)
+        system_prompt, user_prompt = prompts[0]
+        self.assertIn("右手抬起掌心朝前", user_prompt)
+        self.assertIn("山西旅游第4天", user_prompt)
+        self.assertIn("用户请求中的旅行名称、相对日期", system_prompt)
 
     def test_copy_judge_passes_without_evidence_cache(self):
         """证据缓存缺失（如异常路径）不阻断，按通过处理。"""

@@ -1,8 +1,8 @@
 """无 LLM、无浏览器的评估回归入口。
 
 用法（在 agent 目录执行）：
-    python scripts/eval_regression.py -c ../.local/my-config.yaml
-    python scripts/eval_regression.py -c ../.local/my-config.yaml --level L1
+    python scripts/regression/standard.py -c ../.local/my-config.yaml
+    python scripts/regression/standard.py -c ../.local/my-config.yaml --level L1
 
 L0 检查 Go 图库与本地 Chroma 的数据态，L1 直接调用检索函数，
 L2 验证 Python HTTP 检索链路。回归用例由配置标记的黄金用例生成。
