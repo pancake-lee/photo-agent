@@ -23,6 +23,7 @@
 - [AR3 Capability System 闭环复评](../eval/reports/2026-09-07-ar3-capability-system-reassessment.md)：AR3-6 至 AR3-8 实施、授权真实回归与最终评分。
 - [V0–V3 目标达成回顾](../eval/reports/2026-09-07-v0-v3-goal-retrospective.md)：四个版本退出条件对照核验；对话能力三项缺口（AR16–AR18）登记，作为 V4/V5 输入。
 - [V4 Planning + Context](architecture/06-photo-agent-v4-planning-context.md)：多轮上下文第一轮的架构依据；实施交接见 [AR4-1 至 AR4-4](../backlog.md)。
+- [v1.0.19 归档](../archive/v1.0.19.md)：AR4-1 至 AR4-10 与由其取代的 AR16、AR17 的版本汇总。
 - [AR4 第一轮评估](../eval/reports/2026-09-07-ar4-v4-planning-context.md)：V4 多轮上下文离线交付评分、V4 四维度证据与 AR4-5 至 AR4-7 问题登记。
 - [AR4 第二轮评估](../eval/reports/2026-09-07-ar4-round2-followup-assurance.md)：AR4-5/6/7 交付评分（8.3/10）；AR4-5 按离线口径，真实执行待授权补记。
 - [AR4 系列复评与执行合理性](../eval/reports/2026-09-07-ar4-execution-rationality.md)：AR4-1 至 AR4-8 当前实现、真实四轮证据与长会话边界复核。
@@ -87,6 +88,7 @@
 - 2026-09-07：用户授权后按默认 60 秒单请求口径重跑 AR4 live 回归并 PASS。首轮 `2961a71afec3` runtime 交付，第二轮 `41de4080a340` 正确跟进改写并保留选片，第三轮 `449c410f0a8f` 正确声明 `selection_add` + copy、先执行选片并将入选从 1 张扩展至 2 张，第四轮 `1b98dd14a6cf` 非跟进且路由 SQL（2026 年 5 月计数 136）。AR4-5 与 AR4-8 真实验收完成并关单。
 - 2026-09-07：AR4 系列复评与执行合理性评估 8.0/10 通过。407 项离线回归通过，真实四轮 PASS 证据有效；构造超过截断阈值的会话发现原始轮次编号会重置，登记 AR4-9；另登记 AR4-10 的 F541 代码卫生问题。
 - 2026-09-07：AR4-9/10 修复完成。Context Builder 截断后使用原始首个保留轮次作为编号基准，10 轮截断序数回归通过；状态摘要 F541 清除。Agent 全量离线回归 408 passed、6 subtests passed，针对性 Ruff 通过。
+- 2026-09-07：v1.0.19 版本归档。AR4-1–AR4-10 与已由 AR4 系列取代的 AR16、AR17 进入 [v1.0.19 归档](../archive/v1.0.19.md)；backlog 留存 AR18（待规划）与 BQ3（暂缓）。
 
 ## 4. 下一轮建议
 
