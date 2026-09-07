@@ -1,0 +1,25 @@
+{
+  "report_id": "2026-09-07-v0-v3-goal-retrospective",
+  "backlog_id": "AR16-AR18",
+  "created_at": "2026-09-07T12:38:01+08:00",
+  "target": "V0-V3 版本目标达成回顾与对话能力专项核验（多轮连续性 / 历史压缩 / 入口路由开放性）",
+  "overall": 8.0,
+  "dimension_scores": {
+    "V0-V3版本目标达成": 8.0,
+    "会话多轮连续性(现状)": 2.0,
+    "历史压缩与上下文组装(现状)": 1.0,
+    "开放目标覆盖(现状)": 5.0
+  },
+  "reference_note": "overall 仅对照 V0-V3 各版本自声明退出条件；三个低分维度描述现状能力水位，属既定 V4 范围，不判 V3 交付失败",
+  "findings_for_backlog": [
+    "AR16：同一会话内每条消息都是无状态独立工作流，除 Runtime 澄清单槽外不读取任何会话历史，指代与追加修改全部按新请求处理",
+    "AR17：对话历史只作展示持久化，推理链路无任何历史选择、压缩、组装机制，前后端请求契约也仅携带当前问题",
+    "AR18：入口为七类封闭 LLM 分类 + rag 静默兜底，Runtime 目标空间固定三种；类别外的新开放目标会被降级为单步检索或误配目标契约，且用户无感知信号"
+  ],
+  "verification_runtime": [
+    "代码走查：server.py send_message/SendMessageRequest/澄清槽位、photo_agent.py CLASSIFY_SYSTEM/_classify_node/route/sessions resume、state.py GOAL 常量、session_store.py 表结构",
+    "全仓 grep history|session|conversation|summari|compress|压缩|摘要：确认无对话历史读取与压缩逻辑",
+    "文档对照 architecture/00-07 与 Agent Runtime 中枢、AR3 两份复评结论"
+  ],
+  "verification_commits": {}
+}

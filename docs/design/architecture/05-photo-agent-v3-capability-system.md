@@ -1,51 +1,64 @@
 # V3：Capability-Oriented Agent
 
-> 当前落地范围：AR3-1 至 AR3-5（见 [backlog](../../backlog.md)），关联专题：[Agent Runtime 中枢](../2026-08-31-2-agent-runtime-hub.md)。V3 承接 Runtime 通用性专项评估发现的 AR15，不以新增一个总任务掩盖可交付边界。
+> 当前落地范围：AR3-1 至 AR3-8（见 [backlog](../../backlog.md)），关联专题：[Agent Runtime 中枢](../2026-08-31-2-agent-runtime-hub.md)。V3 承接 Runtime 通用性专项评估发现的 AR15，不以新增一个总任务掩盖可交付边界。
 
 ## 架构增量
 
 选片规则、工具顺序和业务经验如果散落在主 Prompt 或不同 Pipeline 中，新需求会产生复制。Capability Layer 将这些逻辑整理为有边界、有契约、可组合的能力库。
 
+## V3 之前：V2 的单目标 Runtime
+
+先看升级前的边界。V2 已经有可靠的多步循环、预算、Guardrail 和 Trace，但它服务的是预先固定的“选片并发帖”任务：状态字段、完成条件和可选动作都围绕这一个目标定义。
+
+```mermaid
+flowchart TD
+    Q[开放请求] --> R{入口识别}
+    R -->|单步| D[既有直接路径]
+    R -->|多步| G[Runtime 循环]
+    G --> S[固定发帖状态<br/>范围 · 候选 · 已选照片 · 文案]
+    S --> C{选择下一步发帖动作}
+    C --> A[扁平动作集<br/>范围解析 · 检索 · 详情 · 选片 · 文案]
+    A --> O[Observation]
+    O --> H[Guardrail · 归约 · 预算]
+    H --> G
+    H -->|完成| X[固定交付：社交帖]
+```
+
+这张图的限制正是 V3 的升级点：
+
+- Runtime 能可靠地循环，但只认识发帖领域状态和“社交帖结果”。
+- 动作虽然已经可调用，却没有 Tool / Skill / Workflow 的层级与完整机器契约。
+- 新需求若要交付“跨期对比报告”或“主题候选”，会被迫修改发帖状态/完成检查，或另开顶层 Pipeline。
+
 ## 展开 Capability Layer
 
 ```mermaid
-flowchart LR
-    R[Agent Runtime] --> K{Capability Selection V3}
-    K --> T[Tool<br/>原子动作]
-    K --> S[Skill<br/>可复用方法]
-    K --> W[Workflow<br/>稳定执行链]
-    T --> O[Structured Observation]
-    S --> O
+flowchart TD
+    Q[开放请求] --> R{入口识别}
+    R -->|单步| D[既有直接路径]
+    R -->|开放目标| G[Runtime 循环]
+    G --> S[目标契约<br/>状态 · 要件 · 允许能力 · 交付]
+    S --> C{按 Goal + State 选择能力}
+    C --> T[Tool<br/>原子外部动作]
+    C --> K[Skill<br/>可复用领域方法]
+    C --> W[Workflow<br/>稳定执行链]
+    T --> O[统一 Observation]
+    K --> O
     W --> O
-    O --> G[Guardrail Layer]
-    G --> R
-
-    T --> T1[search_photos]
-    S --> S1[select_representative_photos]
-    W --> W1[discover_topics]
+    O --> H[Guardrail · 归约 · 预算]
+    H --> G
+    H -->|完成| X[按目标交付<br/>社交帖 · 对比报告 · 主题候选]
 ```
 
-V3 不是增加更多能力名称，而是建立抽象层级。Agent 只负责“当前需要哪项能力”，能力内部负责“如何可靠完成这一类子问题”。
+与上图逐项对照：入口、Runtime 循环、Observation 和 Guardrail 保持不变；V3 只替换中间两层和最终交付。
+
+- “固定发帖状态”替换为“目标契约”，所以新目标无需改 Runtime 核心。
+- “扁平动作集”拆分为 Tool / Skill / Workflow，并补齐各自契约。
+- “固定社交帖”扩展为由目标契约决定的交付；循环仍是同一个循环。
 
 ## 本项目的 V3 决策
 
 V1 的循环、预算、Guardrail 和注册表继续作为 Runtime 核心；它们不应知道照片范围、精选照片或发布文案。目标契约负责声明任务需要完成什么、哪些观察可归约、如何解释正确停止以及如何交付结果。领域能力和领域状态由各目标拥有。
-
-```mermaid
-flowchart TD
-    Q[开放请求] --> R{入口识别执行结构与目标}
-    R -->|单步请求| D[既有直接路径]
-    R -->|开放目标| G[目标契约]
-    G --> C[Runtime 核心]
-    C --> S{选择适用 Capability}
-    S --> T[Tool]
-    S --> K[Skill]
-    S --> W[Workflow]
-    T --> O[统一 Observation]
-    K --> O
-    W --> O
-    O --> G
-```
 
 这里的“通用”不是把照片语义删成无结构字典：权威范围、照片证据和无副作用约束仍由照片目标明确拥有。通用性来自新增目标时只新增它的契约和能力组合，而不改 Runtime 循环、所有目标的归约表或发帖以外的输出。
 
