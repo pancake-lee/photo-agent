@@ -98,6 +98,16 @@ class SessionStore:
                         task_json TEXT NOT NULL,
                         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                     );
+
+                    CREATE TABLE IF NOT EXISTS message_feedback (
+                        message_id INTEGER PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        verdict TEXT NOT NULL CHECK(verdict IN ('helpful', 'needs_improvement')),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_message_feedback_session
+                        ON message_feedback(session_id, message_id);
                 """)
 
                 # 迁移：添加 photos 列（若不存在）
@@ -199,8 +209,12 @@ class SessionStore:
                     return None
 
                 msg_rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, runtime_steps, created_at
-                       FROM messages WHERE session_id=? ORDER BY id""",
+                    """SELECT m.id, m.session_id, m.role, m.content, m.query_type, m.trace_id,
+                              m.granularity, m.usage_json, m.photos, m.runtime_steps, m.created_at,
+                              f.verdict AS feedback
+                       FROM messages m
+                       LEFT JOIN message_feedback f ON f.message_id=m.id
+                       WHERE m.session_id=? ORDER BY m.id""",
                     (session_id,),
                 ).fetchall()
 
@@ -233,6 +247,7 @@ class SessionStore:
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "cost": usage.get("cost", 0.0),
+                        "feedback": m["feedback"] or "",
                         "created_at": m["created_at"],
                     })
 
@@ -429,8 +444,12 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
-                    """SELECT id, session_id, role, content, query_type, trace_id, granularity, usage_json, photos, runtime_steps, created_at
-                       FROM messages WHERE session_id=? ORDER BY id""",
+                    """SELECT m.id, m.session_id, m.role, m.content, m.query_type, m.trace_id,
+                              m.granularity, m.usage_json, m.photos, m.runtime_steps, m.created_at,
+                              f.verdict AS feedback
+                       FROM messages m
+                       LEFT JOIN message_feedback f ON f.message_id=m.id
+                       WHERE m.session_id=? ORDER BY m.id""",
                     (session_id,),
                 ).fetchall()
                 import json
@@ -462,9 +481,42 @@ class SessionStore:
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "cost": usage.get("cost", 0.0),
+                        "feedback": m["feedback"] or "",
                         "created_at": m["created_at"],
                     })
                 return result
+            finally:
+                conn.close()
+
+    def save_message_feedback(self, session_id: str, message_id: int, verdict: str) -> dict | None:
+        """保存助手消息的显式反馈，并返回关联 Trace 与请求摘要。"""
+        if verdict not in {"helpful", "needs_improvement"}:
+            raise ValueError("未知反馈类型")
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    """SELECT trace_id, query_type, usage_json FROM messages
+                       WHERE id=? AND session_id=? AND role='assistant'""",
+                    (message_id, session_id),
+                ).fetchone()
+                if row is None:
+                    return None
+                conn.execute(
+                    """INSERT INTO message_feedback (message_id, session_id, verdict, created_at)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(message_id) DO UPDATE SET
+                       verdict=excluded.verdict, created_at=excluded.created_at""",
+                    (message_id, session_id, verdict, _now_iso()),
+                )
+                conn.commit()
+                import json
+                return {
+                    "trace_id": row["trace_id"] or "",
+                    "query_type": row["query_type"] or "",
+                    "usage": json.loads(row["usage_json"] or "{}"),
+                    "feedback": verdict,
+                }
             finally:
                 conn.close()
 

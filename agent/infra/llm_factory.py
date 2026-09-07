@@ -16,6 +16,7 @@ import langchain_core.callbacks as lc_callbacks
 import langchain_openai as lc_openai
 
 import infra.config as config
+import infra.request_metrics as request_metrics
 
 
 def create_llm(
@@ -34,6 +35,7 @@ def create_llm(
     注意：bind_tools 必须在 with_retry / with_fallbacks 之前调用，
     因为 RunnableRetry 没有 bind_tools 方法。
     """
+    active_callbacks = [*(callbacks or []), *request_metrics.current_callbacks()]
     llm = lc_openai.ChatOpenAI(
         model=model or cfg.llm_model,
         api_key=cfg.llm_api_key,  # type: ignore[arg-type]
@@ -43,7 +45,7 @@ def create_llm(
         # 重试只由下方 with_retry 统一控制；关闭 SDK 隐式重试，保证次数、耗时和日志可预测。
         max_retries=0,
         streaming=streaming,
-        callbacks=callbacks,
+        callbacks=active_callbacks or None,
     )
 
     # bind_tools 必须在 with_retry 之前，否则 RunnableRetry 没有此方法
@@ -68,7 +70,7 @@ def create_llm(
             request_timeout=cfg.llm_request_timeout,
             max_retries=0,
             streaming=streaming,
-            callbacks=callbacks,
+            callbacks=active_callbacks or None,
         )
         if tools:
             fallback_llm = fallback_llm.bind_tools(tools)

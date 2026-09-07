@@ -20,7 +20,7 @@ import { TrashOutline, SendOutline, BookmarkOutline, DownloadOutline } from '@vi
 import { marked } from 'marked'
 import { useChat } from '../composables/useChat'
 import { getAgentBase, getApiBase } from '../config'
-import type { PhotoRef, Granularity } from '../types/chat'
+import type { ChatMessage, PhotoRef, Granularity } from '../types/chat'
 import PhotoPreviewModal from '../components/PhotoPreviewModal.vue'
 import BurstGroupModal from '../components/BurstGroupModal.vue'
 import PhotoThumbList from '../components/PhotoThumbList.vue'
@@ -57,6 +57,7 @@ const {
   createSession,
   loadSession,
   sendMessage,
+  submitFeedback,
   updateLastGranularity,
   deleteSession,
   resetChat,
@@ -167,6 +168,15 @@ async function handleSend() {
     scrollToBottom()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '发送失败')
+  }
+}
+
+async function handleFeedback(msg: ChatMessage, verdict: 'helpful' | 'needs_improvement') {
+  try {
+    await submitFeedback(msg, verdict)
+    message.success(verdict === 'helpful' ? '已记录有帮助' : '已记录需要改进')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '保存反馈失败')
   }
 }
 
@@ -450,6 +460,20 @@ const hasMessages = computed(() => messages.value.length > 0)
                   title="查看完整诊断记录"
                   @click="openTrace(msg.trace_id)"
                 >查看诊断</NButton>
+                <NButton
+                  v-if="msg.id"
+                  size="tiny"
+                  text
+                  :type="msg.feedback === 'helpful' ? 'success' : 'default'"
+                  @click="handleFeedback(msg, 'helpful')"
+                >有帮助</NButton>
+                <NButton
+                  v-if="msg.id"
+                  size="tiny"
+                  text
+                  :type="msg.feedback === 'needs_improvement' ? 'warning' : 'default'"
+                  @click="handleFeedback(msg, 'needs_improvement')"
+                >需改进</NButton>
                 <NButton
                   v-if="canSaveAsGoldenQuery(msg)"
                   size="tiny"

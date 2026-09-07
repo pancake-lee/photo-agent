@@ -175,6 +175,27 @@ async function updateLastGranularity(granularity: Granularity) {
   currentSession.value.last_granularity = granularity
 }
 
+async function submitFeedback(message: ChatMessage, verdict: 'helpful' | 'needs_improvement') {
+  if (!currentSession.value || !message.id) return
+  const sessionId = currentSession.value.session_id
+  const previous = message.feedback || ''
+  message.feedback = verdict
+  try {
+    const resp = await fetch(
+      `${getAgentBase()}/chat/sessions/${sessionId}/messages/${message.id}/feedback`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verdict }),
+      }
+    )
+    if (!resp.ok) throw new Error('保存反馈失败')
+  } catch (e) {
+    message.feedback = previous
+    throw e
+  }
+}
+
 async function deleteSession(sessionId: string) {
   const resp = await fetch(`${getAgentBase()}/chat/sessions/${sessionId}`, {
     method: 'DELETE',
@@ -220,6 +241,7 @@ export function useChat() {
     createSession,
     loadSession,
     sendMessage,
+    submitFeedback,
     updateLastGranularity,
     deleteSession,
     deleteSessions,

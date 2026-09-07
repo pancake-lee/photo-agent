@@ -1,0 +1,23 @@
+{
+  "report_id": "2026-09-07-v5-observability-readiness",
+  "backlog_id": "OBS2",
+  "created_at": "2026-09-07T00:00:00Z",
+  "target": "现有日志与 Trace 对 V5 自适应优化决策的证据充分性",
+  "overall": 6.2,
+  "dimension_scores": {
+    "Runtime 轨迹可复盘性": 8.5,
+    "全路径执行可观测性": 5.5,
+    "成本与延迟可归因性": 4.5,
+    "结果与用户反馈可判定性": 4.5,
+    "长期趋势可用性": 6.0
+  },
+  "findings_for_backlog": [
+    "OBS2：当前 Trace 能复盘 Runtime 的能力调用、恢复和终态，但无法以单一请求关联所有路由的入口依据、端到端耗时、模型成本与用户是否接受或大幅重做；因此不能可靠计算 V5 的 Route Quality、Cost per Successful Task、p50/p95 Latency 和 User Acceptance/Edit Rate，也不足以用生产轨迹判断某条开放路径是否应沉淀为 Workflow。"
+  ],
+  "verification_runtime": [
+    "静态审阅 agent/cli/server.py、agent/cli/photo_agent.py、agent/internal/runtime/graph.py、agent/internal/evals/tracer.py、agent/infra/token_tracker.py 和 agent/internal/chat/session_store.py",
+    "抽样 data/agent/execution-traces/2026-09-07.jsonl：15 条 runtime.trace_summary，其中 10 条 complete=true、5 条非完整终态；摘要均报告 cost=0.0",
+    "查询 data/agent/sqlite/token_usage.db：2026-09-07 有 78 次 deepseek-v4-flash 用量记录，但该表没有 trace_id、route 或 task 关联字段"
+  ],
+  "verification_commits": {}
+}

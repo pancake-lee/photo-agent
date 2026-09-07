@@ -28,7 +28,7 @@ import typing
 logger = logging.getLogger(__name__)
 
 # 日志文件保留天数
-_RETENTION_DAYS = 7
+_RETENTION_DAYS = 30
 
 
 class Tracer:

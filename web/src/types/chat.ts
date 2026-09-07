@@ -46,6 +46,8 @@ export interface ChatMessage {
   input_tokens?: number
   output_tokens?: number
   cost?: number
+  /** 用户对该助手结果的显式反馈，未反馈时为空。 */
+  feedback?: 'helpful' | 'needs_improvement' | ''
   created_at: string
 }
 

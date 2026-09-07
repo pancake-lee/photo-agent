@@ -420,6 +420,10 @@ class SendMessageRequest(pydantic.BaseModel):
     granularity: Literal["photo", "fine", "coarse"] = "photo"
 
 
+class MessageFeedbackRequest(pydantic.BaseModel):
+    verdict: Literal["helpful", "needs_improvement"]
+
+
 class SessionResponse(pydantic.BaseModel):
     session_id: str
     title: str
@@ -776,6 +780,30 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
             raise fastapi.HTTPException(status_code=404, detail="诊断记录不存在或已过期")
         return {"trace_id": trace_id, "steps": [step.__dict__ for step in steps]}
 
+    @app.post("/api/chat/sessions/{session_id}/messages/{message_id}/feedback")
+    async def save_message_feedback(
+        session_id: str,
+        message_id: int,
+        body: MessageFeedbackRequest,
+        req: fastapi.Request,
+    ):
+        s: session_store.SessionStore = req.app.state.store
+        saved = s.save_message_feedback(session_id, message_id, body.verdict)
+        if saved is None:
+            raise fastapi.HTTPException(status_code=404, detail="助手消息不存在")
+        trace_id = saved["trace_id"]
+        if trace_id:
+            feedback_tracer = tracer_mod.Tracer(req.app.state.cfg.project_root, req.app.state.cfg.agent_data_dir)
+            feedback_tracer.trace_id = trace_id
+            feedback_tracer.emit("chat.feedback", {
+                "session_id": session_id,
+                "message_id": message_id,
+                "verdict": saved["feedback"],
+                "query_type": saved["query_type"],
+                "usage": saved["usage"],
+            }, module="chat")
+        return {"message_id": message_id, "verdict": body.verdict}
+
     @app.post("/api/chat/sessions/{session_id}/messages")
     async def send_message(session_id: str, body: SendMessageRequest, req: fastapi.Request):
         s: session_store.SessionStore = req.app.state.store
@@ -821,6 +849,12 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         def execute() -> None:
             try:
+                tracer.emit("chat.request", {
+                    "session_id": session_id,
+                    "question": question,
+                    "granularity": body.granularity,
+                    "has_history": bool(history),
+                }, module="chat")
                 result = agent_inst.route(
                     routed_question, granularity=body.granularity, tracer=tracer,
                     progress_callback=collect_steps,
@@ -834,7 +868,14 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     req.app.state.cfg, req.app.state.chroma_store, photos_raw,
                 )
                 tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity, "followup": bool(result.get("followup")), "effective_question": result.get("effective_question") or question}, module="chat")
-                tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
+                tracer.emit("chat.answer", {
+                    "session_id": session_id,
+                    "photo_ids": [photo.get("photo_id", "") for photo in photos_raw],
+                    "assets": asset_snapshot,
+                    "answer_chars": len(answer),
+                    "execution_status": result.get("execution_status", ""),
+                    "usage": result.get("request_usage") or {},
+                }, module="chat")
                 terminal_reason = result.get("runtime_terminal_reason", "")
                 if terminal_reason == "needs_clarification":
                     s.save_runtime_clarification(
@@ -855,6 +896,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     trace_id=tracer.trace_id, granularity=body.granularity,
                     photos_json=json.dumps(photos_raw, ensure_ascii=False) if photos_raw else "",
                     runtime_steps=event_queue_runtime_steps,
+                    usage=result.get("request_usage") or {},
                 )
                 event_queue.put(("final", {
                     "message_id": msg_id, "answer": answer, "query_type": query_type,

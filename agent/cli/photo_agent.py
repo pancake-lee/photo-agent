@@ -52,6 +52,7 @@ import internal.runtime.graph as rt_graph
 import internal.runtime.state as rt_state
 import infra.openapi_client as openapi_client
 import infra.llm_factory as llm_factory
+import infra.request_metrics as request_metrics
 import infra.token_tracker as token_tracker
 
 
@@ -81,6 +82,8 @@ class RouterState(typing.TypedDict):
     runtime_goal_declared: bool     # 跟进消解是否显式声明了目标类型（区分分类默认值）
     runtime_prior_task_json: str    # 会话层传入的 Runtime 任务快照（空串表示无）
     runtime_task_dump: str          # 本次 Runtime 运行的任务快照（JSON，会话层保存）
+    execution_status: str           # completed / partial / failed，供请求级汇总
+    request_usage: dict             # 当前请求累计的 LLM 用量
 
 
 # 分类规则主体；无历史时直接拼问题，有历史时插入 followup 标签与历史块（V4）
@@ -206,6 +209,14 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     logging.getLogger(__name__).info(
         "[路由] 「%s」 → %s（模型原始分类=%r）", state["question"], query_type, raw,
     )
+    tracer = config.get("configurable", {}).get("tracer")
+    if tracer is not None:
+        tracer.emit("chat.route_decision", {
+            "classifier_output": raw,
+            "query_type": query_type,
+            "runtime_goal_type": goal_type,
+            "has_history": bool(history_block),
+        }, module="chat")
     return {"query_type": query_type, "runtime_goal_type": goal_type}
 
 
@@ -276,7 +287,7 @@ def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
             "results": [],
             "answer": f"SQL 查询失败: {exc}",
         }
-    return {"sql_result": result}
+    return {"sql_result": result, "execution_status": "completed" if result.get("sql") else "failed"}
 
 
 def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
@@ -295,7 +306,7 @@ def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
         _log.exception("[RAG] 检索异常: %s", exc)
         answer_text = f"RAG 检索失败: {exc}"
         photo_refs = []
-    return {"rag_answer": answer_text, "photos": photo_refs}
+    return {"rag_answer": answer_text, "photos": photo_refs, "execution_status": "completed" if photo_refs else "partial"}
 
 
 # 单次工具结果的截断长度，避免超出上下文
@@ -457,6 +468,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 },
                 "rag_answer": answer_text,
                 "photos": photo_refs,
+                "execution_status": "completed",
             }
 
         # SQL 无结果 → 降级
@@ -478,6 +490,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 },
                 "rag_answer": answer_text,
                 "photos": photo_refs,
+                "execution_status": "completed",
             }
 
         # Step 2: RAG 语义检索（组粒度下命中的是连拍组封面）
@@ -527,6 +540,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
                 },
                 "rag_answer": answer_text,
                 "photos": photo_refs,
+                "execution_status": "completed",
             }
 
         # Step 5: 交集非空 → 获取照片详情并生成回答
@@ -582,6 +596,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
             },
             "answer": answer_text,
             "photos": photo_refs,
+            "execution_status": "completed",
         }
     except Exception as exc:
         _log.exception("[combined] 组合查询异常，降级为纯 RAG")
@@ -605,6 +620,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
             },
             "rag_answer": answer_text,
             "photos": photo_refs,
+            "execution_status": "partial",
         }
 
 
@@ -662,6 +678,7 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
         "runtime_clarification": result.get("clarification", {}),
         "runtime_goal_type": result.get("goal_type", state.get("runtime_goal_type", rt_state.GOAL_SOCIAL_POST)),
         "runtime_task_dump": json.dumps(result.get("task_dump") or {}, ensure_ascii=False) if result.get("task_dump") else "",
+        "execution_status": "completed" if result.get("completed") else "partial",
     }
 
 
@@ -877,17 +894,49 @@ class PhotoAgent:
             "runtime_goal_declared": False,
             "runtime_prior_task_json": prior_runtime_task_json or "",
             "runtime_task_dump": "",
+            "execution_status": "",
+            "request_usage": {},
         }
-        result = self._app.invoke(initial, {
-            "configurable": {
-                "cfg": self._cfg,
-                "prices": self._prices,
-                "pricing_available": not self._pricing_error,
-                "tracer": tracer,
-                "progress_callback": progress_callback,
-            },
-        })
-        return typing.cast(RouterState, result)
+        usage, usage_token = request_metrics.begin_request(self._prices)
+        started_at = time.perf_counter()
+        try:
+            runtime_config = {
+                "configurable": {
+                    "cfg": self._cfg,
+                    "prices": self._prices,
+                    "pricing_available": not self._pricing_error,
+                    "tracer": tracer,
+                    "progress_callback": progress_callback,
+                },
+            }
+            result = self._app.invoke(initial, runtime_config)
+            routed = typing.cast(RouterState, result)
+            usage_snapshot = usage.snapshot()
+            execution_mode = "general_agent" if routed["query_type"] == "runtime" else f"direct_{routed['query_type']}"
+            summary = {
+                "query_type": routed["query_type"],
+                "execution_mode": execution_mode,
+                "execution_status": routed.get("execution_status") or "completed",
+                "runtime_terminal_reason": routed.get("runtime_terminal_reason", ""),
+                "duration_ms": round((time.perf_counter() - started_at) * 1000),
+                **usage_snapshot,
+            }
+            if tracer is not None:
+                tracer.emit("chat.execution_summary", summary, module="chat")
+            routed["request_usage"] = usage_snapshot
+            return routed
+        except Exception:
+            if tracer is not None:
+                tracer.emit("chat.execution_summary", {
+                    "query_type": "",
+                    "execution_mode": "unknown",
+                    "execution_status": "failed",
+                    "duration_ms": round((time.perf_counter() - started_at) * 1000),
+                    **usage.snapshot(),
+                }, module="chat")
+            raise
+        finally:
+            request_metrics.end_request(usage_token)
 
     @property
     def tracker(self) -> token_tracker.TokenTracker:

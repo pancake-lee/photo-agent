@@ -25,6 +25,24 @@ class TestSessionStore(unittest.TestCase):
                 session["session_id"], "assistant", "回答", trace_id="trace-123",
             )
 
+    def test_message_feedback_keeps_trace_and_request_usage_association(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = session_store.SessionStore(str(Path(temp_dir) / "sessions.db"))
+            session = store.create_session()
+            message_id = store.add_message(
+                session["session_id"], "assistant", "回答", query_type="sql",
+                trace_id="trace-123", usage={"cost": 0.12, "llm_calls": 2},
+            )
+
+            saved = store.save_message_feedback(
+                session["session_id"], message_id, "helpful",
+            )
+
+            self.assertEqual(saved["trace_id"], "trace-123")
+            self.assertEqual(saved["query_type"], "sql")
+            self.assertEqual(saved["usage"]["cost"], 0.12)
+            self.assertEqual(store.get_messages(session["session_id"])[0]["feedback"], "helpful")
+
             self.assertEqual(
                 store.get_session(session["session_id"])["messages"][0]["trace_id"],
                 "trace-123",

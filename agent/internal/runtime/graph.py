@@ -666,4 +666,5 @@ def run_runtime(
         "clarification": result["task"].resolved_facts.get("clarification") or {},
         "goal_type": result["task"].goal.goal_type,
         "task_dump": rt_state.dump_task(result["task"]),
+        "completed": rt_completion.check_completion(result["task"]).complete,
     }

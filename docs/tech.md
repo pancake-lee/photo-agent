@@ -116,7 +116,7 @@ flowchart TD
 - **能力层**：sql_search / rag_search / hybrid_search（检索，query 只承载软提示，候选受范围交集约束）、resolve_trip（约束解析 + 范围物化）/ fetch_photo_details（Go 工具）、select_photos（连拍折叠 + 两级收缩 + 超限深链 + 范围归属校验，迁移自 Compose 管线）/ write_post（复用图文工坊提示词栈）
 - **护栏与恢复（AR2-3/4/5）**：guardrail 按「状态 → 策略」映射执行恢复，temporary 同能力同参数有界重试、invalid 决策侧摘要反馈再决策 / 能力侧（能力声明可修复）带反馈修复、permanent 确定性终态、恢复耗尽以可行动文案停止；文案事实依据质量门在确定性检查通过后按能力声明触发，不通过进修复环。选片由连拍折叠、范围归属和 ID 去重作确定性保护，不以只读文字摘要的近重复判断阻断交付；无进展检测以状态签名（事实键 + 候选摘要 + 要件缺口 + 最近错误）连续不变判定，先注入换策略反馈、仍无进展才停止
 - **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加；恢复预算 `RuntimeRetryMax / RuntimeRepairMax / RuntimeRedecideMax`（重试/修复按能力独立计数，再决策全局计数），恢复不消耗步数但计入时长与成本
-- **追踪**：tracer 输出 runtime.decide / execute / guardrail（恢复动作）/ observe / check 步骤事件与 trace_summary 轨迹摘要（步数、能力调用、恢复计数、里程碑、结束形态）
+- **追踪**：聊天请求以 `trace_id` 串联 `chat.request`、入口 `chat.route_decision`、`chat.execution_summary`、交付和可选反馈事件；执行汇总记录执行结构、技术状态、端到端时延及请求级 Token/成本。Runtime 另输出 decide / execute / guardrail（恢复动作）/ observe / check 步骤事件与 trace_summary（步数、能力调用、恢复计数、里程碑、结束形态）；回放有效窗口为 30 天
 - **多轮上下文（V4）**：会话历史经 `internal/context/builder.py` 整理为紧凑历史块（近期原文 + 更早单行摘要 + 照片只留 ID 引用）注入入口分类；有历史时分类标签增加 followup（跟进消息不走七类），跟进消解 LLM 把它改写为独立完整请求并声明受影响部分（scope/selection/copy/report/topics）。Runtime 运行后任务快照存 session_store，跟进命中 Runtime 时按受影响部分局部失效后续跑（保留有效范围/事实/产物，重开受影响里程碑并作废对应产物，约束合并且当前消息优先）；完整 Planner 与跨任务 Memory 等长任务证据再引入
 
 ### 3.3 Combined 组合查询详解

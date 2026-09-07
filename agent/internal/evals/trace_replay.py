@@ -19,7 +19,7 @@ import typing
 logger = logging.getLogger(__name__)
 
 # trace 文件保留天数（与 tracer.py 的 _RETENTION_DAYS 一致）
-_RETENTION_DAYS = 7
+_RETENTION_DAYS = 30
 
 # 管线步骤定义：事件名 → 展示信息
 _PIPELINE_STEPS = [
@@ -46,6 +46,14 @@ _RUNTIME_STEP_LABELS = {
     "runtime.observe": ("状态归约与候选", "Runtime"),
     "runtime.check": ("完成检查", "Runtime"),
     "runtime.trace_summary": ("执行汇总", "Runtime"),
+}
+
+_CHAT_STEP_LABELS = {
+    "chat.request": ("用户请求", "聊天"),
+    "chat.route_decision": ("入口路由", "聊天"),
+    "chat.execution_summary": ("执行汇总", "聊天"),
+    "chat.answer": ("结果交付", "聊天"),
+    "chat.feedback": ("用户反馈", "聊天"),
 }
 
 
@@ -141,12 +149,16 @@ def _is_trace_expired(project_root: pathlib.Path, trace_id: str) -> bool:
 
 def _get_step_defs(events: list[dict]) -> list[dict]:
     """返回管线步骤定义列表。统一使用三阶段编辑视角提案步骤。"""
+    chat_defs = [
+        {"event": event, "stage": 0, "label": label, "group": group}
+        for event, (label, group) in _CHAT_STEP_LABELS.items()
+    ]
     if any(event.get("event", "").startswith("runtime.") for event in events):
-        return [
+        return chat_defs + [
             {"event": event, "stage": 0, "label": label, "group": group}
             for event, (label, group) in _RUNTIME_STEP_LABELS.items()
         ]
-    return _PIPELINE_STEPS
+    return chat_defs + _PIPELINE_STEPS
 
 
 def replay_trace(
