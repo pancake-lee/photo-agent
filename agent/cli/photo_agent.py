@@ -82,17 +82,21 @@ class RouterState(typing.TypedDict):
     runtime_goal_declared: bool     # 跟进消解是否显式声明了目标类型（区分分类默认值）
     runtime_prior_task_json: str    # 会话层传入的 Runtime 任务快照（空串表示无）
     runtime_task_dump: str          # 本次 Runtime 运行的任务快照（JSON，会话层保存）
+    route_reason: str               # 路由或未支持目标的受控说明
     execution_status: str           # completed / partial / failed，供请求级汇总
     request_usage: dict             # 当前请求累计的 LLM 用量
 
 
 # 分类规则主体；无历史时直接拼问题，有历史时插入 followup 标签与历史块（V4）
 _CLASSIFY_RULES = (
-    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined、runtime_post、runtime_comparison 或 runtime_topics，不要解释。\n\n"
-    "runtime_post: 用户提出开放目标，需要挑选照片并生成标题、发布文案等创作内容的多步任务；"
-    "runtime_comparison: 用户要求比较两个时期/年份的照片，并基于两组照片总结变化、进步或差异；"
-    "runtime_topics: 用户要求在明确照片范围内发现选题、主题候选或发布角度。"
-    "以上三类即使同时有时间线或日期条件也优先进入对应 runtime。\n"
+    "你是一个照片库请求路由器。只输出 JSON，不要 Markdown 或解释："
+    '{{"route":"direct|runtime|unsupported_goal|followup",'
+    '"direct_type":"sql|rag|tool|combined",'
+    '"goal_type":"已注册 Runtime 目标或空串", "reason":"简短原因"}}。\n\n'
+    "已注册 Runtime 目标：\n{registered_goals}\n"
+    "route=runtime 时 goal_type 必须严格等于其中一个已注册目标；"
+    "请求需要多步产物但未命中已注册目标时填 unsupported_goal；"
+    "不要把未支持的开放任务归为 rag。\n"
     "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、"
     "数量聚合的结构化查询\n"
     "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的纯语义检索\n"
@@ -117,12 +121,14 @@ _CLASSIFY_RULES = (
     "- \"逆光的雪山照片\" → combined\n"
     "- \"黑白高对比度的建筑\" → combined\n"
     "- \"宁静氛围的水边照片\" → combined\n\n"
-    "- \"找山西旅游第一天的照片并生成发布文案\" → runtime\n\n"
+    "- \"找山西旅游第一天的照片并生成发布文案\" → runtime（使用 social_post）\n"
+    "- \"整理废片并删除\" → unsupported_goal\n"
+    "- \"生成年度摄影报告\" → unsupported_goal\n\n"
 )
 
 CLASSIFY_SYSTEM = _CLASSIFY_RULES + (
     "用户问题: {question}\n"
-    "分类:"
+    "输出:"
 )
 
 # 有会话历史时的分类提示词：增加 followup 标签，跟进消息不走七类（AR18 最小切片）
@@ -132,7 +138,7 @@ CLASSIFY_SYSTEM_WITH_HISTORY = _CLASSIFY_RULES + (
     "会话存在时此类消息优先判为 followup\n\n"
     "会话历史（更早摘要与最近原文，仅供理解指代）:\n{history}\n\n"
     "用户问题: {question}\n"
-    "分类:"
+    "输出:"
 )
 
 # 跟进消解：把跟进消息改写为独立完整请求，并声明处理路径与受影响部分。
@@ -141,11 +147,13 @@ FOLLOWUP_RESOLVE_SYSTEM = (
     "你是会话跟进消息消解器。用户在已有会话中发来一条消息，把它改写为不依赖会话"
     "也能理解的独立完整请求，并给出处理路径与受影响部分。\n"
     '只输出 JSON: {{"rewritten": "改写后的独立完整请求", '
-    '"target": "sql|rag|tool|combined|runtime", '
+    '"target": "sql|rag|tool|combined|runtime|unsupported_goal", '
     '"affected": ["scope"|"selection"|"selection_add"|"copy"|"report"|"topics"], '
-    '"goal_type": "social_post|photo_comparison|topic_discovery"}}\n'
+    '"goal_type": "已注册 Runtime 目标或空串"}}\n'
+    "已注册 Runtime 目标：\n{registered_goals}\n"
     "target 规则: 修改或追加此前开放目标（选片发帖/跨期对比/主题发现）的填 runtime；"
-    "普通检索、统计、工具操作按 sql/rag/tool/combined 选择。\n"
+    "普通检索、统计、工具操作按 sql/rag/tool/combined 选择；"
+    "跟进的是未支持的开放任务，或无法可靠判断时填 unsupported_goal。\n"
     "affected 仅在 target=runtime 时填写，可多选: 照片范围变动填 scope，"
     "在已选照片基础上追加或补充填 selection_add（已选照片会被保留），"
     "整体换一批或重新挑选填 selection（已选照片不保留），"
@@ -182,30 +190,31 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     template = CLASSIFY_SYSTEM_WITH_HISTORY if history_block else CLASSIFY_SYSTEM
     prompt = lc_prompts.ChatPromptTemplate.from_messages([("system", template)])
     chain = prompt | llm
-    invoke_vars = {"question": state["question"]}
+    registered_goals = rt_state.goal_entrypoints()
+    goals_text = "\n".join(
+        f"- {item['goal_type']}: {item['description']}" for item in registered_goals
+    )
+    invoke_vars = {"question": state["question"], "registered_goals": goals_text}
     if history_block:
         invoke_vars["history"] = history_block
     response = chain.invoke(invoke_vars)
-    raw = str(response.content).strip().lower()
-    goal_type = rt_state.GOAL_SOCIAL_POST
-    if "followup" in raw and history_block:
+    raw = str(response.content).strip()
+    parsed = caps_common.extract_json_dict(raw) or {}
+    route = str(parsed.get("route") or "").strip()
+    direct_type = str(parsed.get("direct_type") or "").strip()
+    goal_type = str(parsed.get("goal_type") or "").strip()
+    route_reason = str(parsed.get("reason") or "").strip()
+    registered_goal_types = {item["goal_type"] for item in registered_goals}
+    if route == "followup" and history_block:
         query_type = "followup"
-    elif "runtime_comparison" in raw:
+    elif route == "runtime" and goal_type in registered_goal_types:
         query_type = "runtime"
-        goal_type = rt_state.GOAL_PHOTO_COMPARISON
-    elif "runtime_topics" in raw:
-        query_type = "runtime"
-        goal_type = rt_state.GOAL_TOPIC_DISCOVERY
-    elif "runtime" in raw or "compose" in raw:
-        query_type = "runtime"
-    elif "combined" in raw:
-        query_type = "combined"
-    elif "sql" in raw:
-        query_type = "sql"
-    elif "tool" in raw:
-        query_type = "tool"
+    elif route == "direct" and direct_type in ("sql", "rag", "tool", "combined"):
+        query_type = direct_type
     else:
-        query_type = "rag"
+        query_type = "unsupported_goal"
+        if not route_reason:
+            route_reason = "无法将请求可靠归入当前已支持的直接路径或开放目标"
     logging.getLogger(__name__).info(
         "[路由] 「%s」 → %s（模型原始分类=%r）", state["question"], query_type, raw,
     )
@@ -215,14 +224,18 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
             "classifier_output": raw,
             "query_type": query_type,
             "runtime_goal_type": goal_type,
+            "route_reason": route_reason,
             "has_history": bool(history_block),
         }, module="chat")
-    return {"query_type": query_type, "runtime_goal_type": goal_type}
+    return {
+        "query_type": query_type,
+        "runtime_goal_type": goal_type or rt_state.GOAL_SOCIAL_POST,
+        "route_reason": route_reason,
+    }
 
 
 # 跟进消解的合法输出取值（超出词表的值按兜底处理并告警）
-_FOLLOWUP_TARGETS = ("sql", "rag", "tool", "combined", "runtime")
-_FOLLOWUP_GOALS = (rt_state.GOAL_SOCIAL_POST, rt_state.GOAL_PHOTO_COMPARISON, rt_state.GOAL_TOPIC_DISCOVERY)
+_FOLLOWUP_TARGETS = ("sql", "rag", "tool", "combined", "runtime", "unsupported_goal")
 
 
 def _followup_resolve_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
@@ -232,15 +245,20 @@ def _followup_resolve_node(state: RouterState, config: lc_runnables.RunnableConf
     llm = llm_factory.create_llm(cfg, temperature=0.0, callbacks=_get_callbacks())
     prompt = lc_prompts.ChatPromptTemplate.from_messages([("system", FOLLOWUP_RESOLVE_SYSTEM)])
     chain = prompt | llm
-    response = chain.invoke({
+    goals_text = "\n".join(
+        f"- {item['goal_type']}: {item['description']}" for item in rt_state.goal_entrypoints()
+    )
+    invoke_vars = {
         "history": state.get("history_block", ""),
         "question": state["question"],
-    })
+        "registered_goals": goals_text,
+    }
+    response = chain.invoke(invoke_vars)
     parsed = caps_common.extract_json_dict(str(response.content)) or {}
     target = str(parsed.get("target") or "").strip()
     if target not in _FOLLOWUP_TARGETS:
-        _log.warning("[跟进消解] 非法 target=%r，按 rag 兜底", target)
-        target = "rag"
+        _log.warning("[跟进消解] 非法 target=%r，按未支持目标交付", target)
+        target = "unsupported_goal"
     rewritten = str(parsed.get("rewritten") or "").strip() or state["question"]
     affected = [
         str(item) for item in (parsed.get("affected") or [])
@@ -252,9 +270,11 @@ def _followup_resolve_node(state: RouterState, config: lc_runnables.RunnableConf
         "followup": True,
         "runtime_affected": affected,
         "runtime_goal_declared": False,
+        "route_reason": "" if target != "unsupported_goal" else "跟进请求未能匹配已注册开放目标",
     }
     goal_type = str(parsed.get("goal_type") or "").strip()
-    if target == "runtime" and goal_type in _FOLLOWUP_GOALS:
+    registered_goal_types = {item["goal_type"] for item in rt_state.goal_entrypoints()}
+    if target == "runtime" and goal_type in registered_goal_types:
         update["runtime_goal_type"] = goal_type
         update["runtime_goal_declared"] = True
     _log.info(
@@ -682,9 +702,25 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
     }
 
 
+def _unsupported_goal_node(state: RouterState) -> dict:
+    """显式交付未注册开放目标，不读取照片、不调用工具也不产生写操作。"""
+    goals = rt_state.goal_entrypoints()
+    supported = "；".join(
+        f"{item['goal_type']}（{item['description']}）" for item in goals
+    )
+    reason = state.get("route_reason") or "该请求不属于当前已注册的开放目标"
+    question = _effective_question(state)
+    answer = (
+        f"我识别到「{question}」是一项当前尚未支持的照片库任务。{reason}。\n\n"
+        f"当前可执行的开放目标：{supported}。\n\n"
+        "本次没有执行检索、修改、标记、删除或其他照片库操作。"
+    )
+    return {"answer": answer, "execution_status": "unsupported"}
+
+
 def _answer_node(state: RouterState) -> dict:
     query_type = state["query_type"]
-    if query_type == "runtime":
+    if query_type in ("runtime", "unsupported_goal"):
         text = state.get("answer") or "任务执行未返回结果。"
         if state.get("compose_url"):
             text += f"\n\n[进入图文工坊]({state['compose_url']})"
@@ -744,6 +780,7 @@ def _get_graph():
         g.add_node("tool_query", _tool_node)
         g.add_node("combined_query", _combined_node)
         g.add_node("runtime_query", _runtime_node)
+        g.add_node("unsupported_goal", _unsupported_goal_node)
         g.add_node("answer", _answer_node)
         g.add_edge(lg_graph.START, "classify")
         g.add_conditional_edges(
@@ -755,6 +792,7 @@ def _get_graph():
                 "combined": "combined_query",
                 "runtime": "runtime_query",
                 "followup": "followup_resolve",
+                "unsupported_goal": "unsupported_goal",
             },
         )
         g.add_conditional_edges(
@@ -765,6 +803,7 @@ def _get_graph():
                 "tool": "tool_query",
                 "combined": "combined_query",
                 "runtime": "runtime_query",
+                "unsupported_goal": "unsupported_goal",
             },
         )
         g.add_edge("sql_query", "answer")
@@ -772,6 +811,7 @@ def _get_graph():
         g.add_edge("tool_query", "answer")
         g.add_edge("combined_query", "answer")
         g.add_edge("runtime_query", "answer")
+        g.add_edge("unsupported_goal", "answer")
         g.add_edge("answer", lg_graph.END)
         _graph_app = g.compile()
     return _graph_app
@@ -894,6 +934,7 @@ class PhotoAgent:
             "runtime_goal_declared": False,
             "runtime_prior_task_json": prior_runtime_task_json or "",
             "runtime_task_dump": "",
+            "route_reason": "",
             "execution_status": "",
             "request_usage": {},
         }
@@ -912,7 +953,12 @@ class PhotoAgent:
             result = self._app.invoke(initial, runtime_config)
             routed = typing.cast(RouterState, result)
             usage_snapshot = usage.snapshot()
-            execution_mode = "general_agent" if routed["query_type"] == "runtime" else f"direct_{routed['query_type']}"
+            query_type = routed["query_type"]
+            execution_mode = (
+                "general_agent" if query_type == "runtime"
+                else "unsupported_goal" if query_type == "unsupported_goal"
+                else f"direct_{query_type}"
+            )
             summary = {
                 "query_type": routed["query_type"],
                 "execution_mode": execution_mode,

@@ -28,16 +28,33 @@ _GOAL_PRESETS: dict[str, dict] = {
     GOAL_SOCIAL_POST: {
         "requirements": ("selected_photos", "copy_draft"),
         "milestones": ("locate", "candidates", "select", "copy"),
+        "entrypoint_description": "从照片库选片并产出标题、发布文案或发布角度的创作任务",
     },
     GOAL_PHOTO_COMPARISON: {
         "requirements": ("comparison_report",),
         "milestones": ("locate", "candidates", "compare"),
+        "entrypoint_description": "比较两个时期或年份的照片，并总结变化、进步或差异的任务",
     },
     GOAL_TOPIC_DISCOVERY: {
         "requirements": ("topic_candidates",),
         "milestones": ("locate", "topics"),
+        "entrypoint_description": "在明确照片范围内发现选题、主题候选或发布角度的任务",
     },
 }
+
+
+def goal_entrypoints() -> tuple[dict[str, str], ...]:
+    """返回入口分类可见的已注册 Runtime 目标。
+
+    目标的入口意图描述与完成要件共存于同一注册项，避免入口另维护一份目标枚举。
+    """
+    return tuple(
+        {
+            "goal_type": goal_type,
+            "description": preset["entrypoint_description"],
+        }
+        for goal_type, preset in _GOAL_PRESETS.items()
+    )
 
 _REQUIREMENT_LABELS = {
     "selected_photos": "入选照片",

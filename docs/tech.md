@@ -63,7 +63,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["用户问题（自然语言）"] --> B["[classify] LLM 零样本分类<br>query_type: sql | rag | tool | combined | runtime"]
+    A["用户问题（自然语言）"] --> B["[classify] 结构化路由决策<br>直接路径 | 已注册 Runtime 目标 | 未支持目标"]
 
     B -->|sql| C["[_sql_node]<br>NL → generate_sql() → LLM 生成 SQL<br>→ Go POST /api/v1/sql/query 执行<br>→ 结果格式化为自然语言"]
 
@@ -84,11 +84,14 @@ flowchart TD
 
     B -->|runtime| N["[_runtime_node]<br>Agent Runtime 多步执行<br>（开放目标：选片 + 创作）"]
 
+    B -->|unsupported_goal| U["[_unsupported_goal_node]<br>说明当前边界，不执行照片库操作"]
+
     C --> M["[_answer_node]<br>聚合结果 → answer + photos"]
     D --> M
     E --> M
     L --> M
     N --> M
+    U --> M
 ```
 
 ### 3.2.1 Agent Runtime 开放目标执行
@@ -117,7 +120,7 @@ flowchart TD
 - **护栏与恢复（AR2-3/4/5）**：guardrail 按「状态 → 策略」映射执行恢复，temporary 同能力同参数有界重试、invalid 决策侧摘要反馈再决策 / 能力侧（能力声明可修复）带反馈修复、permanent 确定性终态、恢复耗尽以可行动文案停止；文案事实依据质量门在确定性检查通过后按能力声明触发，不通过进修复环。选片由连拍折叠、范围归属和 ID 去重作确定性保护，不以只读文字摘要的近重复判断阻断交付；无进展检测以状态签名（事实键 + 候选摘要 + 要件缺口 + 最近错误）连续不变判定，先注入换策略反馈、仍无进展才停止
 - **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加；恢复预算 `RuntimeRetryMax / RuntimeRepairMax / RuntimeRedecideMax`（重试/修复按能力独立计数，再决策全局计数），恢复不消耗步数但计入时长与成本
 - **追踪**：聊天请求以 `trace_id` 串联 `chat.request`、入口 `chat.route_decision`、`chat.execution_summary`、交付和可选反馈事件；执行汇总记录执行结构、技术状态、端到端时延及请求级 Token/成本。Runtime 另输出 decide / execute / guardrail（恢复动作）/ observe / check 步骤事件与 trace_summary（步数、能力调用、恢复计数、里程碑、结束形态）；回放有效窗口为 30 天
-- **多轮上下文（V4）**：会话历史经 `internal/context/builder.py` 整理为紧凑历史块（近期原文 + 更早单行摘要 + 照片只留 ID 引用）注入入口分类；有历史时分类标签增加 followup（跟进消息不走七类），跟进消解 LLM 把它改写为独立完整请求并声明受影响部分（scope/selection/copy/report/topics）。Runtime 运行后任务快照存 session_store，跟进命中 Runtime 时按受影响部分局部失效后续跑（保留有效范围/事实/产物，重开受影响里程碑并作废对应产物，约束合并且当前消息优先）；完整 Planner 与跨任务 Memory 等长任务证据再引入
+- **开放目标准入与多轮上下文（AR18/V4）**：Runtime 目标注册项同时声明入口意图说明与任务契约，分类器仅能将开放请求指向已注册目标；未知开放请求、非法分类输出和未能消解的跟进进入 `unsupported_goal` 显式终态，说明边界且不执行照片库操作。会话历史经 `internal/context/builder.py` 整理为紧凑历史块（近期原文 + 更早单行摘要 + 照片只留 ID 引用）注入入口分类；有历史时可识别 followup，跟进消解为独立完整请求并声明受影响部分（scope/selection/copy/report/topics）。Runtime 运行后任务快照存 session_store，跟进命中已注册 Runtime 目标时按受影响部分局部失效后续跑（保留有效范围/事实/产物，重开受影响里程碑并作废对应产物，约束合并且当前消息优先）；完整 Planner 与跨任务 Memory 等长任务证据再引入
 
 ### 3.3 Combined 组合查询详解
 

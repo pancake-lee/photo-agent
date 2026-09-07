@@ -573,8 +573,9 @@ class RunRuntimeLoopTest(unittest.TestCase):
 class EntryRoutingTest(unittest.TestCase):
     """入口分类分流：开放目标进 Runtime，query_type 标注 runtime。"""
 
-    def test_classify_maps_runtime_and_compose(self):
-        for raw in ("runtime", "compose"):
+    def test_classify_maps_registered_runtime_goal(self):
+        raw = '{"route":"runtime","direct_type":"","goal_type":"social_post","reason":"创作任务"}'
+        for _ in range(2):
             fake = unittest.mock.MagicMock()
             # prompt | llm 链会以可调用方式使用 mock，两条路径都给出分类文本
             fake.content = raw
@@ -587,10 +588,10 @@ class EntryRoutingTest(unittest.TestCase):
                 )
             self.assertEqual(update["query_type"], "runtime")
 
-    def test_classify_selects_explicit_runtime_goal(self):
+    def test_classify_selects_registered_runtime_goal(self):
         for raw, expected in (
-            ("runtime_comparison", rt_state.GOAL_PHOTO_COMPARISON),
-            ("runtime_topics", rt_state.GOAL_TOPIC_DISCOVERY),
+            ('{"route":"runtime","direct_type":"","goal_type":"photo_comparison","reason":"跨期对比"}', rt_state.GOAL_PHOTO_COMPARISON),
+            ('{"route":"runtime","direct_type":"","goal_type":"topic_discovery","reason":"发现主题"}', rt_state.GOAL_TOPIC_DISCOVERY),
         ):
             fake = unittest.mock.MagicMock()
             fake.content = raw
@@ -623,7 +624,7 @@ class EntryRoutingTest(unittest.TestCase):
         """编译后的外层图能进入 Runtime，防止节点配置注入约定回归。"""
         cfg = _cfg()
         fake = unittest.mock.MagicMock()
-        fake.return_value.content = "runtime"
+        fake.return_value.content = '{"route":"runtime","direct_type":"","goal_type":"social_post","reason":"创作"}'
         initial = {
             "question": "找山西旅游第一天的照片并生成发布文案",
             "granularity": "photo",
@@ -664,6 +665,31 @@ class EntryRoutingTest(unittest.TestCase):
             "compose_url": "#/post-studio?photo_ids=a,b",
         })
         self.assertIn("[进入图文工坊](#/post-studio?photo_ids=a,b)", update["answer"])
+
+    def test_unknown_open_goal_is_explicit_and_never_enters_runtime(self):
+        fake = unittest.mock.MagicMock()
+        raw = '{"route":"unsupported_goal","direct_type":"","goal_type":"","reason":"年度报告未注册"}'
+        fake.return_value.content = raw
+        with unittest.mock.patch.object(photo_agent.llm_factory, "create_llm", return_value=fake):
+            update = photo_agent._classify_node(
+                {"question": "生成年度摄影报告"}, {"configurable": {"cfg": _cfg()}},
+            )
+        self.assertEqual(update["query_type"], "unsupported_goal")
+        result = photo_agent._unsupported_goal_node({
+            "question": "生成年度摄影报告", "effective_question": "生成年度摄影报告",
+            "route_reason": update["route_reason"],
+        })
+        self.assertEqual(result["execution_status"], "unsupported")
+        self.assertIn("没有执行检索、修改、标记、删除", result["answer"])
+
+    def test_invalid_classifier_output_is_not_silently_routed_to_rag(self):
+        fake = unittest.mock.MagicMock()
+        fake.return_value.content = "rag"
+        with unittest.mock.patch.object(photo_agent.llm_factory, "create_llm", return_value=fake):
+            update = photo_agent._classify_node(
+                {"question": "整理废片"}, {"configurable": {"cfg": _cfg()}},
+            )
+        self.assertEqual(update["query_type"], "unsupported_goal")
 
 
 if __name__ == "__main__":

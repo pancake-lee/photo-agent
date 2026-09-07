@@ -101,3 +101,38 @@ class RequestMetricsTest(unittest.TestCase):
         self.assertEqual(data["execution_status"], "completed")
         self.assertIn("duration_ms", data)
         self.assertEqual(result["request_usage"]["llm_calls"], 0)
+
+    def test_unsupported_goal_has_a_distinct_trace_terminal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+
+            class Config:
+                prices_path = ""
+                llm_model = "llm"
+                llm_fallback_model = ""
+                embedding_model = "embedding"
+                retry_enabled = False
+                retry_max_attempts = 1
+
+                @staticmethod
+                def resolve_path(path):
+                    return root / path
+
+                @staticmethod
+                def agent_path(*parts):
+                    return root.joinpath(*parts)
+
+            graph = unittest.mock.MagicMock()
+            graph.invoke.return_value = {
+                "query_type": "unsupported_goal", "execution_status": "unsupported",
+                "runtime_terminal_reason": "", "answer": "未支持", "photos": [],
+            }
+            tracer = unittest.mock.MagicMock()
+            with unittest.mock.patch.object(photo_agent, "_get_graph", return_value=graph):
+                result = photo_agent.PhotoAgent(Config()).route("生成年度摄影报告", tracer=tracer)
+
+        event, data = tracer.emit.call_args.args[0:2]
+        self.assertEqual(event, "chat.execution_summary")
+        self.assertEqual(data["execution_mode"], "unsupported_goal")
+        self.assertEqual(data["execution_status"], "unsupported")
+        self.assertEqual(result["query_type"], "unsupported_goal")

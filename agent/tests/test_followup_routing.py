@@ -69,7 +69,7 @@ class ClassifyFollowupTest(unittest.TestCase):
     """分类节点：有历史时可识别 followup，无历史行为不变。"""
 
     def test_history_and_followup_label_routes_to_followup(self):
-        llm, prompts = _queue_llm(["followup"])
+        llm, prompts = _queue_llm(['{"route":"followup","direct_type":"","goal_type":"","reason":"引用历史"}'])
         with unittest.mock.patch.object(photo_agent.llm_factory, "create_llm", return_value=llm):
             update = photo_agent._classify_node(_state(), {"configurable": {"cfg": _cfg()}})
         self.assertEqual(update["query_type"], "followup")
@@ -80,18 +80,18 @@ class ClassifyFollowupTest(unittest.TestCase):
 
     def test_without_history_followup_label_falls_back_to_rag(self):
         """无历史时不启用 followup 分支（首条消息行为与 V3 完全一致）。"""
-        llm, prompts = _queue_llm(["followup"])
+        llm, prompts = _queue_llm(['{"route":"followup","direct_type":"","goal_type":"","reason":"无历史"}'])
         with unittest.mock.patch.object(photo_agent.llm_factory, "create_llm", return_value=llm):
             update = photo_agent._classify_node(
                 _state(question="不要那么文艺", history_block=""),
                 {"configurable": {"cfg": _cfg()}},
             )
-        self.assertEqual(update["query_type"], "rag")
+        self.assertEqual(update["query_type"], "unsupported_goal")
         self.assertNotIn("followup:", prompts[0])
         self.assertNotIn("会话历史", prompts[0])
 
     def test_history_with_normal_label_still_classifies(self):
-        llm, prompts = _queue_llm(["sql"])
+        llm, _prompts = _queue_llm(['{"route":"direct","direct_type":"sql","goal_type":"","reason":"统计"}'])
         with unittest.mock.patch.object(photo_agent.llm_factory, "create_llm", return_value=llm):
             update = photo_agent._classify_node(
                 _state(question="我有多少张照片？"),
@@ -122,10 +122,10 @@ class FollowupResolveTest(unittest.TestCase):
         self.assertIn("会话历史", prompt)
         self.assertIn("不要那么文艺", prompt)
 
-    def test_invalid_target_falls_back_to_rag_with_original_question(self):
+    def test_invalid_target_returns_explicit_unsupported_goal(self):
         content = '{"rewritten": "改写", "target": "no_such_path", "affected": []}'
         update, _ = self._resolve(content)
-        self.assertEqual(update["query_type"], "rag")
+        self.assertEqual(update["query_type"], "unsupported_goal")
         self.assertEqual(update["effective_question"], "改写")
 
     def test_affected_filtered_to_vocabulary(self):
@@ -144,9 +144,9 @@ class FollowupResolveTest(unittest.TestCase):
         self.assertIn("selection_add", prompt)
         self.assertIn("已选照片会被保留", prompt)
 
-    def test_non_json_output_degrades_gracefully(self):
+    def test_non_json_output_returns_explicit_unsupported_goal(self):
         update, _ = self._resolve("这不是 JSON")
-        self.assertEqual(update["query_type"], "rag")
+        self.assertEqual(update["query_type"], "unsupported_goal")
         self.assertEqual(update["effective_question"], "不要那么文艺")
 
 
@@ -263,7 +263,7 @@ class FollowupGraphPathTest(unittest.TestCase):
     def test_followup_flows_to_runtime_through_resolve(self):
         resolve_json = ('{"rewritten": "找山西旅游第一天的照片并生成发布文案，风格平实", '
                         '"target": "runtime", "affected": ["copy"], "goal_type": "social_post"}')
-        llm, prompts = _queue_llm(["followup", resolve_json])
+        llm, prompts = _queue_llm(['{"route":"followup","direct_type":"","goal_type":"","reason":"引用历史"}', resolve_json])
         initial: photo_agent.RouterState = {
             "question": "不要那么文艺",
             "history_block": "[最近会话]\n用户：找山西旅游第一天的照片并生成发布文案",
