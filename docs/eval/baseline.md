@@ -1,5 +1,16 @@
 # 评估基线
 
+## 2026-09-07 — Agent Runtime V4 多轮上下文基线（AR4-4）
+
+> AR4-4 交付。V4 文档验收六维度中，Plan Executability 与 Replan Precision 按 2026-09-07 范围决策等长任务证据（Planner 延后），本轮不评；多轮续跑中的待办重开即最小 replan 切片。
+
+- **场景与统计逻辑**：`agent/tests/test_context_builder.py`、`tests/test_runtime_resume.py`、`tests/test_followup_routing.py`、`tests/test_server_health.py`（server 接线）；离线替身，不调用真实 LLM。
+- **Context Sufficiency**（当前决策所需信息是否缺失）：跟进消解改写保留此前硬约束并展开指代（2/2 金用例断言改写提示词含原范围约束）。
+- **Context Utilization**（提供的信息是否真正被使用）：续跑第一轮决策提示词可见已选照片/待办里程碑，copy 失效仅 1 次决策即完成（不重跑范围/检索/选片）。
+- **Constraint Retention**（长任务是否丢失硬约束）：约束合并当前优先 + 先前保留（1/1）；范围失效重建不泄漏旧事实（1/1）。
+- **Multi-turn Task Success**（修改、指代和局部重做后完成目标）：改文案 1/1、补选重写 1/1、换范围全链路重跑 1/1、快照 JSON 往返续跑 1/1。
+- **离线口径**：369/369 全量测试通过（含 V4 新增 42 项）；未读取真实照片、未调用真实 LLM。
+
 ## 2026-09-07 — Agent Runtime V3 组合轨迹基线（AR3-5）
 
 - **闭环复评**：8.3/10，通过；见 [AR3 Capability System 闭环复评](reports/2026-09-07-ar3-capability-system-reassessment.md)。
@@ -77,6 +88,8 @@
 | 2026-09-03 | Runtime V2 故障注入基线（AR2-7） | - | - | - | 恢复成功率 100%、正确停止率 100%、无谓重试率 0%，9 场景 |
 | 2026-09-07 | AR3 Capability System 复评 | - | - | - | 6.3/10 通过；AR3-6 至 AR3-8 记录两期范围、主题入口、端到端基线缺口 |
 | 2026-09-07 | AR3 Capability System 闭环复评 | - | - | - | 8.3/10 通过；双范围、主题入口、全轨迹与实时真实回归日志闭环 |
+| 2026-09-07 | Runtime V4 多轮上下文基线（AR4-4） | - | - | - | Context 四维度由离线单测锚定；Planner 两维度按范围决策延后 |
+| 2026-09-07 | AR4 V4 第一轮评估 | - | - | - | 8.3/10 通过（目标 8.0）；登记 AR4-5 真实环境验证、AR4-6/AR4-7 已知边界 |
 | - | - | - | - | - | - |
 
 ---

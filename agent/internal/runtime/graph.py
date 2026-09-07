@@ -597,8 +597,15 @@ def run_runtime(
     progress_callback: typing.Callable[[str, dict], None] | None = None,
     goal_type: str = rt_state.GOAL_SOCIAL_POST,
     delivery_mode: str = "editorial",
+    prior_task: rt_state.TaskState | None = None,
+    affected: list[str] | None = None,
 ) -> dict:
-    """执行一次开放目标任务，返回 {"answer", "photos", "compose_url"}。"""
+    """执行一次开放目标任务，返回 {"answer", "photos", "compose_url"}。
+
+    prior_task 非空时为多轮续跑：按 affected 局部失效后从先前任务状态继续，
+    goal_type/delivery_mode 取自先前任务（当前参数仅全新任务生效）。
+    返回额外携带 goal_type 与 task_dump（任务快照，供会话层保存续跑依据）。
+    """
     budget_state = rt_budget.BudgetState()
     callbacks = [*(llm_callbacks or []), _CostCallback(prices, budget_state)]
     translator = rt_progress.RuntimeProgressTranslator()
@@ -607,12 +614,16 @@ def run_runtime(
         if progress_callback is not None:
             progress_callback("runtime.step", {"steps": translator.consume(event, data)})
 
+    if prior_task is not None:
+        task = rt_state.resume_task(prior_task, question, affected)
+    else:
+        task = rt_state.new_task(
+            goal_type, question, {"question": question}, delivery_mode=delivery_mode,
+        )
     initial: RuntimeGraphState = {
         "question": question,
         "granularity": granularity,
-        "task": rt_state.new_task(
-            goal_type, question, {"question": question}, delivery_mode=delivery_mode,
-        ),
+        "task": task,
         "decision": {},
         "observation": rt_state.Observation("", ""),
         "budget_state": budget_state,
@@ -653,4 +664,6 @@ def run_runtime(
         "stop_reason": result.get("stop_reason", ""),
         "recovery_used": dict(result["budget_state"].recovery_used),
         "clarification": result["task"].resolved_facts.get("clarification") or {},
+        "goal_type": result["task"].goal.goal_type,
+        "task_dump": rt_state.dump_task(result["task"]),
     }

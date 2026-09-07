@@ -17,7 +17,7 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
 按功能分包（package by feature）+ 三层金字塔，依赖方向必须单向：
 
 - `cli/（入口）→ internal/（业务功能包）→ infra/（基础设施）`
-- `internal/` 内各功能包（chat / topics / posts / runtime / evals）之间不互相 import：跨功能复用的实现下沉到 `infra/`，跨功能的编排放在入口层
+- `internal/` 内各功能包（chat / context / topics / posts / runtime / evals）之间不互相 import：跨功能复用的实现下沉到 `infra/`，跨功能的编排放在入口层
 - `infra/` 不 import `internal/` 与 `cli/`，只被依赖
 - 顶层只放工程管理文件（makefile / pyproject.toml / uv.lock / README）与测试、脚本、SDK、退役目录
 - import 风格遵循 Go 式限定调用（详见 `docs/handbook/coding-conventions.md` 导入规范）：`import internal.chat.photo_rag as photo_rag`，调用点 `photo_rag.answer_question(...)`；禁止 `from xxx import <符号>` 导入项目内模块
@@ -68,8 +68,10 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
 
 - `chat/` — 对话查询线
   - `photo_rag.py`：RAG 分支，基于 Chroma 向量检索照片描述
-  - `session_store.py`：会话持久化（SQLite），多轮对话上下文
+  - `session_store.py`：会话持久化（SQLite），多轮对话上下文（含 Runtime 任务快照表，多轮续跑依据）
   - `text_to_sql.py`：Text-to-SQL 分支，自然语言转 SQL 查询照片库
+- `context/` — 会话上下文构建（V4）
+  - `builder.py`：把会话历史整理为紧凑历史块（近期原文 + 更早摘要 + 照片 ID 引用，逐项截断有界），供入口分类与跟进消解消费
 - `evals/` — 评估与观测
   - `eval_engine.py`：聚类主题启发式规则评估引擎，报告落 data 目录
   - `evaluation.py`：RAG 检索质量评估（黄金查询集 + MRR/P@K）

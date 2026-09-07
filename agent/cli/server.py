@@ -791,11 +791,19 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
 
         pending = s.get_runtime_clarification(session_id)
         routed_question = question
+        # 会话历史与 Runtime 任务快照仅在非澄清续跑时进入推理链路（V4 多轮）：
+        # 澄清续跑沿用 AR11 单槽拼接，拼接串本身已是独立完整请求
+        history: list[dict] | None = None
+        prior_task_json: str | None = None
         if pending is not None:
             # 澄清回复类型决定续跑提示的标签（日期/时间线），避免把时间线名误标成日期
             confirm_kind = (pending.get("clarification") or {}).get("confirm_kind", "date")
             label = "时间线" if confirm_kind == "timeline" else "日期"
             routed_question = f"{pending['original_goal']}\n用户确认{label}：{question}"
+        else:
+            history = s.get_messages(session_id)
+            snapshot = s.get_runtime_snapshot(session_id)
+            prior_task_json = snapshot.get("task_json") if snapshot else None
         is_first_message = s.is_first_message(session_id)
         # 保存用户消息
         s.add_message(session_id, "user", question)
@@ -816,6 +824,8 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 result = agent_inst.route(
                     routed_question, granularity=body.granularity, tracer=tracer,
                     progress_callback=collect_steps,
+                    history=history,
+                    prior_runtime_task_json=prior_task_json,
                 )
                 answer = result.get("answer", "") or "未能获取回答。"
                 query_type = result.get("query_type", "")
@@ -823,7 +833,7 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                 asset_snapshot = _build_chat_asset_snapshot(
                     req.app.state.cfg, req.app.state.chroma_store, photos_raw,
                 )
-                tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity}, module="chat")
+                tracer.emit("chat.query", {"session_id": session_id, "question": question, "query_type": query_type, "granularity": body.granularity, "followup": bool(result.get("followup")), "effective_question": result.get("effective_question") or question}, module="chat")
                 tracer.emit("chat.answer", {"session_id": session_id, "photo_ids": [photo.get("photo_id", "") for photo in photos_raw], "assets": asset_snapshot, "answer_chars": len(answer)}, module="chat")
                 terminal_reason = result.get("runtime_terminal_reason", "")
                 if terminal_reason == "needs_clarification":
@@ -833,6 +843,13 @@ def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
                     )
                 elif pending is not None and query_type == "runtime":
                     s.clear_runtime_clarification(session_id)
+                # Runtime 任务快照（V4 多轮续跑依据）：每次 Runtime 运行后整体覆盖
+                if query_type == "runtime" and result.get("runtime_task_dump"):
+                    s.save_runtime_snapshot(
+                        session_id,
+                        result.get("runtime_goal_type") or "social_post",
+                        result["runtime_task_dump"],
+                    )
                 msg_id = s.add_message(
                     session_id, "assistant", answer, query_type=query_type,
                     trace_id=tracer.trace_id, granularity=body.granularity,

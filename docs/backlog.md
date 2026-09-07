@@ -8,8 +8,15 @@
 
 | 状态   | 分组       | 编号  | 任务                                         | 评估 |
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
-| 待规划 | Agent Runtime | AR16  | 会话多轮连续性缺失，每条消息独立执行       |      |
-| 待规划 | Agent Runtime | AR17  | 对话历史无选择与压缩，上下文仅当前问题     |      |
+| Done   | Agent Runtime | AR4-1 | 会话上下文构建器：历史选择、压缩与引用     | 8.4  |
+| Done   | Agent Runtime | AR4-2 | 跟进消息识别与入口全路径接入               | 8.2  |
+| Done   | Agent Runtime | AR4-3 | Runtime 任务快照与多轮局部失效续跑         | 8.4  |
+| Done   | Agent Runtime | AR4-4 | V4 多轮金用例与评估基线                     | 8.3  |
+| 待规划 | Agent Runtime | AR4-5 | 真实 LLM 环境下跟进识别与消解质量未验证     |      |
+| 待规划 | Agent Runtime | AR4-6 | 长程指代的上下文充分性退化                  |      |
+| 待规划 | Agent Runtime | AR4-7 | 补选语义保留无确定性保障                    |      |
+| 已取代 | Agent Runtime | AR16  | 会话多轮连续性缺失（展开为 AR4-1–AR4-4）   |      |
+| 已取代 | Agent Runtime | AR17  | 对话历史无选择与压缩（展开为 AR4-1–AR4-4） |      |
 | 待规划 | Agent Runtime | AR18  | 入口分类封闭集，新开放目标静默降级         |      |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 
@@ -20,20 +27,73 @@
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
 > 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design/2099-01-01-future-requirements.md)。
 
-### AR16 会话多轮连续性缺失，每条消息独立执行
+### AR4-1 会话上下文构建器：历史选择、压缩与引用
+
+- **状态**：Done
+- **背景**：AR17。会话消息在 `session_store` 中只作为展示数据持久化，推理链路从未读取，全仓不存在历史选择、压缩、摘要逻辑。
+- **方案**：新增框架无关纯模块 `internal/context/`（package by feature，输入为纯消息字典列表，不 import 其他功能包）。输入会话历史 + 当前问题，输出结构化会话上下文：近期窗口原文保留（默认最近两组问答）、更早轮次压缩为单行摘要（用户问题原样 + 回答首行 + 照片数）、照片等大对象只保留 ID 引用不进上下文、总长度有硬上限；约束优先级为当前用户消息 > 更早轮次硬约束原文 > 摘要。产物供入口路由与跟进识别消费。
+- **验收**：选择（窗口内外区别处理）、压缩（长会话输出有界）、引用（照片详情不进入上下文）、优先级（当前要求不被摘要覆盖）四类单测；空会话、单轮、长会话边界覆盖。
+- **实施记录**（2026-09-07）：`internal/context/builder.py` 落地，逐项截断（轮数 + 单条 + 照片引用上限）自然有界，未引入额外总长截断分支；`tests/test_context_builder.py` 9 项通过。
+- **评估**：8.4（正确性 8.5 健壮性 8.0 可维护性 8.5 简洁性 8.5），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+
+### AR4-2 跟进消息识别与入口全路径接入
+
+- **状态**：Done
+- **背景**：AR16 路由侧 + AR18 最小跟进识别切片。每条消息独立走七类封闭分类，"刚才那组""不要那么文艺"等指代与追加修改被当全新请求处理。
+- **方案**：入口分类节点在会话有历史时注入 AR4-1 的紧凑历史块，分类标签增加 `followup`（跟进消息不走七类，AR18 切片）；命中 followup 后由独立的消解调用输出改写后的独立完整问题、目标路径与受影响部分（改写问题供下游消费）。`RouterState` 增加 `effective_question`，SQL/RAG/Tool/Combined/Runtime 五条下游路径统一改消费 `effective_question`（首条消息等于原问题，单轮行为不变）。无历史的会话分类行为与提示词完全不变。
+- **验收**：mock LLM 下验证 followup 分支路由与 effective_question 传递；首条消息路径回归不变；五条路径各自的 effective_question 消费有单测。
+- **实施记录**（2026-09-07）：`_classify_node` 有历史分支 + `_followup_resolve_node` 消解节点 + 条件边接入路由图；五路径经 `_effective_question` 统一消费；消解显式声明的目标类型与快照不一致时按声明目标全新执行（`runtime_goal_declared` 区分分类默认值）；server `send_message` 与 CLI `sessions resume` 完成接线；`tests/test_followup_routing.py` 16 项 + server 接线回归通过。
+- **评估**：8.2（正确性 8.5 健壮性 8.0 完整性 8.0 一致性 8.5），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+
+### AR4-3 Runtime 任务快照与多轮局部失效续跑
+
+- **状态**：Done
+- **背景**：AR16 执行侧 + V4 文档「多轮修改如何运行」。修改类跟进（"还是用刚才第二组，但不要那么文艺，再补两个不同场景"）目前只能按全新任务重跑，有效产物不保留。
+- **方案**：`session_store` 新增 `runtime_task_snapshots` 表（session_id 逻辑关联，无外键），Runtime 结束时保存任务快照；`state.py` 提供任务状态的序列化/反序列化往返（经目标契约校验重建）。`run_runtime` 增加 `prior_task` 续跑入口：保留权威范围、已确认事实、照片缓存与仍有效的产物；按消解结果局部失效（受影响里程碑重新入待办、对应产物作废，未受影响部分保留）；用户约束合并时当前消息优先。既有澄清续跑管道（runtime_pending_clarifications）保持不变。跨任务 Memory（长期偏好）不在本轮，等多次会话证据。
+- **验收**：序列化往返一致性；续跑保留有效产物、失效部分重开；约束合并且当前优先；快照 CRUD；澄清续跑回归不变。
+- **实施记录**（2026-09-07）：`dump_task`/`load_task`/`resume_task`（受影响部分词汇表 scope/selection/copy/report/topics，选片或文案失效均作废旧文案以防完成要件瞬间满足）落 `state.py`；`run_runtime` 返回 `task_dump` 与 `goal_type`；快照表 CRUD 与会话删除清理落地；澄清续跑路径不读快照、不注入历史，行为与 V3 一致；`tests/test_runtime_resume.py` 14 项通过。
+- **评估**：8.4（正确性 8.5 健壮性 8.0 Constraint Retention 9.0 Multi-turn Task Success 8.5），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+
+### AR4-4 V4 多轮金用例与评估基线
+
+- **状态**：Done
+- **背景**：V4 验收（Context Sufficiency / Context Utilization / Constraint Retention / Multi-turn Task Success）需要可重复的锚定证据；Planner 两维度（Plan Executability / Replan Precision）按 2026-09-07 决策等长任务证据，本轮不评。
+- **方案**：图级 mock 金用例覆盖多轮修改主线（选片发帖 → 跟进改文案 → 跟进补选重写）与跟进识别消解；全量离线回归纳入；`docs/eval/baseline.md` 登记 V4 维度基线，由单测锚定、可重复生成。
+- **验收**：金用例断言完整轨迹（保留与失效两侧都要断言）；基线条目落地；Agent 全量离线测试通过。
+- **实施记录**（2026-09-07）：金用例四条（改文案 1 决策完成、补选重写、快照 JSON 往返主线、换范围全链路重跑）落在 `tests/test_runtime_resume.py`；[评估基线](eval/baseline.md) 已登记 V4 四维度条目；Agent 全量离线 369/369 通过（V4 新增 42 项），未调用真实 LLM。
+- **评估**：8.3（Context Sufficiency 8.0 Context Utilization 8.5 完整性 8.0），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+
+### AR4-5 真实 LLM 环境下跟进识别与消解质量未验证
 
 - **状态**：待规划
+- **背景**：AR4-2 的 followup 分类与跟进消解提示词仅有离线替身断言（注入契约与输出解析），真实会话中指代展开是否准确、受影响部分声明是否合理、把新问题误判为 followup 的比例均无证据。评估报告将其列为准确性维度的主要失分点。
+- **严重程度**：P1，多轮体验的真实质量取决于此；执行受真实 LLM 回归授权约束（参照 AR2-7/AR3 惯例）。
+- **证据**：[AR4 第一轮评估](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+
+### AR4-6 长程指代的上下文充分性退化
+
+- **状态**：待规划
+- **背景**：Context Builder 的更早轮次摘要只保留用户问题原文、回答首行与照片计数；3 轮以前交付的选片组在历史块中没有 ID 引用，「用刚才第二组」类指代在长会话中无法展开为具体所指，消解只能凭问题原文猜测。
+- **严重程度**：P2，近窗口（最近两组）内的指代不受影响，仅长会话退化。
+- **证据**：[AR4 第一轮评估](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+
+### AR4-7 补选语义保留无确定性保障
+
+- **状态**：待规划
+- **背景**：AFFECT_SELECTION 续跑保留旧 selected_ids 并在决策提示词中可见，但新的选片观察按归约规则整体替换入选集合；补选场景旧照片是否保留完全依赖选片模型是否遵循改写请求中的保留指令，没有程序性保障。
+- **严重程度**：P2，金用例已断言状态可见性，语义保留属模型行为层。
+- **证据**：[AR4 第一轮评估](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+
+### AR16 会话多轮连续性缺失，每条消息独立执行（已取代）
+
+- **状态**：已取代（2026-09-07 V4 规划展开为 AR4-1–AR4-4，随 AR4 系列关闭）
 - **背景**：同一会话内每条消息都是无状态独立工作流。`send_message` 仅将当前问题（或澄清续跑拼接串）传入 `agent.route()`，`RouterState` 无历史字段，SQL/RAG/Tool/Combined/Runtime 五条下游路径全部只消费当前 `question`；请求契约 `SendMessageRequest` 也仅 `question + granularity`。会话内指代（"刚才那组"）、追加修改（"不要那么文艺"）全部按全新请求处理。唯一例外是 Runtime 澄清续跑单槽（AR11 遗产），只覆盖相对日/时间线歧义一种场景。
-- **严重程度**：P1，对话产品核心体验缺口；属既定 V4（Planning + Context）范围，V0–V3 从未承诺。
-- **归属**：V4 核心内容（2026-09-07 确认），不独立成版本、不延后补做；V4 规划时展开为 AR4-x 系列。
 - **证据**：[V0–V3 目标达成回顾](eval/reports/2026-09-07-v0-v3-goal-retrospective.md)。
 
-### AR17 对话历史无选择与压缩，上下文仅当前问题
+### AR17 对话历史无选择与压缩，上下文仅当前问题（已取代）
 
-- **状态**：待规划
+- **状态**：已取代（2026-09-07 V4 规划展开为 AR4-1–AR4-4，随 AR4 系列关闭）
 - **背景**：会话消息在 `session_store` 中只作为展示数据持久化，推理链路从未读取；全仓不存在任何针对对话历史的选择、压缩、摘要逻辑（现存的"摘要"均为照片描述提取、状态签名、SQL 结果格式化）。由于历史不进入上下文，有策略的压缩无从谈起，缺的是整条链路。
-- **严重程度**：P1，与 AR16 同源但独立成缺：多轮拼接解决"要不要带历史"，本条解决"带哪些、怎么压缩"；属 V4 Context Builder 范围。
-- **归属**：V4 核心内容（2026-09-07 确认），与 AR16 同批进入 V4 规划。
 - **证据**：[V0–V3 目标达成回顾](eval/reports/2026-09-07-v0-v3-goal-retrospective.md)。
 
 ### AR18 入口分类封闭集，新开放目标静默降级
@@ -72,6 +132,10 @@
 - proto-first 迁移、语音输入、多语言支持、负样本学习优化
 
 ## 决策历史
+
+- **2026-09-07**：V4 第一轮规划/生成/评估闭环完成，总分 8.3/10（循环目标 8.0 达成）。AR4-1 至 AR4-4 全部 Done：历史经 Context Builder 进入推理链路、followup 识别与消解接入五路径、Runtime 任务快照支持局部失效续跑、四条多轮金用例与 V4 基线落地；Agent 离线全量 369/369（V4 新增 42 项），未调用真实 LLM。评估登记 AR4-5（真实环境验证）、AR4-6（长程指代退化）、AR4-7（补选保留无确定性保障）待规划。详见 [评估报告](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+
+- **2026-09-07**：V4 第一轮规划完成。AR16/AR17 展开为 AR4-1（会话上下文构建器）、AR4-2（跟进消息识别与全路径接入）、AR4-3（Runtime 任务快照与多轮局部失效续跑）、AR4-4（多轮金用例与评估基线）；AR16/AR17 标记已取代。Planner/Replan 全量实现与跨任务 Memory 按 2026-09-07 范围决策延后，本轮多轮续跑中的待办重开即最小 replan 切片。架构依据见 [V4 Planning + Context](design/architecture/06-photo-agent-v4-planning-context.md)。
 
 - **2026-09-07**：v1.0.18 归档。归档 AR3-1–AR3-8，以及拆分为 AR3 系列后关闭的 AR15，共 9 项，版本主题为 Agent Runtime V3 能力系统；V0–V3 目标回顾报告随版本存档引用；AR16–AR18 留存待规划，BQ3 继续暂缓。
 

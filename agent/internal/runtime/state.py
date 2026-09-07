@@ -485,6 +485,178 @@ def requirement_label(requirement: str) -> str:
 
 
 # ============================================================================
+# 多轮续跑：任务快照序列化与局部失效（V4）
+# ============================================================================
+
+# 跟进消解声明的受影响部分（多轮修改词汇表，入口按此校验 LLM 输出）
+AFFECT_SCOPE = "scope"            # 照片范围变动：范围及下游产物全部失效
+AFFECT_SELECTION = "selection"    # 重新挑选或增删照片：选片与文案失效
+AFFECT_COPY = "copy"              # 仅修改文案：文案失效，选片保留
+AFFECT_REPORT = "report"          # 重写对比结论
+AFFECT_TOPICS = "topics"          # 重新发现主题
+
+_AFFECT_VOCABULARY = (AFFECT_SCOPE, AFFECT_SELECTION, AFFECT_COPY, AFFECT_REPORT, AFFECT_TOPICS)
+
+# 受影响部分 → 需重开的里程碑（按目标类型）；范围失效隐含下游全部失效
+_GOAL_AFFECT_MILESTONES: dict[str, dict[str, tuple[str, ...]]] = {
+    GOAL_SOCIAL_POST: {
+        AFFECT_SCOPE: ("locate", "candidates", "select", "copy"),
+        AFFECT_SELECTION: ("select", "copy"),
+        AFFECT_COPY: ("copy",),
+    },
+    GOAL_PHOTO_COMPARISON: {
+        AFFECT_SCOPE: ("locate", "candidates", "compare"),
+        AFFECT_REPORT: ("compare",),
+    },
+    GOAL_TOPIC_DISCOVERY: {
+        AFFECT_SCOPE: ("locate", "topics"),
+        AFFECT_TOPICS: ("topics",),
+    },
+}
+
+
+def affect_vocabulary() -> tuple[str, ...]:
+    """跟进消解可声明的受影响部分全集。"""
+    return _AFFECT_VOCABULARY
+
+
+def dump_task(state: TaskState) -> dict:
+    """把任务状态序列化为可持久化的字典（快照存 session_store 用）。"""
+    return {
+        "goal_type": state.goal.goal_type,
+        "description": state.goal.description,
+        "delivery_mode": state.goal.delivery_mode,
+        "constraints": dict(state.constraints),
+        "resolved_facts": dict(state.resolved_facts),
+        "scope": dataclasses.asdict(state.scope),
+        "artifacts": dataclasses.asdict(state.artifacts),
+        "progress": {
+            "todo": list(state.progress.todo),
+            "history": list(state.progress.history),
+            "errors": list(state.progress.errors),
+            "terminal_reason": state.progress.terminal_reason,
+        },
+    }
+
+
+def load_task(data: dict) -> TaskState:
+    """从快照字典重建任务状态；Goal 经目标契约重建校验，字段缺失或类型不符报错。"""
+    if not isinstance(data, dict):
+        raise ValueError("任务快照必须是字典")
+    goal = new_goal(
+        str(data["goal_type"]),
+        str(data["description"]),
+        str(data.get("delivery_mode") or "editorial"),
+    )
+    scope_data = data.get("scope") or {}
+    artifacts_data = data.get("artifacts") or {}
+    progress_data = data.get("progress") or {}
+    facts = data.get("resolved_facts")
+    constraints = data.get("constraints")
+    if not isinstance(facts, dict) or not isinstance(constraints, dict):
+        raise ValueError("任务快照的 resolved_facts/constraints 必须是字典")
+    if not isinstance(artifacts_data, dict) or not isinstance(progress_data, dict):
+        raise ValueError("任务快照的 artifacts/progress 必须是字典")
+    scope = Scope(
+        established=bool(scope_data.get("established")),
+        restricted=bool(scope_data.get("restricted")),
+        conditions=dict(scope_data.get("conditions") or {}),
+        condition_summary=str(scope_data.get("condition_summary") or ""),
+        photo_ids=[str(pid) for pid in scope_data.get("photo_ids") or []],
+        sql=str(scope_data.get("sql") or ""),
+    )
+    artifacts = Artifacts(
+        candidate_ids=list(artifacts_data.get("candidate_ids") or []),
+        selected_ids=list(artifacts_data.get("selected_ids") or []),
+        copy_draft=dict(artifacts_data.get("copy_draft") or {}),
+        photo_cache={str(k): dict(v) for k, v in (artifacts_data.get("photo_cache") or {}).items()},
+        handoff_url=str(artifacts_data.get("handoff_url") or ""),
+        comparison_report=dict(artifacts_data.get("comparison_report") or {}),
+        topic_candidates=list(artifacts_data.get("topic_candidates") or []),
+        comparison_photo_ids={
+            str(k): list(v) for k, v in (artifacts_data.get("comparison_photo_ids") or {}).items()
+        },
+        comparison_scopes={
+            str(k): Scope(
+                established=bool(v.get("established")),
+                restricted=bool(v.get("restricted")),
+                conditions=dict(v.get("conditions") or {}),
+                condition_summary=str(v.get("condition_summary") or ""),
+                photo_ids=[str(pid) for pid in v.get("photo_ids") or []],
+                sql=str(v.get("sql") or ""),
+            )
+            for k, v in (artifacts_data.get("comparison_scopes") or {}).items()
+        },
+    )
+    history = [
+        {k: item.get(k) for k in ("step", "action", "kind", "summary")}
+        for item in progress_data.get("history") or []
+        if isinstance(item, dict)
+    ]
+    progress = Progress(
+        todo=list(progress_data.get("todo") or []),
+        history=history,
+        errors=[str(e) for e in progress_data.get("errors") or []],
+        terminal_reason=str(progress_data.get("terminal_reason") or ""),
+    )
+    return TaskState(
+        goal=goal,
+        constraints=dict(constraints),
+        resolved_facts=dict(facts),
+        scope=scope,
+        artifacts=artifacts,
+        progress=progress,
+    )
+
+
+def resume_task(prior: TaskState, followup_question: str, affected: list[str] | None = None) -> TaskState:
+    """多轮修改续跑：保留仍有效的部分，只让受影响的里程碑与产物失效。
+
+    目标描述更新为改写后的独立完整请求；用户约束合并（当前消息优先）；
+    范围失效时下游产物与已确认事实全部重置，照片缓存保留以免重复拉取。
+    """
+    goal = copy.deepcopy(prior.goal)
+    goal.description = followup_question
+    affect_map = _GOAL_AFFECT_MILESTONES[goal.goal_type]
+    valid_affects = [a for a in (affected or []) if a in affect_map]
+
+    scope = copy.deepcopy(prior.scope)
+    artifacts = copy.deepcopy(prior.artifacts)
+    facts = dict(prior.resolved_facts)
+    facts.pop("clarification", None)
+
+    if AFFECT_SCOPE in valid_affects:
+        scope = Scope()
+        artifacts = Artifacts(photo_cache=artifacts.photo_cache)
+        facts = {}
+    # 选片或文案失效都作废旧文案：否则完成要件仍满足，续跑会瞬间「完成」而不重写
+    if AFFECT_SELECTION in valid_affects or AFFECT_COPY in valid_affects:
+        artifacts.copy_draft = {}
+    if AFFECT_REPORT in valid_affects:
+        artifacts.comparison_report = {}
+    if AFFECT_TOPICS in valid_affects:
+        artifacts.topic_candidates = []
+
+    reopen = {m for a in valid_affects for m in affect_map[a]}
+    milestones = _GOAL_PRESETS[goal.goal_type]["milestones"]
+    todo = [m for m in milestones if m in prior.progress.todo or m in reopen]
+    progress = Progress(
+        todo=todo,
+        history=list(prior.progress.history),
+        errors=list(prior.progress.errors),
+        terminal_reason="",
+    )
+    return TaskState(
+        goal=goal,
+        constraints={**prior.constraints, "question": followup_question},
+        resolved_facts=facts,
+        scope=scope,
+        artifacts=artifacts,
+        progress=progress,
+    )
+
+
+# ============================================================================
 # 决策摘要与最终输出
 # ============================================================================
 

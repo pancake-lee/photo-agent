@@ -20,6 +20,7 @@
 """
 
 import argparse
+import json
 import logging
 import pathlib
 import sys
@@ -42,6 +43,7 @@ if str(_AGENT_DIR) not in sys.path:
 import cli.demo as demo
 import internal.evals.evaluation as evaluation
 import internal.chat.photo_rag as photo_rag
+import internal.context.builder as ctx_builder
 import internal.topics.suggest as suggest_mod
 import internal.chat.text_to_sql as text_to_sql
 import infra.config as config
@@ -60,21 +62,29 @@ import infra.token_tracker as token_tracker
 class RouterState(typing.TypedDict):
     """查询路由的共享 State。"""
     question: str
-    granularity: str        # 检索粒度 photo/fine/coarse，见 photo_rag.GRANULARITY_COLLECTIONS
+    history_block: str              # 会话紧凑历史块（V4 Context Builder 产物，首条消息为空）
+    effective_question: str         # 下游实际消费的问题：跟进消息为指代消解后的独立完整请求
+    followup: bool                  # 是否为跟进消息（引用/修改此前会话结果）
+    granularity: str                # 检索粒度 photo/fine/coarse，见 photo_rag.GRANULARITY_COLLECTIONS
     query_type: str
     sql_result: dict
     rag_answer: str
     tool_answer: str
-    combined_result: dict   # {sql_ids, rag_ids, intersection_ids, answer}
+    combined_result: dict           # {sql_ids, rag_ids, intersection_ids, answer}
     answer: str
     photos: list[dict]
-    compose_url: str        # Runtime 兜底深链（候选超限时引导进图文工坊）
+    compose_url: str                # Runtime 兜底深链（候选超限时引导进图文工坊）
     runtime_terminal_reason: str
     runtime_clarification: dict
     runtime_goal_type: str
+    runtime_affected: list[str]     # 跟进消解声明的受影响部分（resume_task 词汇表）
+    runtime_goal_declared: bool     # 跟进消解是否显式声明了目标类型（区分分类默认值）
+    runtime_prior_task_json: str    # 会话层传入的 Runtime 任务快照（空串表示无）
+    runtime_task_dump: str          # 本次 Runtime 运行的任务快照（JSON，会话层保存）
 
 
-CLASSIFY_SYSTEM = (
+# 分类规则主体；无历史时直接拼问题，有历史时插入 followup 标签与历史块（V4）
+_CLASSIFY_RULES = (
     "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined、runtime_post、runtime_comparison 或 runtime_topics，不要解释。\n\n"
     "runtime_post: 用户提出开放目标，需要挑选照片并生成标题、发布文案等创作内容的多步任务；"
     "runtime_comparison: 用户要求比较两个时期/年份的照片，并基于两组照片总结变化、进步或差异；"
@@ -105,8 +115,51 @@ CLASSIFY_SYSTEM = (
     "- \"黑白高对比度的建筑\" → combined\n"
     "- \"宁静氛围的水边照片\" → combined\n\n"
     "- \"找山西旅游第一天的照片并生成发布文案\" → runtime\n\n"
+)
+
+CLASSIFY_SYSTEM = _CLASSIFY_RULES + (
     "用户问题: {question}\n"
     "分类:"
+)
+
+# 有会话历史时的分类提示词：增加 followup 标签，跟进消息不走七类（AR18 最小切片）
+CLASSIFY_SYSTEM_WITH_HISTORY = _CLASSIFY_RULES + (
+    "followup: 用户消息引用、修改或追问此前会话的结果（如「刚才那组」「不要那么文艺」"
+    "「第二组再补两张不同场景」），需要结合会话历史才能理解，不是新的独立请求；"
+    "会话存在时此类消息优先判为 followup\n\n"
+    "会话历史（更早摘要与最近原文，仅供理解指代）:\n{history}\n\n"
+    "用户问题: {question}\n"
+    "分类:"
+)
+
+# 跟进消解：把跟进消息改写为独立完整请求，并声明处理路径与受影响部分。
+# 模板内 JSON 示例的花括号一律双写转义（ChatPromptTemplate 变量语法）。
+FOLLOWUP_RESOLVE_SYSTEM = (
+    "你是会话跟进消息消解器。用户在已有会话中发来一条消息，把它改写为不依赖会话"
+    "也能理解的独立完整请求，并给出处理路径与受影响部分。\n"
+    '只输出 JSON: {{"rewritten": "改写后的独立完整请求", '
+    '"target": "sql|rag|tool|combined|runtime", '
+    '"affected": ["scope"|"selection"|"copy"|"report"|"topics"], '
+    '"goal_type": "social_post|photo_comparison|topic_discovery"}}\n'
+    "target 规则: 修改或追加此前开放目标（选片发帖/跨期对比/主题发现）的填 runtime；"
+    "普通检索、统计、工具操作按 sql/rag/tool/combined 选择。\n"
+    "affected 仅在 target=runtime 时填写，可多选: 照片范围变动填 scope，"
+    "重新挑选或增删照片填 selection，仅改文案或风格填 copy，重写对比结论填 report，"
+    "重新发现主题填 topics；不确定时按影响面更小的选择。\n"
+    "goal_type 仅在 target=runtime 时填写，沿用会话中此前开放目标的类型。\n"
+    "改写要求: 保留用户此前的有效约束（日期、范围、数量），合并本次的新要求；"
+    "指代（如「刚才那组」「第二组」）必须展开为具体所指。\n"
+    "示例:\n"
+    "历史最近一轮: 用户「找山西旅游第一天的照片并生成发布文案」，助手交付了 8 张照片和文案；"
+    "用户说「不要那么文艺」→ "
+    '{{"rewritten": "找山西旅游第一天的照片并生成发布文案，文案风格平实不要文艺", '
+    '"target": "runtime", "affected": ["copy"], "goal_type": "social_post"}}\n'
+    "用户说「再补两个不同场景」→ "
+    '{{"rewritten": "找山西旅游第一天的照片并生成发布文案，在已选照片外再补两个不同场景", '
+    '"target": "runtime", "affected": ["selection", "copy"], "goal_type": "social_post"}}\n\n'
+    "会话历史（更早摘要与最近原文）:\n{history}\n\n"
+    "用户消息: {question}\n"
+    "输出:"
 )
 
 
@@ -120,12 +173,19 @@ def _get_cfg(config: lc_runnables.RunnableConfig) -> config.Config:
 def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
     llm = llm_factory.create_llm(cfg, temperature=0.0, callbacks=_get_callbacks())
-    prompt = lc_prompts.ChatPromptTemplate.from_messages([("system", CLASSIFY_SYSTEM)])
+    history_block = state.get("history_block", "")
+    template = CLASSIFY_SYSTEM_WITH_HISTORY if history_block else CLASSIFY_SYSTEM
+    prompt = lc_prompts.ChatPromptTemplate.from_messages([("system", template)])
     chain = prompt | llm
-    response = chain.invoke({"question": state["question"]})
+    invoke_vars = {"question": state["question"]}
+    if history_block:
+        invoke_vars["history"] = history_block
+    response = chain.invoke(invoke_vars)
     raw = str(response.content).strip().lower()
     goal_type = rt_state.GOAL_SOCIAL_POST
-    if "runtime_comparison" in raw:
+    if "followup" in raw and history_block:
+        query_type = "followup"
+    elif "runtime_comparison" in raw:
         query_type = "runtime"
         goal_type = rt_state.GOAL_PHOTO_COMPARISON
     elif "runtime_topics" in raw:
@@ -147,11 +207,60 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     return {"query_type": query_type, "runtime_goal_type": goal_type}
 
 
+# 跟进消解的合法输出取值（超出词表的值按兜底处理并告警）
+_FOLLOWUP_TARGETS = ("sql", "rag", "tool", "combined", "runtime")
+_FOLLOWUP_GOALS = (rt_state.GOAL_SOCIAL_POST, rt_state.GOAL_PHOTO_COMPARISON, rt_state.GOAL_TOPIC_DISCOVERY)
+
+
+def _followup_resolve_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
+    """跟进消解节点：改写为独立完整请求 + 处理路径 + 受影响部分（LLM 输出程序校验）。"""
+    cfg = _get_cfg(config)
+    _log = logging.getLogger(__name__)
+    llm = llm_factory.create_llm(cfg, temperature=0.0, callbacks=_get_callbacks())
+    prompt = lc_prompts.ChatPromptTemplate.from_messages([("system", FOLLOWUP_RESOLVE_SYSTEM)])
+    chain = prompt | llm
+    response = chain.invoke({
+        "history": state.get("history_block", ""),
+        "question": state["question"],
+    })
+    parsed = caps_common.extract_json_dict(str(response.content)) or {}
+    target = str(parsed.get("target") or "").strip()
+    if target not in _FOLLOWUP_TARGETS:
+        _log.warning("[跟进消解] 非法 target=%r，按 rag 兜底", target)
+        target = "rag"
+    rewritten = str(parsed.get("rewritten") or "").strip() or state["question"]
+    affected = [
+        str(item) for item in (parsed.get("affected") or [])
+        if str(item) in rt_state.affect_vocabulary()
+    ]
+    update: dict = {
+        "query_type": target,
+        "effective_question": rewritten,
+        "followup": True,
+        "runtime_affected": affected,
+        "runtime_goal_declared": False,
+    }
+    goal_type = str(parsed.get("goal_type") or "").strip()
+    if target == "runtime" and goal_type in _FOLLOWUP_GOALS:
+        update["runtime_goal_type"] = goal_type
+        update["runtime_goal_declared"] = True
+    _log.info(
+        "[跟进消解] 「%s」 → target=%s, affected=%s, 改写=「%s」",
+        state["question"], target, affected, rewritten,
+    )
+    return update
+
+
+def _effective_question(state: RouterState) -> str:
+    """下游统一入口：跟进消息消费消解后的独立完整请求，其余等于原始问题。"""
+    return state.get("effective_question") or state["question"]
+
+
 def _sql_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     cfg = _get_cfg(config)
     _log = logging.getLogger(__name__)
     try:
-        result = text_to_sql.answer_with_sql(cfg, state["question"])
+        result = text_to_sql.answer_with_sql(cfg, _effective_question(state))
         _log.info(
             "[sql] 查询完成: rows=%d, answer_chars=%d",
             len(result.get("results") or []),
@@ -174,7 +283,7 @@ def _rag_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
     _log = logging.getLogger(__name__)
     try:
         answer_text, photo_refs = photo_rag.answer_question(
-            cfg, state["question"],
+            cfg, _effective_question(state),
             distance_threshold=cfg.rag_distance_threshold,
             auto_distance_ratio=cfg.rag_auto_distance_ratio,
             granularity=granularity,
@@ -221,7 +330,7 @@ def _tool_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
 
         messages: list[lc_messages.BaseMessage] = [
             lc_messages.SystemMessage(content=_TOOL_SYSTEM_PROMPT),
-            lc_messages.HumanMessage(content=state["question"]),
+            lc_messages.HumanMessage(content=_effective_question(state)),
         ]
 
         for round_no in range(1, max_rounds + 1):
@@ -314,7 +423,7 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
         5. 交集为空 → 降级为纯 RAG
     """
     cfg = _get_cfg(config)
-    question = state["question"]
+    question = _effective_question(state)
     granularity = state.get("granularity", "photo")
     _log = logging.getLogger(__name__)
 
@@ -498,14 +607,41 @@ def _combined_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
 
 
 def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> dict:
-    """开放目标节点：进入 Runtime 多步执行（decide/execute/reduce/check 循环）。"""
+    """开放目标节点：进入 Runtime 多步执行（decide/execute/reduce/check 循环）。
+
+    跟进消息携带任务快照时从先前任务局部失效后续跑（V4 多轮修改）；
+    快照损坏按全新任务执行并告警，不让持久化数据问题打断会话。
+    """
     cfg = _get_cfg(config)
+    _log = logging.getLogger(__name__)
     configurable = config.get("configurable", {})
     progress_callback = configurable.get("progress_callback")
     if progress_callback is not None:
         progress_callback("runtime.started", {"message": "任务已进入多步处理"})
+    prior_task = None
+    prior_json = state.get("runtime_prior_task_json") or ""
+    if state.get("followup") and prior_json:
+        try:
+            prior_task = rt_state.load_task(json.loads(prior_json))
+        except (ValueError, KeyError, TypeError) as exc:
+            _log.warning("[runtime] 任务快照不可用，按全新任务执行: %s", exc)
+            prior_task = None
+        if prior_task is not None and state.get("runtime_goal_declared"):
+            # 消解显式声明的目标与快照目标不一致（如对发帖任务提对比跟进）：
+            # 旧任务产物不适用于新目标，按声明的目标全新执行
+            if state.get("runtime_goal_type") != prior_task.goal.goal_type:
+                _log.info(
+                    "[runtime] 跟进目标与快照目标不一致（%s ≠ %s），按全新任务执行",
+                    state.get("runtime_goal_type"), prior_task.goal.goal_type,
+                )
+                prior_task = None
+    if prior_task is not None:
+        _log.info(
+            "[runtime] 跟进续跑: goal=%s, affected=%s",
+            prior_task.goal.goal_type, state.get("runtime_affected") or [],
+        )
     result = rt_graph.run_runtime(
-        cfg, state["question"],
+        cfg, _effective_question(state),
         granularity=state.get("granularity", "photo"),
         llm_callbacks=_get_callbacks(),
         prices=configurable.get("prices"),
@@ -513,6 +649,8 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
         tracer=configurable.get("tracer"),
         progress_callback=progress_callback,
         goal_type=state.get("runtime_goal_type", rt_state.GOAL_SOCIAL_POST),
+        prior_task=prior_task,
+        affected=state.get("runtime_affected") or [],
     )
     return {
         "answer": result["answer"],
@@ -520,6 +658,8 @@ def _runtime_node(state: RouterState, config: lc_runnables.RunnableConfig) -> di
         "compose_url": result.get("compose_url", ""),
         "runtime_terminal_reason": result.get("terminal_reason", ""),
         "runtime_clarification": result.get("clarification", {}),
+        "runtime_goal_type": result.get("goal_type", state.get("runtime_goal_type", rt_state.GOAL_SOCIAL_POST)),
+        "runtime_task_dump": json.dumps(result.get("task_dump") or {}, ensure_ascii=False) if result.get("task_dump") else "",
     }
 
 
@@ -579,6 +719,7 @@ def _get_graph():
     if _graph_app is None:
         g = lg_graph.StateGraph(RouterState)
         g.add_node("classify", _classify_node)
+        g.add_node("followup_resolve", _followup_resolve_node)
         g.add_node("sql_query", _sql_node)
         g.add_node("rag_query", _rag_node)
         g.add_node("tool_query", _tool_node)
@@ -588,6 +729,17 @@ def _get_graph():
         g.add_edge(lg_graph.START, "classify")
         g.add_conditional_edges(
             "classify", _route_by_type,
+            {
+                "sql": "sql_query",
+                "rag": "rag_query",
+                "tool": "tool_query",
+                "combined": "combined_query",
+                "runtime": "runtime_query",
+                "followup": "followup_resolve",
+            },
+        )
+        g.add_conditional_edges(
+            "followup_resolve", _route_by_type,
             {
                 "sql": "sql_query",
                 "rag": "rag_query",
@@ -686,17 +838,27 @@ class PhotoAgent:
         granularity: str = "photo",
         tracer=None,
         progress_callback=None,
+        history: list[dict] | None = None,
+        prior_runtime_task_json: str | None = None,
     ) -> RouterState:
-        """路由单次查询，自动分发到 SQL / RAG / Tool / Combined / Runtime 分支。
+        """路由单次查询，自动分发到 SQL / RAG / Tool / Combined / Runtime / 跟进消解分支。
 
         参数:
             question:    用户问题
             granularity: 检索粒度 photo/fine/coarse。photo 为单张照片检索（默认），
                          fine/coarse 走连拍组封面集合，一组只返回一个结果
             tracer:      可选 Tracer，Runtime 多步执行时输出步骤事件
+            history:     会话历史消息（session_store.get_messages 产物）。
+                         非空时构建紧凑历史块，分类可识别跟进消息（V4 多轮）
+            prior_runtime_task_json: 会话层保存的 Runtime 任务快照（JSON），
+                         跟进消息命中 Runtime 时局部失效后续跑
         """
+        session_ctx = ctx_builder.build_session_context(history or [])
         initial: RouterState = {
             "question": question,
+            "history_block": session_ctx.history_block,
+            "effective_question": question,
+            "followup": False,
             "granularity": granularity,
             "query_type": "",
             "sql_result": {},
@@ -709,6 +871,10 @@ class PhotoAgent:
             "runtime_terminal_reason": "",
             "runtime_clarification": {},
             "runtime_goal_type": rt_state.GOAL_SOCIAL_POST,
+            "runtime_affected": [],
+            "runtime_goal_declared": False,
+            "runtime_prior_task_json": prior_runtime_task_json or "",
+            "runtime_task_dump": "",
         }
         result = self._app.invoke(initial, {
             "configurable": {
@@ -983,10 +1149,23 @@ def _handle_sessions(cfg: config.Config, cmd: list[str]) -> None:
                 if not user_input.strip():
                     continue
 
+                # 历史与任务快照在追加当前消息前读取（V4 多轮）
+                history = store.get_messages(session_id)
+                snapshot = store.get_runtime_snapshot(session_id)
                 store.add_message(session_id, "user", user_input)
-                result = agent.route(user_input)
+                result = agent.route(
+                    user_input,
+                    history=history,
+                    prior_runtime_task_json=snapshot.get("task_json") if snapshot else None,
+                )
                 answer = result.get("answer", "") or "未能获取回答。"
                 query_type = result.get("query_type", "")
+                if query_type == "runtime" and result.get("runtime_task_dump"):
+                    store.save_runtime_snapshot(
+                        session_id,
+                        result.get("runtime_goal_type") or "social_post",
+                        result["runtime_task_dump"],
+                    )
 
                 # 首条提问后更新标题
                 user_count = sum(

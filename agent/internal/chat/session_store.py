@@ -91,6 +91,13 @@ class SessionStore:
                         clarification_json TEXT NOT NULL DEFAULT '{}',
                         created_at TEXT NOT NULL DEFAULT (datetime('now'))
                     );
+
+                    CREATE TABLE IF NOT EXISTS runtime_task_snapshots (
+                        session_id TEXT PRIMARY KEY,
+                        goal_type TEXT NOT NULL,
+                        task_json TEXT NOT NULL,
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                    );
                 """)
 
                 # 迁移：添加 photos 列（若不存在）
@@ -276,6 +283,7 @@ class SessionStore:
                 # 先删消息再删会话（虽然设置了 ON DELETE CASCADE，但显式操作更安全）
                 conn.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
                 conn.execute("DELETE FROM runtime_pending_clarifications WHERE session_id=?", (session_id,))
+                conn.execute("DELETE FROM runtime_task_snapshots WHERE session_id=?", (session_id,))
                 cur = conn.execute("DELETE FROM sessions WHERE id=?", (session_id,))
                 conn.commit()
                 return cur.rowcount > 0
@@ -324,6 +332,56 @@ class SessionStore:
             conn = self._get_conn()
             try:
                 conn.execute("DELETE FROM runtime_pending_clarifications WHERE session_id=?", (session_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    # ── Runtime 任务快照（多轮续跑依据，V4）──────────────────
+
+    def save_runtime_snapshot(self, session_id: str, goal_type: str, task_json: str) -> None:
+        """保存会话最近一次 Runtime 任务快照（单槽，整体覆盖）。"""
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute(
+                    """INSERT INTO runtime_task_snapshots
+                       (session_id, goal_type, task_json, updated_at)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(session_id) DO UPDATE SET
+                       goal_type=excluded.goal_type,
+                       task_json=excluded.task_json,
+                       updated_at=excluded.updated_at""",
+                    (session_id, goal_type, task_json, _now_iso()),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_runtime_snapshot(self, session_id: str) -> dict | None:
+        """读取会话最近一次 Runtime 任务快照，无快照返回 None。"""
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT goal_type, task_json, updated_at FROM runtime_task_snapshots WHERE session_id=?",
+                    (session_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                return {
+                    "goal_type": row["goal_type"],
+                    "task_json": row["task_json"],
+                    "updated_at": row["updated_at"],
+                }
+            finally:
+                conn.close()
+
+    def clear_runtime_snapshot(self, session_id: str) -> None:
+        """删除会话的 Runtime 任务快照（会话删除时清理）。"""
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute("DELETE FROM runtime_task_snapshots WHERE session_id=?", (session_id,))
                 conn.commit()
             finally:
                 conn.close()

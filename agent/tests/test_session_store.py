@@ -88,6 +88,35 @@ class TestSessionStore(unittest.TestCase):
             self.assertEqual(messages[0]["runtime_steps"], [])
             self.assertEqual(store.get_session("legacy")["last_granularity"], "photo")
 
+    def test_runtime_snapshot_save_get_clear_roundtrip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = session_store.SessionStore(str(Path(temp_dir) / "sessions.db"))
+            session = store.create_session()
+            self.assertIsNone(store.get_runtime_snapshot(session["session_id"]))
+
+            store.save_runtime_snapshot(session["session_id"], "social_post", '{"goal_type": "social_post"}')
+            snapshot = store.get_runtime_snapshot(session["session_id"])
+            self.assertEqual(snapshot["goal_type"], "social_post")
+            self.assertEqual(snapshot["task_json"], '{"goal_type": "social_post"}')
+
+            # 单槽覆盖：同会话第二次保存整体替换
+            store.save_runtime_snapshot(session["session_id"], "photo_comparison", '{"goal_type": "photo_comparison"}')
+            snapshot = store.get_runtime_snapshot(session["session_id"])
+            self.assertEqual(snapshot["goal_type"], "photo_comparison")
+
+            store.clear_runtime_snapshot(session["session_id"])
+            self.assertIsNone(store.get_runtime_snapshot(session["session_id"]))
+
+    def test_delete_session_cleans_runtime_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = session_store.SessionStore(str(Path(temp_dir) / "sessions.db"))
+            session = store.create_session()
+            store.save_runtime_snapshot(session["session_id"], "social_post", "{}")
+
+            store.delete_session(session["session_id"])
+
+            self.assertIsNone(store.get_runtime_snapshot(session["session_id"]))
+
 
 if __name__ == "__main__":
     unittest.main()

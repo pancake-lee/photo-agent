@@ -117,6 +117,7 @@ flowchart TD
 - **护栏与恢复（AR2-3/4/5）**：guardrail 按「状态 → 策略」映射执行恢复，temporary 同能力同参数有界重试、invalid 决策侧摘要反馈再决策 / 能力侧（能力声明可修复）带反馈修复、permanent 确定性终态、恢复耗尽以可行动文案停止；文案事实依据质量门在确定性检查通过后按能力声明触发，不通过进修复环。选片由连拍折叠、范围归属和 ID 去重作确定性保护，不以只读文字摘要的近重复判断阻断交付；无进展检测以状态签名（事实键 + 候选摘要 + 要件缺口 + 最近错误）连续不变判定，先注入换策略反馈、仍无进展才停止
 - **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加；恢复预算 `RuntimeRetryMax / RuntimeRepairMax / RuntimeRedecideMax`（重试/修复按能力独立计数，再决策全局计数），恢复不消耗步数但计入时长与成本
 - **追踪**：tracer 输出 runtime.decide / execute / guardrail（恢复动作）/ observe / check 步骤事件与 trace_summary 轨迹摘要（步数、能力调用、恢复计数、里程碑、结束形态）
+- **多轮上下文（V4）**：会话历史经 `internal/context/builder.py` 整理为紧凑历史块（近期原文 + 更早单行摘要 + 照片只留 ID 引用）注入入口分类；有历史时分类标签增加 followup（跟进消息不走七类），跟进消解 LLM 把它改写为独立完整请求并声明受影响部分（scope/selection/copy/report/topics）。Runtime 运行后任务快照存 session_store，跟进命中 Runtime 时按受影响部分局部失效后续跑（保留有效范围/事实/产物，重开受影响里程碑并作废对应产物，约束合并且当前消息优先）；完整 Planner 与跨任务 Memory 等长任务证据再引入
 
 ### 3.3 Combined 组合查询详解
 

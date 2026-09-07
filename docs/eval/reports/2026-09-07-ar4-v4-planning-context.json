@@ -1,0 +1,37 @@
+{
+  "report_id": "2026-09-07-ar4-v4-planning-context",
+  "backlog_id": "AR4-1-AR4-4",
+  "created_at": "2026-09-07T21:40:00+08:00",
+  "target": "V4 Planning + Context 第一轮（多轮上下文）离线交付评估",
+  "overall": 8.3,
+  "per_task": {
+    "AR4-1": 8.4,
+    "AR4-2": 8.2,
+    "AR4-3": 8.4,
+    "AR4-4": 8.3
+  },
+  "dimension_scores": {
+    "正确性": 8.5,
+    "健壮性": 8.0,
+    "可维护性": 8.5,
+    "简洁性": 8.5,
+    "准确性": 8.0,
+    "完整性": 8.0,
+    "一致性": 8.5,
+    "Context Sufficiency": 8.0,
+    "Context Utilization": 8.5,
+    "Constraint Retention": 9.0,
+    "Multi-turn Task Success": 8.5
+  },
+  "findings_for_backlog": [
+    "AR4-5（待规划）：真实 LLM 环境下 followup 识别与跟进消解质量未验证。分类与消解提示词仅有离线替身断言，真实会话中指代展开是否准确、受影响部分声明是否合理、误判 followup 的比例均无证据；需要用户授权后以真实会话回归（参照 AR2-7/AR3 真实回归入口的授权惯例）。",
+    "AR4-6（待规划）：长程指代的上下文充分性退化。更早轮次摘要只保留用户问题原文与回答首行，3 轮以前交付的选片组只有照片计数没有 ID 引用，「用刚才第二组」类指代在长会话中无法展开为具体所指。",
+    "AR4-7（待规划）：补选语义保留无确定性保障。AFFECT_SELECTION 续跑保留旧 selected_ids 供模型扩展，但新选片观察整体替换入选集合，旧照片是否保留完全依赖选片模型行为；可在挑选能力提示词或归约层增加确定性保留规则。"
+  ],
+  "verification_runtime": [
+    "uv run --with pytest python -m pytest tests/ -q → 369 passed, 6 subtests（基线 327 + V4 新增 42）",
+    "uv run --with ruff ruff check（V4 新增/重写文件）→ All checks passed",
+    "金用例四条：改文案仅 1 次决策完成、补选重写 2 次决策、快照 JSON 往返续跑、换范围全链路重跑，均断言保留与失效两侧"
+  ],
+  "verification_commits": {}
+}
