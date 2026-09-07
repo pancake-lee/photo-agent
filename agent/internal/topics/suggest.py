@@ -379,13 +379,15 @@ def _stage1_generate_intuitions(
         }, module="suggest")
 
     t_start = time.time()
+    logger.info("Stage 1 LLM 调用开始：样本=%d 张", len(sampled))
     try:
         resp = llm.invoke(messages)
         raw = resp.content if hasattr(resp, "content") else str(resp)
     except Exception as e:
-        logger.exception("Stage 1 LLM 调用失败")
+        logger.exception("Stage 1 LLM 调用失败：耗时 %.1fs", time.time() - t_start)
         return []
     llm_duration_ms = int((time.time() - t_start) * 1000)
+    logger.info("Stage 1 LLM 调用完成：耗时 %.1fs", llm_duration_ms / 1000)
 
     # trace: suggest.stage1.llm.end
     token_usage: dict = {}
@@ -502,17 +504,6 @@ def _stage2_expand_selection(
             rag_ids = rag_result
             rag_details = []
 
-    if not rag_ids:
-        logger.warning("Stage 2: RAG 检索 '%s' 无结果", intuition.title)
-        if tracer:
-            tracer.emit("suggest.stage2.rag.end", {
-                "matched_count": 0,
-                "total_retrieved": 0,
-                "photo_ids": [],
-                "distances": [],
-            }, module="suggest")
-        return []
-
     # 从全量照片中匹配 RAG 结果
     photo_by_id: dict[str, any] = {}
     for p in all_photos:
@@ -535,17 +526,28 @@ def _stage2_expand_selection(
             if dist is not None:
                 matched_distances.append(dist)
 
-    if not matched:
-        if tracer:
-            tracer.emit("suggest.stage2.rag.end", {
-                "matched_count": 0,
-                "total_retrieved": len(rag_ids),
-                "photo_ids": [],
-                "distances": [],
-            }, module="suggest")
-        return []
-
     logger.info("Stage 2: RAG 匹配 %d/%d 张照片", len(matched), len(rag_ids))
+
+    # 小范围（例如按月）可能在向量库只有少数命中。候选池不足时，以同一权威范围
+    # 内按日期分散的照片补足；这不是越界回退，且保留 RAG 命中的优先顺序。
+    if len(matched) < _STAGE3_TARGET_MIN:
+        existing_ids = {getattr(photo, "id", "") for photo in matched}
+        by_date: dict[str, list] = collections.defaultdict(list)
+        for photo in all_photos:
+            photo_id = getattr(photo, "id", "")
+            if photo_id and photo_id not in existing_ids:
+                shot_date = _parse_shot_date(getattr(photo, "shot_at", "") or "")
+                key = shot_date.isoformat() if shot_date else "__unknown__"
+                by_date[key].append(photo)
+        for date_key in sorted(by_date):
+            if len(matched) >= _STAGE3_TARGET_MIN:
+                break
+            photo = by_date[date_key][0]
+            matched.append(photo)
+            existing_ids.add(getattr(photo, "id", ""))
+        logger.info(
+            "Stage 2: RAG 候选不足，已从权威范围按日期补足到 %d 张", len(matched),
+        )
 
     # trace: suggest.stage2.rag.end (before diversity filter)
     if tracer:
@@ -608,6 +610,19 @@ def _stage2_expand_selection(
             pid = getattr(p, "id", "")
             if pid and pid not in diverse_ids:
                 removed_ids.append(pid)
+
+    # 日期多样性是质量偏好而非完成前置。若同日上限使候选池重新低于第三阶段
+    # 的最低输入，仍从同一权威范围回填，避免把可处理的范围误报成“无选题”。
+    if len(diverse) < _STAGE3_MIN_POOL:
+        existing_ids = {getattr(photo, "id", "") for photo in diverse}
+        for photo in all_photos:
+            photo_id = getattr(photo, "id", "")
+            if photo_id and photo_id not in existing_ids:
+                diverse.append(photo)
+                existing_ids.add(photo_id)
+            if len(diverse) >= _STAGE3_MIN_POOL:
+                break
+        logger.info("Stage 2: 多样性筛选后候选不足，已从权威范围回填到 %d 张", len(diverse))
 
     # 验证时间跨度
     dates = []
@@ -821,13 +836,15 @@ def _stage3_generate_proposals(
         ]
 
         t_start = time.time()
+        logger.info("Stage 3 LLM 调用开始：选题='%s'，候选=%d 张", intuition.title, len(expanded))
         try:
             resp = llm.invoke(messages)
             raw = resp.content if hasattr(resp, "content") else str(resp)
         except Exception as e:
-            logger.exception("Stage 3 LLM 调用失败: %s", intuition.title)
+            logger.exception("Stage 3 LLM 调用失败：选题='%s'，耗时 %.1fs", intuition.title, time.time() - t_start)
             continue
         llm_duration_ms = int((time.time() - t_start) * 1000)
+        logger.info("Stage 3 LLM 调用完成：选题='%s'，耗时 %.1fs", intuition.title, llm_duration_ms / 1000)
 
         # trace: suggest.stage3.llm.end
         token_usage: dict = {}

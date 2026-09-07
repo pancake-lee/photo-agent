@@ -2,6 +2,11 @@
 
 ## 2026-09-07 — Agent Runtime V3 组合轨迹基线（AR3-5）
 
+- **闭环复评**：8.3/10，通过；见 [AR3 Capability System 闭环复评](reports/2026-09-07-ar3-capability-system-reassessment.md)。
+- **完整离线轨迹**：跨期对比与主题发现均走入口分类、`run_runtime`、范围归约和完成检查；负向断言覆盖缺失期别、绕过证据与稀疏 RAG 候选。
+- **真实只读回归**：独立脚本 `agent/scripts/regression/live/ar3_capability_system.py`；跨期真实运行完成，主题真实运行可见地在 Stage 3 的单请求 30 秒上限超时。脚本与日常 unittest 物理隔离。
+- **可观测性**：决策、能力内 LLM、主题 Stage 1/3 均输出开始、完成/失败与耗时；SDK 隐式重试关闭，日志可区分慢响应和超时。
+
 - **离线口径**：仅使用 `agent/tests/test_runtime_v3_contracts.py` 的替身照片与替身 LLM；不读取真实照片、不调用真实 LLM。
 - **Capability Selection Accuracy**：目标契约只暴露适用能力；跨期对比目标拒绝 `write_post` 等发帖专属观察（1/1）。
 - **Capability Reuse Rate**：跨期目标复用 Runtime 状态、Guardrail、范围/检索/详情 Tool，新增 1 个对比 Skill；主题发现复用既有三阶段 Workflow（2/2 组合入口）。
@@ -71,6 +76,7 @@
 | 2026-08-31 | 当前阶段合理性专项评估 | - | - | - | 当前阶段 7.4/10；登记 OBS1、GQ1、AR8 |
 | 2026-09-03 | Runtime V2 故障注入基线（AR2-7） | - | - | - | 恢复成功率 100%、正确停止率 100%、无谓重试率 0%，9 场景 |
 | 2026-09-07 | AR3 Capability System 复评 | - | - | - | 6.3/10 通过；AR3-6 至 AR3-8 记录两期范围、主题入口、端到端基线缺口 |
+| 2026-09-07 | AR3 Capability System 闭环复评 | - | - | - | 8.3/10 通过；双范围、主题入口、全轨迹与实时真实回归日志闭环 |
 | - | - | - | - | - | - |
 
 ---

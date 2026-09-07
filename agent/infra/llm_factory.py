@@ -40,6 +40,8 @@ def create_llm(
         base_url=cfg.llm_base_url,
         temperature=temperature,
         request_timeout=cfg.llm_request_timeout,
+        # 重试只由下方 with_retry 统一控制；关闭 SDK 隐式重试，保证次数、耗时和日志可预测。
+        max_retries=0,
         streaming=streaming,
         callbacks=callbacks,
     )
@@ -64,6 +66,7 @@ def create_llm(
             base_url=cfg.llm_base_url,
             temperature=temperature,
             request_timeout=cfg.llm_request_timeout,
+            max_retries=0,
             streaming=streaming,
             callbacks=callbacks,
         )

@@ -14,6 +14,7 @@ import datetime
 import functools
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
@@ -88,6 +89,8 @@ def invoke_structured_llm(
 
     JSON 提取与字段校验由调用方负责，本入口只统一 LLM 构造与回调挂载。
     """
+    logger.info("[runtime] 能力内 LLM 调用开始")
+    started_at = time.perf_counter()
     llm = llm_factory.create_llm(
         ctx.cfg, temperature=temperature, callbacks=ctx.llm_callbacks or None,
     )
@@ -95,6 +98,7 @@ def invoke_structured_llm(
         lc_messages.SystemMessage(content=system_prompt),
         lc_messages.HumanMessage(content=user_prompt),
     ])
+    logger.info("[runtime] 能力内 LLM 调用完成，耗时 %.1fs", time.perf_counter() - started_at)
     response_text = str(response.content)
     if ctx.tracer is not None:
         payload_ref = ctx.tracer.save_payload(

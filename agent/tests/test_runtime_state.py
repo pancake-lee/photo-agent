@@ -260,6 +260,31 @@ class ScopeReductionTest(unittest.TestCase):
         self.assertEqual(task.progress.history, [])
         self.assertIn("candidates", task.progress.todo)
 
+    def test_comparison_period_scopes_and_candidates_stay_independent(self):
+        task = rt_state.new_task(rt_state.GOAL_PHOTO_COMPARISON, "跨期对比")
+        for period, ids in (("earlier", ["old-a", "old-b"]), ("later", ["new-a", "new-b"])):
+            task = rt_state.reduce_observation(task, rt_state.Observation(
+                rt_state.OBS_SCOPE, "范围", {
+                    "period": period, "restricted": True, "ids": ids,
+                    "condition_summary": period, "conditions": {},
+                },
+            ), action="resolve_trip")
+            task = rt_state.reduce_observation(task, rt_state.Observation(
+                rt_state.OBS_PHOTO_IDS, "检索", {"period": period, "ids": ["outside", ids[1]]},
+            ), action="sql_search")
+        self.assertEqual(task.artifacts.comparison_photo_ids["earlier"], ["old-b"])
+        self.assertEqual(task.artifacts.comparison_photo_ids["later"], ["new-b"])
+        self.assertNotIn("locate", task.progress.todo)
+        self.assertNotIn("candidates", task.progress.todo)
+        summary = rt_state.summarize_state(task)
+        self.assertIn("早期范围: earlier", summary)
+        self.assertIn("近期范围: later", summary)
+
+    def test_comparison_period_is_required_for_scope_and_search(self):
+        task = rt_state.new_task(rt_state.GOAL_PHOTO_COMPARISON, "跨期对比")
+        with self.assertRaises(ValueError):
+            rt_state.reduce_observation(task, _scope_obs(["a"]), action="resolve_trip")
+
 
 class SummarizeStateTest(unittest.TestCase):
     def test_summary_contains_key_sections(self):

@@ -321,7 +321,7 @@ class ResolveTripCapabilityTest(unittest.TestCase):
     """约束解析能力：抽取 + 程序校验 + 权威范围物化（SQL 不经 LLM）。"""
 
     def _resolve(self, llm_content: str, question="找山西旅游第一天傍晚的照片",
-                 execute_ids=None):
+                 execute_ids=None, params=None):
         fake_llm = unittest.mock.MagicMock()
         fake_llm.invoke.return_value.content = llm_content
         patches = [
@@ -336,7 +336,7 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         for patch in patches:
             patch.start()
         self.addCleanup(lambda: [p.stop() for p in reversed(patches)])
-        return caps_resolve_trip._resolve_trip({}, _ctx(_cfg(), question=question))
+        return caps_resolve_trip._resolve_trip(params or {}, _ctx(_cfg(), question=question))
 
     def test_matched_constraints_materialize_scope_sql(self):
         """山西用例：范围 SQL 只含硬约束（时间线/天序/小时窗），软提示不入 WHERE。"""
@@ -368,6 +368,27 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         self.assertEqual(obs.payload["ids"], [])
         self.assertEqual(obs.payload["soft_hints"], ["黄昏氛围"])
 
+    def test_date_range_materializes_period_scoped_sql(self):
+        obs = self._resolve(
+            '{"timeline": "", "day": "", "date_range": {"start": "2025-03-01", "end": "2025-05-31"},'
+            ' "time_of_day": "", "soft_hints": ["洱海"]}',
+            question="对比 2025 和 2026 春天的洱海照片", execute_ids=["old"],
+            params={"hint": "2025 年春天的洱海照片", "period": "earlier"},
+        )
+        self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
+        self.assertEqual(obs.payload["period"], "earlier")
+        self.assertIn("BETWEEN '2025-03-01' AND '2025-05-31'", obs.payload["sql"])
+        self.assertEqual(obs.payload["condition_summary"], "2025-03-01至2025-05-31")
+
+    def test_explicit_year_month_is_programmatically_materialized(self):
+        obs = self._resolve(
+            '{"timeline":"", "day":"", "date_range":{"start":"", "end":""}, "time_of_day":"", "soft_hints":[]}',
+            question="在 2026 年 5 月拍摄的照片中发现选题", execute_ids=["may"],
+        )
+        self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
+        self.assertIn("BETWEEN '2026-05-01' AND '2026-05-31'", obs.payload["sql"])
+        self.assertEqual(obs.payload["condition_summary"], "2026-05-01至2026-05-31")
+
     def test_empty_scope_returns_deterministic_terminal(self):
         """受限但 0 张时进入 empty_scope 终态，不进入检索/选片。"""
         obs = self._resolve(
@@ -395,7 +416,8 @@ class ResolveTripCapabilityTest(unittest.TestCase):
         )
         self.assertEqual(obs.kind, rt_state.OBS_SCOPE)
         self.assertEqual(obs.payload["conditions"], {
-            "timeline": "山西旅游", "day": "", "time_of_day": "",
+            "timeline": "山西旅游", "day": "", "date_range": {"start": "", "end": ""},
+            "time_of_day": "",
         })
         # 只剩时间线约束，SQL 不带天序与小时窗
         self.assertNotIn("MIN(DATE", obs.payload["sql"])

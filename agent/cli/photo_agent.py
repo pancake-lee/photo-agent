@@ -75,9 +75,11 @@ class RouterState(typing.TypedDict):
 
 
 CLASSIFY_SYSTEM = (
-    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined 或 runtime，不要解释。\n\n"
-    "runtime: 用户提出开放目标，需要挑选照片并生成标题、发布文案等创作内容的多步任务；"
-    "即使同时有时间线或日期条件也优先 runtime。\n"
+    "你是一个查询分类器。判断用户对照片库的提问属于哪种类型，只回答 sql、rag、tool、combined、runtime_post、runtime_comparison 或 runtime_topics，不要解释。\n\n"
+    "runtime_post: 用户提出开放目标，需要挑选照片并生成标题、发布文案等创作内容的多步任务；"
+    "runtime_comparison: 用户要求比较两个时期/年份的照片，并基于两组照片总结变化、进步或差异；"
+    "runtime_topics: 用户要求在明确照片范围内发现选题、主题候选或发布角度。"
+    "以上三类即使同时有时间线或日期条件也优先进入对应 runtime。\n"
     "sql: 涉及统计计数、EXIF 参数筛选（品牌/型号/镜头/焦距/光圈/ISO/日期/GPS）、"
     "数量聚合的结构化查询\n"
     "rag: 涉及照片内容描述、场景、物体、颜色、情感、构图、风格、氛围的纯语义检索\n"
@@ -122,7 +124,14 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     chain = prompt | llm
     response = chain.invoke({"question": state["question"]})
     raw = str(response.content).strip().lower()
-    if "runtime" in raw or "compose" in raw:
+    goal_type = rt_state.GOAL_SOCIAL_POST
+    if "runtime_comparison" in raw:
+        query_type = "runtime"
+        goal_type = rt_state.GOAL_PHOTO_COMPARISON
+    elif "runtime_topics" in raw:
+        query_type = "runtime"
+        goal_type = rt_state.GOAL_TOPIC_DISCOVERY
+    elif "runtime" in raw or "compose" in raw:
         query_type = "runtime"
     elif "combined" in raw:
         query_type = "combined"
@@ -135,9 +144,6 @@ def _classify_node(state: RouterState, config: lc_runnables.RunnableConfig) -> d
     logging.getLogger(__name__).info(
         "[路由] 「%s」 → %s（模型原始分类=%r）", state["question"], query_type, raw,
     )
-    goal_type = rt_state.GOAL_SOCIAL_POST
-    if query_type == "runtime" and any(term in state["question"] for term in ("对比", "进步", "变化", "跨年", "跨期")):
-        goal_type = rt_state.GOAL_PHOTO_COMPARISON
     return {"query_type": query_type, "runtime_goal_type": goal_type}
 
 

@@ -1,6 +1,7 @@
 """约束解析能力：resolve_trip（能力内 LLM 抽取硬约束，程序物化权威范围）。"""
 
 import datetime
+import calendar
 import logging
 import re
 
@@ -33,6 +34,7 @@ _DAY_LABELS = {"first": "第一天", "last": "最后一天"}
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MONTH_DAY_RE = re.compile(r"(?<!\d)(\d{1,2})月(\d{1,2})日")
+_YEAR_MONTH_RE = re.compile(r"(?<!\d)(\d{4})\s*年\s*(\d{1,2})\s*月")
 
 # 范围物化与软提示的规模上限
 _SCOPE_SQL_LIMIT = 500
@@ -40,10 +42,11 @@ _SOFT_HINTS_MAX = 8
 
 _CONSTRAINT_SYSTEM_PROMPT = (
     "你是照片库检索助手。从用户目标中抽取可验证的硬约束与软提示。\n"
-    '只输出 JSON: {"timeline": "", "day": "", "time_of_day": "", "soft_hints": []}\n'
+    '只输出 JSON: {"timeline": "", "day": "", "date_range": {"start": "", "end": ""}, "time_of_day": "", "soft_hints": []}\n'
     "字段规则:\n"
     "- timeline: 目标提到的旅行或活动名称，从时间线列表中选最接近的；完全没提到则为空串\n"
     '- day: 第一天用 "first"，最后一天用 "last"，第N天用 "relative:N"，明确日期用 "YYYY-MM-DD"，没提到则为空串\n'
+    '- date_range: 跨期对比等明确日期区间，start/end 均为 YYYY-MM-DD；明确某年春天填该年 03-01 至 05-31，没提到则两个空串\n'
     "- time_of_day: 拍摄时段，只能是 清晨/上午/中午/下午/傍晚/夜晚 之一，没明确则为空串\n"
     "- soft_hints: 其余的地点、景物、氛围等描述（字符串数组），只用于排序，不构成硬性筛选"
 )
@@ -75,7 +78,29 @@ def _validate_time_of_day(raw: str) -> str:
     return value if value in _TIME_OF_DAY_WINDOWS else ""
 
 
-def _describe_scope(timeline: str, day: str, time_of_day: str) -> str:
+def _validate_date_range(raw: object) -> tuple[str, str]:
+    if not isinstance(raw, dict):
+        return "", ""
+    start = _validate_day(str(raw.get("start") or ""))
+    end = _validate_day(str(raw.get("end") or ""))
+    if not start or not end or start > end:
+        return "", ""
+    return start, end
+
+
+def _extract_month_range(hint: str) -> tuple[str, str]:
+    """从用户原文确定性解析「YYYY 年 M 月」，避免模型遗漏明确的日期范围。"""
+    matched = _YEAR_MONTH_RE.search(hint)
+    if not matched:
+        return "", ""
+    year, month = (int(value) for value in matched.groups())
+    if month < 1 or month > 12:
+        return "", ""
+    last_day = calendar.monthrange(year, month)[1]
+    return f"{year:04d}-{month:02d}-01", f"{year:04d}-{month:02d}-{last_day:02d}"
+
+
+def _describe_scope(timeline: str, day: str, time_of_day: str, date_start: str = "", date_end: str = "") -> str:
     """拼出用户可读的范围条件，如"山西旅游第一天傍晚"。"""
     parts = [timeline] if timeline else []
     if day in _DAY_LABELS:
@@ -84,6 +109,8 @@ def _describe_scope(timeline: str, day: str, time_of_day: str) -> str:
         parts.append(f"第{day.removeprefix('relative:')}天")
     elif day:
         parts.append(day)
+    if date_start and date_end:
+        parts.append(date_start if date_start == date_end else f"{date_start}至{date_end}")
     if time_of_day:
         parts.append(time_of_day)
     return "".join(parts)
@@ -92,6 +119,7 @@ def _describe_scope(timeline: str, day: str, time_of_day: str) -> str:
 def build_scope_sql(
     timeline: str, day: str,
     hour_start: int | None, hour_end: int | None,
+    date_start: str = "", date_end: str = "",
 ) -> str:
     """按校验后的硬约束拼装权威范围 SQL（只含时间线/天序/小时窗，程序拼装不经 LLM）。
 
@@ -109,6 +137,8 @@ def build_scope_sql(
         conds.append(f"{local_day} = (SELECT {agg}({local_day}) FROM photos{scoped})")
     elif day:
         conds.append(f"{local_day} = '{day}'")
+    if date_start and date_end:
+        conds.append(f"{local_day} BETWEEN '{date_start}' AND '{date_end}'")
     if hour_start is not None and hour_end is not None:
         conds.append(
             f"CAST(strftime('%H', shot_at, 'localtime') AS INTEGER) "
@@ -218,6 +248,7 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
     """约束解析：抽取硬约束（时间线/天序/时段）与软提示，物化权威候选范围。"""
     timelines = _fetch_timelines(ctx.cfg)
     hint = str(params.get("hint") or ctx.question or "")
+    period = str(params.get("period") or "")
     response_text = common.invoke_structured_llm(
         ctx, _CONSTRAINT_SYSTEM_PROMPT,
         f"用户目标: {hint}\n\n时间线列表: {'、'.join(timelines) or '（空）'}",
@@ -239,16 +270,22 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
         message = f"「{raw_timeline}」匹配到 {len(matches)} 条时间线：{listed}，请回复完整名称。"
         return rt_state.Observation(
             rt_state.OBS_NEEDS_CLARIFICATION, message,
-            {"message": message, "options": matches, "confirm_kind": "timeline"},
+            {"message": message, "options": matches, "confirm_kind": "timeline", "period": period},
         )
     matched = matches[0] if matches else ""
     day = _validate_day(str(data.get("day") or ""))
+    date_start, date_end = _validate_date_range(data.get("date_range"))
+    if not date_start:
+        date_start, date_end = _extract_month_range(hint)
     time_of_day = _validate_time_of_day(str(data.get("time_of_day") or ""))
     soft_hints = [
         str(item).strip() for item in data.get("soft_hints") or []
         if str(item).strip()
     ][:_SOFT_HINTS_MAX]
-    conditions = {"timeline": matched, "day": day, "time_of_day": time_of_day}
+    conditions = {
+        "timeline": matched, "day": day, "date_range": {"start": date_start, "end": date_end},
+        "time_of_day": time_of_day,
+    }
 
     explicit_day, date_options = _resolve_date_in_hint(ctx, matched, hint)
     if explicit_day:
@@ -258,7 +295,7 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
         message = f"“{_MONTH_DAY_RE.search(hint).group(0)}”可能是 {' 或 '.join(date_options)}，请回复完整日期。"
         return rt_state.Observation(
             rt_state.OBS_NEEDS_CLARIFICATION, message,
-            {"message": message, "options": date_options, "timeline": matched, "confirm_kind": "date"},
+            {"message": message, "options": date_options, "timeline": matched, "confirm_kind": "date", "period": period},
         )
 
     if day.startswith("relative:"):
@@ -272,28 +309,28 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
             )
             return rt_state.Observation(
                 rt_state.OBS_NEEDS_CLARIFICATION, message,
-                {"message": message, "options": [event_date, photo_date], "timeline": matched, "confirm_kind": "date"},
+                {"message": message, "options": [event_date, photo_date], "timeline": matched, "confirm_kind": "date", "period": period},
             )
         resolved_date = event_date or photo_date
         if not resolved_date:
             return rt_state.Observation(
                 rt_state.OBS_NEEDS_CLARIFICATION, "无法确定这次旅行的起始日期，请直接回复完整日期。",
-                {"message": "无法确定这次旅行的起始日期，请直接回复完整日期。", "options": [], "timeline": matched, "confirm_kind": "date"},
+                {"message": "无法确定这次旅行的起始日期，请直接回复完整日期。", "options": [], "timeline": matched, "confirm_kind": "date", "period": period},
             )
         day = resolved_date
         conditions["day"] = day
 
-    if not (matched or day or time_of_day):
+    if not (matched or day or date_start or time_of_day):
         logger.info("[runtime] resolve_trip 无硬约束，范围不受限 | soft_hints=%s", soft_hints)
         return rt_state.Observation(
             rt_state.OBS_SCOPE,
             "目标没有可验证的硬约束，候选范围不受限（全库）",
-            {"conditions": conditions, "restricted": False, "ids": [], "soft_hints": soft_hints},
+            {"conditions": conditions, "restricted": False, "ids": [], "soft_hints": soft_hints, "period": period},
         )
 
     hour_start, hour_end = _TIME_OF_DAY_WINDOWS[time_of_day] if time_of_day else (None, None)
-    sql = build_scope_sql(matched, day, hour_start, hour_end)
-    scope_label = _describe_scope(matched, day, time_of_day)
+    sql = build_scope_sql(matched, day, hour_start, hour_end, date_start, date_end)
+    scope_label = _describe_scope(matched, day, time_of_day, date_start, date_end)
     ids = text_to_sql.execute_sql_for_ids(ctx.cfg.go_backend_url, sql, limit=_SCOPE_SQL_LIMIT)
     logger.info(
         "[runtime] resolve_trip 物化范围: %s → %d 张 | SQL: %s", scope_label, len(ids), sql,
@@ -302,7 +339,7 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
         return rt_state.Observation(
             rt_state.OBS_ERROR,
             f"未找到符合条件的照片（{scope_label}）",
-            {"terminal_reason": "empty_scope", "conditions": conditions, "sql": sql},
+            {"terminal_reason": "empty_scope", "conditions": conditions, "sql": sql, "period": period},
             # 范围物化 0 张是语义空结果（empty 状态），empty_scope 是它在 V2 前的确定性终态
             status=rt_state.STATUS_EMPTY,
         )
@@ -313,6 +350,7 @@ def _resolve_trip(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observa
         "sql": sql,
         "condition_summary": scope_label,
         "soft_hints": soft_hints,
+        "period": period,
     }
     return rt_state.Observation(
         rt_state.OBS_SCOPE,
@@ -335,6 +373,7 @@ RESOLVE_TRIP = rt_registry.Capability(
     ),
     parameters={
         "hint": {"type": "str", "description": "解析提示，缺省用原始请求", "required": False},
+        "period": {"type": "str", "description": "跨期对比的 earlier 或 later 证据组；其他目标省略", "required": False},
     },
     run=_resolve_trip,
     decide_hint=(

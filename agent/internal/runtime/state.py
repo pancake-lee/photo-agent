@@ -112,7 +112,9 @@ class Artifacts:
     handoff_url: str = ""
     comparison_report: dict = dataclasses.field(default_factory=dict)
     topic_candidates: list[dict] = dataclasses.field(default_factory=list)
+    # 跨期对比的两个证据组不能复用全局 scope/candidate_ids：两期范围必须独立可追溯。
     comparison_photo_ids: dict[str, list[str]] = dataclasses.field(default_factory=dict)
+    comparison_scopes: dict[str, "Scope"] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -255,10 +257,17 @@ def _apply_photo_ids(state: TaskState, obs: Observation) -> None:
     for pid in obs.payload.get("ids") or []:
         if pid and pid not in ids:
             ids.append(pid)
-    state.artifacts.candidate_ids = ids
     period = str(obs.payload.get("period") or "")
-    if period in ("earlier", "later"):
-        state.artifacts.comparison_photo_ids[period] = list(ids)
+    if state.goal.goal_type == GOAL_PHOTO_COMPARISON:
+        _require_comparison_period(period)
+        scope = state.artifacts.comparison_scopes.get(period)
+        if scope is None or not scope.established:
+            raise ValueError(f"跨期对比的 {period} 期必须先建立权威范围")
+        state.artifacts.comparison_photo_ids[period] = _constrain_ids_to_scope(ids, scope)
+        if all(state.artifacts.comparison_photo_ids.get(name) for name in ("earlier", "later")):
+            _finish_milestone(state, "candidates")
+        return
+    state.artifacts.candidate_ids = ids
     _constrain_candidates_to_scope(state)
     _finish_milestone(state, "candidates")
 
@@ -268,14 +277,20 @@ def _constrain_candidates_to_scope(state: TaskState) -> None:
 
     软提示（地点/景物/氛围）只影响范围内排序，永远不能清空或替换范围。
     """
-    if not state.scope.restricted:
-        return
-    scope_set = set(state.scope.photo_ids)
-    kept = [pid for pid in state.artifacts.candidate_ids if pid in scope_set]
-    if kept:
-        state.artifacts.candidate_ids = kept
-    else:
-        state.artifacts.candidate_ids = list(state.scope.photo_ids)
+    state.artifacts.candidate_ids = _constrain_ids_to_scope(state.artifacts.candidate_ids, state.scope)
+
+
+def _constrain_ids_to_scope(ids: list[str], scope: Scope) -> list[str]:
+    if not scope.restricted:
+        return list(ids)
+    scope_set = set(scope.photo_ids)
+    kept = [pid for pid in ids if pid in scope_set]
+    return kept or list(scope.photo_ids)
+
+
+def _require_comparison_period(period: str) -> None:
+    if period not in ("earlier", "later"):
+        raise ValueError("跨期对比的范围与检索必须声明 period=earlier 或 period=later")
 
 
 def _apply_scope(state: TaskState, obs: Observation) -> None:
@@ -285,33 +300,44 @@ def _apply_scope(state: TaskState, obs: Observation) -> None:
     范围晚于检索建立时，既有候选同样要回到范围内。
     """
     restricted = bool(obs.payload.get("restricted"))
-    state.scope.established = True
-    state.scope.restricted = restricted
-    state.scope.conditions = dict(obs.payload.get("conditions") or {})
-    state.scope.condition_summary = str(obs.payload.get("condition_summary") or "")
-    state.scope.sql = str(obs.payload.get("sql") or "")
+    period = str(obs.payload.get("period") or "")
+    scope = state.scope
+    if state.goal.goal_type == GOAL_PHOTO_COMPARISON:
+        _require_comparison_period(period)
+        scope = Scope()
+        state.artifacts.comparison_scopes[period] = scope
+    scope.established = True
+    scope.restricted = restricted
+    scope.conditions = dict(obs.payload.get("conditions") or {})
+    scope.condition_summary = str(obs.payload.get("condition_summary") or "")
+    scope.sql = str(obs.payload.get("sql") or "")
     ids: list[str] = []
     for pid in obs.payload.get("ids") or []:
         if pid and pid not in ids:
             ids.append(pid)
-    state.scope.photo_ids = ids if restricted else []
+    scope.photo_ids = ids if restricted else []
     facts: dict = {}
-    if state.scope.conditions.get("timeline"):
-        facts["timeline"] = state.scope.conditions["timeline"]
+    if scope.conditions.get("timeline"):
+        facts["timeline"] = scope.conditions["timeline"]
     if obs.payload.get("soft_hints"):
         facts["soft_hints"] = [str(h) for h in obs.payload["soft_hints"]]
     if facts:
         state.resolved_facts.update(facts)
     if restricted:
-        if not state.scope.photo_ids:
-            detail = f"未找到符合条件的照片（{state.scope.condition_summary}）" \
-                if state.scope.condition_summary else "权威候选范围为空"
+        if not scope.photo_ids:
+            detail = f"未找到符合条件的照片（{scope.condition_summary}）" \
+                if scope.condition_summary else "权威候选范围为空"
             state.progress.errors.append(detail)
             del state.progress.errors[:-_ERRORS_MAX]
             state.progress.terminal_reason = "empty_scope"
         else:
-            _constrain_candidates_to_scope(state)
-    _finish_milestone(state, "locate")
+            if state.goal.goal_type != GOAL_PHOTO_COMPARISON:
+                _constrain_candidates_to_scope(state)
+    if state.goal.goal_type != GOAL_PHOTO_COMPARISON or all(
+        state.artifacts.comparison_scopes.get(name, Scope()).established
+        for name in ("earlier", "later")
+    ):
+        _finish_milestone(state, "locate")
 
 
 def _apply_facts(state: TaskState, obs: Observation) -> None:
@@ -377,6 +403,12 @@ def _apply_comparison_reported(state: TaskState, obs: Observation) -> None:
     report = dict(obs.payload.get("report") or {})
     if not report.get("summary"):
         raise ValueError("comparison_reported 观察必须携带 report.summary")
+    periods = report.get("periods") or {}
+    for period in ("earlier", "later"):
+        expected = state.artifacts.comparison_photo_ids.get(period) or []
+        actual = periods.get(period) or []
+        if not expected or list(actual) != expected:
+            raise ValueError(f"跨期对比报告的 {period} 期照片必须等于已验证证据组")
     state.artifacts.comparison_report = report
     for photo in obs.payload.get("photos") or []:
         if photo.get("id"):
@@ -478,8 +510,15 @@ def state_signature(state: TaskState) -> str:
     """
     import internal.runtime.completion as rt_completion
 
+    candidates = state.artifacts.candidate_ids
+    if state.goal.goal_type == GOAL_PHOTO_COMPARISON:
+        candidates = [
+            f"{period}:{pid}"
+            for period in ("earlier", "later")
+            for pid in state.artifacts.comparison_photo_ids.get(period, [])
+        ]
     candidates_digest = hashlib.md5(
-        "、".join(state.artifacts.candidate_ids).encode("utf-8")
+        "、".join(candidates).encode("utf-8")
     ).hexdigest()[:8]
     completion = rt_completion.check_completion(state)
     parts = [
@@ -523,6 +562,13 @@ def summarize_state(state: TaskState) -> str:
         f"对比报告: {'已有' if state.artifacts.comparison_report else '无'}",
         f"主题候选: {len(state.artifacts.topic_candidates)} 个",
     ]
+    if state.goal.goal_type == GOAL_PHOTO_COMPARISON:
+        lines[6:8] = [
+            "早期范围: " + _comparison_scope_summary(state, "earlier"),
+            f"早期候选: {_ids_preview(state.artifacts.comparison_photo_ids.get('earlier', []))}",
+            "近期范围: " + _comparison_scope_summary(state, "later"),
+            f"近期候选: {_ids_preview(state.artifacts.comparison_photo_ids.get('later', []))}",
+        ]
     if state.progress.terminal_reason:
         lines.append(f"终止形态: {state.progress.terminal_reason}")
     if state.progress.errors:
@@ -535,6 +581,15 @@ def summarize_state(state: TaskState) -> str:
             for item in recent
         )
     return "\n".join(lines)
+
+
+def _comparison_scope_summary(state: TaskState, period: str) -> str:
+    scope = state.artifacts.comparison_scopes.get(period)
+    if scope is None or not scope.established:
+        return "尚未确认"
+    if not scope.restricted:
+        return "不受限（全库）"
+    return f"{scope.condition_summary}（硬约束，共 {len(scope.photo_ids)} 张）"
 
 
 _STOP_REASON_LABELS = {

@@ -131,7 +131,9 @@ def _progress_details(action: str, params: dict, observation: rt_state.Observati
 _RUNTIME_DECIDE_RULES = (
     "- 优先选择能推进「待办里程碑」的能力，不要重复已完成的里程碑\n"
     "- 检索到候选后先挑选照片，挑选完成后再创作文案\n"
-    "- 跨期对比先以 period=earlier 与 period=later 分别收集两期证据，再执行 compare_photo_periods\n"
+    "- 主题发现：范围建立后下一步必须是 discover_topics；它从状态读取范围，不得传 photo_ids 或再次 resolve_trip\n"
+    "- 跨期对比必须先以 period=earlier 和 period=later 分别执行 resolve_trip（hint 只描述该期范围）与检索；"
+    "每次检索都沿用对应 period，两个证据组均非空后才执行不带照片参数的 compare_photo_periods\n"
     "- params 必须符合能力声明，不要编造参数名"
 )
 
@@ -158,6 +160,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
     # 决策反馈通道（guardrail 再决策/换策略建议、无进展换策略提示），消费即清空
     feedback = str(state.get("decision_feedback") or "")
     missing = rt_completion.check_completion(task).missing
+    logger.info("[runtime] 第 %d 步决策 LLM 调用开始", state["step_no"] + 1)
     llm = llm_factory.create_llm(cfg, temperature=0.0, callbacks=callbacks or None)
     started_at = time.perf_counter()
     human_content = (
@@ -173,6 +176,7 @@ def _decide_node(state: RuntimeGraphState, config: lc_runnables.RunnableConfig) 
         lc_messages.HumanMessage(content=human_content),
     ])
     duration_ms = round((time.perf_counter() - started_at) * 1000)
+    logger.info("[runtime] 第 %d 步决策 LLM 调用完成，耗时 %.1fs", state["step_no"] + 1, duration_ms / 1000)
     parsed = caps_common.extract_json_dict(str(response.content)) or {}
     decision = {
         "action": str(parsed.get("action") or ""),

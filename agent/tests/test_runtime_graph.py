@@ -587,6 +587,21 @@ class EntryRoutingTest(unittest.TestCase):
                 )
             self.assertEqual(update["query_type"], "runtime")
 
+    def test_classify_selects_explicit_runtime_goal(self):
+        for raw, expected in (
+            ("runtime_comparison", rt_state.GOAL_PHOTO_COMPARISON),
+            ("runtime_topics", rt_state.GOAL_TOPIC_DISCOVERY),
+        ):
+            fake = unittest.mock.MagicMock()
+            fake.content = raw
+            fake.return_value.content = raw
+            with unittest.mock.patch.object(photo_agent.llm_factory, "create_llm", return_value=fake):
+                update = photo_agent._classify_node(
+                    {"question": "测试开放目标"}, {"configurable": {"cfg": _cfg()}},
+                )
+            self.assertEqual(update["query_type"], "runtime")
+            self.assertEqual(update["runtime_goal_type"], expected)
+
     def test_runtime_node_maps_result_into_router_state(self):
         cfg = _cfg()
         with unittest.mock.patch.object(

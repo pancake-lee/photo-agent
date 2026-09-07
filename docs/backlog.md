@@ -8,14 +8,14 @@
 
 | 状态   | 分组       | 编号  | 任务                                         | 评估 |
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
-| Done | Agent Runtime | AR3-1 | 目标契约与通用任务状态拆分                | 8.2  |
-| Done | Agent Runtime | AR3-2 | Capability 分层与既有能力契约迁移         | 7.8  |
-| Done | Agent Runtime | AR3-3 | 照片跨期对比开放目标接入                  | 4.8  |
-| Done | Agent Runtime | AR3-4 | 主题发现 Workflow 能力化                  | 5.5  |
-| Done | Agent Runtime | AR3-5 | V3 组合轨迹评估与回归基线                 | 5.0  |
-| 待规划 | Agent Runtime | AR3-6 | 跨期对比缺少两期独立权威范围              |      |
-| 待规划 | Agent Runtime | AR3-7 | 主题发现 Workflow 缺少生产入口            |      |
-| 待规划 | Agent Runtime | AR3-8 | V3 基线缺少完整多目标组合轨迹             |      |
+| Done | Agent Runtime | AR3-1 | 目标契约与通用任务状态拆分                | 8.5  |
+| Done | Agent Runtime | AR3-2 | Capability 分层与既有能力契约迁移         | 8.4  |
+| Done | Agent Runtime | AR3-3 | 照片跨期对比开放目标接入                  | 8.6  |
+| Done | Agent Runtime | AR3-4 | 主题发现 Workflow 能力化                  | 8.1  |
+| Done | Agent Runtime | AR3-5 | V3 组合轨迹评估与回归基线                 | 8.2  |
+| Done | Agent Runtime | AR3-6 | 跨期对比缺少两期独立权威范围              | 8.6  |
+| Done | Agent Runtime | AR3-7 | 主题发现 Workflow 缺少生产入口            | 8.2  |
+| Done | Agent Runtime | AR3-8 | V3 基线缺少完整多目标组合轨迹             | 8.3  |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 
 > v1.0.17 已归档：AR2-1–AR2-7、CQ7、DL1、AR11–AR14、HARN1，以及已取代的 CQ4，详见 [v1.0.17](archive/v1.0.17.md)。
@@ -81,24 +81,39 @@
 
 ### AR3-6 跨期对比缺少两期独立权威范围
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：跨期对比的 `TaskState` 仅有一份 `Scope` 与当前候选集；`resolve_trip` 只能物化一组范围，检索结果的 `period` 仅写入 Observation payload，且除 `earlier`/`later` 外静默忽略。第二期检索会覆盖当前候选。
 - **严重程度**：P1，判别用例无法确定性收集两期证据，可能以相同或不受限照片组形成对比。
 - **证据**：[AR3 Capability System 复评](eval/reports/2026-09-07-ar3-capability-system.md)。
+- **方案**：跨期目标把早期与近期建模为两个独立、带期别的照片证据组。每组持有自身的权威范围、候选与照片引用；范围解析和检索必须声明期别，且只能归约至对应组。对比能力只接受两组均已建立且各自候选在自身范围内的证据。发帖目标继续使用原有单范围状态和能力轨迹。
+- **涉及模块**：Runtime 状态归约、范围解析与检索能力契约、对比 Skill、决策摘要/完成检查、图级离线回归。
+- **验收**：跨年对比的两次范围解析与检索互不覆盖；非法或缺失期别被确定性拒绝；对比报告只引用两个已验证证据组中的照片；原发帖 Runtime 回归保持通过。
+- **实施与验证**：独立 `comparison_scopes`/`comparison_photo_ids` 只接受 `earlier`/`later`；图级回归覆盖双范围、双检索和报告防绕过。真实只读回归 trace `f93416119896` 成功交付两期照片依据。
+- **评估**：8.6，详见 [AR3 Capability System 闭环复评](eval/reports/2026-09-07-ar3-capability-system-reassessment.md)。
 
 ### AR3-7 主题发现 Workflow 缺少生产入口
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：入口分类仅能选择 `social_post` 或 `photo_comparison` Runtime 目标；仓库内没有将用户请求路由至 `GOAL_TOPIC_DISCOVERY` 的生产调用。
 - **严重程度**：P1，已注册的 `discover_topics` 无法由聊天入口触发，主题发现开放目标不可达。
 - **证据**：[AR3 Capability System 复评](eval/reports/2026-09-07-ar3-capability-system.md)。
+- **方案**：入口分类在保持单步查询与发帖兼容的前提下，显式区分发帖、跨期对比和范围化主题发现三个开放目标，并将分类结果传入既有 Runtime。主题发现仍先建立一个明确范围，再以单个 Workflow Observation 返回候选及范围内证据；不改变原有自动/手动选题和历史写入路径。
+- **涉及模块**：聊天入口分类、Runtime 目标选择、分类与图级回归。
+- **验收**：主题发现请求经入口进入 `GOAL_TOPIC_DISCOVERY`；范围化 Workflow 作为唯一主题发现能力完成任务；发帖、跨期对比和非 Runtime 查询的分类兼容回归通过。
+- **实施与验证**：入口分类显式输出 `runtime_topics`；范围已建立后 `discover_topics` 直接读取状态范围，避免重复定位。完整 Runtime 离线轨迹通过。
+- **评估**：8.2，详见 [AR3 Capability System 闭环复评](eval/reports/2026-09-07-ar3-capability-system-reassessment.md)。
 
 ### AR3-8 V3 基线缺少完整多目标组合轨迹
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：`test_runtime_v3_contracts.py` 直接调用对比 Skill 与 Workflow 适配函数，未经过入口分类、Runtime 循环及两目标的完整轨迹；当前 2/2 成功与 0/3 契约失败指标不覆盖设计承诺的组合路径。
 - **严重程度**：P1，AR3-5 基线不能证明 V3 退出条件或捕获入口、范围与编排断链。
 - **证据**：[AR3 Capability System 复评](eval/reports/2026-09-07-ar3-capability-system.md)。
+- **方案**：将跨期对比和范围化主题发现纳入 Runtime 图级离线回归，断言入口目标选择、能力调用顺序、范围内证据和终态交付；指标由完整轨迹的断言结果计算。新增独立的真实数据/真实 LLM 只读回归脚本，运行后只输出结果摘要和失败原因，不写照片、标签、草稿或主题历史。
+- **涉及模块**：V3 契约/图级测试、独立真实回归脚本、评估基线与报告。
+- **验收**：两个不同目标均有完整 Runtime 离线轨迹；错误期别、范围外证据和错误目标选择被回归拒绝；真实回归与日常测试物理隔离且仅在明确授权时执行；基线可从实际测试断言记录成功率与契约失败率。
+- **实施与验证**：图级替身回归覆盖跨期和主题两目标；真实脚本位于 `scripts/regression/live/`，每步与每次 LLM 调用均实时输出并可重定向落盘；SDK 隐式重试已关闭并有工厂回归。
+- **评估**：8.3，详见 [AR3 Capability System 闭环复评](eval/reports/2026-09-07-ar3-capability-system-reassessment.md)。
 
 ### BQ3 未鉴权服务暴露任意 SQL 查询
 

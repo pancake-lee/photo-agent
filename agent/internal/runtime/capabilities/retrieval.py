@@ -148,13 +148,13 @@ def _hybrid_search(params: dict, ctx: rt_registry.RunContext) -> rt_state.Observ
             rt_state.OBS_PHOTO_IDS,
             f"结构化与语义交集为空（结构化 {len(sql_ids)} ∩ 语义 {len(rag_ids)}），"
             "候选交由权威范围兜底",
-            {"ids": [], "source": "hybrid", "sql": filter_sql},
+            {"ids": [], "source": "hybrid", "sql": filter_sql, "period": params.get("period")},
             status=common.retrieval_status(intersection),
         )
     return rt_state.Observation(
         rt_state.OBS_PHOTO_IDS,
         f"混合检索返回 {len(intersection)} 个候选照片（结构化 {len(sql_ids)} ∩ 语义 {len(rag_ids)}）",
-        {"ids": intersection, "source": "hybrid", "sql": filter_sql},
+        {"ids": intersection, "source": "hybrid", "sql": filter_sql, "period": params.get("period")},
         status=common.retrieval_status(intersection),
     )
 
@@ -168,6 +168,7 @@ HYBRID_SEARCH = rt_registry.Capability(
     ),
     parameters={
         "query": {"type": "str", "description": "组合检索描述", "required": True},
+        "period": {"type": "str", "description": "跨期对比的 earlier 或 later 证据组", "required": False},
     },
     run=_hybrid_search,
     decide_hint=_SEARCH_DECIDE_HINT,
