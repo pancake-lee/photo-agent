@@ -79,6 +79,21 @@ class CompressionBoundTest(unittest.TestCase):
         self.assertIn("第4问", ctx.history_block)
         self.assertIn("第11问", ctx.history_block)
 
+    def test_retained_turns_keep_original_ordinal_after_truncation(self):
+        """截断最早轮次后，序数指代仍对应原始会话，而非保留窗口的局部序号。"""
+        messages = []
+        for index in range(1, 11):
+            messages.append(_message("user", f"原始第{index}轮问题"))
+            messages.append(_message("assistant", f"原始第{index}轮回答"))
+
+        ctx = ctx_builder.build_session_context(messages)
+
+        self.assertTrue(ctx.truncated)
+        self.assertIn("第3轮 用户：原始第3轮问题", ctx.history_block)
+        self.assertIn("— 第9轮 —", ctx.history_block)
+        self.assertIn("— 第10轮 —", ctx.history_block)
+        self.assertNotIn("第1轮 用户：原始第3轮问题", ctx.history_block)
+
     def test_huge_messages_produce_bounded_block(self):
         """逐项截断保证输出长度有界：海量输入不会撑爆历史块。"""
         messages = []
@@ -118,7 +133,41 @@ class ReferenceTest(unittest.TestCase):
             _message("assistant", "第三组完成"),
         ]
         ctx = ctx_builder.build_session_context(messages)
-        self.assertIn("（照片 3 张）", ctx.history_block)
+        self.assertIn("（照片 3 张，引用：p0、p1、p2）", ctx.history_block)
+
+
+class OlderReferenceTest(unittest.TestCase):
+    """长程指代（AR4-6）：更早轮次摘要保留有界 ID 引用，长会话可展开具体所指。"""
+
+    def _long_session(self, first_turn_photos: list[dict]) -> list[dict]:
+        messages = [
+            _message("user", "找山西旅游第一天的照片并生成发布文案"),
+            _message("assistant", "# 山西首日", photos=first_turn_photos),
+        ]
+        for index in range(2, 6):
+            messages.append(_message("user", f"第{index}轮问题"))
+            messages.append(_message("assistant", f"第{index}轮回答"))
+        return messages
+
+    def test_first_turn_photo_ids_visible_in_long_session(self):
+        photos = [{"photo_id": f"p{i}"} for i in range(3)]
+        ctx = ctx_builder.build_session_context(self._long_session(photos))
+        # 第 1 轮已滑出近窗口，其照片 ID 仍在摘要行中可见，指代可展开
+        self.assertIn("第1轮 用户：找山西旅游第一天的照片", ctx.history_block)
+        self.assertIn("引用：p0、p1、p2", ctx.history_block)
+
+    def test_older_reference_capped_with_total_count(self):
+        photos = [{"photo_id": f"p{i}"} for i in range(10)]
+        ctx = ctx_builder.build_session_context(self._long_session(photos))
+        self.assertIn("（照片 10 张，引用：p0、p1、p2、p3、p4、p5…）", ctx.history_block)
+        # 超出摘要引用上限的 ID 不逐个列出（p9 只可能以「共/照片 10 张」计数形式出现）
+        self.assertNotIn("p9", ctx.history_block)
+
+    def test_older_turn_without_photos_has_no_reference(self):
+        messages = self._long_session([])
+        ctx = ctx_builder.build_session_context(messages)
+        self.assertIn("第1轮 用户：", ctx.history_block)
+        self.assertNotIn("引用：", ctx.history_block.split("[最近会话]")[0])
 
 
 class PriorityTest(unittest.TestCase):

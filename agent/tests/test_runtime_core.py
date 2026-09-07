@@ -120,6 +120,42 @@ class CompletionTest(unittest.TestCase):
         result = rt_completion.check_completion(task)
         self.assertTrue(result.complete)
 
+    def test_selection_add_requires_reopened_select_to_run(self):
+        """补选续跑尚未重跑选片时，旧入选不能满足选片要件（AR4-8）。"""
+        prior = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        prior = rt_state.reduce_observation(prior, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a"]},
+        ), step_no=1, action="select_photos")
+        prior = rt_state.reduce_observation(prior, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "标题", "content": "正文"},
+        ), step_no=2, action="write_post")
+
+        resumed = rt_state.resume_task(prior, "再补一张", [rt_state.AFFECT_SELECTION_ADD])
+        result = rt_completion.check_completion(resumed)
+        self.assertFalse(result.complete)
+        self.assertEqual(result.missing, ["selected_photos", "copy_draft"])
+
+    def test_selection_add_completes_after_select_milestone_cleared(self):
+        """补选重跑选片清除待办后，保留集不再阻断完成（AR4-8）。"""
+        prior = rt_state.new_task(rt_state.GOAL_SOCIAL_POST, "发帖", {"question": "q"})
+        prior = rt_state.reduce_observation(prior, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "选中", {"ids": ["a"]},
+        ), step_no=1, action="select_photos")
+        prior = rt_state.reduce_observation(prior, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "标题", "content": "正文"},
+        ), step_no=2, action="write_post")
+
+        resumed = rt_state.resume_task(prior, "再补一张", [rt_state.AFFECT_SELECTION_ADD])
+        resumed = rt_state.reduce_observation(resumed, rt_state.Observation(
+            rt_state.OBS_PHOTOS_SELECTED, "补选完成", {"ids": ["b"]},
+        ), step_no=3, action="select_photos")
+        resumed = rt_state.reduce_observation(resumed, rt_state.Observation(
+            rt_state.OBS_COPY_DRAFTED, "完成", {"title": "新标题", "content": "新正文"},
+        ), step_no=4, action="write_post")
+        result = rt_completion.check_completion(resumed)
+        self.assertTrue(result.complete)
+        self.assertEqual(result.missing, [])
+
 
 class CapabilityRegistryTest(unittest.TestCase):
     def _registry(self) -> rt_registry.CapabilityRegistry:

@@ -107,6 +107,9 @@ class Artifacts:
 
     candidate_ids: list[str] = dataclasses.field(default_factory=list)
     selected_ids: list[str] = dataclasses.field(default_factory=list)
+    # 补选续跑时程序性保留的已选照片（AR4-7）：新选片观察归约时合并进 selected_ids，
+    # 旧照片保留不依赖选片模型遵循指令；每次 resume_task 按受影响声明重算
+    preserved_selected_ids: list[str] = dataclasses.field(default_factory=list)
     copy_draft: dict = dataclasses.field(default_factory=dict)     # {"title", "content"}
     photo_cache: dict[str, dict] = dataclasses.field(default_factory=dict)
     handoff_url: str = ""
@@ -372,8 +375,16 @@ def _apply_photos_selected(state: TaskState, obs: Observation) -> None:
 
     缓存语义是"命中即完整详情"（cached_photos 据此跳过补拉），
     因此 payload.photos 必须携带能力手中的完整详情，不能只带 id/filename 摘要。
+
+    补选续跑（AR4-7）：保留集非空时程序性合并（保留集在前、新选去重追加），
+    旧照片保留不依赖选片模型遵循指令；合并幂等，修复环重执行不丢失保留语义。
     """
-    state.artifacts.selected_ids = list(obs.payload.get("ids") or [])
+    new_ids = list(dict.fromkeys(str(pid) for pid in obs.payload.get("ids") or []))
+    preserved = state.artifacts.preserved_selected_ids
+    if preserved:
+        state.artifacts.selected_ids = list(preserved) + [pid for pid in new_ids if pid not in preserved]
+    else:
+        state.artifacts.selected_ids = new_ids
     for photo in obs.payload.get("photos") or []:
         pid = photo.get("id")
         if pid:
@@ -490,18 +501,20 @@ def requirement_label(requirement: str) -> str:
 
 # 跟进消解声明的受影响部分（多轮修改词汇表，入口按此校验 LLM 输出）
 AFFECT_SCOPE = "scope"            # 照片范围变动：范围及下游产物全部失效
-AFFECT_SELECTION = "selection"    # 重新挑选或增删照片：选片与文案失效
+AFFECT_SELECTION = "selection"    # 重新挑选（整体替换）：选片与文案失效，旧入选不保留
+AFFECT_SELECTION_ADD = "selection_add"  # 补选（在已选基础上追加）：旧入选程序性保留（AR4-7）
 AFFECT_COPY = "copy"              # 仅修改文案：文案失效，选片保留
 AFFECT_REPORT = "report"          # 重写对比结论
 AFFECT_TOPICS = "topics"          # 重新发现主题
 
-_AFFECT_VOCABULARY = (AFFECT_SCOPE, AFFECT_SELECTION, AFFECT_COPY, AFFECT_REPORT, AFFECT_TOPICS)
+_AFFECT_VOCABULARY = (AFFECT_SCOPE, AFFECT_SELECTION, AFFECT_SELECTION_ADD, AFFECT_COPY, AFFECT_REPORT, AFFECT_TOPICS)
 
 # 受影响部分 → 需重开的里程碑（按目标类型）；范围失效隐含下游全部失效
 _GOAL_AFFECT_MILESTONES: dict[str, dict[str, tuple[str, ...]]] = {
     GOAL_SOCIAL_POST: {
         AFFECT_SCOPE: ("locate", "candidates", "select", "copy"),
         AFFECT_SELECTION: ("select", "copy"),
+        AFFECT_SELECTION_ADD: ("select", "copy"),
         AFFECT_COPY: ("copy",),
     },
     GOAL_PHOTO_COMPARISON: {
@@ -568,6 +581,8 @@ def load_task(data: dict) -> TaskState:
     artifacts = Artifacts(
         candidate_ids=list(artifacts_data.get("candidate_ids") or []),
         selected_ids=list(artifacts_data.get("selected_ids") or []),
+        # 旧快照无该字段（AR4-7 之前落库），缺失时按空处理
+        preserved_selected_ids=[str(pid) for pid in artifacts_data.get("preserved_selected_ids") or []],
         copy_draft=dict(artifacts_data.get("copy_draft") or {}),
         photo_cache={str(k): dict(v) for k, v in (artifacts_data.get("photo_cache") or {}).items()},
         handoff_url=str(artifacts_data.get("handoff_url") or ""),
@@ -630,8 +645,15 @@ def resume_task(prior: TaskState, followup_question: str, affected: list[str] | 
         artifacts = Artifacts(photo_cache=artifacts.photo_cache)
         facts = {}
     # 选片或文案失效都作废旧文案：否则完成要件仍满足，续跑会瞬间「完成」而不重写
-    if AFFECT_SELECTION in valid_affects or AFFECT_COPY in valid_affects:
+    if AFFECT_SELECTION in valid_affects or AFFECT_SELECTION_ADD in valid_affects or AFFECT_COPY in valid_affects:
         artifacts.copy_draft = {}
+    # 补选保留集每次续跑按声明重算（AR4-7）：声明补选时保留当前入选，
+    # 其余声明（重选/范围失效/仅改文案）一律清空，避免陈旧保留集跨轮泄漏。
+    # 补选与重选同时声明时按补选处理：保留用户已认可的照片是更安全的一侧
+    if AFFECT_SELECTION_ADD in valid_affects:
+        artifacts.preserved_selected_ids = list(artifacts.selected_ids)
+    else:
+        artifacts.preserved_selected_ids = []
     if AFFECT_REPORT in valid_affects:
         artifacts.comparison_report = {}
     if AFFECT_TOPICS in valid_affects:
@@ -727,8 +749,13 @@ def summarize_state(state: TaskState) -> str:
         f"已确认事实: {_dump(state.resolved_facts)}",
         _scope_summary(state),
         f"候选照片: {_ids_preview(state.artifacts.candidate_ids)}",
-        f"已选照片: {_ids_preview(state.artifacts.selected_ids)}",
-        f"文案草稿: "
+        f"已选照片: {_ids_preview(state.artifacts.selected_ids)}"
+        + (
+            f"（其中 {len(state.artifacts.preserved_selected_ids)} 张为补选保留，"
+            "重新挑选时只需覆盖要新增的部分，保留照片会自动合并）"
+            if state.artifacts.preserved_selected_ids else ""
+        ),
+        "文案草稿: "
         + (f"已有（标题「{state.artifacts.copy_draft.get('title', '')}」）"
            if state.artifacts.copy_draft else "无"),
         f"对比报告: {'已有' if state.artifacts.comparison_report else '无'}",

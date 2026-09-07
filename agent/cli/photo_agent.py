@@ -139,13 +139,15 @@ FOLLOWUP_RESOLVE_SYSTEM = (
     "也能理解的独立完整请求，并给出处理路径与受影响部分。\n"
     '只输出 JSON: {{"rewritten": "改写后的独立完整请求", '
     '"target": "sql|rag|tool|combined|runtime", '
-    '"affected": ["scope"|"selection"|"copy"|"report"|"topics"], '
+    '"affected": ["scope"|"selection"|"selection_add"|"copy"|"report"|"topics"], '
     '"goal_type": "social_post|photo_comparison|topic_discovery"}}\n'
     "target 规则: 修改或追加此前开放目标（选片发帖/跨期对比/主题发现）的填 runtime；"
     "普通检索、统计、工具操作按 sql/rag/tool/combined 选择。\n"
     "affected 仅在 target=runtime 时填写，可多选: 照片范围变动填 scope，"
-    "重新挑选或增删照片填 selection，仅改文案或风格填 copy，重写对比结论填 report，"
-    "重新发现主题填 topics；不确定时按影响面更小的选择。\n"
+    "在已选照片基础上追加或补充填 selection_add（已选照片会被保留），"
+    "整体换一批或重新挑选填 selection（已选照片不保留），"
+    "仅改文案或风格填 copy，重写对比结论填 report，"
+    "重新发现主题填 topics；补选还是重选不确定时填 selection_add。\n"
     "goal_type 仅在 target=runtime 时填写，沿用会话中此前开放目标的类型。\n"
     "改写要求: 保留用户此前的有效约束（日期、范围、数量），合并本次的新要求；"
     "指代（如「刚才那组」「第二组」）必须展开为具体所指。\n"
@@ -156,7 +158,7 @@ FOLLOWUP_RESOLVE_SYSTEM = (
     '"target": "runtime", "affected": ["copy"], "goal_type": "social_post"}}\n'
     "用户说「再补两个不同场景」→ "
     '{{"rewritten": "找山西旅游第一天的照片并生成发布文案，在已选照片外再补两个不同场景", '
-    '"target": "runtime", "affected": ["selection", "copy"], "goal_type": "social_post"}}\n\n'
+    '"target": "runtime", "affected": ["selection_add", "copy"], "goal_type": "social_post"}}\n\n'
     "会话历史（更早摘要与最近原文）:\n{history}\n\n"
     "用户消息: {question}\n"
     "输出:"

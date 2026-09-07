@@ -24,8 +24,10 @@ _ASSISTANT_TEXT_MAX = 400
 # 摘要行内用户问题与回答的截断长度
 _OLDER_USER_MAX = 80
 _OLDER_ANSWER_MAX = 60
-# 照片 ID 引用上限
+# 照片 ID 引用上限（近窗口原文行）
 _PHOTO_REF_MAX = 12
+# 更早轮次摘要行的照片 ID 引用上限（更小，长会话指代仍可展开为具体所选，AR4-6）
+_OLDER_PHOTO_REF_MAX = 6
 
 
 @dataclasses.dataclass
@@ -93,18 +95,32 @@ def _pair_turns(messages: list[dict]) -> list[dict]:
     return turns
 
 
+def _older_photo_suffix(photo_ids: list[str]) -> str:
+    """更早轮次摘要的照片括注：数量 + 有界 ID 引用。
+
+    ID 引用让「用刚才第二组」类长程指代在消解时能展开为具体所选（AR4-6）；
+    上限小于近窗口，超限截断，数量始终可见。
+    """
+    if not photo_ids:
+        return ""
+    preview = "、".join(photo_ids[:_OLDER_PHOTO_REF_MAX])
+    if len(photo_ids) > _OLDER_PHOTO_REF_MAX:
+        preview += "…"
+    return f"（照片 {len(photo_ids)} 张，引用：{preview}）"
+
+
 def _older_summary_line(turn_no: int, turn: dict) -> str:
-    """更早轮次的单行摘要：用户问题原样（截断），回答只留首行与照片数。"""
+    """更早轮次的单行摘要：用户问题原样（截断），回答只留首行、照片数与有界 ID 引用。"""
     user_text = _clip(turn["user_text"], _OLDER_USER_MAX)
     answer_first_line = turn["assistant_text"].strip().splitlines()[0] if turn["assistant_text"].strip() else ""
     answer_text = _clip(answer_first_line, _OLDER_ANSWER_MAX)
-    photo_count = len([pid for pid in turn["photo_ids"] if pid])
+    photo_ids = [pid for pid in turn["photo_ids"] if pid]
+    photo_suffix = _older_photo_suffix(photo_ids)
     parts = [f"第{turn_no}轮 用户：{user_text}"]
     if answer_text:
-        suffix = f"（照片 {photo_count} 张）" if photo_count else ""
-        parts.append(f"回答：{answer_text}{suffix}")
-    elif photo_count:
-        parts.append(f"（照片 {photo_count} 张）")
+        parts.append(f"回答：{answer_text}{photo_suffix}")
+    elif photo_suffix:
+        parts.append(photo_suffix)
     return "；".join(parts)
 
 
@@ -130,9 +146,12 @@ def build_session_context(messages: list[dict]) -> SessionContext:
         return SessionContext(history_block="", has_history=False, turn_count=0, truncated=False)
 
     truncated = False
+    first_retained_turn_no = 1
     older_count = max(len(turns) - _RECENT_TURNS, 0)
     if older_count > _OLDER_TURNS_MAX:
-        turns = turns[older_count - _OLDER_TURNS_MAX:]
+        discarded_turn_count = older_count - _OLDER_TURNS_MAX
+        turns = turns[discarded_turn_count:]
+        first_retained_turn_no += discarded_turn_count
         older_count = _OLDER_TURNS_MAX
         truncated = True
     older_turns = turns[:older_count]
@@ -141,13 +160,13 @@ def build_session_context(messages: list[dict]) -> SessionContext:
     sections: list[str] = []
     if older_turns:
         summary_lines = [
-            _older_summary_line(index + 1, turn)
+            _older_summary_line(first_retained_turn_no + index, turn)
             for index, turn in enumerate(older_turns)
         ]
         sections.append("[更早会话摘要]\n" + "\n".join(summary_lines))
     if recent_turns:
         recent_lines: list[str] = ["[最近会话]"]
-        base_no = older_count
+        base_no = first_retained_turn_no + older_count - 1
         for index, turn in enumerate(recent_turns):
             recent_lines.append(f"— 第{base_no + index + 1}轮 —")
             recent_lines.extend(_recent_block(base_no + index + 1, turn))

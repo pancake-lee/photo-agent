@@ -19,8 +19,15 @@ class CompletionResult:
     missing: list[str]
 
 def _selected_photos_ready(s: rt_state.TaskState) -> bool:
-    """入选照片要件：有入选，且范围受限时全部属于权威范围（范围外交付被阻断）。"""
+    """入选照片要件：有入选，且范围受限时全部属于权威范围（范围外交付被阻断）。
+
+    补选续跑（AR4-8）：保留集非空且 select 里程碑尚未重执行时判缺口，
+    程序性强制重跑选片，「新增」侧不依赖决策模型自觉；重执行后待办清除，
+    即使模型只返回保留照片也不会死循环。
+    """
     if not s.artifacts.selected_ids:
+        return False
+    if s.artifacts.preserved_selected_ids and "select" in s.progress.todo:
         return False
     if not s.scope.restricted:
         return True

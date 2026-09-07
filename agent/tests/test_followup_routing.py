@@ -133,6 +133,17 @@ class FollowupResolveTest(unittest.TestCase):
         update, _ = self._resolve(content)
         self.assertEqual(update["runtime_affected"], ["copy"])
 
+    def test_selection_add_accepted_and_prompt_explains_rule(self):
+        """补选消解（AR4-7）：selection_add 通过词表校验，提示词含补选/重选规则。"""
+        content = ('{"rewritten": "找山西旅游第一天的照片，在已选基础上再补两个不同场景", '
+                   '"target": "runtime", "affected": ["selection_add", "copy"], '
+                   '"goal_type": "social_post"}')
+        update, prompt = self._resolve(content)
+        self.assertEqual(update["runtime_affected"], ["selection_add", "copy"])
+        # 提示词向消解模型说明补选与重选的区分（含不确定时的默认）
+        self.assertIn("selection_add", prompt)
+        self.assertIn("已选照片会被保留", prompt)
+
     def test_non_json_output_degrades_gracefully(self):
         update, _ = self._resolve("这不是 JSON")
         self.assertEqual(update["query_type"], "rag")

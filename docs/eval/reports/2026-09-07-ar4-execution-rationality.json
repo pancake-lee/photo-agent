@@ -1,0 +1,43 @@
+{
+  "report_id": "2026-09-07-ar4-execution-rationality",
+  "backlog_id": "AR4-1-AR4-8",
+  "created_at": "2026-09-07T00:00:00Z",
+  "target": "AR4 系列复评与执行合理性评估（会话上下文、跟进消解、局部续跑、真实四轮回归）",
+  "overall": 8.0,
+  "per_task": {
+    "AR4-1": 7.8,
+    "AR4-2": 8.2,
+    "AR4-3": 8.4,
+    "AR4-4": 8.3,
+    "AR4-5": 8.6,
+    "AR4-6": 7.5,
+    "AR4-7": 8.5,
+    "AR4-8": 8.7
+  },
+  "dimension_scores": {
+    "正确性": 7.8,
+    "健壮性": 8.2,
+    "可维护性": 8.3,
+    "简洁性": 8.4,
+    "准确性": 8.3,
+    "完整性": 8.0,
+    "一致性": 8.5,
+    "Context Sufficiency": 7.5,
+    "Context Utilization": 8.5,
+    "Constraint Retention": 9.0,
+    "Multi-turn Task Success": 8.3,
+    "执行合理性": 8.2
+  },
+  "findings_for_backlog": [
+    "AR4-9：会话历史超过截断上限后，保留轮次被从第 1 轮重新编号，序数指代（如“第二组”）可能错误绑定到实际不同的历史轮次。P2，仅影响超过 8 轮的长会话。",
+    "AR4 范围文件存在 1 项 F541 lint 违规：state.py 的无插值 f-string，不影响运行但当前 AR4 变更集无法通过所选文件的完整 Ruff 检查。P3。"
+  ],
+  "verification_runtime": [
+    "cd agent && uv run --with pytest python -m pytest tests/ -q → 407 passed, 6 subtests passed",
+    "cd agent && uv run python scripts/regression/live/ar4_multiturn_followup.py --help → 正常输出用法，不触发 LLM",
+    "既有授权真实回归：四轮均 PASS；首轮 runtime、第二轮仅 copy、第三轮 selection_add 后由 1 张扩展至 2 张且旧片保留、第四轮非 followup 路由 SQL（136 张）",
+    "构造 10 轮会话：历史块保留实际第 3–10 轮，但展示为第 1–8 轮，复现 AR4-9",
+    "cd agent && uv run --with ruff ruff check --select F541 internal/runtime/state.py → 1 个 F541"
+  ],
+  "verification_commits": {}
+}

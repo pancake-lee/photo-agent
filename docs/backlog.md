@@ -8,13 +8,16 @@
 
 | 状态   | 分组       | 编号  | 任务                                         | 评估 |
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
-| Done   | Agent Runtime | AR4-1 | 会话上下文构建器：历史选择、压缩与引用     | 8.4  |
+| Done   | Agent Runtime | AR4-1 | 会话上下文构建器：历史选择、压缩与引用     | 7.8  |
 | Done   | Agent Runtime | AR4-2 | 跟进消息识别与入口全路径接入               | 8.2  |
 | Done   | Agent Runtime | AR4-3 | Runtime 任务快照与多轮局部失效续跑         | 8.4  |
 | Done   | Agent Runtime | AR4-4 | V4 多轮金用例与评估基线                     | 8.3  |
-| 待规划 | Agent Runtime | AR4-5 | 真实 LLM 环境下跟进识别与消解质量未验证     |      |
-| 待规划 | Agent Runtime | AR4-6 | 长程指代的上下文充分性退化                  |      |
-| 待规划 | Agent Runtime | AR4-7 | 补选语义保留无确定性保障                    |      |
+| Done   | Agent Runtime | AR4-5 | 真实 LLM 环境下跟进识别与消解质量已验证 | 8.6  |
+| Done   | Agent Runtime | AR4-8 | 补选续跑跳过选片步骤，新增无确定性保障 | 8.7  |
+| Done   | Agent Runtime | AR4-6 | 长程指代的上下文充分性退化                  | 7.5  |
+| Done   | Agent Runtime | AR4-7 | 补选语义保留无确定性保障                    | 8.5  |
+| Done   | Agent Runtime | AR4-9 | 截断历史重编号使序数指代可能错绑           | 8.6  |
+| Done   | 代码治理   | AR4-10 | AR4 状态摘要存在 Ruff F541 违规            | 9.0  |
 | 已取代 | Agent Runtime | AR16  | 会话多轮连续性缺失（展开为 AR4-1–AR4-4）   |      |
 | 已取代 | Agent Runtime | AR17  | 对话历史无选择与压缩（展开为 AR4-1–AR4-4） |      |
 | 待规划 | Agent Runtime | AR18  | 入口分类封闭集，新开放目标静默降级         |      |
@@ -35,6 +38,7 @@
 - **验收**：选择（窗口内外区别处理）、压缩（长会话输出有界）、引用（照片详情不进入上下文）、优先级（当前要求不被摘要覆盖）四类单测；空会话、单轮、长会话边界覆盖。
 - **实施记录**（2026-09-07）：`internal/context/builder.py` 落地，逐项截断（轮数 + 单条 + 照片引用上限）自然有界，未引入额外总长截断分支；`tests/test_context_builder.py` 9 项通过。
 - **评估**：8.4（正确性 8.5 健壮性 8.0 可维护性 8.5 简洁性 8.5），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+- **复评**：7.8（长会话截断后原始轮次序号未保持），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
 
 ### AR4-2 跟进消息识别与入口全路径接入
 
@@ -44,6 +48,7 @@
 - **验收**：mock LLM 下验证 followup 分支路由与 effective_question 传递；首条消息路径回归不变；五条路径各自的 effective_question 消费有单测。
 - **实施记录**（2026-09-07）：`_classify_node` 有历史分支 + `_followup_resolve_node` 消解节点 + 条件边接入路由图；五路径经 `_effective_question` 统一消费；消解显式声明的目标类型与快照不一致时按声明目标全新执行（`runtime_goal_declared` 区分分类默认值）；server `send_message` 与 CLI `sessions resume` 完成接线；`tests/test_followup_routing.py` 16 项 + server 接线回归通过。
 - **评估**：8.2（正确性 8.5 健壮性 8.0 完整性 8.0 一致性 8.5），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+- **复评**：8.2（真实四轮 followup 主线通过；长程序数指代受 AR4-9 影响），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
 
 ### AR4-3 Runtime 任务快照与多轮局部失效续跑
 
@@ -53,6 +58,7 @@
 - **验收**：序列化往返一致性；续跑保留有效产物、失效部分重开；约束合并且当前优先；快照 CRUD；澄清续跑回归不变。
 - **实施记录**（2026-09-07）：`dump_task`/`load_task`/`resume_task`（受影响部分词汇表 scope/selection/copy/report/topics，选片或文案失效均作废旧文案以防完成要件瞬间满足）落 `state.py`；`run_runtime` 返回 `task_dump` 与 `goal_type`；快照表 CRUD 与会话删除清理落地；澄清续跑路径不读快照、不注入历史，行为与 V3 一致；`tests/test_runtime_resume.py` 14 项通过。
 - **评估**：8.4（正确性 8.5 健壮性 8.0 Constraint Retention 9.0 Multi-turn Task Success 8.5），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+- **复评**：8.4（快照与局部续跑边界保持），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
 
 ### AR4-4 V4 多轮金用例与评估基线
 
@@ -62,27 +68,83 @@
 - **验收**：金用例断言完整轨迹（保留与失效两侧都要断言）；基线条目落地；Agent 全量离线测试通过。
 - **实施记录**（2026-09-07）：金用例四条（改文案 1 决策完成、补选重写、快照 JSON 往返主线、换范围全链路重跑）落在 `tests/test_runtime_resume.py`；[评估基线](eval/baseline.md) 已登记 V4 四维度条目；Agent 全量离线 369/369 通过（V4 新增 42 项），未调用真实 LLM。
 - **评估**：8.3（Context Sufficiency 8.0 Context Utilization 8.5 完整性 8.0），详见 [2026-09-07-ar4-v4-planning-context](eval/reports/2026-09-07-ar4-v4-planning-context.md)
+- **复评**：8.3（缺少超过截断阈值的序数指代金用例），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
 
 ### AR4-5 真实 LLM 环境下跟进识别与消解质量未验证
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：AR4-2 的 followup 分类与跟进消解提示词仅有离线替身断言（注入契约与输出解析），真实会话中指代展开是否准确、受影响部分声明是否合理、把新问题误判为 followup 的比例均无证据。评估报告将其列为准确性维度的主要失分点。
 - **严重程度**：P1，多轮体验的真实质量取决于此；执行受真实 LLM 回归授权约束（参照 AR2-7/AR3 惯例）。
+- **方案**：按 AR3 live 回归惯例新增 `agent/scripts/regression/live/ar4_multiturn_followup.py`（独立目录、不入日常 unittest discovery、执行需当轮明确授权）。脚本经 `PhotoAgent.route` 在内存中线程化 history 与 Runtime 任务快照（等价 server send_message 接线，只读照片库，不写会话存储），跑四轮真实多轮会话：山西第一天选片发帖（runtime 全链路）→「不要那么文艺」（期望 followup、affected 仅 copy、选片集合不变、文案变化）→「再补两张不同场景的照片」（期望 affected 含补选、已选照片程序性保留且有新增）→「2026 年 5 月我拍了多少张照片」（负样本，期望非 followup、路由 sql）。各轮断言逻辑拆为纯函数（输入各轮结果摘要字典，输出 failures 列表），离线单测用构造结果覆盖断言函数本身；脚本头部注明授权命令、前置条件（backend 10004 健康）与消耗估算。
+- **验收**：断言纯函数离线单测通过（正/负/边界构造结果）；脚本可导入且 `--help` 正常（不触发 LLM）；真实执行按授权约束单独进行（用户授权后运行，结果记入实施记录）。
+- **实施记录**（2026-09-07）：`agent/scripts/regression/live/ar4_multiturn_followup.py` 落地，4 轮真实会话在内存中线程化 history 与任务快照（只读，不写会话存储），执行前先探测后端不健康即退出（不消耗 LLM）；各轮断言为纯函数，`tests/test_ar4_live_assertions.py` 20 项离线单测通过（正/负/边界）；脚本 `--help` 正常导入不触发 LLM。AI 自动验证到此为止，真实 LLM 执行受授权约束未进行（本轮用户选择「只交付脚本不执行」）。
+- **（用户）验收操作**：启动 Go 后端（10004 健康）后，在明确授权真实 LLM 消耗（约 2–7 元）的前提下运行 `cd agent && .venv/bin/python scripts/regression/live/ar4_multiturn_followup.py -c ../.local/my-config.yaml`。预期输出 `PASS：AR4 真实多轮跟进识别与消解回归完成。`；真实执行结果（PASS/FAIL 与各轮断言明细）记入本条实施记录。
+- **真实执行记录**（2026-09-07，用户当轮授权）：4 轮真实会话完成，14 项断言 13 过 1 失败，结论 FAIL。通过项：首轮 runtime 全链路交付（选 2 张 + 文案）；第二轮 followup 识别、affected=['copy']、选片不变、文案由文艺转平实；第三轮消解正确声明 `selection_add`、旧照片零丢失（归约合并保障生效）；第四轮负样本非 followup、路由 sql（count=136）。失败项：「补选未新增照片：前轮 2 张，本轮 2 张」。trace `6263b1d80304` 定位根因：补选续跑后 `selected_photos` 完成要件因保留集非空即满足，重开的 select 里程碑不参与完成判定，决策模型第 1 步误判「照片已选齐」直接 write_post 收尾（`todo_left=['select']` 但 `complete=True`），选片从未重执行。缺陷登记为 AR4-8；脚本断言按设计捕捉到该缺陷，脚本本身无需修改。
+- **复验记录**（2026-09-07，用户当轮授权）：服务重启后以单请求 30 秒上限复跑。首轮 runtime 完整交付（trace `bf313e8e827e`，4 步、选 1 张）；第二轮正确识别 followup、消解 `affected=['copy']` 并进入仅文案续跑（trace `71df7f2a84b1`），但文案修复请求发生 `APITimeoutError`，以 `capability_execution_failed` 终态返回。第三轮正确识别 followup、消解 `affected=['selection_add', 'copy']`（trace `260f5c5288b7`），在 Runtime 首个 decide 请求再次 `APITimeoutError`，脚本异常退出（exit code 1），未能执行第三轮的「旧片保留且有新增」断言或第四轮 SQL 负样本断言。结论：本次无法判定 AR4-8 的真实补选修复效果；失败原因为外部模型响应超时，不是回归断言失败。
+- **通过记录**（2026-09-07，用户当轮授权）：按脚本默认单请求 60 秒口径完成四轮，输出 `PASS：AR4 真实多轮跟进识别与消解回归完成。`。首轮 trace `2961a71afec3` runtime 4 步完成、选 1 张并生成文案；第二轮 trace `41de4080a340` 正确识别 followup、`affected=['copy']`、选片不变且完成平实改写；第三轮 trace `449c410f0a8f` 正确识别 followup、`affected=['selection_add','copy']`，强制先执行 `select_photos` 再写文案，入选扩展为 2 张且旧片保留；第四轮 trace `1b98dd14a6cf` 非 followup、路由 sql，返回 2026 年 5 月计数 136。AR4-5 真实环境验证完成。
 - **证据**：[AR4 第一轮评估](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+- **评估**：8.0（离线口径：断言纯函数与脚本工程质量；真实 LLM 执行待授权后补记），详见 [2026-09-07-ar4-round2-followup-assurance](eval/reports/2026-09-07-ar4-round2-followup-assurance.md)
+- **复评**：8.6（授权真实四轮回归已 PASS），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
 
 ### AR4-6 长程指代的上下文充分性退化
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：Context Builder 的更早轮次摘要只保留用户问题原文、回答首行与照片计数；3 轮以前交付的选片组在历史块中没有 ID 引用，「用刚才第二组」类指代在长会话中无法展开为具体所指，消解只能凭问题原文猜测。
 - **严重程度**：P2，近窗口（最近两组）内的指代不受影响，仅长会话退化。
+- **方案**：`internal/context/builder.py` 的更早轮次摘要行在照片计数后追加有界 ID 引用（独立于近窗口的更小上限常量，超限截断并标注总数），复用现有照片引用行的有界规则。历史块仍由逐项截断自然有界，近窗口原文与其余摘要内容不变；跟进消解提示词无需改动（历史块整体注入，长会话中指代可经摘要行的 ID 展开为具体所选）。
+- **验收**：单测覆盖更早摘要行含 ID 引用、超上限截断标注总数、无照片轮次不产生引用段；既有 context builder 全部单测与全量离线回归通过；长会话（≥4 轮）历史块中第 1 轮照片 ID 可见。
+- **实施记录**（2026-09-07）：`internal/context/builder.py` 更早轮次摘要行追加有界 ID 引用（独立上限 `_OLDER_PHOTO_REF_MAX = 6`，超限截断、总数始终可见），历史块仍由逐项截断自然有界；消解提示词无改动。`tests/test_context_builder.py` 新增 OlderReferenceTest 3 项 + 既有断言更新，长会话第 1 轮照片 ID 可见；全量离线回归通过。
 - **证据**：[AR4 第一轮评估](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+- **评估**：8.4（Context Sufficiency 8.5 Context Utilization 8.5 健壮性 8.5 简洁性 8.5），详见 [2026-09-07-ar4-round2-followup-assurance](eval/reports/2026-09-07-ar4-round2-followup-assurance.md)
+- **复评**：7.5（有界 ID 引用已具备，但截断后的轮次身份错误），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
 
 ### AR4-7 补选语义保留无确定性保障
 
-- **状态**：待规划
+- **状态**：Done
 - **背景**：AFFECT_SELECTION 续跑保留旧 selected_ids 并在决策提示词中可见，但新的选片观察按归约规则整体替换入选集合；补选场景旧照片是否保留完全依赖选片模型是否遵循改写请求中的保留指令，没有程序性保障。
 - **严重程度**：P2，金用例已断言状态可见性，语义保留属模型行为层。
+- **方案**：受影响部分词汇表把「补选」与「重选」分开：`state.py` 新增补选取值（与 selection 同样重开 select/copy 里程碑），跟进消解提示词声明规则区分两者（在已选基础上追加 → 补选；换一批/重新挑 → 重选）。`resume_task` 在补选声明时把当前 selected_ids 记入 Artifacts 新增的保留字段，重选与范围失效时清空该字段；归约规则 `_apply_photos_selected` 在保留字段非空时程序性合并（保留集在前、模型新选去重追加），旧照片保留不再依赖选片模型遵循指令。快照序列化/反序列化（dump_task/load_task）携带新字段，旧快照缺失时按空处理。合并幂等，修复环重执行选片时保留语义不丢失。
+- **验收**：单测覆盖补选声明后模型新选不含旧照片时旧照片仍在入选集合、重选声明不保留、范围失效清空保留字段、快照往返含新字段且旧快照兼容、消解词表校验接受新取值；既有 resume/routing 金用例与全量离线回归通过。
+- **实施记录**（2026-09-07）：`state.py` 新增 `AFFECT_SELECTION_ADD`（与 selection 同样重开 select/copy）与 `Artifacts.preserved_selected_ids`；`resume_task` 补选声明时记入保留集、重选/范围失效/copy 续跑时清空（范围+补选同时声明按范围优先清空）；`_apply_photos_selected` 保留集非空时程序性合并（保留在前、新选去重追加、修复环幂等）；`summarize_state` 已选行追加补选保留标记；dump/load 携带新字段、旧快照缺失按空兼容；消解提示词区分补选/重选并声明不确定时默认补选。新增 SelectionPreservationReduceTest 7 项 + resume/routing 金用例更新，全量离线回归 404 项通过。
 - **证据**：[AR4 第一轮评估](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
+- **评估**：8.5（正确性 8.5 Multi-turn Task Success 8.5 可维护性 8.5 简洁性 8.5），详见 [2026-09-07-ar4-round2-followup-assurance](eval/reports/2026-09-07-ar4-round2-followup-assurance.md)
+- **复评**：8.5（保留集归约、幂等与兼容性保持），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
+
+### AR4-8 补选续跑跳过选片步骤，新增无确定性保障
+
+- **状态**：Done
+- **背景**：AR4-5 真实回归（trace `6263b1d80304`）发现。补选（`selection_add`）续跑重开 select/copy 里程碑并把旧入选记入保留集，但 `selected_photos` 完成要件只判 `selected_ids` 非空 + 范围归属，保留集非空使要件即时满足；重开的 select 里程碑（`progress.todo`）不参与完成判定。决策模型看到「已选照片 2 张（补选保留标记）」后误判「照片已选齐」，第 1 步直接 write_post，任务以 `todo_left=['select']`、`complete=True` 收尾，选片从未重执行、无任何新增照片。
+- **严重程度**：P1，补选是发帖多轮的高频修改路径；AR4-7 保障了「保留」侧，「新增」侧仍完全依赖决策模型自觉，属同类模型行为依赖问题。
+- **方案**（用户选定 A，2026-09-07）：完成要件程序性保障。`completion.py` 的 `_selected_photos_ready` 增加判定：保留集非空且 select 里程碑仍在待办（未重执行）时要件不满足，决策循环看到「完成要件缺口: 选好图片」+ 待办含挑选，程序性强制重跑选片；选片重执行后归约合并、待办清除，要件恢复满足。不依赖决策模型自觉，只影响补选续跑路径；模型重跑后即使只返回保留照片也不会死循环（待办清除即要件满足）。新增的数量与场景质量仍由模型层负责（场景优先提示已存在）。否决备选：B 仅强化决策提示词（本次失败证明模型会忽略现有保留标记提示）；C 能力层候选排除（改动面大、数量无法程序化）。
+- **验收**：完成要件单测覆盖补选声明后未重跑选片判缺口、重跑后恢复满足；图级回归复现 trace `6263b1d80304` 场景（决策模型先跳 write_post 时被完成检查拦下、续跑补选片后交付）；重选/普通续跑路径行为不变；全量离线回归通过。真实环境复验经 AR4-5 live 脚本由用户授权后执行。
+- **实施记录**（2026-09-07）：`completion.py` 在补选保留集非空且 `select` 仍待办时，将入选照片判为缺口，阻止模型仅写文案即完成；选片观察归约清除 `select` 待办后恢复满足，模型即使只返回旧照片也不会死循环。`test_runtime_core.py` 新增未重跑选片判缺口、重跑后恢复完成两项单测；`test_runtime_resume.py` 新增图级回归，复现模型先误写文案，随后从「完成要件缺口: selected_photos」强制执行补选，最终保留旧照片并新增 `a` 后交付。Agent 全量离线回归 407 passed、6 个 subtests passed，未调用真实 LLM。
+- **（用户）验收操作**：如需真实环境复验，请在明确授权真实 LLM 消耗（约 2–7 元）后运行 `cd agent && .venv/bin/python scripts/regression/live/ar4_multiturn_followup.py -c ../.local/my-config.yaml`。预期第三轮补选后的入选照片数大于第二轮，且输出 `PASS：AR4 真实多轮跟进识别与消解回归完成。`；请回传 PASS/FAIL 与断言明细。
+- **真实复验记录**（2026-09-07，用户当轮授权）：受 AR4-5 同次回归的模型超时影响，第三轮仅完成 followup 识别和 `selection_add` 消解，未进入选片执行与新增照片断言；本条仍待一次模型服务可用时的完整 PASS 复验。
+- **通过记录**（2026-09-07，用户当轮授权）：AR4-5 默认 60 秒口径复验的第三轮（trace `449c410f0a8f`）在 `selection_add` 续跑后首步执行 `select_photos`，没有重现「仅写文案即完成」；归约后入选从 1 张增至 2 张、旧片未丢失，随后文案交付且 `complete=True`。真实新增保障验证通过。
+- **证据**：AR4-5 真实执行记录（本文件）、trace `6263b1d80304`（`data/agent/execution-traces/2026-09-07.jsonl`）。
+- **评估**：8.7（完成要件确定性保障与真实补选复验通过），详见 [2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)
+
+### AR4-9 截断历史重编号使序数指代可能错绑
+
+- **状态**：Done
+- **背景**：复评构造 10 轮会话时，Context Builder 为控制更早摘要轮数而丢弃原始第 1–2 轮后，将原始第 3–10 轮显示为第 1–8 轮。用户使用「第二组」「第六轮」等序数指代时，消解器收到的轮次标签与实际会话不一致，可能引用错误的照片组或约束。
+- **严重程度**：P2，仅影响超过当前上下文截断阈值的长会话；照片 ID 引用仍在，但序数语义已失真。
+- **方案**：Context Builder 在截断前记录首个保留轮次的原始序号，并将其用于更早摘要和最近原文的轮次标签；历史块的长度上限与保留内容不变。
+- **验收**：✅ 构造 10 轮会话时，原始第 3 轮摘要显示为「第3轮」，原始第 9、10 轮原文显示为「第9轮」「第10轮」；✅ 既有 Context Builder 与全量 Agent 回归通过。
+- **实施记录**（2026-09-07）：`internal/context/builder.py` 在轮次截断时保留首个未丢弃轮次的原始序号，摘要与近期原文统一使用该基准编号；`test_context_builder.py` 新增 10 轮截断序数回归。Agent 全量离线回归 408 passed、6 subtests passed。
+- **证据**：[2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)。
+- **评估**：8.6（正确性 9.0 健壮性 8.5 可维护性 8.5 简洁性 8.5），本轮自动验证通过。
+
+### AR4-10 AR4 状态摘要存在 Ruff F541 违规
+
+- **状态**：Done
+- **背景**：`agent/internal/runtime/state.py` 的状态摘要含无插值 f-string；执行 `ruff check --select F541 internal/runtime/state.py` 返回 1 个 F541。功能不受影响，但当前 AR4 变更文件不能完整通过 Ruff。
+- **严重程度**：P3，代码卫生问题。
+- **方案**：将无插值字符串改为普通字符串，不改变状态摘要内容。
+- **验收**：✅ `ruff check internal/context/builder.py internal/runtime/state.py tests/test_context_builder.py` 通过；✅ 全量 Agent 回归通过。
+- **实施记录**（2026-09-07）：移除 `summarize_state` 中无插值 f-string 前缀；针对性 Ruff 通过，Agent 全量离线回归 408 passed、6 subtests passed。
+- **证据**：[2026-09-07-ar4-execution-rationality](eval/reports/2026-09-07-ar4-execution-rationality.md)。
+- **评估**：9.0（正确性 9.0 可维护性 9.0 简洁性 9.0），本轮自动验证通过。
 
 ### AR16 会话多轮连续性缺失，每条消息独立执行（已取代）
 
@@ -132,6 +194,12 @@
 - proto-first 迁移、语音输入、多语言支持、负样本学习优化
 
 ## 决策历史
+
+- **2026-09-07**：用户授权完成 AR4-5 与 AR4-8 默认 60 秒口径的真实四轮回归，输出 PASS。补选轮正确识别 `selection_add`、程序性先重跑选片并将入选从 1 张扩展为 2 张，负样本正确路由 SQL（136 张）；两项均关单。trace：`2961a71afec3`、`41de4080a340`、`449c410f0a8f`、`1b98dd14a6cf`。
+
+- **2026-09-07**：AR4-5 真实回归定位补选续跑跳过选片缺陷后，用户选定 AR4-8 方案 A：完成检查将「补选保留集非空且 select 仍待办」判为入选照片缺口，程序性强制选片重跑，不以决策模型自觉为保障。完成要件两项单测与模型先误写文案的图级回归已落地；真实 LLM 复验仍需当轮授权。
+
+- **2026-09-07**：V4 第二轮（AR4-5/6/7）自动循环闭环完成，总分 8.3/10（循环目标 ≥8.0 达成，循环结束）。AR4-6（更早摘要有界照片 ID 引用）与 AR4-7（补选 `selection_add` 归约层程序性保留合并）关单；AR4-5 按用户当轮决策「只交付脚本不执行」交付真实多轮回归脚本与 20 项断言纯函数离线单测，转待用户验收（真实执行需后续授权，约 2–7 元）。Agent 离线全量 404/404（新增 35 项），未调用真实 LLM。详见 [第二轮评估报告](eval/reports/2026-09-07-ar4-round2-followup-assurance.md)。
 
 - **2026-09-07**：V4 第一轮规划/生成/评估闭环完成，总分 8.3/10（循环目标 8.0 达成）。AR4-1 至 AR4-4 全部 Done：历史经 Context Builder 进入推理链路、followup 识别与消解接入五路径、Runtime 任务快照支持局部失效续跑、四条多轮金用例与 V4 基线落地；Agent 离线全量 369/369（V4 新增 42 项），未调用真实 LLM。评估登记 AR4-5（真实环境验证）、AR4-6（长程指代退化）、AR4-7（补选保留无确定性保障）待规划。详见 [评估报告](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
 
