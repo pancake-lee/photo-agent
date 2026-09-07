@@ -1,0 +1,41 @@
+{
+  "report_id": "2026-09-07-ar3-capability-system",
+  "backlog_id": "AR3-1-AR3-5",
+  "created_at": "2026-09-07T00:00:00Z",
+  "target": "Agent Runtime V3（AR3-1 至 AR3-5）交付复评",
+  "overall": 6.3,
+  "per_task": {
+    "AR3-1": 8.2,
+    "AR3-2": 7.8,
+    "AR3-3": 4.8,
+    "AR3-4": 5.5,
+    "AR3-5": 5.0
+  },
+  "dimension_scores": {
+    "正确性": 5.8,
+    "健壮性": 6.2,
+    "可维护性": 7.6,
+    "简洁性": 7.5,
+    "准确性": 5.0,
+    "完整性": 5.3,
+    "一致性": 7.0,
+    "惊喜度": 6.0,
+    "可用性": 5.2,
+    "交互体验": 5.0,
+    "AI增量": 7.0
+  },
+  "findings_for_backlog": [
+    "AR3-6：跨期对比没有两期独立的权威范围。TaskState 仅保存一份 Scope 和一份当前 candidate_ids；resolve_trip 只能物化一组范围，第二次检索会覆盖当前候选。检索的 period 仅记录在 Observation payload，且 period 参数可传任意字符串，未参与检索过滤。影响：『比较 2025 和 2026 春天的洱海照片』无法由 Runtime 确定性收集两期证据，可能以相同或不受限的照片组完成对比。严重程度 P1。",
+    "AR3-7：主题发现 Workflow 没有可达入口。入口分类只会选择 social_post 或 photo_comparison 两种 Runtime 目标，仓库中没有将请求路由至 GOAL_TOPIC_DISCOVERY 的生产调用。影响：discover_topics 虽被注册，用户请求不能经聊天入口触发该开放目标；AR3-4 的 Runtime 可调用性与 AR3-5 的组合轨迹验收未形成闭环。严重程度 P1。",
+    "AR3-8：V3 基线未覆盖两个不同目标的完整 Runtime 轨迹。test_runtime_v3_contracts.py 直接调用对比 Skill 和 Workflow 适配函数，未经过入口分类、decide/execute/guardrail/reduce/check 循环；当前 2/2 成功率和 0/3 契约失败率不能证明设计要求的组合路径。严重程度 P1。"
+  ],
+  "verification_runtime": [
+    "agent/.venv/bin/python -m unittest discover -s tests -v：305/305 通过（1.05s）",
+    "agent/.venv/bin/python -m unittest discover -s tests -p 'test_runtime*.py' -v：176/176 通过（0.76s）",
+    "代码走查：入口 photo_agent.py、Runtime state.py/graph.py/registry.py/completion.py、retrieval.py/comparison.py/workflows.py，以及 V3 契约测试。",
+    "未启动服务；未读取真实照片；未调用真实 LLM。"
+  ],
+  "verification_commits": {
+    "AR3系列实现": "2b40e5d"
+  }
+}

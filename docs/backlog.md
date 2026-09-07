@@ -8,11 +8,14 @@
 
 | 状态   | 分组       | 编号  | 任务                                         | 评估 |
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
-| Done | Agent Runtime | AR3-1 | 目标契约与通用任务状态拆分                |      |
-| Done | Agent Runtime | AR3-2 | Capability 分层与既有能力契约迁移         |      |
-| Done | Agent Runtime | AR3-3 | 照片跨期对比开放目标接入                  |      |
-| Done | Agent Runtime | AR3-4 | 主题发现 Workflow 能力化                  |      |
-| Done | Agent Runtime | AR3-5 | V3 组合轨迹评估与回归基线                 |      |
+| Done | Agent Runtime | AR3-1 | 目标契约与通用任务状态拆分                | 8.2  |
+| Done | Agent Runtime | AR3-2 | Capability 分层与既有能力契约迁移         | 7.8  |
+| Done | Agent Runtime | AR3-3 | 照片跨期对比开放目标接入                  | 4.8  |
+| Done | Agent Runtime | AR3-4 | 主题发现 Workflow 能力化                  | 5.5  |
+| Done | Agent Runtime | AR3-5 | V3 组合轨迹评估与回归基线                 | 5.0  |
+| 待规划 | Agent Runtime | AR3-6 | 跨期对比缺少两期独立权威范围              |      |
+| 待规划 | Agent Runtime | AR3-7 | 主题发现 Workflow 缺少生产入口            |      |
+| 待规划 | Agent Runtime | AR3-8 | V3 基线缺少完整多目标组合轨迹             |      |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 
 > v1.0.17 已归档：AR2-1–AR2-7、CQ7、DL1、AR11–AR14、HARN1，以及已取代的 CQ4，详见 [v1.0.17](archive/v1.0.17.md)。
@@ -30,6 +33,7 @@
 - **依赖**：无；完成后 AR3-2、AR3-3 才可开始。
 - **验收**：社交发帖原始山西用例的状态摘要、完成语义、终态和用户输出不退化；新增目标定义无需修改 Runtime 循环或全局归约/完成检查表；关键词变化不再改变同一目标的交付语义。
 - **实施与验证**：目标契约声明允许能力与观察；候选交付仅由 `delivery_mode` 结构化参数决定。Runtime/发帖回归与 V3 契约离线测试通过。
+- **评估**：8.2（正确性 5.8 健壮性 6.2 可维护性 7.6 简洁性 7.5），详见 [2026-09-07-ar3-capability-system](eval/reports/2026-09-07-ar3-capability-system.md)。
 
 ### AR3-2 Capability 分层与既有能力契约迁移
 
@@ -40,6 +44,7 @@
 - **依赖**：AR3-1。
 - **验收**：每项已注册能力都有可机器读取的层级与完整契约；无效选择仍由现有参数校验和 Guardrail 处理；山西发帖轨迹仍只使用其适用能力，且能力清单不要求 Runtime 知道具体业务实现。
 - **实施与验证**：注册表增加 Tool/Skill/Workflow 层级、适用与不适用条件、输入输出、错误和副作用契约；决策仅收到当前目标允许的能力。离线契约测试通过。
+- **评估**：7.8（正确性 5.8 健壮性 6.2 可维护性 7.6 简洁性 7.5），详见 [2026-09-07-ar3-capability-system](eval/reports/2026-09-07-ar3-capability-system.md)。
 
 ### AR3-3 照片跨期对比开放目标接入
 
@@ -50,6 +55,7 @@
 - **依赖**：AR3-1、AR3-2。
 - **验收**：上述判别用例可进入 Runtime，完成两组范围/候选收集并输出带照片依据的对比结论；其轨迹复用既有检索/详情能力；社交发帖和普通 RAG/Combined 路由不回归；全程不修改真实照片、标签或草稿。
 - **实施与验证**：新增只读 `photo_comparison` 目标与 `compare_photo_periods` Skill，报告保存两期照片 ID 依据；入口对 Runtime 对比意图选择该目标。离线替身回归验证两期证据、完成检查与输出引用。
+- **评估**：4.8（正确性 5.8 健壮性 6.2 准确性 5.0 完整性 5.3），详见 [2026-09-07-ar3-capability-system](eval/reports/2026-09-07-ar3-capability-system.md)。
 
 ### AR3-4 主题发现 Workflow 能力化
 
@@ -60,6 +66,7 @@
 - **依赖**：AR3-2；可与 AR3-3 并行实施。
 - **验收**：Workflow 可由明确范围独立调用并返回与既有管线等价的主题候选和证据；原有自动/手动选题与历史查看不退化；Runtime 得到的是单个结构化 Observation，而不是内嵌主题发现的端到端聊天路径。
 - **实施与验证**：主题发现以 `discover_topics` Workflow 注册，显式范围下推至既有三阶段管线，输出单个主题候选 Observation；不写入历史。离线范围传递回归通过。
+- **评估**：5.5（正确性 5.8 健壮性 6.2 完整性 5.3 可用性 5.2），详见 [2026-09-07-ar3-capability-system](eval/reports/2026-09-07-ar3-capability-system.md)。
 
 ### AR3-5 V3 组合轨迹评估与回归基线
 
@@ -70,6 +77,28 @@
 - **依赖**：AR3-3、AR3-4。
 - **验收**：自动回归覆盖两个不同目标的完整轨迹、目标/能力不适用时的正确拒绝，以及发帖链路兼容性；基线能报告 Capability Selection Accuracy、Capability Reuse Rate、New-Pipeline Rate、Contract Failure Rate、Task Success/Cost；真实 LLM 用例未在未获当轮授权时执行。
 - **实施与验证**：新增 `test_runtime_v3_contracts.py` 覆盖显式交付变体、目标拒绝、能力完整契约、跨期对比和范围化 Workflow；指标写入 `docs/eval/baseline.md`。Agent 离线全量 305/305 通过，未读取真实数据或调用真实 LLM。
+- **评估**：5.0（正确性 5.8 完整性 5.3 一致性 7.0），详见 [2026-09-07-ar3-capability-system](eval/reports/2026-09-07-ar3-capability-system.md)。
+
+### AR3-6 跨期对比缺少两期独立权威范围
+
+- **状态**：待规划
+- **背景**：跨期对比的 `TaskState` 仅有一份 `Scope` 与当前候选集；`resolve_trip` 只能物化一组范围，检索结果的 `period` 仅写入 Observation payload，且除 `earlier`/`later` 外静默忽略。第二期检索会覆盖当前候选。
+- **严重程度**：P1，判别用例无法确定性收集两期证据，可能以相同或不受限照片组形成对比。
+- **证据**：[AR3 Capability System 复评](eval/reports/2026-09-07-ar3-capability-system.md)。
+
+### AR3-7 主题发现 Workflow 缺少生产入口
+
+- **状态**：待规划
+- **背景**：入口分类仅能选择 `social_post` 或 `photo_comparison` Runtime 目标；仓库内没有将用户请求路由至 `GOAL_TOPIC_DISCOVERY` 的生产调用。
+- **严重程度**：P1，已注册的 `discover_topics` 无法由聊天入口触发，主题发现开放目标不可达。
+- **证据**：[AR3 Capability System 复评](eval/reports/2026-09-07-ar3-capability-system.md)。
+
+### AR3-8 V3 基线缺少完整多目标组合轨迹
+
+- **状态**：待规划
+- **背景**：`test_runtime_v3_contracts.py` 直接调用对比 Skill 与 Workflow 适配函数，未经过入口分类、Runtime 循环及两目标的完整轨迹；当前 2/2 成功与 0/3 契约失败指标不覆盖设计承诺的组合路径。
+- **严重程度**：P1，AR3-5 基线不能证明 V3 退出条件或捕获入口、范围与编排断链。
+- **证据**：[AR3 Capability System 复评](eval/reports/2026-09-07-ar3-capability-system.md)。
 
 ### BQ3 未鉴权服务暴露任意 SQL 查询
 
