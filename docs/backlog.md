@@ -10,6 +10,7 @@
 | ------ | ---------- | ----- | -------------------------------------------- | ---- |
 | Done   | Agent Runtime | AR18  | 入口分类封闭集，新开放目标静默降级         |      |
 | Done     | 可观测性   | OBS2  | V5 优化缺少请求级成本、结果关联证据链       | 8.4  |
+| Done     | 文档可视化 | AD1   | Agent 执行链路的可编辑代码导览图            |     |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 
 > v1.0.19 已归档：AR4-1–AR4-10，以及由 AR4 系列取代关闭的 AR16、AR17，详见 [v1.0.19](archive/v1.0.19.md)。
@@ -62,6 +63,28 @@
 - **评估**：8.4（Runtime 轨迹可复盘性 9.0、全路径执行可观测性 8.5、成本与延迟可归因性 8.5、结果与用户反馈可判定性 8.0、长期趋势可用性 8.0），详见 [闭环评估报告](eval/reports/2026-09-07-obs2-request-evidence-loop.md)。
 - **实施与验证**：请求级用量回调经 LLM 工厂统一注入，入口和收尾事件写入同一 Trace，助手消息保存用量并可记录显式反馈；Trace 有效回放窗口为 30 天。Agent 离线全量 402/402、Web Vitest 14/14 与生产构建通过，未调用真实 LLM 或修改真实数据。
 - **证据**：[初始评估](eval/reports/2026-09-07-v5-observability-readiness.md)、[闭环评估](eval/reports/2026-09-07-obs2-request-evidence-loop.md)。
+
+### AD1 Agent 执行链路的可编辑代码导览图
+
+- **状态**：Done
+- **背景**：Agent 已历经多轮 Runtime、能力系统和多轮上下文迭代；现有 `docs/tech.md` 的 Mermaid 图覆盖概念流程，但缺少从 HTTP 入口到最终交付的统一阅读入口，也不能在节点和连线上稳定定位实际文件、函数、状态与回环条件。维护者难以建立完整心智模型。
+- **方案**：以一份 Excalidraw 画板承载三个由 Frame 分隔的层级，而非把全部实现细节塞入单张无层次的巨图：
+  - 总览 Frame：`POST /api/chat/sessions/{id}/messages` 到 SSE/消息持久化、`PhotoAgent.route()`、入口分类、单步路径（SQL/RAG/Tool/Combined）、Runtime、`answer` 汇合及 Trace/SessionStore 的请求生命周期；节点写入口文件和方法，边写数据或控制含义。
+  - Runtime Frame：仅展开 `run_runtime()` 的 `decide → execute → guardrail → reduce → check → finish`；标明唯一 LLM 决策点、`TaskState`/`Observation`、参数校验、完成检查、预算与无进展判定，以及 retry/repair/redecide/finish 的条件回边和对应函数。
+  - 能力 Frame：按三个目标契约列出允许能力（social_post、photo_comparison、topic_discovery），将能力名连接到其实现模块；只记录能力等级、输入/观察输出和关键外部依赖，不画能力内部算法。
+  - 每个节点使用统一的三行信息：职责、`文件:方法`、关键输入/输出；每条条件边使用简短的程序判定文字。源码定位以 `agent/cli/photo_agent.py`、`agent/internal/runtime/{graph,state,registry,guardrail,completion}.py` 及 `capabilities/` 为准，图的页角记录代码基线日期/commit（由执行时读取）。
+- **分析**：推荐「一画板三层 Frame」：既能从全局流向 Runtime 回环，再追到能力实现，又可在 Excalidraw 中移动、批注和逐层阅读。单一巨图会使单步五分支和 Runtime 回环交叉，失去导览价值；拆成独立多文件则会削弱路径间的跳转关系。概念总览最多约 12 个主节点，Runtime 单独占一屏，保证信息密度可控。
+- **工具决策**：优先采用 Excalidraw 官方 MCP App（远程地址 `https://mcp.excalidraw.com`），前提是所用客户端支持远程 MCP 与 MCP Apps；它由 Excalidraw 官方仓库维护，适合交互编辑。若当前客户端无法承载 MCP App 或必须让 Agent 将 `.excalidraw` 文件稳定写入仓库，再评估本地、文件导出型第三方 MCP；不同时安装多个同类 MCP，也不额外引入 Skill。
+- **任务列表**：
+  - AD1-1：确认画板层级和交付位置，建立从入口到 Runtime/能力的代码证据清单。
+  - AD1-2：生成并校对 Excalidraw 三 Frame 画板，导出可编辑 `.excalidraw` 源文件及便于预览的 SVG/PNG。
+  - AD1-3：以关键代码和测试回读核对所有节点、回边、文件和方法名；在图中写入代码基线信息。
+- **交付与验证**：已生成 [可编辑画板](diagrams/agent-execution-code-guide.excalidraw)、[SVG](diagrams/agent-execution-code-guide.svg) 与 [PNG](diagrams/agent-execution-code-guide.png)。代码基线为 `42894c7`（2026-09-07）；已对入口、路由图、Runtime 条件边、三类目标能力和对应测试回读核对。画板 JSON 结构校验通过，PNG 已以 `3120×1981` 浏览器渲染并人工回读。
+- **验收**：
+  - [x] 不看源代码时，可从总览识别五类单步路由、Runtime 和未支持目标的汇合与终态。
+  - [x] Runtime 图准确表达唯一 LLM 决策点、四种回环/收尾判断和 TaskState/Observation 的职责。
+  - [x] 每个主节点与关键条件边都能定位到实际文件和方法；不存在概念图与代码不一致的连线。
+  - [x] 用户可在 Excalidraw 中打开、编辑和导出该画板。
 
 ### BQ3 未鉴权服务暴露任意 SQL 查询
 

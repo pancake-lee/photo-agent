@@ -2,189 +2,111 @@
 
 [English](./README.en.md) | 中文
 
-> 用自然语言搜索你的照片库 —— “猫猫在厕所门口张大嘴巴” 就能找到那张照片。
+> 让照片库能够被自然语言理解、检索与再创作的本地优先 AI 摄影助手。
+>
+> 例如，输入「去年用 85mm 拍的、有氛围感的猫」，即可从视觉语义与 EXIF 元数据中找回对应照片。
 
-![猫猫在厕所门口张大嘴巴](./docs/capture/v1.0.6-p1.png)
-![图片管理](./docs/capture/v1.0.6-p2.png)
-![黄金用例](./docs/capture/v1.0.6-p3.png)
-![组图发现](./docs/capture/v1.0.6-p4.png)
+<p align="center">
+  <img src="./docs/capture/v1.0.6-p1.png" alt="自然语言检索" width="48%" />
+  <img src="./docs/capture/v1.0.6-p2.png" alt="照片管理" width="48%" />
+</p>
 
----
+## 项目亮点
 
-## 🎯 谁适合用这个项目？
+- **混合检索**：LangGraph 将请求路由至 Text-to-SQL、向量检索或两者交集，在精确筛选与视觉语义之间取得平衡。
+- **多模态照片索引**：导入时提取 EXIF，VLM 生成自然语言描述与场景、光线、构图等结构化属性，再写入 SQLite 和 ChromaDB。
+- **可控 Agent Runtime**：面向「选片并生成文案」等开放目标，提供显式状态、能力注册、确定性护栏、重试预算、无进展检测与局部续跑。
+- **摄影工作流**：覆盖照片管理、连拍分组、主题聚类、时间线、选题建议、图文草稿与 Windows 导入客户端。
+- **可评估、可追踪**：以黄金用例持续衡量 P@10、R@10、MRR；请求通过 trace_id 串联路由、工具调用、耗时、Token 与成本。
+- **边界清晰的三栈协作**：Go 负责数据与多媒体服务，Python 承担 AI 编排，Vue 提供交互界面，服务间通过 HTTP/OpenAPI 解耦。
 
-- **摄影爱好者**：想用自然语言检索自己的照片库 → 看「快速开始」直接部署
-- **AI 开发者**：想学习 LangGraph + ChromaDB + Go 三栈实践 → 看「架构概览」和 `docs/tech.md`
+## 架构
 
----
+```mermaid
+flowchart TD
+    Web["Vue 3 + TypeScript<br/>照片管理与 AI 交互"]
+    Go["Go / Kratos<br/>元数据、文件、VLM、Embedding 代理"]
+    Agent["Python / FastAPI<br/>LangGraph Agent 与检索服务"]
+    DB["SQLite<br/>照片与 EXIF 属性"]
+    Vector["ChromaDB<br/>视觉描述向量索引"]
+    Client["Wails Windows Client<br/>本地照片导入"]
 
-## 🚀 快速开始
+    Web --> Go
+    Web --> Agent
+    Client --> Go
+    Go --> DB
+    Go --> Agent
+    Agent --> Go
+    Agent --> Vector
+```
 
-### 0. 环境要求
+### 技术实现
 
-- Go 1.23+
-- Python 3.12（推荐用 `uv` 管理）
-- Node.js + pnpm
+- **前端**：Vue 3、TypeScript、Vite、Naive UI、Vitest。提供流式对话、照片分段浏览、筛选、任务队列与结果工作台。
+- **AI 服务**：Python、FastAPI、LangChain、LangGraph、ChromaDB、HDBSCAN、UMAP。支持 SQL / RAG / Combined 路由、Function Calling 和多轮上下文压缩。
+- **业务后端**：Go、Kratos v2、GORM、SQLite、OpenAPI/Protobuf、ImageMagick。负责照片 CRUD、文件传输、EXIF、缩略图、VLM 描述、只读 SQL 安全校验与 Embedding 兼容代理。
+- **桌面导入**：Wails 2 Windows 客户端，支持照片扫描、导入进度与单实例控制。
+- **工程保障**：前后端单元测试、检索黄金用例、可回放 Trace、统一配置与 `make start / stop / status` 生命周期管理。
 
-### 1. 克隆与配置
+## 核心流程
+
+```text
+照片导入 → EXIF / 缩略图 → VLM 描述与属性提取 → Embedding → ChromaDB
+自然语言问题 → Agent 路由 → SQL 筛选 / 语义召回 / 结果交集 → 照片与回答
+开放创作目标 → 能力编排 → 护栏与质量检查 → 选片结果与文案草稿
+```
+
+## 功能一览
+
+- 自然语言检索：支持时间、器材等结构化条件与画面语义的组合查询。
+- 智能相册：基于向量聚类自动发现主题，并生成可读的主题名称。
+- 摄影档案问答：围绕历史作品、拍摄偏好与时间线进行多轮追问。
+- 选片与图文工坊：按目标筛选候选照片，生成发布标题、文案和提示词草稿。
+- 连拍与导入：对连拍序列分组，并通过 Windows 客户端管理本地导入流程。
+
+<p align="center">
+  <img src="./docs/capture/v1.0.6-p3.png" alt="检索质量评估" width="48%" />
+  <img src="./docs/capture/v1.0.6-p4.png" alt="主题聚类浏览" width="48%" />
+</p>
+
+## 快速开始
+
+环境要求：Go 1.24+、Python 3.12+、Node.js 与 pnpm，以及 ImageMagick。
 
 ```bash
 git clone https://github.com/yourname/photo-agent.git
 cd photo-agent
-cp ./configs/config.yaml .local/my-config.yaml
-# 编辑 .local/my-config.yaml，填入你的 API Key 和照片路径
-```
+cp configs/config.yaml .local/my-config.yaml
+# 编辑 .local/my-config.yaml，填入模型 API Key 与照片路径
 
-### 2. 启动服务
-
-```bash
-# 一键启动三个服务（Go 后端 + Python Agent + Web 前端）
 make start
-# 停止：make stop
 ```
 
-也可手动分三个终端启动：
+访问 `http://localhost:10006`。使用 `make status` 查看健康状态，使用 `make stop` 停止全部服务。
 
-```bash
-# 终端 1: Go 后端
-cd backend && make build && ./bin/server -c ../.local/my-config.yaml
+完整的环境准备与手动启动方式见 [部署指南](docs/deploy.md)。
 
-# 终端 2: Python AI Agent
-cd agent && source .venv/bin/activate && python chain/photo_agent.py -c ../.local/my-config.yaml --serve
+## 项目结构
 
-# 终端 3: Web 前端
-cd web && pnpm dev
-```
-
-访问 `http://localhost:10006` 开始使用。
-
-> 所有服务端口统一在 `config.yaml` 中配置，无需硬编码。
-
----
-
-## 🧭 架构概览
-
-```mermaid
-flowchart TD
-    A["Web 前端<br>（Vue 3 + NaiveUI）"]
-    A --> B["对话 / 聚类<br>（Python API）"]
-    A --> C["语义检索（RAG）<br>（ChromaDB）"]
-    A --> D["结构化查询<br>（Go API）"]
-    B --> E["LangGraph 路由<br>SQL / RAG / Combined"]
-    C --> E
-    D --> E
-```
-
-**核心决策**：用户查询由 LangGraph 自动判断走哪条路——
-
-- **SQL 分支**：统计、EXIF 筛选（"2023 年用 50mm 拍了多少张"）
-- **RAG 分支**：语义描述（"有氛围感的海边日落"）
-- **Combined 分支**：复合条件（"去年拍的猫片，用 85mm 镜头"）
-
-详细架构见 [`docs/tech.md`](docs/tech.md)。
-
----
-
-## ✨ 核心能力
-
-### 1. 自然语言检索
-
-- **语义检索**：用 VLM 生成的视觉描述做向量匹配，理解“雪山日照金山”这类模糊描述
-- **结构化查询**：EXIF 元数据（焦距、ISO、镜头、时间）通过 Text-to-SQL 精确筛选
-- **混合路由**：LangGraph 自动判断用 SQL 还是 RAG，或两者组合
-
-### 2. 智能相册（无监督聚类）
-
-- HDBSCAN + UMAP 降维，自动发现照片库中的主题组合
-- LLM 为每个聚类生成主题名（如“城市蓝调时刻”“云南雪山系列”）
-- Web 界面按视觉连贯性排序浏览
-
-### 3. 摄影档案问答
-
-- 多轮对话，支持追问和条件细化
-- 基于历史作品分析风格特点、构图偏好
-- 时间线自动匹配，关联旅游等活动标签
-
-### 4. 检索质量评估
-
-- 内置”黄金用例”测试集，Web 页面实时运行评估并展示 P@10 / R@10 / MRR
-- 评估基线数据见 `docs/eval/baseline.md`
-
----
-
-## 🏗️ 三栈架构，各取所长
-
-- **Web 前端**：Vue 3 + NaiveUI — 照片管理、对话界面、聚类浏览、黄金用例管理
-- **Python 推理层**：FastAPI + LangChain/LangGraph + ChromaDB — Agent 编排、向量检索、Text-to-SQL、聚类分析
-- **Go 后端**：Kratos v2 + GORM + SQLite — 照片元数据管理、文件服务、VLM 预处理、Embedding 代理
-
-**为什么不用单一框架？**
-
-- **Go**：稳，处理并发和元数据快，你熟悉
-- **Python**：AI 生态最丰富，LangGraph 能精细控制路由
-- **各层可独立替换**，不会因为换前端框架就重写后端
-
----
-
-## 📁 项目结构
-
-```
+```text
 photo-agent/
-├── backend/              # Go 业务后端（HTTP 入口在 internal/defaultService）
-├── agent/                # Python AI 服务层
-│   ├── chain/            # LangGraph 编排 + FastAPI 服务
-│   ├── vectorstore/      # ChromaDB 封装
-│   ├── tools/            # OpenAPI 工具解析与执行
-│   └── scripts/          # 索引脚本、评估脚本
-├── web/                  # Vue 3 前端
-├── client/               # Wails Windows 导入客户端
-├── tools/                # 跨模块开发与验证工具（按语言分目录）
-├── configs/              # 配置模板
-├── data/                 # 运行时数据（照片/SQLite/ChromaDB）
-├── dify/                 # 早期 Dify 验证，保留参考（非核心方案）
-└── docs/                 # 项目文档
+├── backend/     # Go API、照片与元数据服务
+├── agent/       # Python Agent、检索、评估与追踪
+├── web/         # Vue 3 Web 应用
+├── client/      # Wails Windows 导入客户端
+├── configs/     # 配置模板与模型提示词
+├── tools/       # 跨模块验证工具
+└── docs/        # 产品、架构、评估与部署文档
 ```
 
----
+## 延伸阅读
 
-## 📚 文档索引
+- [技术架构与数据流](docs/tech.md)
+- [产品能力与验收标准](docs/prd.md)
+- [检索评估基线](docs/eval/baseline.md)
+- [部署指南](docs/deploy.md)
+- [开发与验证工具](tools/README.md)
 
-- [docs/prd.md](docs/prd.md) — 产品需求、用户故事、验收标准
-- [docs/tech.md](docs/tech.md) — 架构设计、API 契约、数据模型
-- [docs/backlog.md](docs/backlog.md) — 需求池、演进路线图、拒绝清单
-- [docs/terminology.md](docs/terminology.md) — 项目专用名词和中英文命名
-- [docs/deploy.md](docs/deploy.md) — 部署指南
-- [docs/harness.md](docs/harness.md) — Harness 工程架构概览
-- [docs/note.md](docs/note.md) — 决策备忘、否决记录、踩坑记录
-- [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — AI 工作模式完整流程
-- [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — 各语言编码规范
-- [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — 文档审阅规范
-- [docs/eval/baseline.md](docs/eval/baseline.md) — 评估基线指标
-- [tools/README.md](tools/README.md) — 跨模块开发与验证工具说明
-
----
-
-## 📊 当前状态
-
-- ✅ 自然语言检索（RAG + SQL）
-- ✅ 聚类相册（HDBSCAN + UMAP）
-- ✅ 选题建议（AI 主动推送 + 审阅打分）
-- ✅ 图文工坊（提示词生成 + 草稿润色）
-- ✅ 连拍分组（精细/模糊两档）
-- ✅ 导入工作流（Windows 客户端）
-- ✅ 黄金用例评估
-- ✅ Web 交互界面
-- ✅ Text-to-SQL 混合路由
-- 🚧 多轮对话上下文感知（指代消解、条件追加）
-
----
-
-## 🤝 贡献
-
-欢迎 Issue / PR。请先阅读 [docs/backlog.md](docs/backlog.md) 了解当前优先级，避免重复工作。
-
----
-
-## 📄 License
+## License
 
 MIT
