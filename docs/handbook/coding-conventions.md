@@ -1,8 +1,7 @@
 # 编码规范
 
-<!-- harness:begin src=pancake/30-Tools/harness/common/handbook-coding-conventions.md 公共骨架：由 pancake 统一同步，勿在此修改；改动请编辑 pancake 后运行 sync.sh push -->
+<!-- harness:begin -->
 > 按语言/模块分节。AI 在对应目录下工作时读取相关节。
-> 公共骨架块由 pancake/30-Tools/harness 统一同步（以 harness marker 标记），勿在 marker 内直接修改。
 
 ---
 
@@ -58,10 +57,42 @@
 ### 格式化
 
 - 逻辑修改后统一用 `gofmt -w <file>` 处理，不纠结缩进对齐
+- 手写代码单行原则上不超过 80 个字符；函数签名、调用参数、结构体字面量和长字符串按语义换行，不为压缩行数牺牲扫读性
+- 函数签名超过 80 个字符时，按参数列表长度选择换行方式：
+  - 参数列表本身可在 80 个字符内完整展示时，参数保持在同一行，在最后一个参数后加逗号再换行，不提前拆成一参数一行
+  - 参数列表本身也超过 80 个字符时，将每个参数独立放在一行
+- 函数调用的右括号后没有返回值声明，不使用“参数保持同一行、右括号单独一行”的形式：
+  - 完整调用不超过 80 个字符时，所有参数与右括号保持在同一行
+  - 完整调用超过 80 个字符时，从左括号后换行，每个参数独立一行，最后再单独写右括号
+
+```go
+func readResult(ctx context.Context, path string,
+) (Result, error) {
+	// 参数列表本身未超过 80 个字符。
+}
+
+func runStage(
+	ctx context.Context,
+	config Config,
+	preparer Preparer,
+) error {
+	// 参数列表本身超过 80 个字符。
+}
+
+result, err := readResult(ctx, path)
+
+result, err = runStage(
+	ctx,
+	config,
+	preparer,
+)
+```
+
+- 一行只表达一个主要行为。赋值、函数调用与错误判断分行编写，不使用 `if err := run(); err != nil` 或 `if err = run(); err != nil` 形式
+- 函数内不同阶段之间留一个空行，例如参数校验、资源准备、核心执行、结果处理与清理，让每个步骤可以独立扫读
 
 ### 代码组织
 
-- 避免 `if` 中使用 `;`（如 `if d, ok := data["k"]; ok`），易造成长代码
 - 入口函数放在 `internal/<module>/<module>.go`，而非 `cmd/`
 - 非复杂场景优先用基础类型组合，仅在复用明显或封装语义明确时抽象 `type`
 - **接口代理模式**：基础类通过接口代理支持子类覆盖，子类初始化后调用 `BindProvider(self)`
@@ -74,9 +105,9 @@
 
 ### Go 工具链
 
-- Always set `GOTOOLCHAIN=local` before running any `go` command
+- 沿用当前的 `GOTOOLCHAIN` 配置，不在每条 `go` 命令前重复设置，也不改为指定版本或启用自动下载
 - 当 `go.mod` 的 `go` directive 高于系统 Go 版本时，不要依赖 auto-download，修复 go.mod directive 或更新系统 Go
-<!-- harness:end src=pancake/30-Tools/harness/common/handbook-coding-conventions.md -->
+<!-- harness:end -->
 
 ---
 

@@ -1,9 +1,8 @@
 # 文档审阅规范
 
-<!-- harness:begin src=pancake/30-Tools/harness/common/handbook-doc-review.md 公共骨架：由 pancake 统一同步，勿在此修改；改动请编辑 pancake 后运行 sync.sh push -->
+<!-- harness:begin -->
 > 定期执行文档治理，确保各文档各司其职、不冗余、不越界、与代码实现一致。
 > 用户按需触发，每次自行判断采用第一版或第二版。
-> 公共骨架块由 pancake/30-Tools/harness 统一同步（以 harness marker 标记），勿在 marker 内直接修改。
 
 ---
 
@@ -80,7 +79,7 @@
 
 - `.claude/skills/*`：Claude Code 技能文件，独立维护
 - 其余项目自定的非项目文档，在下方「本项目补充」节中列出
-<!-- harness:end src=pancake/30-Tools/harness/common/handbook-doc-review.md -->
+<!-- harness:end -->
 
 ---
 
