@@ -1,0 +1,2627 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 4,
+      "type": "row",
+      "title": "Health / 服务健康",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Unavailable",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Available",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none",
+          "noValue": "No data",
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 85,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 24,
+        "h": 5
+      },
+      "id": 5,
+      "maxDataPoints": 2000,
+      "options": {
+        "mergeValues": true,
+        "showValue": "never",
+        "alignValue": "left",
+        "rowHeight": 0.7,
+        "perPage": 0,
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "up{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / metrics scrape",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "pgo_dependency_up{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / {{dependency}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Service status history",
+      "type": "state-timeline",
+      "description": "所选实例的指标抓取及已初始化依赖历史状态，每个组件一行。up 表示抓取成功；database 表示默认 SQLite 连接最近一次检查可达，不代表 Python Agent、VLM 或 Embedding 业务可用。依赖在诊断服务启动后及每 15 秒异步检查；缺失数据留空，短时掉线可能未记录。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Requests / 请求 RED",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 8,
+        "h": 8
+      },
+      "id": 1,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))",
+          "legendFormat": "requests/s",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Request rate",
+      "type": "timeseries",
+      "description": "所选实例和操作的平均请求速率，使用 Grafana 自适应速率窗口；仅覆盖经过现有 Kratos 中间件并正常返回的 HTTP/gRPC 调用，手动注册且未调用中间件的路由不计入。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 7,
+        "w": 8,
+        "h": 8
+      },
+      "id": 2,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(rate(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\",result=\"error\"}[$__rate_interval])) or (sum(rate(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])) * 0)) / (sum(rate(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "error rate",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Error rate",
+      "type": "timeseries",
+      "description": "按中间件返回 Go error 分类，不是 HTTP 状态码错误率。分母使用实际速率，低于 1 RPS 仍为真实比例；有请求但无 error 序列显示 0，无流量时无数据。手动 HTTP 路由及 panic 恢复路径不保证计入。",
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 7,
+        "w": 8,
+        "h": 8
+      },
+      "id": 3,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(pgo_http_request_duration_seconds_bucket{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "p95 latency",
+      "type": "timeseries",
+      "description": "所选请求在自适应速率窗口内的桶估算 P95，单位秒，仅反映既有中间件覆盖的 HTTP/gRPC 处理耗时；无流量时可无数据。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "id": 9,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (instance, operation, result) (rate(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{instance}} / {{operation}} / {{result}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Request rate by operation",
+      "type": "timeseries",
+      "description": "按实例、操作和处理结果拆分，便于区分正常与错误调用。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "id": 10,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, instance, operation) (rate(pgo_http_request_duration_seconds_bucket{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${operation:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{instance}} / {{operation}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Request p95 by operation",
+      "type": "timeseries",
+      "description": "按实例与操作估算 P95，空闲且没有新观测时不显示有效分位数。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Database / SQLite 与连接池",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "id": 12,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (instance, operation, result) (rate(pgo_db_query_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${db_operation:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{instance}} / {{operation}} / {{result}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Database operation rate",
+      "type": "timeseries",
+      "description": "pgo 默认数据库连接经 GORM 回调观测的操作速率，按实例、操作和结果分组；独立 SQL 连接不在此统计内。使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "id": 14,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(sum by (instance, operation) (rate(pgo_db_query_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${db_operation:regex}\",result=\"error\"}[$__rate_interval])) or on (instance, operation) (sum by (instance, operation) (rate(pgo_db_query_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${db_operation:regex}\"}[$__rate_interval])) * 0)) / (sum by (instance, operation) (rate(pgo_db_query_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${db_operation:regex}\"}[$__rate_interval])) > 0)",
+          "legendFormat": "{{instance}} / {{operation}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Database error rate",
+      "type": "timeseries",
+      "description": "按 db.Error 分类。有正常操作但无错误序列时为 0；没有操作流量或指标时无有效比例。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "id": 13,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, instance, operation) (rate(pgo_db_query_duration_seconds_bucket{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",operation=~\"${db_operation:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{instance}} / {{operation}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Database p95 latency",
+      "type": "timeseries",
+      "description": "GORM 操作回调耗时 P95，包括客户端处理，不是数据库纯 SQL 执行耗时。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "id": 15,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "pgo_db_connections_open{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / open",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "pgo_db_connections_in_use{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / in_use",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "pgo_db_connections_idle{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / idle",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Database connections",
+      "type": "timeseries",
+      "description": "默认数据库 sql.DB.Stats 的 open/in_use/idle；open 包含使用和空闲连接。不是数据库服务器全局连接数，不受数据库操作筛选影响。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "id": 16,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pgo_db_connection_wait_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}[$__rate_interval])",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Connection wait rate",
+      "type": "timeseries",
+      "description": "等待连接的次数每秒增量，反映连接池压力；不受数据库操作筛选影响。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "id": 17,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pgo_db_connection_wait_duration_seconds_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}[$__rate_interval]) / (rate(pgo_db_connection_wait_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}[$__rate_interval]) > 0)",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Average connection wait",
+      "type": "timeseries",
+      "description": "最近采样间隔的累计等待时间增量除以等待次数增量；无等待时无有效均值，非等待队列长度。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "id": 18,
+      "type": "row",
+      "title": "Process / 进程资源",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 12,
+        "h": 8
+      },
+      "id": 19,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "rate(process_cpu_seconds_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}[$__rate_interval])",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Process CPU",
+      "type": "timeseries",
+      "description": "CPU 秒/秒，1 约等于一个逻辑 CPU 核，允许大于 1；未按主机或容器 CPU 配额归一化。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 49,
+        "w": 12,
+        "h": 8
+      },
+      "id": 20,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "process_resident_memory_bytes{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / RSS",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Process memory",
+      "type": "timeseries",
+      "description": "进程 RSS；virtual memory 由基础采集器自动暴露，默认隐藏。RSS 与 Go heap 的统计口径不同。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 12,
+        "h": 8
+      },
+      "id": 21,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "process_open_fds{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / open",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "process_max_fds{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / limit",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Open file descriptors",
+      "type": "timeseries",
+      "description": "进程文件描述符使用量和上限，依赖平台支持。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 57,
+        "w": 12,
+        "h": 8
+      },
+      "id": 22,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "process_open_fds{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"} / (process_max_fds{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"} > 0)",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "File descriptor usage",
+      "type": "timeseries",
+      "description": "进程文件描述符使用量 / 上限，依赖平台支持；缺少采集值时显示 No data。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "Go runtime / Go 运行时",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 66,
+        "w": 12,
+        "h": 8
+      },
+      "id": 24,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "go_memstats_heap_alloc_bytes{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / alloc",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "go_memstats_heap_sys_bytes{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / sys",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Go heap memory",
+      "type": "timeseries",
+      "description": "Go 已分配 heap 与向系统申请的 heap；heap_inuse 由基础采集器自动暴露，默认隐藏。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 66,
+        "w": 12,
+        "h": 8
+      },
+      "id": 25,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "rate(go_memstats_alloc_bytes_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}[$__rate_interval])",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Go allocation rate",
+      "type": "timeseries",
+      "description": "累计分配字节的每秒增量，包含之后已回收的分配，不是存活堆增长速度。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 74,
+        "w": 12,
+        "h": 8
+      },
+      "id": 26,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "go_memstats_heap_objects{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Go heap objects",
+      "type": "timeseries",
+      "description": "当前堆对象数；分配来源请查看 Pyroscope heap 或手动 pprof。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 74,
+        "w": 12,
+        "h": 8
+      },
+      "id": 27,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "go_goroutines{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}",
+          "legendFormat": "{{instance}} / goroutines",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Goroutines",
+      "type": "timeseries",
+      "description": "当前 goroutine 数；threads 由基础采集器自动暴露，默认隐藏。持续增长时结合画像确认泄漏或阻塞堆积。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 82,
+        "w": 12,
+        "h": 8
+      },
+      "id": 28,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "go_gc_duration_seconds{job=\"photo-agent-backend\",instance=~\"${instance:regex}\",quantile=~\"0.5|0.75|1\"}",
+          "legendFormat": "{{instance}} / q={{quantile}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "GC pause quantiles",
+      "type": "timeseries",
+      "description": "默认 Go collector 的 GC 暂停时间 summary，按实例展示 P50/P75/最大值。不是当前仪表盘时间范围的 histogram 分位数，不跨实例求平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 82,
+        "w": 12,
+        "h": 8
+      },
+      "id": 29,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "rate(go_gc_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}[$__rate_interval])",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "GC cycle rate",
+      "type": "timeseries",
+      "description": "GC 暂停观测次数的每秒增量，用于观察 GC 频率。 速率使用 Grafana $__rate_interval 窗口平均。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 90,
+        "w": 24,
+        "h": 8
+      },
+      "id": 30,
+      "maxDataPoints": 2000,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.11",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "time() - (go_memstats_last_gc_time_seconds{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"} > 0)",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "title": "Time since last GC",
+      "type": "timeseries",
+      "description": "距上次 GC 的秒数；从未发生 GC 或缺少指标时无数据。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "15s"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [
+    "photo-agent",
+    "backend",
+    "pgo"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "options": [],
+        "hide": 0
+      },
+      {
+        "name": "instance",
+        "label": "Instance",
+        "description": "所有面板均使用该实例筛选。",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(up{job=\"photo-agent-backend\"}, instance)",
+        "query": {
+          "query": "label_values(up{job=\"photo-agent-backend\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "operation",
+        "label": "Request operation",
+        "description": "只影响请求面板，仅列出既有 Kratos 中间件实际记录的 operation；不覆盖未接入中间件的手动 HTTP 路由。",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}, operation)",
+        "query": {
+          "query": "label_values(pgo_http_requests_total{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}, operation)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "db_operation",
+        "label": "DB operation",
+        "description": "只影响数据库操作面板，不影响连接池或运行时。",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(pgo_db_query_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}, operation)",
+        "query": {
+          "query": "label_values(pgo_db_query_duration_seconds_count{job=\"photo-agent-backend\",instance=~\"${instance:regex}\"}, operation)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Photo Agent Backend",
+  "uid": "photo-agent-backend",
+  "version": 1,
+  "refresh": "15s",
+  "description": "Photo Agent Go 后端 defaultService：复用 pgo 指标，按实例及操作筛选服务健康、请求 RED、SQLite、进程与 Go runtime。手动 HTTP 路由未纳入请求埋点，详见 docs/deploy.md。"
+}

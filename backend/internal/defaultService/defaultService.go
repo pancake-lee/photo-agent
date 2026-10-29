@@ -47,7 +47,7 @@ func main() {
 	var storageSvr service.StorageServer
 	var draftSvr service.DraftServer
 
-	papp.SetIgnoreAuth() // 开发阶段，忽略 auth 验证
+	papp.SetIgnoreAuth() // 开发阶段，个人内网使用，忽略 auth 验证
 	papp.RunKratosApp(
 		&defaultSvr,
 		&photoSvr,

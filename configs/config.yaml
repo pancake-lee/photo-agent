@@ -12,6 +12,15 @@ Http:
   Addr: "0.0.0.0:10004"
   Timeout: 1000
 
+# 独立诊断端口只供容器网络内的 Prometheus 与运维 CLI 使用。
+# Pprof 默认关闭，需要时显式改为 true，且不要将该端口暴露到公网。
+Diagnostics:
+  Enabled: true
+  Addr: "0.0.0.0:10007"
+  Pprof: true
+  BlockProfileRate: 1
+  MutexProfileFraction: 1
+
 Sqlite:
   Path: "./data/backend/sqlite/photo_agent.db"
 

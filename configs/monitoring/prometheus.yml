@@ -1,0 +1,10 @@
+# 将此 job 合并到已有 prometheus.yml 的 scrape_configs 下。
+# backend-host 替换为 Prometheus 所在网络可访问的 Go 后端主机名或 IP。
+# 端口须与后端 Diagnostics.Addr 一致，不是业务 HTTP 端口 10004。
+scrape_configs:
+  - job_name: photo-agent-backend
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend-host:19090"]

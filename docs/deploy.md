@@ -118,6 +118,51 @@ cd web && pnpm dev
 
 ---
 
+## Go 后端监控
+
+### 1. 启用诊断端口
+
+在 `.local/my-config.yaml` 中配置：
+
+```yaml
+Diagnostics:
+  Enabled: true
+  Addr: "0.0.0.0:19090"
+  Pprof: false
+```
+
+在 `backend/` 下重新编译并重启 Go 后端。向监控网络开放诊断端口。
+
+### 2. 添加 Prometheus job
+
+将 [抓取配置](../configs/monitoring/prometheus.yml) 中的 job 合并到现有 `scrape_configs`，target 填写 Prometheus 可达的后端地址，保留 job 名 `photo-agent-backend`。
+
+从 Prometheus 所在网络验证：
+
+```bash
+curl -fsS http://<target地址>/metrics
+curl -fsS http://<target地址>/healthz
+```
+
+重载 Prometheus 配置，在 Targets 中确认 `photo-agent-backend` 为 `UP`。
+
+### 3. 导入 Grafana dashboard
+
+在 Grafana 的 Dashboards → New → Import 上传 [photo-agent-backend.json](../configs/monitoring/grafana/photo-agent-backend.json)，在顶部 `Prometheus` 下拉框选择数据源。
+
+可按 Instance、Request operation、DB operation 筛选服务健康、请求、数据库、进程和 Go runtime 指标。
+
+### 4. 确认数据
+
+确认健康、连接池和 Go runtime 面板有数据。成功调用一次生成接口（如照片列表），等待至少两次抓取，确认请求面板出现对应 operation。
+
+- **请求**：仅覆盖现有 Kratos 中间件处理并正常返回的调用；上传、图片读取等手动路由及 panic 恢复路径不保证计入。错误率按 Go `error` 分类。
+- **数据库**：覆盖 pgo 默认连接的 GORM 操作与连接池。
+- **无流量**：错误率和 P95 可无数据。
+- **健康**：展示抓取与数据库依赖状态，不代表 Agent、VLM 或 Embedding 可用。
+
+---
+
 ## 常见问题
 
 ### Q: 新增照片后如何处理？
