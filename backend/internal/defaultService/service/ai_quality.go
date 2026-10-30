@@ -26,7 +26,7 @@ const (
 // （故障彩条 / 故障失真 / 异常显示画面 / 花屏 / glitch / corrupted），
 // 命中任一即待复核；发现新措辞时在此补充。
 var reviewMarkers = []string{
-	"故障画面", "故障彩条", "故障失真", "测试图",
+	"故障画面", "故障彩条", "故障失真", "测试图", "彩条纹理",
 	"异常显示画面", "显示异常", "花屏",
 	"color bars", "test pattern", "glitch", "corrupted",
 }

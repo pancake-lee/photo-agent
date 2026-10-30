@@ -569,6 +569,7 @@ func parseVlmAttrs(photoIdentifier, description string) (objects, colors, scene,
 	return
 }
 
+// 对vlm结果解析，获取json代码块中的内容，输出json字符串
 func extractJSONBlock(text string) string {
 	start := strings.Index(text, "```json")
 	if start == -1 {

@@ -12,6 +12,7 @@
 | Done     | 可观测性   | OBS2  | V5 优化缺少请求级成本、结果关联证据链       | 8.4  |
 | Done     | 文档可视化 | AD1   | Agent 执行链路的可编辑代码导览图            |     |
 | Done   | 可观测性   | OBS3 | Go 后端 Grafana 与 Prometheus 接入配置    |      |
+| Done   | 资产质量闭环 | AQL2-3 | VLM 坏图描述「彩条纹理」审核漏判修复      |      |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 
 > v1.0.19 已归档：AR4-1–AR4-10，以及由 AR4 系列取代关闭的 AR16、AR17，详见 [v1.0.19](archive/v1.0.19.md)。
@@ -21,6 +22,16 @@
 > v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](archive/v1.0.15.md)。
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
 > 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design/2099-01-01-future-requirements.md)。
+
+### AQL2-3 VLM 坏图描述「彩条纹理」审核漏判修复
+
+- **状态**：Done
+- **背景**：生成山西第三天图文时，文案混入「彩条纹路糊成色块」等异常内容。对应照片的 VLM 描述为「抽象分块图案，上为彩条纹理下为浅紫纯色块」，既有审核规则未覆盖「彩条纹理」，导致坏图描述漏判。
+- **方案**：沿用既有关键词审核机制，在 `backend/internal/defaultService/service/ai_quality.go` 的 `reviewMarkers` 中补充「彩条纹理」，让该描述命中待复核规则，复用图片管理的批量审查与重新生成流程。
+- **实施**：2026-10-30 用户手动完成修复；同时为 `extractJSONBlock` 补充用途注释。
+- **验收**：暂存代码已包含新增关键词，`validateVlmDescription` 会在描述包含该词时返回审核错误。按用户本轮说明「已修复」登记完成。
+- **验证记录**：AI 仅静态核对暂存差异与审核函数，未运行服务、调用真实 LLM 或修改业务数据。
+- **关联**：[人工维护记录](archive/handmake-record-1.md)、[资产质量闭环专题](design/2026-08-26-4-ai-asset-quality-loop-hub.md)；延续 AQL2-2 的坏图描述漏判修复。
 
 ### OBS3 Go 后端 Grafana 与 Prometheus 接入配置
 
