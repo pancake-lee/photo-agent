@@ -9,7 +9,7 @@
  *
  * 覆盖在视图内容区上（左侧菜单栏露出、可正常点击切换页面，
  * 切走即视为放弃选图），选完把结果写回 photoPickSession 由发起方读取。
- * 见 docs/design/2026-08-26-1-photo-pick-overlay.md。
+ * 见 docs/design-docs/2026-08-26-1-photo-pick-overlay.md。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { NBadge, NButton, NDatePicker, NIcon, NInput, NPopover, NSelect, NSpace, NTooltip } from 'naive-ui'

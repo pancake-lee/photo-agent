@@ -2,7 +2,7 @@
 //
 // 在仓库根目录运行：
 //
-//	GOTOOLCHAIN=local go run ./tools/go/main.go
+//	go run ./tools/go/main.go
 //
 // 加 --self-check 可同时验证核心纳入/排除规则。
 package main
@@ -34,11 +34,12 @@ var categoryList = []string{
 }
 
 var explicitCategoryMap = map[string]string{
-	"backend/Makefile":    categoryConfig,
-	"backend/go.mod":      categoryConfig,
-	"configs/config.yaml": categoryConfig,
-	"docs/deploy.md":      categoryDocs,
-	"docs/tech.md":        categoryDocs,
+	"backend/Makefile":                  categoryConfig,
+	"backend/go.mod":                    categoryConfig,
+	"configs/config.yaml":               categoryConfig,
+	"docs/deploy.md":                    categoryDocs,
+	"ARCHITECTURE.md":                   categoryDocs,
+	"docs/design-docs/system-design.md": categoryDocs,
 }
 
 var excludedDirList = []string{
@@ -190,7 +191,9 @@ func runSelfCheck() error {
 		{"backend/sql/abandon_code.sql", "", false},
 		{"backend/Makefile", categoryConfig, true},
 		{"configs/config.yaml", categoryConfig, true},
-		{"docs/tech.md", categoryDocs, true},
+		{"ARCHITECTURE.md", categoryDocs, true},
+		{"docs/design-docs/system-design.md", categoryDocs, true},
+		{"docs/tech.md", "", false},
 	}
 
 	for _, testCase := range testCaseList {
