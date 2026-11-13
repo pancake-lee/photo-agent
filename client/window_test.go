@@ -37,3 +37,20 @@ func TestLoadWindowStateCorrupt(t *testing.T) {
 		t.Fatal("内容损坏时应返回 ok=false")
 	}
 }
+
+func TestGetInitialWindowStateRejectsMinimisedBounds(t *testing.T) {
+	saved := WindowState{Width: 134, Height: 37, X: -32000, Y: -32000}
+	got, restore := getInitialWindowState(saved, 1920, 1080)
+	want := WindowState{Width: 1344, Height: 756}
+	if restore || got != want {
+		t.Fatalf("getInitialWindowState = (%+v, %t), want (%+v, false)", got, restore, want)
+	}
+}
+
+func TestGetInitialWindowStateRestoresNormalBounds(t *testing.T) {
+	saved := WindowState{Width: 1200, Height: 700, X: -1300, Y: 40, Maximised: true}
+	got, restore := getInitialWindowState(saved, 1920, 1080)
+	if !restore || got != saved {
+		t.Fatalf("getInitialWindowState = (%+v, %t), want (%+v, true)", got, restore, saved)
+	}
+}

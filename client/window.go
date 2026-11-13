@@ -30,6 +30,9 @@ type WindowState struct {
 const (
 	defaultWindowWidth  = 1280
 	defaultWindowHeight = 800
+	// 旧版本可能将最小化时的窗口矩形当作正常窗口保存。
+	minRestoredWindowWidth  = 320
+	minRestoredWindowHeight = 200
 )
 
 // 首次启动窗口占主屏的比例。
@@ -112,15 +115,8 @@ func applyInitialWindow(ctx context.Context) {
 		sw, sh = defaultWindowWidth, defaultWindowHeight
 	}
 
-	s, ok := loadWindowState()
-	// 尺寸有效且不超过主屏时恢复，否则按主屏 70% 初始化（覆盖分辨率变化、状态损坏等场景）。
-	restore := ok && s.Width > 0 && s.Height > 0 && s.Width <= sw && s.Height <= sh
-	if !restore {
-		s = WindowState{
-			Width:  int(float64(sw) * initialWindowRatio),
-			Height: int(float64(sh) * initialWindowRatio),
-		}
-	}
+	saved, _ := loadWindowState()
+	s, restore := getInitialWindowState(saved, sw, sh)
 
 	runtime.WindowSetSize(ctx, s.Width, s.Height)
 
@@ -140,6 +136,18 @@ func applyInitialWindow(ctx context.Context) {
 	runtime.WindowShow(ctx)
 }
 
+func getInitialWindowState(saved WindowState, sw, sh int) (WindowState, bool) {
+	if saved.Width >= minRestoredWindowWidth && saved.Width <= sw &&
+		saved.Height >= minRestoredWindowHeight && saved.Height <= sh {
+		return saved, true
+	}
+
+	return WindowState{
+		Width:  int(float64(sw) * initialWindowRatio),
+		Height: int(float64(sh) * initialWindowRatio),
+	}, false
+}
+
 // restorePosition 将窗口恢复到绝对屏幕坐标 (ax, ay)。
 //
 // Wails 的 WindowSetPosition 传入的是「相对当前显示器工作区左上角」的偏移，
@@ -155,6 +163,11 @@ func restorePosition(ctx context.Context, ax, ay int) {
 // saveWindowStateOnClose 在 OnBeforeClose 中调用，保存退出时的窗口状态。
 // 最大化时仅更新 Maximised 标记，保留上次记录的正常尺寸，便于取消最大化后正确恢复。
 func saveWindowStateOnClose(ctx context.Context) {
+	// 最小化时读取到的是当前矩形，保留上次记录的正常尺寸和位置。
+	if runtime.WindowIsMinimised(ctx) {
+		return
+	}
+
 	if runtime.WindowIsMaximised(ctx) {
 		if s, ok := loadWindowState(); ok {
 			s.Maximised = true
