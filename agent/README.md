@@ -20,7 +20,7 @@ Photo Agent 的 AI 侧服务：LangChain + Chroma + LangGraph，负责照片 RAG
 - `internal/` 内各功能包（chat / context / topics / posts / runtime / evals）之间不互相 import：跨功能复用的实现下沉到 `infra/`，跨功能的编排放在入口层
 - `infra/` 不 import `internal/` 与 `cli/`，只被依赖
 - 顶层只放工程管理文件（makefile / pyproject.toml / uv.lock / README）与测试、脚本、SDK、退役目录
-- import 风格遵循 Go 式限定调用（详见 `docs/styles/python.md` 导入规范）：`import internal.chat.photo_rag as photo_rag`，调用点 `photo_rag.answer_question(...)`；禁止 `from xxx import <符号>` 导入项目内模块
+- import 风格遵循 Go 式限定调用（详见 `docs/harness/styles/python.md` 导入规范）：`import internal.chat.photo_rag as photo_rag`，调用点 `photo_rag.answer_question(...)`；禁止 `from xxx import <符号>` 导入项目内模块
 
 ## 目录与文件职责
 

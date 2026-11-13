@@ -2,7 +2,7 @@
 
 > 评估对象：Agent Runtime V1 的框架形态（入口路由 + graph/state/completion/registry + capabilities）。
 > 触发问题：V1 解决了「山西第一天推文」，但用户感觉这套方案窄，不确定是「能力还不够多」还是「框架本身窄」。
-> 参照系：[architecture/00-07 演进线](../../design/architecture/00-photo-agent-architecture.md)、[Agent Runtime 专题中枢](../../design/2026-08-31-2-agent-runtime-hub.md)。
+> 参照系：[architecture/00-07 演进线](../../design-docs/architecture/00-photo-agent-architecture.md)、[Agent Runtime 专题中枢](../../design-docs/2026-08-31-2-agent-runtime-hub.md)。
 > 本次为代码与文档走查型评估，未起服务做运行时验证；Runtime 相关单测 98/98 通过作为基线证据。
 
 ## 结论
@@ -105,5 +105,5 @@ flowchart TD
 ## 执行证据
 
 - Runtime 定向单测 98/98 通过（`tests/test_runtime_{core,graph,state,progress,capabilities}.py`）。
-- 代码走查清单：`agent/internal/runtime/{graph,state,completion,registry,budget,progress}.py`、`capabilities/{__init__,retrieval,creation,resolve_trip,common,photo_tools}.py`、`agent/cli/photo_agent.py`（分类与路由）、`docs/design/architecture/00-07`、Runtime 专题中枢与 v1.0.16 归档。
+- 代码走查清单：`agent/internal/runtime/{graph,state,completion,registry,budget,progress}.py`、`capabilities/{__init__,retrieval,creation,resolve_trip,common,photo_tools}.py`、`agent/cli/photo_agent.py`（分类与路由）、`docs/design-docs/architecture/00-07`、Runtime 专题中枢与 v1.0.16 归档。
 - 未做运行时验证：本评估回答的是结构问题，行为表现已有 AR6/AR9/AR11 真实验收记录支撑，无需重复起服务。

@@ -2,7 +2,7 @@
 
 > 本文档记录当前评估基建的单元测试与三层回归 CLI 用例逻辑。
 > 指标基线见 [baseline.md](baseline.md)。
-> 实现入口：[agent/chain/evaluation.py](../../agent/chain/evaluation.py)、
+> 实现入口：[agent/internal/evals/evaluation.py](../../agent/internal/evals/evaluation.py)、
 > [agent/scripts/regression/standard.py](../../agent/scripts/regression/standard.py)。
 
 ## 0. 称呼约定
@@ -86,7 +86,7 @@
 
 ```bash
 cd agent
-.venv/bin/python scripts/eval_regression.py \
+.venv/bin/python scripts/regression/standard.py \
   -c ../.local/my-config.yaml \
   --level all
 ```

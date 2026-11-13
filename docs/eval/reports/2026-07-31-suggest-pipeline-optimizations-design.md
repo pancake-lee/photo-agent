@@ -2,7 +2,7 @@
 
 - **报告 ID**：eval-d7f3a1b2c4e5
 - **日期**：2026-07-31T18:00:00
-- **对象**：设计方案文档 docs/design/2026-07-31-2-suggest-pipeline-optimizations.md 质量评估
+- **对象**：设计方案文档 docs/design-docs/2026-07-31-2-suggest-pipeline-optimizations.md 质量评估
 
 ## 摘要
 

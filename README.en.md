@@ -14,7 +14,7 @@ English | [中文](./README.md)
 ## 🎯 Who Is This For?
 
 - **Photography Enthusiasts**: Want to search your photo library with natural language → Jump to [Quick Start](#-quick-start)
-- **AI Developers**: Want to learn LangGraph + ChromaDB + Go three-stack practice → See [Architecture Overview](#-architecture-overview) and [`docs/tech.md`](docs/tech.md)
+- **AI Developers**: Want to learn LangGraph + ChromaDB + Go three-stack practice → See [Architecture Overview](#-architecture-overview) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ---
 
@@ -81,7 +81,7 @@ flowchart TD
 - **RAG Branch**: Semantic descriptions ("atmospheric sunset by the sea")
 - **Combined Branch**: Composite conditions ("cat photos from last year with 85mm lens")
 
-See [`docs/tech.md`](docs/tech.md) for detailed architecture.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for detailed architecture.
 
 ---
 
@@ -149,15 +149,15 @@ photo-agent/
 
 ## 📚 Documentation Index
 
-- [docs/prd.md](docs/prd.md) — Product requirements, user stories
-- [docs/tech.md](docs/tech.md) — Architecture design, API contracts, data models
+- [docs/product-specs/photo-agent.md](docs/product-specs/photo-agent.md) — Product requirements, user stories
+- [docs/design-docs/system-design.md](docs/ARCHITECTURE.md) — Architecture design, API contracts, data models
 - [docs/backlog.md](docs/backlog.md) — Roadmap, rejected items
 - [docs/deploy.md](docs/deploy.md) — Deployment guide
-- [docs/harness.md](docs/harness.md) — Harness engineering architecture overview
+- [docs/harness/project-context.md](docs/harness/project-context.md) — Project conventions, document paths and verification entrypoints
 - [docs/note.md](docs/note.md) — Decision memos, lessons learned
-- [docs/handbook/work-modes.md](docs/handbook/work-modes.md) — AI work mode workflows
-- [docs/handbook/coding-conventions.md](docs/handbook/coding-conventions.md) — Coding conventions
-- [docs/handbook/doc-review.md](docs/handbook/doc-review.md) — Document review guidelines
+- [docs/harness/top/HARNESS.md](docs/harness/top/HARNESS.md) — AI work mode workflows
+- [docs/harness/styles/code.md](docs/harness/styles/code.md) — Coding conventions
+- [docs/harness/styles/doc-review.md](docs/harness/styles/doc-review.md) — Document review guidelines
 - [docs/eval/baseline.md](docs/eval/baseline.md) — Evaluation baseline metrics
 
 ---

@@ -2,7 +2,7 @@
 
 - **报告 ID**：eval-3.5-design-2026-07-28
 - **日期**：2026-07-28T02:10:00
-- **对象**：评估 docs/design/2026-07-28-1-suggest-persistence.md 设计方案与实现
+- **对象**：评估 docs/design-docs/2026-07-28-1-suggest-persistence.md 设计方案与实现
 
 ## 摘要
 

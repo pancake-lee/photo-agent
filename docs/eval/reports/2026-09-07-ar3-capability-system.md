@@ -1,7 +1,7 @@
 # AR3 Capability System 复评
 
 > 评估对象：AR3-1 至 AR3-5（目标契约、Capability 分层、跨期对比、主题发现 Workflow、组合基线）。
-> 参照：[V3 Capability System](../../design/architecture/05-photo-agent-v3-capability-system.md)、[任务详情](../../backlog.md)、[V3 基线](../baseline.md)。
+> 参照：[V3 Capability System](../../design-docs/architecture/05-photo-agent-v3-capability-system.md)、[任务详情](../../backlog.md)、[V3 基线](../baseline.md)。
 > 范围：代码与离线回归走查；未启动服务，未读取真实照片、未调用真实 LLM。
 
 ## 摘要

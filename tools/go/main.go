@@ -38,7 +38,7 @@ var explicitCategoryMap = map[string]string{
 	"backend/go.mod":                    categoryConfig,
 	"configs/config.yaml":               categoryConfig,
 	"docs/deploy.md":                    categoryDocs,
-	"ARCHITECTURE.md":                   categoryDocs,
+	"docs/ARCHITECTURE.md":              categoryDocs,
 	"docs/design-docs/system-design.md": categoryDocs,
 }
 
@@ -191,7 +191,7 @@ func runSelfCheck() error {
 		{"backend/sql/abandon_code.sql", "", false},
 		{"backend/Makefile", categoryConfig, true},
 		{"configs/config.yaml", categoryConfig, true},
-		{"ARCHITECTURE.md", categoryDocs, true},
+		{"docs/ARCHITECTURE.md", categoryDocs, true},
 		{"docs/design-docs/system-design.md", categoryDocs, true},
 		{"docs/tech.md", "", false},
 	}

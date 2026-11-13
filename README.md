@@ -101,8 +101,8 @@ photo-agent/
 
 ## 延伸阅读
 
-- [技术架构与数据流](docs/tech.md)
-- [产品能力与验收标准](docs/prd.md)
+- [技术架构与数据流](docs/ARCHITECTURE.md)
+- [产品能力与验收标准](docs/product-specs/photo-agent.md)
 - [检索评估基线](docs/eval/baseline.md)
 - [部署指南](docs/deploy.md)
 - [开发与验证工具](tools/README.md)

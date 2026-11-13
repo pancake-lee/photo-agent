@@ -1,6 +1,6 @@
 # V4 Planning + Context 第一轮评估（AR4-1 至 AR4-4）
 
-> 评估对象：V4 多轮上下文离线交付（[V4 架构文档](../../design/architecture/06-photo-agent-v4-planning-context.md)第一轮范围：AR16/AR17 展开的 AR4-1 至 AR4-4）。
+> 评估对象：V4 多轮上下文离线交付（[V4 架构文档](../../design-docs/architecture/06-photo-agent-v4-planning-context.md)第一轮范围：AR16/AR17 展开的 AR4-1 至 AR4-4）。
 > 范围决策：Planner/Replan 全量实现与跨任务 Memory 按 2026-09-07 决策延后至长任务证据出现，本轮多轮续跑中的待办重开即最小 replan 切片；Plan Executability 与 Replan Precision 两维度本轮不评。
 
 ## 摘要

@@ -68,7 +68,7 @@
 
 ## 后端代码质量基线
 
-- **专题中枢**：[后端代码质量治理](../design/2026-08-30-1-backend-code-quality-hub.md)。
+- **专题中枢**：[后端代码质量治理](../design-docs/2026-08-30-1-backend-code-quality-hub.md)。
 - **2026-08-29**：`backend/` 手写 Go、人工维护的 Proto/SQL、后端配置及直接技术文档首次按 100 分制评估，**57/100（5.7/10），不通过**。
 - **阻断项**：启动迁移删除存量列；服务跳过鉴权且暴露任意 SQL 查询；敏感配置写入运行日志。
 - **自动证据**：全量 Go 测试、`go vet`、核心 Service/DAO race 测试通过；当前评估环境 HTTP 探测超时，未形成新的 API 用户用例闭环。
@@ -115,9 +115,9 @@
 > 数据管道各环节的正确性指标，跟踪属性解析、选题发现等流程的数据质量。
 > 指标来源：AI 评估模式下的 `sqlite3` 直接查询 + suggest API 调用。
 >
-> 📋 3.4 专题中枢：[design/2026-07-27-topic-discovery-hub.md](../design/2026-07-27-topic-discovery-hub.md)
+> 📋 3.4 专题中枢：[主题发现专题中枢](../_archives/topic-discovery/2026-07-27-5-topic-discovery-hub.md)
 >
-> 中枢文档：[2026-08-11-import-workflow-hub.md](../design/2026-08-11-import-workflow-hub.md) — 导入工作流专题全部关联产物的汇总入口
+> 中枢文档：[2026-08-11-import-workflow-hub.md](../design-docs/2026-08-11-import-workflow-hub.md) — 导入工作流专题全部关联产物的汇总入口
 
 ### 2026-08-30 — 当前 Backlog Done 任务复评（排除暂缓项）
 
@@ -175,7 +175,7 @@
 - **剩余问题**：LB5 重算未执行（用户步骤）、LB7 PhotoManagement.vue 拆分、LB8 四项低危小项
 - **误报澄清**：子代理报「offset 不随排序方向/排序 UI 残留/气泡无延迟」三项高严重问题，经运行时复测全部排除（首项因 curl 误传 camelCase 参数走进 default 分支）
 - **评估报告**：`reports/2026-08-21-photo-list-lb-series.json`
-- **专题中枢**：[design/2026-08-20-1-photo-list-hub.md](../design/2026-08-20-1-photo-list-hub.md)
+- **专题中枢**：[design-docs/2026-08-20-1-photo-list-hub.md](../design-docs/2026-08-20-1-photo-list-hub.md)
 
 ### 2026-08-18 — 导入工作流 W1-W11（Windows 客户端，第三轮整体评估）
 
@@ -202,7 +202,7 @@
 ### 2026-08-18 — 导入工作流 W1-W4（Windows 客户端，首轮评估）
 
 - **总体评分**：7.7/10 ✅ 通过（阈值 6.0）
-- **评估对象**：W1 Wails 工程搭建 + W2 服务端 NEF 存储与 storage/info + W3 客户端文件操作 + W4 前端导入三步流程页面（对应 [design/2026-08-11-import-workflow.md](../design/2026-08-11-import-workflow.md)）
+- **评估对象**：W1 Wails 工程搭建 + W2 服务端 NEF 存储与 storage/info + W3 客户端文件操作 + W4 前端导入三步流程页面（对应 [design-docs/2026-08-11-import-workflow.md](../design-docs/2026-08-11-import-workflow.md)）
 - **实测验证**：146 张 JPG + 113 张 NEF 上传到 `202608-山西旅游/`，DB 记录 146 jpg + 113 nef 一一对应，NEF shot_at 从 EXIF 正确提取入库；客户端单测通过（import_test/sync_test）
 - **代码质量**：（正确性 8 / 健壮性 7 / 可维护性 8 / 简洁性 8）— 纯函数/绑定分离、前后端类型对应、注释充分；无重试、warning 未消费、overwrite 不回写 shot_at
 - **功能效果**：（准确性 8 / 完整性 7 / 一致性 8）— 四阶段全落地，命名/风格一致；warning 字段前端丢弃、无清空中转收尾
@@ -223,7 +223,7 @@
 ### 2026-07-31 — 3.8 衍生优化设计方案文档评估
 
 - **总体评分**：7.3/10 ✅ 通过（阈值 6.0）
-- **评估对象**：`docs/archive/topic-discovery/2026-07-31-2-suggest-pipeline-optimizations.md`（五个优化任务的设计方案，已归档）
+- **评估对象**：`docs/_archives/topic-discovery/2026-07-31-2-suggest-pipeline-optimizations.md`（五个优化任务的设计方案，已归档）
 - **文档质量**：（结构清晰度 8 / 决策合理性 8 / 验收可执行性 7 / 代码一致性 5 / 方案完整性 7）— 结构统一、决策有据，但 §7 代码质量清单中至少 3/5 条描述与实际代码不符
 - **新发现问题**：§7 三处代码描述不准确（prompt_idx 非重复赋值、_migrate_to_v2 非裸 except、_save_suggest_history 已捕获 OSError），backlog 与设计文档验收勾选状态不一致
 - **评估报告**：`reports/2026-07-31-suggest-pipeline-optimizations-design.json`

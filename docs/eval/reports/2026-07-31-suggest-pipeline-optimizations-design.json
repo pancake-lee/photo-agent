@@ -2,7 +2,7 @@
   "report_id": "eval-d7f3a1b2c4e5",
   "backlog_id": "3.9/3.10/3.11/B12/B13",
   "created_at": "2026-07-31T18:00:00",
-  "target": "设计方案文档 docs/design/2026-07-31-2-suggest-pipeline-optimizations.md 质量评估",
+  "target": "设计方案文档 docs/design-docs/2026-07-31-2-suggest-pipeline-optimizations.md 质量评估",
   "overall": 7.3,
   "dimension_scores": {
     "方案结构清晰度": 8,

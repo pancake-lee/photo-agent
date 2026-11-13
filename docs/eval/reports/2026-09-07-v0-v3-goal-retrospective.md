@@ -2,7 +2,7 @@
 
 > 报告 ID：`2026-09-07-v0-v3-goal-retrospective`
 > 评估对象：V0–V3 各版本退出条件的实际达成情况，以及用户提出的三个对话能力疑问（多轮连续性、历史压缩、预设问答+兜底路由）。
-> 评估方式：设计文档（`docs/design/architecture/00–07`）与源码走查对照。未启动服务、未调用 LLM、未读取真实照片数据。
+> 评估方式：设计文档（`docs/design-docs/architecture/00–07`）与源码走查对照。未启动服务、未调用 LLM、未读取真实照片数据。
 > 参照系说明：本报告有两个参照系。「版本目标达成」对照的是各版本自己声明的退出条件；「对话能力现状」对照的是通用 Agent 对话产品应有的能力。两者结论分开陈述，不互相折算。
 
 ## 摘要
@@ -89,5 +89,5 @@
 
 - 代码走查：`agent/cli/server.py`（send_message / SendMessageRequest / 澄清槽位读写）、`agent/cli/photo_agent.py`（CLASSIFY_SYSTEM、_classify_node、五下游节点、route 无状态、sessions resume）、`agent/internal/runtime/state.py`（GOAL 常量、_GOAL_PRESETS）、`agent/internal/chat/session_store.py`（三张表结构）。
 - 全仓 grep：`history|session|conversation|summari|compress|压缩|摘要`，确认无对话历史读取与压缩逻辑。
-- 文档对照：`docs/design/architecture/00–07`、`docs/design/2026-08-31-2-agent-runtime-hub.md`、AR3 复评两份报告结论。
+- 文档对照：`docs/design-docs/architecture/00–07`、`docs/design-docs/2026-08-31-2-agent-runtime-hub.md`、AR3 复评两份报告结论。
 - 未运行：服务、自动回归、LLM 调用、真实数据读取（本评估为纯走查，无消耗）。

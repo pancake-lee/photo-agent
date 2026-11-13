@@ -2,7 +2,7 @@
   "report_id": "eval-3.5-design-2026-07-28",
   "backlog_id": "3.5",
   "created_at": "2026-07-28T02:10:00",
-  "target": "评估 docs/design/2026-07-28-1-suggest-persistence.md 设计方案与实现",
+  "target": "评估 docs/design-docs/2026-07-28-1-suggest-persistence.md 设计方案与实现",
   "overall": 7.5,
   "dimension_scores": {
     "设计清晰度": 9,

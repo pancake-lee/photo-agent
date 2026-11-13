@@ -2,7 +2,7 @@
 
 > 评估对象：AR 系列完成后的当前工作区，重点覆盖 Agent 日志、Runtime 多步执行、RAG 黄金用例边界、对话页面交互，以及相关静态代码和自动验证。
 >
-> Agent Runtime 专题关联：[Agent Runtime 专题中枢](../../design/2026-08-31-2-agent-runtime-hub.md)。本报告不是常规功能评分，而是判断实现是否适合当前“单用户、本地摄影库、继续迭代”的阶段。
+> Agent Runtime 专题关联：[Agent Runtime 专题中枢](../../design-docs/2026-08-31-2-agent-runtime-hub.md)。本报告不是常规功能评分，而是判断实现是否适合当前“单用户、本地摄影库、继续迭代”的阶段。
 
 ## 结论
 

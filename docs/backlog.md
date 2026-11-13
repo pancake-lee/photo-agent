@@ -14,15 +14,31 @@
 | Done   | 可观测性   | OBS3 | Go 后端 Grafana 与 Prometheus 接入配置    |      |
 | Done   | 资产质量闭环 | AQL2-3 | VLM 坏图描述「彩条纹理」审核漏判修复      |      |
 | Done   | Windows 客户端 | W13 | 重启后主窗口只剩标题栏 | |
+| 规划中 | 导入工作流 | W14 | 相机与 iPad 筛片结果汇合入库 | |
 | 暂缓   | 代码治理   | BQ3   | 未鉴权服务暴露任意 SQL 查询                  |      |
 
-> v1.0.19 已归档：AR4-1–AR4-10，以及由 AR4 系列取代关闭的 AR16、AR17，详见 [v1.0.19](archive/v1.0.19.md)。
-> v1.0.18 已归档：AR3-1–AR3-8，以及拆分为 AR3 系列后关闭的 AR15，详见 [v1.0.18](archive/v1.0.18.md)。
-> v1.0.17 已归档：AR2-1–AR2-7、CQ7、DL1、AR11–AR14、HARN1，以及已取代的 CQ4，详见 [v1.0.17](archive/v1.0.17.md)。
-> v1.0.16 已归档：AR、AR1–AR10、TIDY5–TIDY7、CFG8、NAV1、OBS1、GQ1、EVAL1，详见 [v1.0.16](archive/v1.0.16.md)。
-> v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](archive/v1.0.15.md)。
-> v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](archive/v1.0.14.md)。
-> 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design/2099-01-01-future-requirements.md)。
+> v1.0.19 已归档：AR4-1–AR4-10，以及由 AR4 系列取代关闭的 AR16、AR17，详见 [v1.0.19](version/v1.0.19.md)。
+> v1.0.18 已归档：AR3-1–AR3-8，以及拆分为 AR3 系列后关闭的 AR15，详见 [v1.0.18](version/v1.0.18.md)。
+> v1.0.17 已归档：AR2-1–AR2-7、CQ7、DL1、AR11–AR14、HARN1，以及已取代的 CQ4，详见 [v1.0.17](version/v1.0.17.md)。
+> v1.0.16 已归档：AR、AR1–AR10、TIDY5–TIDY7、CFG8、NAV1、OBS1、GQ1、EVAL1，详见 [v1.0.16](version/v1.0.16.md)。
+> v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](version/v1.0.15.md)。
+> v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](version/v1.0.14.md)。
+> 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design-docs/2099-01-01-future-requirements.md)。
+
+### W14 相机与 iPad 筛片结果汇合入库
+
+> 关联专题：[导入工作流](design-docs/2026-08-11-import-workflow-hub.md) · [交互与原片流转设计](design-docs/2026-11-13-1-autocull-import-design.md)
+
+- 状态：规划中
+- 背景：相机有大量未导入的 NEF 和 JPG。部分拍摄在 iPad 上已删除废片、标记收藏，其余照片希望在 Photo Agent 内自动初筛并人工复审。现有客户端要求手工整理 `full/nef/like`，实际只上传 `like` 中的文件，普通留存缺少入库入口。
+- 方案（审阅稿）：Windows 客户端管理拍摄批次、相机 JPG/NEF 配对、iPad 结果及人工决定。客户端在后台运行 [923493524/autocull](https://github.com/923493524/autocull) 的分析能力，结果进入导入前复审。客户端按确认清单从原路径上传。服务端按内容核验原片，处理重名和中断重试，并保存收藏状态。确认废弃后可在本地独立暂存和恢复。设计稿中的接入路径、NEF 默认上传范围、废片处理和服务器副本的长期保护范围供审阅。
+- AutoCull 接入边界：源码 MIT，固定经验证版本及默认 YuNet/SFace。用分析命令读取 `tiers.csv` 的档位、排名、理由及连拍组。上游 `run` 按目录分析并写 `_cull_out`。接入可在客户端工作目录准备输入副本后运行公开 CLI，或封装分析入口以支持直接读取选定原片、另写工作目录。发布的便携版入口还执行移动、复制或 XMP 写入。1.4.9 源码支持递归扫描，公开 Windows 发布包为 1.4.8。
+- 已有验证：在 Linux 临时环境运行 1.4.9 源码及默认模型，12 张合成 JPG 含跨目录重名，结果为 12 条唯一相对路径，原 JPG 哈希一致，未生成 XMP。Windows 打包、真实 NEF 和旅拍排序待验证。
+- 子任务（审阅稿）
+  - W14-1 导入来源与配对。客户端读取既有目录，匹配相机与 iPad 输入并保存批次。验证同名不同照片各自匹配，部分导出缺席继续待审。
+  - W14-2 自动初筛与复审。在 Windows 接入 AutoCull 分析，验证进度、取消、恢复、低档回看和 iPad 决定沿用。用真实 Nikon 样本比较推荐档漏选和复审耗时，核对分析前后原片及 XMP 的路径和内容。
+  - W14-3 入库及收藏。客户端提交清单，服务端按内容确认原片和配对文件，图片管理支持收藏。验证同名不同内容分别落盘，断点重试可补齐，摘要不符保持未验证，入库后可改收藏。
+  - W14-4 废片暂存与恢复。客户端预览确认废弃的磁盘文件，记录逐文件位置，按确认策略处理。验证中途失败时能定位和恢复文件，恢复撞名时保留两份内容。
 
 ### W13 重启后主窗口只剩标题栏
 
@@ -41,7 +57,7 @@
 - **实施**：2026-10-30 用户手动完成修复；同时为 `extractJSONBlock` 补充用途注释。
 - **验收**：暂存代码已包含新增关键词，`validateVlmDescription` 会在描述包含该词时返回审核错误。按用户本轮说明「已修复」登记完成。
 - **验证记录**：AI 仅静态核对暂存差异与审核函数，未运行服务、调用真实 LLM 或修改业务数据。
-- **关联**：[人工维护记录](archive/handmake-record-1.md)、[资产质量闭环专题](design/2026-08-26-4-ai-asset-quality-loop-hub.md)；延续 AQL2-2 的坏图描述漏判修复。
+- **关联**：[人工维护记录](_archives/handmake-record-1.md)、[资产质量闭环专题](design-docs/2026-08-26-4-ai-asset-quality-loop-hub.md)；延续 AQL2-2 的坏图描述漏判修复。
 
 ### OBS3 Go 后端 Grafana 与 Prometheus 接入配置
 
@@ -111,7 +127,7 @@
 ### AD1 Agent 执行链路的可编辑代码导览图
 
 - **状态**：Done
-- **背景**：Agent 已历经多轮 Runtime、能力系统和多轮上下文迭代；现有 `docs/tech.md` 的 Mermaid 图覆盖概念流程，但缺少从 HTTP 入口到最终交付的统一阅读入口，也不能在节点和连线上稳定定位实际文件、函数、状态与回环条件。维护者难以建立完整心智模型。
+- **背景**：Agent 已历经多轮 Runtime、能力系统和多轮上下文迭代；现有 `docs/design-docs/system-design.md` 的 Mermaid 图覆盖概念流程，但缺少从 HTTP 入口到最终交付的统一阅读入口，也不能在节点和连线上稳定定位实际文件、函数、状态与回环条件。维护者难以建立完整心智模型。
 - **方案**：以一份 Excalidraw 画板承载三个由 Frame 分隔的层级，而非把全部实现细节塞入单张无层次的巨图：
   - 总览 Frame：`POST /api/chat/sessions/{id}/messages` 到 SSE/消息持久化、`PhotoAgent.route()`、入口分类、单步路径（SQL/RAG/Tool/Combined）、Runtime、`answer` 汇合及 Trace/SessionStore 的请求生命周期；节点写入口文件和方法，边写数据或控制含义。
   - Runtime Frame：仅展开 `run_runtime()` 的 `decide → execute → guardrail → reduce → check → finish`；标明唯一 LLM 决策点、`TaskState`/`Observation`、参数校验、完成检查、预算与无进展判定，以及 retry/repair/redecide/finish 的条件回边和对应函数。
@@ -159,7 +175,7 @@
 
 ## 决策历史
 
-- **2026-09-07**：v1.0.19 归档。AR4-1–AR4-10 与由 AR4 系列取代关闭的 AR16、AR17 移入 [v1.0.19](archive/v1.0.19.md)；AR18 留作待规划，BQ3 继续暂缓。
+- **2026-09-07**：v1.0.19 归档。AR4-1–AR4-10 与由 AR4 系列取代关闭的 AR16、AR17 移入 [v1.0.19](version/v1.0.19.md)；AR18 留作待规划，BQ3 继续暂缓。
 
 - **2026-09-07**：用户授权完成 AR4-5 与 AR4-8 默认 60 秒口径的真实四轮回归，输出 PASS。补选轮正确识别 `selection_add`、程序性先重跑选片并将入选从 1 张扩展为 2 张，负样本正确路由 SQL（136 张）；两项均关单。trace：`2961a71afec3`、`41de4080a340`、`449c410f0a8f`、`1b98dd14a6cf`。
 
@@ -169,7 +185,7 @@
 
 - **2026-09-07**：V4 第一轮规划/生成/评估闭环完成，总分 8.3/10（循环目标 8.0 达成）。AR4-1 至 AR4-4 全部 Done：历史经 Context Builder 进入推理链路、followup 识别与消解接入五路径、Runtime 任务快照支持局部失效续跑、四条多轮金用例与 V4 基线落地；Agent 离线全量 369/369（V4 新增 42 项），未调用真实 LLM。评估登记 AR4-5（真实环境验证）、AR4-6（长程指代退化）、AR4-7（补选保留无确定性保障）待规划。详见 [评估报告](eval/reports/2026-09-07-ar4-v4-planning-context.md)。
 
-- **2026-09-07**：V4 第一轮规划完成。AR16/AR17 展开为 AR4-1（会话上下文构建器）、AR4-2（跟进消息识别与全路径接入）、AR4-3（Runtime 任务快照与多轮局部失效续跑）、AR4-4（多轮金用例与评估基线）；AR16/AR17 标记已取代。Planner/Replan 全量实现与跨任务 Memory 按 2026-09-07 范围决策延后，本轮多轮续跑中的待办重开即最小 replan 切片。架构依据见 [V4 Planning + Context](design/architecture/06-photo-agent-v4-planning-context.md)。
+- **2026-09-07**：V4 第一轮规划完成。AR16/AR17 展开为 AR4-1（会话上下文构建器）、AR4-2（跟进消息识别与全路径接入）、AR4-3（Runtime 任务快照与多轮局部失效续跑）、AR4-4（多轮金用例与评估基线）；AR16/AR17 标记已取代。Planner/Replan 全量实现与跨任务 Memory 按 2026-09-07 范围决策延后，本轮多轮续跑中的待办重开即最小 replan 切片。架构依据见 [V4 Planning + Context](design-docs/architecture/06-photo-agent-v4-planning-context.md)。
 
 - **2026-09-07**：v1.0.18 归档。归档 AR3-1–AR3-8，以及拆分为 AR3 系列后关闭的 AR15，共 9 项，版本主题为 Agent Runtime V3 能力系统；V0–V3 目标回顾报告随版本存档引用；AR16–AR18 留存待规划，BQ3 继续暂缓。
 
@@ -177,7 +193,7 @@
 
 - **2026-09-07**：V0–V3 目标达成回顾完成。四个版本退出条件均判定达成（8.0/10）；对话能力三项核验属实（无多轮连续性、无历史压缩、入口封闭分类+兜底），登记 AR16、AR17、AR18 待规划，作为进入 V4/V5 的输入；详见 [回顾报告](eval/reports/2026-09-07-v0-v3-goal-retrospective.md)。
 
-- **2026-09-07**：V3 能力系统完成规划。AR15 不再以笼统父任务保留，按可独立交接和验收的 AR3-1（目标契约）、AR3-2（能力分层）、AR3-3（跨期对比第二目标）、AR3-4（主题发现 Workflow）与 AR3-5（评估基线）展开；架构决策见 [V3 Capability System](design/architecture/05-photo-agent-v3-capability-system.md)，专题链路已同步至 Runtime 中枢。
+- **2026-09-07**：V3 能力系统完成规划。AR15 不再以笼统父任务保留，按可独立交接和验收的 AR3-1（目标契约）、AR3-2（能力分层）、AR3-3（跨期对比第二目标）、AR3-4（主题发现 Workflow）与 AR3-5（评估基线）展开；架构决策见 [V3 Capability System](design-docs/architecture/05-photo-agent-v3-capability-system.md)，专题链路已同步至 Runtime 中枢。
 
 - **2026-09-07**：AR3-1–AR3-5 完成。Runtime 按目标契约筛选能力与观察，Capability 注册表完成 Tool/Skill/Workflow 契约迁移；接入只读跨期对比目标和范围化主题发现 Workflow。离线全量回归 305/305 通过，未执行真实数据或真实 LLM 回归。
 
