@@ -6,9 +6,9 @@
 
 - [产品规格](../product-specs/photo-agent.md)记录产品目标、行为与约束。
 - [架构入口](../ARCHITECTURE.md)定位主要模块、依赖、数据流与稳定边界。
-- [系统设计](../design-docs/system-design.md)保留详细数据流、接口和模型约定，[专题设计](../design-docs/)保留既有主题、编号与中枢。
+- [系统设计](../design-docs/system-design.md)提供专题设计索引、详细数据流、接口和模型约定。
 - [当前任务](../backlog.md)记录规划、实施、状态和验收，设计门槛与数据约束见根部 Agent 规则。
-- [版本记录](../version/README.md)承接后续版本与既有历史快照入口。
+- [版本记录](../version/README.md)提供版本快照和历史设计归档索引入口。
 - 运行和部署按[部署指南](../deploy.md)，本地配置位于 `.local/`。
 - 工作模式按[公共总纲](top/HARNESS.md)选择，项目运行证据入口见下节。
 
