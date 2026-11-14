@@ -17,3 +17,4 @@
 - [后端重构原稿](../_archives/backend-refactor/)
 - [后端代码质量治理原稿](../_archives/backend-quality/)
 - [任务验收交接原稿](../_archives/harness-task-closure/)
+- [架构图维护原稿](../_archives/architecture-diagrams/)
