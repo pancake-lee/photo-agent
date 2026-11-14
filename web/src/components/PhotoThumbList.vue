@@ -65,7 +65,20 @@ function downloadOriginal(p: PhotoRef) {
   document.body.removeChild(anchor)
 }
 
+const deleted = ref(new Set<string>())
+
+async function checkUnavailable(id: string) {
+  try {
+    const response = await fetch(imageUrl(id), { method: 'GET', cache: 'no-store' })
+    if (response.status === 410) deleted.value = new Set([...deleted.value, id])
+    await response.body?.cancel()
+  } catch {
+    // A network failure does not establish a deletion.
+  }
+}
+
 function handlePreview(p: PhotoRef) {
+  if (deleted.value.has(getUuid(p))) return
   if (p.burst_group_id) {
     emit('openGroup', p)
     return
@@ -155,13 +168,15 @@ const restPhotos = computed(() => {
         @click="handlePreview(p)"
       >
         <img
-          v-if="getUuid(p)"
+          v-if="getUuid(p) && !deleted.has(getUuid(p))"
           class="photo-thumb"
+          @error="checkUnavailable(getUuid(p))"
           :src="imageUrl(getUuid(p))"
         />
+        <span v-else-if="deleted.has(getUuid(p))">已删除</span>
         <NIcon v-else size="24"><ImageOutline /></NIcon>
         <NButton
-          v-if="getUuid(p)"
+          v-if="getUuid(p) && !deleted.has(getUuid(p))"
           class="photo-download-button"
           quaternary
           circle

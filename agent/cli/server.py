@@ -8,6 +8,8 @@
         # 或直接: server.run_server(cfg) 使用 Agent.Addr
 """
 
+import asyncio
+import contextlib
 import sys
 import pathlib
 import logging
@@ -617,10 +619,33 @@ class PostStudioGenerateResponse(pydantic.BaseModel):
 def create_app(cfg: config_mod.Config) -> fastapi.FastAPI:
     """创建 FastAPI 应用，绑定配置和 Agent 实例。"""
 
+    @contextlib.asynccontextmanager
+    async def lifespan(app: fastapi.FastAPI):
+        async def cleanup_recycle() -> None:
+            while True:
+                try:
+                    removed = await asyncio.to_thread(app.state.embed_queue.cleanup_expired_recycle)
+                    if removed:
+                        logger.info("EmbedQueue: 已清理 %d 张到期照片的索引", removed)
+                except (requests.RequestException, ValueError):
+                    logger.warning("EmbedQueue: 到期照片索引待重试", exc_info=True)
+                except Exception:
+                    logger.exception("EmbedQueue: 清理到期照片索引失败")
+                await asyncio.sleep(3600)
+
+        maintenance = asyncio.create_task(cleanup_recycle())
+        try:
+            yield
+        finally:
+            maintenance.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await maintenance
+
     app = fastapi.FastAPI(
         title="Photo Agent Chat API",
         version="0.1.0",
         description="照片 AI 助手对话接口",
+        lifespan=lifespan,
     )
 
     @app.middleware("http")

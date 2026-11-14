@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PhotoFavoriteButton from './PhotoFavoriteButton.vue'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import {
   NDescriptions,
@@ -213,6 +214,7 @@ async function saveShotAt() {
         <div class="lightbox-panel">
           <div class="panel-header">
             <span class="panel-title">照片详情</span>
+          <PhotoFavoriteButton v-if="photo && showVlmActions" :id="photo.id" />
             <NButton size="small" @click="$emit('close')">
               <template #icon><NIcon :size="16"><CloseOutline /></NIcon></template>
               退出

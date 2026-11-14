@@ -190,3 +190,23 @@ Go 后端监听 `Http.Addr`，Python Agent 监听 `Agent.Addr`，Web 前端监�
 ### Q: 会话数据存储在哪里？
 
 `data/agent/sqlite/chat_sessions.db`（SQLite），可在配置文件中通过 `Agent.ChatDBPath` 调整。
+
+## Windows 批次导入
+
+在仓库根目录运行 `make client`，产物为 `bin/photo-agent.exe`。Windows 客户端的「设置」中填写可访问的 Go 后端地址。服务端启动时会自动创建批次核验与最近删除所需的数据表。
+
+初筛使用 AutoCull 1.4.9 的公开 CLI。可在导入页填写 CLI 可执行文件的绝对路径，或填写下面准备好的源码目录。[固定版本源码](https://github.com/923493524/autocull/tree/6679ad3b4c1fef09980acd6704bf5a2cef3612b8)
+
+```powershell
+git clone https://github.com/923493524/autocull.git
+cd autocull
+git checkout 6679ad3b4c1fef09980acd6704bf5a2cef3612b8
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe tools\fetch_models.py
+.\.venv\Scripts\python.exe -m autocull --version
+```
+
+打开「导入工作流」，添加原片和已有的 iPad 导出目录。批次支持直接人工审阅。选择「预览入库」核对本地原片与服务器目标，上传核验后可分别回收已入库及确认废弃的照片。
+
+从 Windows 回收站恢复归集目录后，在批次中选择「核对并恢复原路径」。服务器回收项在「图片管理 → 最近删除」恢复，保留 30 天。

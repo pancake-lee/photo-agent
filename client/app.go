@@ -11,7 +11,10 @@ import (
 
 // App struct
 type App struct {
-	ctx context.Context
+	ctx        context.Context
+	batchMu    sync.Mutex
+	cullMu     sync.Mutex
+	cancelCull context.CancelFunc
 }
 
 // NewApp creates a new App application struct
@@ -28,6 +31,7 @@ func (a *App) startup(ctx context.Context) {
 
 // beforeClose 退出前保存当前窗口状态（尺寸/位置/是否最大化），供下次启动恢复。
 func (a *App) beforeClose(ctx context.Context) bool {
+	a.CancelImportCull()
 	saveWindowStateOnClose(ctx)
 	return false
 }

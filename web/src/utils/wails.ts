@@ -145,13 +145,13 @@ interface WailsApp {
   Log(msg: string): Promise<void>
 }
 
-function getApp(): WailsApp {
+export function getWailsApp<T = WailsApp>(): T {
   const w = window as any
   const app = w.go?.main?.App
   if (!app) {
     throw new Error('Wails 桌面环境未就绪')
   }
-  return app as WailsApp
+  return app as T
 }
 
 /** 统一提取 Wails 绑定异常的可读信息。 */
@@ -163,31 +163,31 @@ export function wailsError(e: unknown): string {
 
 export const wailsApi = {
   chooseDirectory(): Promise<string> {
-    return getApp().ChooseDirectory()
+    return getWailsApp().ChooseDirectory()
   },
   createStagingDirs(stagingPath: string, folderName: string): Promise<CreateStagingResult> {
-    return getApp().CreateStagingDirs(stagingPath, folderName)
+    return getWailsApp().CreateStagingDirs(stagingPath, folderName)
   },
   scanStaging(stagingPath: string, folderName: string): Promise<StagingScan> {
-    return getApp().ScanStaging(stagingPath, folderName)
+    return getWailsApp().ScanStaging(stagingPath, folderName)
   },
   analyzeStaging(stagingPath: string, folderName: string): Promise<ImportAnalysis> {
-    return getApp().AnalyzeStaging(stagingPath, folderName)
+    return getWailsApp().AnalyzeStaging(stagingPath, folderName)
   },
   migrateKeptNef(stagingPath: string, folderName: string, keepList: string[]): Promise<MigrateResult> {
-    return getApp().MigrateKeptNef(stagingPath, folderName, keepList)
+    return getWailsApp().MigrateKeptNef(stagingPath, folderName, keepList)
   },
   previewImage(path: string): Promise<string> {
-    return getApp().PreviewImage(path)
+    return getWailsApp().PreviewImage(path)
   },
   getStorageInfo(serverURL: string): Promise<StorageInfo> {
-    return getApp().GetStorageInfo(serverURL)
+    return getWailsApp().GetStorageInfo(serverURL)
   },
   checkConflicts(stagingPath: string, folderName: string, serverURL: string): Promise<ConflictCheck> {
-    return getApp().CheckConflicts(stagingPath, folderName, serverURL)
+    return getWailsApp().CheckConflicts(stagingPath, folderName, serverURL)
   },
   syncToServer(stagingPath: string, folderName: string, serverURL: string, resolution: string): Promise<SyncResult> {
-    return getApp().SyncToServer(stagingPath, folderName, serverURL, resolution)
+    return getWailsApp().SyncToServer(stagingPath, folderName, serverURL, resolution)
   },
   /** 写入客户端日志文件（Go 层 Log 绑定），用于排查前端调用链路。非 Wails 环境降级为 console.log。 */
   log(msg: string): void {
@@ -205,9 +205,13 @@ export const wailsApi = {
  * 返回取消订阅函数；非 Wails 环境返回 no-op。
  */
 export function onSyncProgress(cb: (p: SyncProgress) => void): () => void {
+  return onWailsEvent('sync:progress', cb)
+}
+
+export function onWailsEvent<T>(event: string, cb: (value: T) => void): () => void {
   const runtime = (window as any).runtime
   if (runtime?.EventsOn) {
-    return runtime.EventsOn('sync:progress', cb)
+    return runtime.EventsOn(event, cb)
   }
   return () => {}
 }

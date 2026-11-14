@@ -210,7 +210,7 @@ function formatExifTooltip(): string {
                     </template>
                   </NButton>
                 </template>
-                确定删除该图片？（原图文件和数据库记录将被永久删除）
+                将这张照片和仍配对的 NEF 移入最近删除，30 天内可恢复。
               </NPopconfirm>
             </div>
             <div v-if="!selectionMode && showRemove" class="photo-delete">

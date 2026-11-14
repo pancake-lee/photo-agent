@@ -14,6 +14,31 @@ class EmbedQueueQualityGateTest(unittest.TestCase):
         self.assertFalse(embed_queue.EmbedQueue._has_trusted_description({}))
 
 
+class EmbedQueueRecycleTest(unittest.TestCase):
+    def test_expired_cleanup_only_removes_purged_ids_from_all_collections(self):
+        queue = embed_queue.EmbedQueue.__new__(embed_queue.EmbedQueue)
+        queue._go_url = "http://backend"
+        queue._store = mock.Mock()
+        fine = mock.Mock()
+        coarse = mock.Mock()
+        queue._group_stores = {"fine": fine, "coarse": coarse}
+        queue._store.get_embedded_photo_ids.return_value = {"purged", "recoverable", "active"}
+        fine.get_embedded_photo_ids.return_value = {"purged", "recoverable"}
+        coarse.get_embedded_photo_ids.return_value = {"active"}
+        response = mock.Mock(status_code=200)
+        response.json.return_value = ["purged"]
+
+        with mock.patch.object(embed_queue.requests, "get", return_value=response) as get:
+            self.assertEqual(queue.cleanup_expired_recycle(), 1)
+        get.assert_called_once_with(
+            "http://backend/api/v1/photo-recycle/deleted-ids",
+            params={"purged": "1"}, timeout=5,
+        )
+        queue._store.delete.assert_called_once_with(where={"photo_id": "purged"})
+        fine.delete.assert_called_once_with(where={"photo_id": "purged"})
+        coarse.delete.assert_not_called()
+
+
 class _GroupStore:
     def __init__(self):
         self.single_calls = []

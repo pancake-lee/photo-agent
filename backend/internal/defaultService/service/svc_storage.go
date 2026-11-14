@@ -157,6 +157,9 @@ func countFiles(root string) (jpg, nef int64) {
 			return nil
 		}
 		if d.IsDir() {
+			if d.Name() == ".recently-deleted" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(d.Name()))

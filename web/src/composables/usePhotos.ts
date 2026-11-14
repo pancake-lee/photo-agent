@@ -390,6 +390,13 @@ export function usePhotos() {
         ...(resp.scattered ?? []).map((e) => e.event ?? ''),
       ].filter((n) => n !== '')
       timelines.value = names
+      const imported = await fetch(`${getApiBase()}/photo-import/activities`)
+      if (imported.ok) {
+        const activityList: unknown = await imported.json()
+        if (Array.isArray(activityList)) {
+          timelines.value = [...new Set([...names, ...activityList.filter((name): name is string => typeof name === 'string')])]
+        }
+      }
     } catch (e) {
       auxiliaryError.value = '时间线筛选项加载失败，请稍后重试'
     }

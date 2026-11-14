@@ -21,6 +21,8 @@ import queue
 import threading
 import sys
 import pathlib
+
+import requests
 from datetime import datetime, timezone
 
 import infra.backend_sdk as bksdk
@@ -259,6 +261,33 @@ class EmbedQueue:
             "total_photos": len(go_photos),
         }
 
+    def _recycle_ids(self, purged_only: bool = False) -> set[str]:
+        response = requests.get(
+            f"{self._go_url}/api/v1/photo-recycle/deleted-ids",
+            params={"purged": "1" if purged_only else "0"},
+            timeout=5,
+        )
+        if response.status_code == 404:
+            return set()
+        response.raise_for_status()
+        ids = response.json()
+        if not isinstance(ids, list) or any(not isinstance(photo_id, str) for photo_id in ids):
+            raise ValueError("回收索引返回了无效照片 ID")
+        return set(ids)
+
+    def cleanup_expired_recycle(self) -> int:
+        """Remove expired photo vectors from all retrieval collections."""
+        purged = self._recycle_ids(purged_only=True)
+        if not purged:
+            return 0
+        removed: set[str] = set()
+        for store in (self._store, *self._group_stores.values()):
+            matched = purged & store.get_embedded_photo_ids()
+            for photo_id in matched:
+                store.delete(where={"photo_id": photo_id})
+            removed.update(matched)
+        return len(removed)
+
     def cleanup_orphans(self) -> int:
         """
         清理三个集合中的孤立文档：photo_id 在 Go 后端中已不存在的。
@@ -277,7 +306,12 @@ class EmbedQueue:
             logger.warning("EmbedQueue: 无法获取 Go 照片列表，跳过清理: %s", e)
             return 0
 
-        valid_ids = {p.id for p in go_photos}
+        try:
+            retained = self._recycle_ids() - self._recycle_ids(purged_only=True)
+        except (requests.RequestException, ValueError):
+            logger.warning("EmbedQueue: 无法核对回收记录，延后清理孤立向量")
+            return 0
+        valid_ids = {p.id for p in go_photos} | retained
         removed = self._store.cleanup_orphans(valid_ids)
         for profile, store in self._group_stores.items():
             n = store.cleanup_orphans(valid_ids)

@@ -18,6 +18,15 @@ func Migrate() error {
 		plogger.Info("DB migrate: created photos table")
 	}
 
+	for _, table := range []any{&model.PhotoArchive{}, &model.PhotoRecycle{}, &model.PhotoImportReservation{}} {
+		if !g.Migrator().HasTable(table) {
+			err := g.Migrator().CreateTable(table)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	// photos 表按需补列
 	if !g.Migrator().HasColumn(&model.Photo{}, "file_type") {
 		if err := g.Migrator().AddColumn(&model.Photo{}, "FileType"); err != nil {

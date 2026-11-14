@@ -1,0 +1,208 @@
+package data
+
+import (
+	"errors"
+	"time"
+
+	"backend/internal/pkg/db/model"
+
+	"github.com/pancake-lee/pgo/pkg/papp"
+	"github.com/pancake-lee/pgo/pkg/pdb"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+type PhotoArchiveDO = model.PhotoArchive
+type PhotoRecycleDO = model.PhotoRecycle
+
+func (*photoDAO) FindArchivedImport(ctx *papp.AppCtx, key string) (*PhotoArchiveDO, error) {
+	var row PhotoArchiveDO
+	err := pdb.GetGormDB().WithContext(ctx).Where("import_key = ?", key).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &row, err
+}
+
+func (*photoDAO) FindByArchivePath(ctx *papp.AppCtx, path string) (*PhotoDO, error) {
+	var row PhotoDO
+	err := pdb.GetGormDB().WithContext(ctx).
+		Where("file_path = ? COLLATE NOCASE", path).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &row, err
+}
+
+func (*photoDAO) GetArchiveState(ctx *papp.AppCtx, id string) (PhotoArchiveDO, error) {
+	row := PhotoArchiveDO{PhotoID: id}
+	err := pdb.GetGormDB().WithContext(ctx).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return row, nil
+	}
+	return row, err
+}
+
+func (*photoDAO) FindImportReservation(
+	ctx *papp.AppCtx, key, normalizedTarget string,
+) (*model.PhotoImportReservation, error) {
+	var row model.PhotoImportReservation
+	query := pdb.GetGormDB().WithContext(ctx)
+	if normalizedTarget != "" {
+		query = query.Where("target = ? COLLATE NOCASE", normalizedTarget)
+	} else {
+		query = query.Where("import_key = ?", key)
+	}
+	err := query.Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &row, err
+}
+
+func (*photoDAO) ReserveImportTarget(ctx *papp.AppCtx, key, target string) error {
+	row := model.PhotoImportReservation{Target: target, ImportKey: key}
+	err := pdb.GetGormDB().WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&row).Error
+	return err
+}
+
+func (*photoDAO) SaveVerifiedImport(
+	ctx *papp.AppCtx, row *PhotoDO, state PhotoArchiveDO, existing bool,
+) error {
+	return pdb.GetGormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if !existing {
+			err := tx.Create(row).Error
+			if err != nil {
+				return err
+			}
+		}
+		err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&state).Error
+		if err != nil {
+			return err
+		}
+		return tx.Delete(&model.PhotoImportReservation{}, "import_key = ?", state.ImportKey).Error
+	})
+}
+
+func (*photoDAO) SetArchiveFavorite(ctx *papp.AppCtx, id string, value bool) error {
+	state := PhotoArchiveDO{PhotoID: id, Favorite: value}
+	return pdb.GetGormDB().WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "photo_id"}},
+		DoUpdates: clause.Assignments(map[string]any{"favorite": value}),
+	}).Create(&state).Error
+}
+
+func (*photoDAO) ListImportedActivities(ctx *papp.AppCtx) ([]string, error) {
+	names := make([]string, 0)
+	err := pdb.GetGormDB().WithContext(ctx).Table("photos").
+		Joins("JOIN photo_archives ON photo_archives.photo_id = photos.id").
+		Where("photo_archives.import_key <> '' AND photos.timeline <> ''").
+		Distinct("photos.timeline").Order("photos.timeline").Pluck("photos.timeline", &names).Error
+	return names, err
+}
+
+func (*photoDAO) ListArchiveActivity(ctx *papp.AppCtx, activity string) ([]PhotoDO, error) {
+	var rows []PhotoDO
+	err := pdb.GetGormDB().WithContext(ctx).
+		Where("timeline = ? AND file_type <> ?", activity, "nef").
+		Order("file_path").Find(&rows).Error
+	return rows, err
+}
+
+func (*photoDAO) SaveRecycle(ctx *papp.AppCtx, item *PhotoRecycleDO) error {
+	return pdb.GetGormDB().WithContext(ctx).Save(item).Error
+}
+
+func (*photoDAO) FindRecycle(ctx *papp.AppCtx, id string) (*PhotoRecycleDO, error) {
+	var item PhotoRecycleDO
+	err := pdb.GetGormDB().WithContext(ctx).Take(&item, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &item, err
+}
+
+func (*photoDAO) FindPhotoRecycle(ctx *papp.AppCtx, id, kind string) (*PhotoRecycleDO, error) {
+	var item PhotoRecycleDO
+	err := pdb.GetGormDB().WithContext(ctx).
+		Where("photo_id = ? AND kind = ?", id, kind).Take(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &item, err
+}
+
+func (*photoDAO) ListRecycle(ctx *papp.AppCtx) ([]PhotoRecycleDO, error) {
+	items := make([]PhotoRecycleDO, 0)
+	err := pdb.GetGormDB().WithContext(ctx).
+		Order("deleted_at DESC, id DESC").Find(&items).Error
+	return items, err
+}
+
+func (*photoDAO) FinishRecycle(ctx *papp.AppCtx, item *PhotoRecycleDO) error {
+	return pdb.GetGormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if item.Kind == "photo" {
+			err := tx.Delete(&model.Photo{}, "id = ?", item.PhotoID).Error
+			if err != nil {
+				return err
+			}
+		}
+		return tx.Save(item).Error
+	})
+}
+
+func (*photoDAO) FinishRecycleRestore(
+	ctx *papp.AppCtx, item *PhotoRecycleDO, photo *PhotoDO,
+) error {
+	return pdb.GetGormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if item.Kind == "photo" {
+			err := tx.Create(photo).Error
+			if err != nil {
+				return err
+			}
+		}
+		return tx.Delete(item).Error
+	})
+}
+
+func (*photoDAO) PurgeRecycle(ctx *papp.AppCtx, item *PhotoRecycleDO) error {
+	return pdb.GetGormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if item.Kind == "photo" {
+			err := tx.Delete(&model.PhotoArchive{}, "photo_id = ?", item.PhotoID).Error
+			if err != nil {
+				return err
+			}
+			err = tx.Exec("DELETE FROM ai_processing_history WHERE photo_id = ?", item.PhotoID).Error
+			if err != nil {
+				return err
+			}
+			// Retain the identity for index cleanup and historical links.
+			item.State, item.LastError = "purged", ""
+			item.PhotoJSON, item.FilesJSON = nil, nil
+			return tx.Save(item).Error
+		}
+		return tx.Delete(item).Error
+	})
+}
+
+func (*photoDAO) ListDeletedPhotoIDs(ctx *papp.AppCtx, purgedOnly bool) ([]string, error) {
+	ids := make([]string, 0)
+	states := []string{"deleted", "restoring", "purged"}
+	if purgedOnly {
+		states = []string{"purged"}
+	}
+	err := pdb.GetGormDB().WithContext(ctx).Model(&model.PhotoRecycle{}).
+		Where("kind = ? AND state IN ?", "photo", states).
+		Pluck("photo_id", &ids).Error
+	return ids, err
+}
+
+func (*photoDAO) ListRecycleWork(ctx *papp.AppCtx, cutoff time.Time) ([]PhotoRecycleDO, error) {
+	items := make([]PhotoRecycleDO, 0)
+	err := pdb.GetGormDB().WithContext(ctx).
+		Where("state IN ? OR (state = ? AND deleted_at <= ?)",
+			[]string{"moving", "restoring"}, "deleted", cutoff).
+		Find(&items).Error
+	return items, err
+}

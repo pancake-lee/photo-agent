@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 
 	"backend/internal/defaultService/conf"
@@ -46,6 +47,10 @@ func main() {
 	var healthSvr service.HealthServer
 	var storageSvr service.StorageServer
 	var draftSvr service.DraftServer
+
+	recycleCtx, stopRecycle := context.WithCancel(context.Background())
+	defer stopRecycle()
+	go service.RunPhotoRecycleMaintenance(recycleCtx)
 
 	papp.SetIgnoreAuth() // 开发阶段，个人内网使用，忽略 auth 验证
 	papp.RunKratosApp(

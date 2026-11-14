@@ -19,6 +19,7 @@ import (
 	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
 
+	kratoserrors "github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 )
@@ -93,6 +94,19 @@ func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 		r.POST("/api/v1/photos/upload", s.UploadPhotoHandler)
 		r.POST("/api/v1/photos/{id}/ai-health", s.UpdateAIHealthHandler)
 		r.POST("/api/v1/photos/{id}/ai-validate", s.ValidateAIHandler)
+
+		r.GET("/api/v1/photo-import/activities", s.listImportedActivities)
+		r.POST("/api/v1/photo-import/preview", s.previewArchiveImport)
+		r.POST("/api/v1/photo-import/file", s.writeArchiveImport)
+		r.POST("/api/v1/photo-import/finish", s.finishArchiveImport)
+		r.GET("/api/v1/photos/{id}/favorite", s.photoFavorite)
+		r.POST("/api/v1/photos/{id}/favorite", s.photoFavorite)
+		r.GET("/api/v1/photo-recycle/activity-nef", s.photoNEFCleanup)
+		r.POST("/api/v1/photo-recycle/activity-nef", s.photoNEFCleanup)
+		r.GET("/api/v1/photo-recycle", s.listPhotoRecycle)
+		r.POST("/api/v1/photo-recycle/restore", s.recoverPhotoRecycle)
+		r.GET("/api/v1/photo-recycle/{id}/image", s.previewPhotoRecycle)
+		r.GET("/api/v1/photo-recycle/deleted-ids", s.photoDeletedIDs)
 
 		api.RegisterPhotoServiceHTTPServer(httpSrv, s)
 	}
@@ -274,6 +288,10 @@ func (s *PhotoServer) GetPhotoDetail(
 
 	photo, err := data.PhotoDAO.GetByID(ctx, req.Id)
 	if err != nil {
+		recycled, lookupErr := data.PhotoDAO.FindPhotoRecycle(ctx, req.Id, "photo")
+		if lookupErr == nil && recycled != nil {
+			return nil, kratoserrors.NotFound("PHOTO_DELETED", "照片已删除")
+		}
 		return nil, ctx.Log.LogErr(err)
 	}
 
@@ -316,10 +334,12 @@ func (s *PhotoServer) UpdatePhotoTags(
 	return &api.Empty{}, nil
 }
 
-// UpdatePhotoShotAt 修改照片拍摄时间：写 DB + 写 EXIF（源文件）。
+// UpdatePhotoShotAt 更新拍摄时间，核验入库原片保持原始字节。
 func (s *PhotoServer) UpdatePhotoShotAt(
 	_ctx context.Context, req *api.UpdatePhotoShotAtRequest,
 ) (*api.Empty, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
 	ctx := papp.NewAppCtx(_ctx)
 
 	if req.Id == "" || req.ShotAt <= 0 {
@@ -333,8 +353,11 @@ func (s *PhotoServer) UpdatePhotoShotAt(
 		return nil, ctx.Log.LogErr(err)
 	}
 
-	// 非 NEF 才写回文件 EXIF（NEF 不写回，仅更新 DB）
-	if photo.FileType != "nef" {
+	archive, err := data.PhotoDAO.GetArchiveState(ctx, photo.ID)
+	if err != nil {
+		return nil, err
+	}
+	if photo.FileType != "nef" && archive.JPGSHA256 == "" {
 		if err := writeShotAtToExif(photo.FilePath, shotAt); err != nil {
 			plogger.Warnf("UpdatePhotoShotAt: write exif failed %s: %v", photo.FilePath, err)
 		}
@@ -351,27 +374,14 @@ func (s *PhotoServer) UpdatePhotoShotAt(
 func (s *PhotoServer) DeletePhoto(
 	_ctx context.Context, req *api.DeletePhotoRequest,
 ) (*api.DeletePhotoResponse, error) {
-	ctx := papp.NewAppCtx(_ctx)
+	ctx, cancel := archiveOperationContext(_ctx)
+	defer cancel()
 
-	photo, err := data.PhotoDAO.GetByID(ctx, req.Id)
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	err := startPhotoRecycle(ctx, req.Id, "photo", nil)
 	if err != nil {
 		return nil, ctx.Log.LogErr(err)
-	}
-
-	if err := data.PhotoDAO.DelByID(ctx, req.Id); err != nil {
-		return nil, ctx.Log.LogErr(err)
-	}
-
-	// 删除源文件（PhotoSrc）和缩略图（PhotoPath）
-	srcPath := filepath.Join(conf.C.Storage.PhotoSrc, photo.FilePath)
-	if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
-		plogger.Warnf("Failed to delete source file %s: %v", srcPath, err)
-	}
-	if photo.FileType != "nef" {
-		thumbPath := filepath.Join(conf.C.Storage.PhotoPath, photo.FilePath)
-		if err := os.Remove(thumbPath); err != nil && !os.IsNotExist(err) {
-			plogger.Warnf("Failed to delete thumbnail %s: %v", thumbPath, err)
-		}
 	}
 
 	return &api.DeletePhotoResponse{
@@ -393,8 +403,15 @@ func (s *PhotoServer) GetPhotoImageHandler(kctx khttp.Context) error {
 
 	photo, err := data.PhotoDAO.GetByID(ctx, id)
 	if err != nil {
+		recycled, lookupErr := data.PhotoDAO.FindPhotoRecycle(ctx, id, "photo")
+		if lookupErr == nil && recycled != nil {
+			kctx.Response().Header().Set("Cache-Control", "no-store")
+			return kctx.Result(http.StatusGone, map[string]string{"error": "照片已删除"})
+		}
 		return err
 	}
+
+	kctx.Response().Header().Set("Cache-Control", "no-store")
 
 	original := kctx.Request().URL.Query().Get("size") == "original"
 	if photo.FileType == "nef" && !original {
@@ -451,6 +468,9 @@ func (s *PhotoServer) UploadPhotoHandler(kctx khttp.Context) error {
 
 	_ctx := req.Context()
 	ctx := papp.NewAppCtx(_ctx)
+
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
 
 	isNEF := ext == ".nef"
 	if isNEF {
@@ -798,6 +818,14 @@ func nefConflictInfo(filename string, newShotAt *time.Time) map[string]any {
 }
 
 func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileType string, shotAt *time.Time) (string, error) {
+	photoDO := newPhotoRecord(ctx, putil.UUID(), filename, folder, fileType, shotAt)
+	if err := data.PhotoDAO.Add(ctx, photoDO); err != nil {
+		return "", fmt.Errorf("create photo record failed: %w", err)
+	}
+	return photoDO.ID, nil
+}
+
+func newPhotoRecord(ctx *papp.AppCtx, id, filename, folder, fileType string, shotAt *time.Time) *data.PhotoDO {
 	relPath := filename
 	if folder != "" {
 		relPath = filepath.Join(folder, filename)
@@ -829,7 +857,7 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 	}
 
 	photoDO := &data.PhotoDO{
-		ID:           putil.UUID(),
+		ID:           id,
 		Filename:     filename,
 		FilePath:     relPath,
 		FileType:     fileType,
@@ -858,11 +886,7 @@ func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileTyp
 		photoDO.Altitude = *ei.Altitude
 	}
 
-	if err := data.PhotoDAO.Add(ctx, photoDO); err != nil {
-		return "", fmt.Errorf("create photo record failed: %w", err)
-	}
-
-	return photoDO.ID, nil
+	return photoDO
 }
 
 func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, shotAt *time.Time) error {

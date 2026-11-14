@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NLayout, NLayoutContent, NLayoutHeader, NModal, NButton, NEmpty, NSpin, NAlert, NSpace, useMessage } from 'naive-ui'
+import PhotoArchiveActions from '../components/PhotoArchiveActions.vue'
 import PhotoDetail from '../components/PhotoDetail.vue'
 import DescriptionModal from '../components/DescriptionModal.vue'
 import UploadModal from '../components/UploadModal.vue'
@@ -199,7 +200,7 @@ async function handleStopEmbed() { await stopEmbedQueue(); message.info('Embed �
 async function handleTriggerEmbed(photoId: string) { try { await enqueueEmbedPhoto(photoId); await fetchEmbedProgress() } catch (e) { message.error(e instanceof Error ? e.message : '入队失败') } }
 function handleViewDescription() { if (selectedPhoto.value) { descPhoto.value = selectedPhoto.value; showDescModal.value = true } }
 function handleRegenerateDescription() { if (descPhoto.value) handleTriggerDescribe(descPhoto.value.id); showDescModal.value = false }
-async function handleDeletePhoto(photoId: string) { try { await deletePhoto(photoId); message.success('图片已删除'); fetchStats() } catch (e) { message.error(e instanceof Error ? e.message : '删除失败') } }
+async function handleDeletePhoto(photoId: string) { try { await deletePhoto(photoId); message.success('已移入最近删除'); fetchStats() } catch (e) { message.error(e instanceof Error ? e.message : '删除失败') } }
 async function handleRebuildBurst() { try { const status = await rebuildBurst(() => { message.success(`连拍分组完成，精细 ${burstStatus.value.group_count} 组 / 模糊 ${burstStatus.value.coarse_group_count} 组`); relocateToStart(); syncBurstVectors() }); message[status === 'already_running' ? 'info' : 'success'](status === 'already_running' ? '连拍分组已在进行中' : '连拍分组重算已启动') } catch (e) { message.error(e instanceof Error ? e.message : '启动失败') } }
 // 分组变了组向量集合就过期了，重建完成后立即对齐（封面向量复用全量集合，不重跑 Embedding）
 async function syncBurstVectors() { try { const counts = await syncGroupCollections(); message.success(`连拍组向量已同步，精细 ${counts.fine ?? 0} 组 / 模糊 ${counts.coarse ?? 0} 组`) } catch (e) { message.warning(e instanceof Error ? e.message : '连拍组向量同步失败') } }
@@ -262,6 +263,9 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         @apply-filters="applyFilters" @reset-filters="resetFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
         @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @download-selection="downloadSelection" @go-to-post-studio="goToPostStudio"
       />
+      <div class="archive-actions">
+        <PhotoArchiveActions :activity="filterTimeline" @changed="applyFilters(); fetchStats(); fetchSegments(); fetchTimelines()" />
+      </div>
     </NLayoutHeader>
     <NLayoutContent><div class="content-wrapper">
       <PhotoListBrowser
@@ -306,6 +310,7 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
 .page-layout > :deep(.n-layout-scroll-container) { display: flex; flex-direction: column; }
 .page-layout :deep(.n-layout-header) { flex-shrink: 0; }
 .page-layout :deep(.n-layout-content) { flex: 1; min-height: 0; }
+.archive-actions { padding: 0 24px 8px; }
 .content-wrapper { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 20px 24px; overflow: hidden; }
 .batch-preview { display: flex; flex-wrap: wrap; gap: 10px; }
 .batch-preview-item { width: 72px; color: var(--n-text-color-2); font-size: 11px; overflow: hidden; }

@@ -6,6 +6,7 @@ import {
   NSteps,
   NStep,
   NCard,
+  NButton,
   NSpin,
   NEmpty,
   NModal,
@@ -25,12 +26,14 @@ import type {
   SyncResult,
 } from '../utils/wails'
 import { settings } from '../stores/settings'
+import ImportBatchWorkflow from '../components/ImportBatchWorkflow.vue'
 import ImportWorkflowStep1 from '../components/ImportWorkflowStep1.vue'
 import ImportWorkflowStep2 from '../components/ImportWorkflowStep2.vue'
 import ImportWorkflowStep3 from '../components/ImportWorkflowStep3.vue'
 import type { CleanupAdviceRow, DirRow } from '../types/importWorkflow'
 
 const message = useMessage()
+const useLegacyImport = ref(false)
 
 // ── 当前步骤（1 新建活动 / 2 分析报告 / 3 上传同步） ──
 
@@ -405,6 +408,9 @@ onUnmounted(() => {
     <NLayoutHeader bordered>
       <div class="page-header">
         <h2 class="page-title">导入工作流</h2>
+        <NButton v-if="isWails()" text class="workflow-switch" @click="useLegacyImport = !useLegacyImport">
+          {{ useLegacyImport ? '批次导入' : '中转目录导入' }}
+        </NButton>
       </div>
     </NLayoutHeader>
 
@@ -417,6 +423,7 @@ onUnmounted(() => {
         </p>
       </NCard>
 
+      <ImportBatchWorkflow v-else-if="!useLegacyImport" />
       <div v-else class="workflow-container">
         <NSteps :current="step" class="steps">
           <NStep title="新建活动" description="创建中转目录并引导导出" />
@@ -507,6 +514,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 16px 24px;
 }
+.workflow-switch { margin-left: auto; }
 .page-title {
   margin: 0;
   font-size: 18px;
