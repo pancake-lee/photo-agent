@@ -1,6 +1,6 @@
 # 后端代码质量基线评估
 
-> 专题中枢：[后端代码质量治理专题中枢](../../design-docs/2026-08-30-1-backend-code-quality-hub.md)。后续复评见 [2026-08-30 后端代码质量复评](2026-08-30-backend-code-quality-reassessment.md)。
+> 治理交付记录：[v1.0.15](../../version/v1.0.15.md)。后续复评见 [2026-08-30 后端代码质量复评](2026-08-30-backend-code-quality-reassessment.md)。
 
 > 评估对象：`backend/` 的手写 Go 代码、人工维护的 Proto/SQL、后端配置和直接对应技术文档。
 >
