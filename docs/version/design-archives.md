@@ -8,3 +8,4 @@
 - [图文工坊原稿](../_archives/post-studio/)
 - [照片选择与已选展示原稿](../_archives/photo-selection/)
 - [主题发现原稿](../_archives/topic-discovery/)
+- [桌面导入原稿](../_archives/import-workflow/)

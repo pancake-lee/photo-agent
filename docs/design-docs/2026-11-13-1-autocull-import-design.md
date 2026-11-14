@@ -5,7 +5,7 @@
 - 需求来源：用户对话
 - 设计范围：Windows 导入、AutoCull 初筛、原片归档、活动精选与删除恢复
 
-[导入工作流专题](2026-08-11-import-workflow-hub.md) · [W14 实施入口](../backlog.md#w14-相机与-ipad-筛片结果汇合入库)
+[现行桌面导入设计](2026-08-11-desktop-import-design.md) · [W14 实施入口](../backlog.md#w14-相机与-ipad-筛片结果汇合入库)
 
 ## 核心方案 · 审批读到这里
 

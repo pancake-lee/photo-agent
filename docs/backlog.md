@@ -28,7 +28,7 @@
 
 ### W14 相机与 iPad 筛片结果汇合入库
 
-> 关联专题：[导入工作流](design-docs/2026-08-11-import-workflow-hub.md) · [交互与原片流转设计](design-docs/2026-11-13-1-autocull-import-design.md)
+> 关联专题：[现行桌面导入](design-docs/2026-08-11-desktop-import-design.md) · [交互与原片流转设计](design-docs/2026-11-13-1-autocull-import-design.md)
 
 - 状态：规划中
 - 背景：相机有大量未导入的 NEF 和 JPG。部分拍摄在 iPad 上已删除废片、标记收藏，其余照片希望在 Photo Agent 内自动初筛并人工复审。现有客户端要求手工整理 `full/nef/like`，实际只上传 `like` 中的文件，普通留存缺少入库入口。

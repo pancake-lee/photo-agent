@@ -7,6 +7,7 @@
 
 ## 专题设计
 
+- [Windows 桌面导入](2026-08-11-desktop-import-design.md)记录中转目录、收藏 NEF 迁移与同步边界。
 - [主题发现](2026-08-01-topic-discovery-feature-design.md)记录提案管线、版本重跑和工坊交接。
 - [连拍分组](2026-08-19-burst-grouping-design.md)记录双档识别、重算、组内取数与封面维护。
 - [图片管理分段浏览](2026-08-20-lb-photo-list-browsing-design.md)记录筛选、导航定位及双向窗口。
