@@ -2,7 +2,7 @@
 
 > 评估对象：Agent Runtime V1 的框架形态（入口路由 + graph/state/completion/registry + capabilities）。
 > 触发问题：V1 解决了「山西第一天推文」，但用户感觉这套方案窄，不确定是「能力还不够多」还是「框架本身窄」。
-> 参照系：[architecture/00-07 演进线](../../design-docs/architecture/00-photo-agent-architecture.md)、[Agent Runtime 专题中枢](../../design-docs/2026-08-31-2-agent-runtime-hub.md)。
+> 参照系：[architecture/00-07 演进线](../../design-docs/architecture/00-photo-agent-architecture.md)、[Agent 多步任务设计](../../design-docs/2026-08-31-agent-tasks-design.md)。
 > 本次为代码与文档走查型评估，未起服务做运行时验证；Runtime 相关单测 98/98 通过作为基线证据。
 
 ## 结论

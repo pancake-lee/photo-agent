@@ -1,7 +1,7 @@
 # AR3 Capability System 闭环复评
 
 > 评估对象：AR3-1 至 AR3-8。
-> 参照：[首次复评](2026-09-07-ar3-capability-system.md)、[V3 基线](../baseline.md)、[Runtime 中枢](../../design-docs/2026-08-31-2-agent-runtime-hub.md)。
+> 参照：[首次复评](2026-09-07-ar3-capability-system.md)、[V3 基线](../baseline.md)、[Agent 多步任务设计](../../design-docs/2026-08-31-agent-tasks-design.md)。
 > 范围：代码走查、离线全量回归，以及本轮授权的只读真实数据/LLM 回归。
 
 ## 结论

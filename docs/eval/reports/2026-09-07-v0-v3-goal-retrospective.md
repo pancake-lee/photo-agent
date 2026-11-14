@@ -89,5 +89,5 @@
 
 - 代码走查：`agent/cli/server.py`（send_message / SendMessageRequest / 澄清槽位读写）、`agent/cli/photo_agent.py`（CLASSIFY_SYSTEM、_classify_node、五下游节点、route 无状态、sessions resume）、`agent/internal/runtime/state.py`（GOAL 常量、_GOAL_PRESETS）、`agent/internal/chat/session_store.py`（三张表结构）。
 - 全仓 grep：`history|session|conversation|summari|compress|压缩|摘要`，确认无对话历史读取与压缩逻辑。
-- 文档对照：`docs/design-docs/architecture/00–07`、`docs/design-docs/2026-08-31-2-agent-runtime-hub.md`、AR3 复评两份报告结论。
+- 文档对照：`docs/design-docs/architecture/00–07`、`docs/design-docs/2026-08-31-agent-tasks-design.md`、AR3 复评两份报告结论。
 - 未运行：服务、自动回归、LLM 调用、真实数据读取（本评估为纯走查，无消耗）。

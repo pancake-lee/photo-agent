@@ -7,6 +7,7 @@
 
 ## 专题设计
 
+- [Agent 多步任务](2026-08-31-agent-tasks-design.md)记录目标准入、权威范围、恢复和多轮续跑。
 - [检索黄金用例与回归](2026-08-25-golden-query-design.md)记录用例契约、指标快照和三层回归。
 - [AI 照片资产质量](2026-08-26-ai-asset-quality-design.md)记录描述校验、向量版本和检索准入。
 - [Windows 桌面导入](2026-08-11-desktop-import-design.md)记录中转目录、收藏 NEF 迁移与同步边界。
@@ -111,31 +112,7 @@ flowchart TD
 
 ### 3.2.1 Agent Runtime 开放目标执行
 
-开放目标（如「找山西旅游第一天的照片并生成发布文案」）进入 Runtime 循环图，单步查询保持单发管线直调：
-
-```mermaid
-flowchart TD
-    S["START 开放目标"] --> DC["decide<br>LLM 在能力列表中选择下一动作"]
-    DC --> EX["execute<br>程序校验参数并调用能力"]
-    EX --> GR["guardrail<br>确定性验证 + 语义质量门<br>+ 状态到策略映射"]
-    GR -->|"接受"| RD["reduce<br>观察归约进 TaskState"]
-    GR -->|"瞬时重试 / 带反馈修复"| EX
-    GR -->|"无效决策再决策"| DC
-    RD --> CK["check<br>完成检查 + 预算判定<br>+ 无进展检测"]
-    CK -->|"要件未齐且预算可用"| DC
-    CK -->|"要件齐备"| FN["finish<br>标题文案 + 入选照片引用"]
-    CK -->|"候选超限兜底"| FH["finish<br>图文工坊深链"]
-    CK -->|"预算耗尽 / 无进展"| FS["finish<br>说明已完成与缺口"]
-```
-
-- **分层**：`agent/runtime/` 中 state（TaskState + 显式归约 + 状态签名）、budget（步数/时长/成本 + 恢复计数）、completion（确定性完成检查）、registry（能力注册表 + 参数校验 + 质量门/可修复声明）、guardrail（恢复策略表）、evaluators（语义质量门）为框架无关纯 Python；graph.py 仅用 LangGraph 表达循环图与条件回环
-- **TaskState**：goal（目标类型 + 完成要件）/ constraints（用户原始约束）/ resolved_facts（推断事实）/ scope（权威候选范围：硬约束条件 + 物化 ID 集 + 是否受限）/ artifacts（候选与入选照片 ID、文案草稿，大对象只存引用）/ progress（待办里程碑 + 有界历史）
-- **权威范围（AR9）**：resolve_trip 先做约束解析（LLM 只抽取，时间线确定性匹配、时段查固定映射表转小时窗），再由程序只按硬约束（时间线 + 天序 + 小时窗，经 `localtime` 统一本地时区）拼装范围 SQL 物化为权威范围；软提示只影响范围内排序，归约层对候选统一求交集、零命中回落整个范围；受限空范围进入 empty_scope 确定性终态
-- **能力层**：sql_search / rag_search / hybrid_search（检索，query 只承载软提示，候选受范围交集约束）、resolve_trip（约束解析 + 范围物化）/ fetch_photo_details（Go 工具）、select_photos（连拍折叠 + 两级收缩 + 超限深链 + 范围归属校验，迁移自 Compose 管线）/ write_post（复用图文工坊提示词栈）
-- **护栏与恢复（AR2-3/4/5）**：guardrail 按「状态 → 策略」映射执行恢复，temporary 同能力同参数有界重试、invalid 决策侧摘要反馈再决策 / 能力侧（能力声明可修复）带反馈修复、permanent 确定性终态、恢复耗尽以可行动文案停止；文案事实依据质量门在确定性检查通过后按能力声明触发，不通过进修复环。选片由连拍折叠、范围归属和 ID 去重作确定性保护，不以只读文字摘要的近重复判断阻断交付；无进展检测以状态签名（事实键 + 候选摘要 + 要件缺口 + 最近错误）连续不变判定，先注入换策略反馈、仍无进展才停止
-- **预算**：`Agent.RuntimeMaxSteps / RuntimeTimeoutSeconds / RuntimeCostLimit` 配置，成本由 LLM 回调按价格表累加；恢复预算 `RuntimeRetryMax / RuntimeRepairMax / RuntimeRedecideMax`（重试/修复按能力独立计数，再决策全局计数），恢复不消耗步数但计入时长与成本
-- **追踪**：聊天请求以 `trace_id` 串联 `chat.request`、入口 `chat.route_decision`、`chat.execution_summary`、交付和可选反馈事件；执行汇总记录执行结构、技术状态、端到端时延及请求级 Token/成本。Runtime 另输出 decide / execute / guardrail（恢复动作）/ observe / check 步骤事件与 trace_summary（步数、能力调用、恢复计数、里程碑、结束形态）；回放有效窗口为 30 天
-- **开放目标准入与多轮上下文（AR18/V4）**：Runtime 目标注册项同时声明入口意图说明与任务契约，分类器仅能将开放请求指向已注册目标；未知开放请求、非法分类输出和未能消解的跟进进入 `unsupported_goal` 显式终态，说明边界且不执行照片库操作。会话历史经 `internal/context/builder.py` 整理为紧凑历史块（近期原文 + 更早单行摘要 + 照片只留 ID 引用）注入入口分类；有历史时可识别 followup，跟进消解为独立完整请求并声明受影响部分（scope/selection/copy/report/topics）。Runtime 运行后任务快照存 session_store，跟进命中已注册 Runtime 目标时按受影响部分局部失效后续跑（保留有效范围/事实/产物，重开受影响里程碑并作废对应产物，约束合并且当前消息优先）；完整 Planner 与跨任务 Memory 等长任务证据再引入
+已注册的开放目标进入 Runtime，单步查询沿用直接路由。Runtime 按约束确认范围、执行能力并检查交付要件。详细循环、失败恢复和多轮快照见 [Agent 多步任务详细设计](2026-08-31-agent-tasks-design.md)。
 
 ### 3.3 Combined 组合查询详解
 

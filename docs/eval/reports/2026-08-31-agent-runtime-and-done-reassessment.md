@@ -2,7 +2,7 @@
 
 > 评估对象：AR1–AR6，以及本轮 backlog 中其余 4 个 `Done` 条目（TIDY5、TIDY6、CFG8、NAV1）。不含已归档条目、暂缓的 BQ3 与已取代的 CQ4。
 >
-> 专题中枢：[Agent Runtime 专题中枢](../../design-docs/2026-08-31-2-agent-runtime-hub.md)。
+> 专题中枢：[Agent 多步任务设计](../../design-docs/2026-08-31-agent-tasks-design.md)。
 
 ## 结论
 

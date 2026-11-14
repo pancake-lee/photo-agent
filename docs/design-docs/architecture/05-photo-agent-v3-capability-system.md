@@ -1,6 +1,6 @@
 # V3：Capability-Oriented Agent
 
-> 当前落地范围：AR3-1 至 AR3-8（见 [backlog](../../backlog.md)），关联专题：[Agent Runtime 中枢](../2026-08-31-2-agent-runtime-hub.md)。V3 承接 Runtime 通用性专项评估发现的 AR15，不以新增一个总任务掩盖可交付边界。
+> 当前落地范围：AR3-1 至 AR3-8（见 [backlog](../../backlog.md)），关联专题：[Agent Agent 多步任务设计](../2026-08-31-agent-tasks-design.md)。V3 承接 Runtime 通用性专项评估发现的 AR15，不以新增一个总任务掩盖可交付边界。
 
 ## 架构增量
 
