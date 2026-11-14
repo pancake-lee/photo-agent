@@ -7,6 +7,7 @@
 
 ## 专题设计
 
+- [连拍分组](2026-08-19-burst-grouping-design.md)记录双档识别、重算、组内取数与封面维护。
 - [图片管理分段浏览](2026-08-20-lb-photo-list-browsing-design.md)记录筛选、导航定位及双向窗口。
 - [图文工坊](2026-08-23-post-studio-feature-design.md)记录照片编排、文案生成、草稿和导出。
 

@@ -38,4 +38,4 @@
 
 - 窗口加载、导航定位、展示口径与验证方式见 [LB 详细设计](../design-docs/2026-08-20-lb-photo-list-browsing-design.md)。
 - 活动事件和散片重算见 [时间线管理规格](photo-agent.md#28-时间线管理)。
-- 连拍组识别和封面规则见 [BG1 连拍分组设计](../design-docs/2026-08-19-1-burst-grouping-design.md)。
+- 连拍展示和封面操作见 [连拍分组产品规格](2026-08-19-burst-grouping.md)。
