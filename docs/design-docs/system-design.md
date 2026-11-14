@@ -377,6 +377,12 @@ Vite 开发代理：
 
 ## 5. 数据模型
 
+### 5.0 Go 数据库与接口生成
+
+- 表结构的开发源是 `backend/sql/`。在 `backend/` 按 `initDB → gorm → curd` 生成 ORM 模板库、查询模型和常规 CRUD。模板库会重建。生产库由启动迁移按需创建表和补列。 [SQL 源](../../backend/sql/) · [生成目标](../../backend/Makefile) · [启动迁移](../../backend/internal/pkg/db/migrate.go)
+- 业务 API 从手写 Proto 生成 Go 契约和 OpenAPI，再由 `api-cli` 生成 Web 与 Agent SDK。表结构或响应字段调整时，核对生成物和实际客户端使用。 [Proto](../../backend/proto/) · [OpenAPI](../../backend/openapi.yaml)
+- Service 编排业务，DAO 承担数据访问，表关联由服务和 DAO 维护。 [架构边界](../ARCHITECTURE.md#修改时遵守的边界)
+
 ### 5.1 Go SQLite — Photo 表
 
 `photos` 表由 GORM 生成（`backend/internal/pkg/db/model/photos.gen.go`），字段按职责分组：
