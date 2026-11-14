@@ -7,6 +7,7 @@
 
 ## 专题设计
 
+- [检索黄金用例与回归](2026-08-25-golden-query-design.md)记录用例契约、指标快照和三层回归。
 - [AI 照片资产质量](2026-08-26-ai-asset-quality-design.md)记录描述校验、向量版本和检索准入。
 - [Windows 桌面导入](2026-08-11-desktop-import-design.md)记录中转目录、收藏 NEF 迁移与同步边界。
 - [主题发现](2026-08-01-topic-discovery-feature-design.md)记录提案管线、版本重跑和工坊交接。

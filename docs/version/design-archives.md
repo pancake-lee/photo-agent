@@ -10,3 +10,4 @@
 - [主题发现原稿](../_archives/topic-discovery/)
 - [桌面导入原稿](../_archives/import-workflow/)
 - [AI 照片资产质量原稿](../_archives/ai-asset-quality/)
+- [检索黄金用例与回归原稿](../_archives/golden-query/)
