@@ -9,6 +9,7 @@
 
 - [连拍分组](2026-08-19-burst-grouping-design.md)记录双档识别、重算、组内取数与封面维护。
 - [图片管理分段浏览](2026-08-20-lb-photo-list-browsing-design.md)记录筛选、导航定位及双向窗口。
+- [组图检索](2026-08-22-grouped-retrieval-design.md)记录检索粒度、组向量集合与同步。
 - [图文工坊](2026-08-23-post-studio-feature-design.md)记录照片编排、文案生成、草稿和导出。
 
 ---
@@ -174,7 +175,7 @@ flowchart TD
 
 ### 3.6 ChromaDB 向量库设计
 
-**存储策略（Route B）**：ChromaDB 仅存最小元数据（`photo_id` + `chunk_index`），结构化属性全部在 Go SQLite 中。
+ChromaDB 保存向量、照片与分块标识、向量版本和组图元数据。Go SQLite 维护拍摄属性，组合查询以照片 ID 汇合语义与结构化结果。
 
 **索引流程**：
 

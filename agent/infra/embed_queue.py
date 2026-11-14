@@ -548,7 +548,7 @@ class EmbedQueue:
         - 关联标识：photo_id + chunk_index（去重、清理孤立数据、chunk 排序）
         - 向量操作记录：model + embedded_at（向量生成时所用的模型与时间，属向量溯源信息，
           非图片结构化属性，图片结构化属性仍由 Go SQLite 统一管理）
-        RAG 检索不做 ChromaDB where 过滤（详见 docs/design-docs/2026-06-23-chroma-metadata-design.md）。
+        RAG 检索不做 ChromaDB where 过滤（详见 docs/design-docs/2026-08-22-grouped-retrieval-design.md）。
         """
         strategy = self._cfg.chunk_strategy
         if strategy == "none":

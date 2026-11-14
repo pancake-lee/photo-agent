@@ -4,4 +4,5 @@
 
 - [连拍分组原稿](../_archives/burst-grouping/)
 - [图片管理分段浏览原稿](../_archives/photo-list-browsing/)
+- [组图检索原稿](../_archives/grouped-retrieval/)
 - [图文工坊原稿](../_archives/post-studio/)
