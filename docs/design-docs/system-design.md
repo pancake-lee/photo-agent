@@ -5,6 +5,11 @@
 > Go 业务后端（照片存储/EXIF/VLM/Embedding代理）+ Python AI 服务层（LangGraph 编排/Chroma 向量检索/Text-to-SQL） + Web 前端（Vue 3 + NaiveUI）。
 > 早期曾用 Dify 验证 Agent 可行性，现已不作为核心方案。
 
+## 专题设计
+
+- [图片管理分段浏览](2026-08-20-lb-photo-list-browsing-design.md)记录筛选、导航定位及双向窗口。
+- [图文工坊](2026-08-23-post-studio-feature-design.md)记录照片编排、文案生成、草稿和导出。
+
 ---
 
 ## 1. 整体架构
@@ -276,7 +281,7 @@ flowchart TD
 - `DELETE /drafts/:id` — 删除草稿
 - `GET /drafts` — 草稿列表
 - `GET /drafts/:id` — 单条草稿详情
-- `GET /drafts/:id/export` — 导出草稿 ZIP（原图 + Markdown）
+- `GET /drafts/:id/export` — 导出已保存草稿的 ZIP
 
 **存储**：
 

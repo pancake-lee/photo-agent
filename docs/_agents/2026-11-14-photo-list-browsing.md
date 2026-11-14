@@ -6,7 +6,7 @@
 
 - `LB` 沿用专题编号。分段、窗口定位、浏览区及顶栏变化服务于同一用户流程，LB1–LB4、LB6–LB8 是功能的来源与验收历史。 [历史设计中枢](../_archives/photo-list-browsing/2026-08-20-1-photo-list-hub.md)
 - LB5 的活动事件和散片结果是浏览页的输入。活动维护与重算由时间线功能负责。 [时间线规格](../product-specs/photo-agent.md#28-时间线管理) · [时间线归属设计](../design-docs/system-design.md#37-时间线归属与重算)
-- 规格和详细设计分别从 [总规格](../product-specs/photo-agent.md#51-web-前端主要交互方式) 与 [架构](../ARCHITECTURE.md#关键流程) 可达。原实施状态以 [v1.0.10](../version/v1.0.10.md) 为准。
+- 规格和详细设计分别从 [总规格](../product-specs/photo-agent.md#51-web-前端主要交互方式) 与 [系统设计](../design-docs/system-design.md#专题设计) 进入。原实施状态见 [v1.0.10](../version/v1.0.10.md)。
 - LB1 原稿注明源自外部 AI 对话的需求总结。仓库中可追溯的最早文本是 `f6659db` 的首轮规划，直接对话缺少独立入口。 [LB1 原始设计](../_archives/photo-list-browsing/2026-08-20-1-photo-list-segmented-browse-design.md)
 
 ## 规格与实现差异
@@ -32,6 +32,6 @@
 ## 文档迁移
 
 - DOC3 已完成。分段浏览由产品规格和 Feature 详细设计承接。LB5 的管理行为与验收补入总规格，重算契约补入系统设计。 [浏览规格](../product-specs/2026-08-20-photo-list-browsing.md) · [浏览设计](../design-docs/2026-08-20-lb-photo-list-browsing-design.md) · [时间线规格](../product-specs/photo-agent.md#28-时间线管理) · [时间线设计](../design-docs/system-design.md#37-时间线归属与重算)
-- 四份旧稿按原名和原文移入 `docs/_archives/photo-list-browsing/`。版本快照及原稿中的旧相对路径随快照保留。跨目录追溯从版本索引进入，也可用本记录定位新稿、版本和评估。 [归档入口](../version/README.md#历史设计归档)
+- 四份旧稿按原名和原文移入 `docs/_archives/photo-list-browsing/`。版本快照及原稿中的旧相对路径随快照保留。 [历史设计归档索引](../version/design-archives.md)
 - LB5 的同月散片可能在全量重算时合并。现有单测向分组函数提供活动照片作为分隔，全量重算提前剔除这些照片。复验需走完整重算路径，检查人工标记、同月多段及跨月归属。 [重算入口](../../backend/internal/defaultService/service/svc_timeline.go#L374) · [分组用例](../../backend/internal/defaultService/service/svc_timeline_test.go#L42)
 - 迁移验证：四份归档与移动前逐字节一致，既有冻结文件保持原样，35 个新增链接与锚点通过检查。现行规格、设计和架构均可独立于旧稿读取。
