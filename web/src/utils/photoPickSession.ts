@@ -5,7 +5,7 @@
  * 已选照片（含扩展字段如粒度）+ 发起方草稿。覆盖层「完成选择」后把
  * 新的选择写回，发起方读取并清理。F5 刷新后会话仍在，页面重建时可恢复。
  *
- * 协议见 docs/design-docs/2026-08-26-1-photo-pick-overlay.md 第 3.3 节。
+ * 协议见 docs/design-docs/2026-08-26-photo-selection-design.md 的「会话协议」。
  */
 
 /** 覆盖层回传的选中照片：photo_id 去后缀文件名，与评估匹配口径一致 */

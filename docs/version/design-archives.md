@@ -6,3 +6,4 @@
 - [图片管理分段浏览原稿](../_archives/photo-list-browsing/)
 - [组图检索原稿](../_archives/grouped-retrieval/)
 - [图文工坊原稿](../_archives/post-studio/)
+- [照片选择与已选展示原稿](../_archives/photo-selection/)

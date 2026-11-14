@@ -12,6 +12,8 @@
 - [组图检索](2026-08-22-grouped-retrieval-design.md)记录检索粒度、组向量集合与同步。
 - [图文工坊](2026-08-23-post-studio-feature-design.md)记录照片编排、文案生成、草稿和导出。
 
+- [照片选择与已选展示](2026-08-26-photo-selection-design.md)记录覆盖层、会话协议和组内精选。
+
 ---
 
 ## 1. 整体架构
