@@ -187,6 +187,28 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 - 聚合：同一照片多 chunk 只保留距离最小的一条
 - 自动截断：相邻距离比值 ≥1.8 时截断（Max Ratio Gap），保留相关性高的结果
 
+### 3.7 时间线归属与重算
+
+时间线管理维护 SQLite 中的活动事件。Go 后端复用同一套日期窗口进行导入匹配和全量重算。产品行为与验收见 [时间线管理规格](../product-specs/photo-agent.md#28-时间线管理)。
+
+```mermaid
+flowchart TD
+    A[触发重算] --> B[读取活动与照片]
+    B --> C{人工指定或拍摄时间无效}
+    C -->|是| D[保留原归属]
+    C -->|否| E{命中活动窗口}
+    E -->|是| F[写入活动名]
+    E -->|否| G[生成并写入散片组名]
+    D --> H[返回重算进度与计数]
+    F --> H
+    G --> H
+```
+
+- 活动匹配 · 使用后端本地日期和配置窗口。区间从活动日前若干天起，右端取窗口上限与下一活动中点中较早的一天。重叠时按活动日期顺序取首个命中。 [匹配规则](../../backend/internal/defaultService/service/timeline.go#L65) · [配置模板](../../configs/config.yaml#L35)
+- 散片分组 · 设计按活动间隔及本地月份切分，同月组序号按时间递增。当前重算先剔除活动照片，再把剩余照片交给分组函数。实际流程可能把同月、分处活动两侧的散片合并。跨月与同月多段验收以完整重算为准。 [重算入口](../../backend/internal/defaultService/service/svc_timeline.go#L374) · [分组实现](../../backend/internal/defaultService/service/timeline.go#L126)
+- 数据职责 · 活动事件保存日期、名称和备注。照片保存活动名或散片名及人工标记，通过名称逻辑关联。散片清单从现存照片归属聚合，图片管理读取事件和散片清单。旧 JSON 导入属于 v1.0.10 的迁移历史。 [存储定义](../../backend/sql/timeline_events.sql) · [版本记录](../version/v1.0.10.md#时间线顶栏与可维护性lb5-lb8)
+- 执行反馈 · 重算在后端异步执行，同一时刻接受一次任务。页面轮询进度与计数。写入失败记入后端日志，当前状态接口只有运行标记和计数，结束后需结合结果及日志判断部分失败。 [服务契约](../../backend/proto/timeline_service.proto) · [管理页](../../web/src/views/TimelineManagement.vue)
+
 ---
 
 ## 4. API 设计
@@ -234,7 +256,7 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 - `GET /timelines` — 时间线列表
 - `GET /timelines/:name/photos` — 某时间线下照片
 - `GET /timeline-events` — 时间线事件列表
-- `POST /timeline-events` — 创建时间线事件
+- `POST /timeline-events` — 新建或更新活动事件
 - `POST /timeline-events/recompute` — 重算时间线归属
 - `GET /timeline-events/recompute/status` — 重算进度
 - `DELETE /timeline-events/:id` — 删除时间线事件
@@ -465,7 +487,7 @@ photo-agent/
 
 - **Go**：
   - `internal/defaultService/service/file_util.go`：EXIF 提取 + 图片尺寸读取 + ImageMagick 压缩
-  - `internal/defaultService/service/timeline.go`：从用户提供的 Markdown 表格解析时间线事件
+  - `internal/defaultService/service/timeline.go`：从数据库读取活动事件，提供日期匹配和散片分组。见 [时间线归属与重算](#37-时间线归属与重算)
 - **Python**：
   - `internal/evals/`：RAG 检索评估（黄金查询 + MRR/P@10 指标）与聚类规则评估
   - `scripts/`：检索回归脚本；照片嵌入由 VLM/Embedding 队列闭环完成

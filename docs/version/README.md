@@ -20,3 +20,7 @@
 - [v1.0.8](v1.0.8.md)
 - [v1.0.7](v1.0.7.md)
 - [v1.0.6](v1.0.6.md)
+
+## 历史设计归档
+
+- DOC3 · 图片管理分段浏览文档迁移。LB1–LB8 的四份旧设计原稿归档，供复盘、分析和统计。功能交付记录见 [v1.0.10](v1.0.10.md)。[历史设计中枢](../_archives/photo-list-browsing/2026-08-20-1-photo-list-hub.md) · [历史评估](../eval/reports/2026-08-21-photo-list-lb-series.md) · [迁移核对记录](../_agents/2026-11-14-photo-list-browsing.md#文档迁移)

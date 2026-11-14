@@ -175,7 +175,7 @@
 - **剩余问题**：LB5 重算未执行（用户步骤）、LB7 PhotoManagement.vue 拆分、LB8 四项低危小项
 - **误报澄清**：子代理报「offset 不随排序方向/排序 UI 残留/气泡无延迟」三项高严重问题，经运行时复测全部排除（首项因 curl 误传 camelCase 参数走进 default 分支）
 - **评估报告**：`reports/2026-08-21-photo-list-lb-series.json`
-- **专题中枢**：[design-docs/2026-08-20-1-photo-list-hub.md](../design-docs/2026-08-20-1-photo-list-hub.md)
+- **历史设计**：[版本索引中的 LB 归档入口](../version/README.md#历史设计归档)
 
 ### 2026-08-18 — 导入工作流 W1-W11（Windows 客户端，第三轮整体评估）
 
