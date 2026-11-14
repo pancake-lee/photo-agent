@@ -16,3 +16,4 @@
 - [Web 照片上传原稿](../_archives/web-photo-upload/)
 - [后端重构原稿](../_archives/backend-refactor/)
 - [后端代码质量治理原稿](../_archives/backend-quality/)
+- [任务验收交接原稿](../_archives/harness-task-closure/)
