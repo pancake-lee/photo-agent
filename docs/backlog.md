@@ -24,7 +24,7 @@
 > v1.0.15 已归档：PS10、BQ1–BQ2、BQ4–BQ6、BQ8–BQ11、DOC2、TIDY1–TIDY4、CFG1–CFG7，详见 [v1.0.15](version/v1.0.15.md)。
 > v1.0.14 已归档：CQ1–CQ3、CQ5、CQ6、AQL2-1、AQL2-2，详见 [v1.0.14](version/v1.0.14.md)。
 > DOC3 文档迁移已完成，见 [LB 迁移记录](_agents/2026-11-14-photo-list-browsing.md#文档迁移)。
-> 其余 6 项待规划任务经审阅后迁至 [未来需求暂存](design-docs/2099-01-01-future-requirements.md)。
+> 暂未启动的方向见[未来需求](future-requirements.md)。
 
 ### W14 相机与 iPad 筛片结果汇合入库
 

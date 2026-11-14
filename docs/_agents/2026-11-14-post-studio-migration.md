@@ -5,7 +5,7 @@
 ## 现行入口
 
 - 产品规格维护创作入口、模式、草稿、导出与验收。详细设计维护模块职责、文案契约和保存边界。文件名沿用首轮设计日期 `2026-08-23`。 [产品规格](../product-specs/2026-08-23-post-studio.md) · [详细设计](../design-docs/2026-08-23-post-studio-feature-design.md)
-- 共享选图控件、Agent 候选收缩和草稿清空等未来项继续在各自文档维护。工坊补图当前使用页面内的搜索弹窗。 [工坊页面](../../web/src/views/PostStudio.vue#L584) · [未来需求](../design-docs/2099-01-01-future-requirements.md#fr-8-草稿字段清空能力)
+- 共享选图控件、Agent 候选收缩和草稿清空等未来项继续在各自文档维护。工坊补图当前使用页面内的搜索弹窗。 [工坊页面](../../web/src/views/PostStudio.vue#L584) · [未来需求](../future-requirements.md#fr-8-草稿字段清空能力)
 - 两份旧稿保留原名与字节内容。 [历史设计归档索引](../version/design-archives.md)
 
 ## 实现边界

@@ -71,6 +71,5 @@
 - [docs/harness/styles/code.md](docs/harness/styles/code.md) — 各语言编码规范
 - [docs/harness/styles/doc-review.md](docs/harness/styles/doc-review.md) — 文档审阅规范
 - [docs/eval/baseline.md](docs/eval/baseline.md) — 评估基线指标
-- [docs/design-docs/2099-01-01-future-requirements.md](docs/design-docs/2099-01-01-future-requirements.md) — 未来需求暂存（从 backlog 审阅迁出）
 - [docs/design-docs/](docs/design-docs/) — 方案设计文档
 - [docs/version/](docs/version/README.md) — 版本记录与历史归档入口

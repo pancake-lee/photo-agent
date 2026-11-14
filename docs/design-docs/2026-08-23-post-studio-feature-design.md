@@ -30,8 +30,8 @@ flowchart TD
 ### 页面与数据职责
 
 - Web 汇合自选、提案和草稿入口。采纳提案优先使用提案照片序列，叙事内容预填正文及润色输入。Agent 候选过多时也可传入照片进入工坊。 [工坊页面](../../web/src/views/PostStudio.vue) · [主题采纳](../../web/src/views/SuggestView.vue) · [Agent 候选入口](../../agent/internal/runtime/capabilities/creation.py)
-- 工坊复用照片卡、详情灯箱与连拍精选弹窗，补图搜索由工坊维护。详情按当前照片顺序切换。详情处理入口与元数据编辑边界见 [FR-7](2099-01-01-future-requirements.md#fr-7-详情面板读写模式区分)。
-- Go 草稿服务保存照片顺序与组引用、文案、来源、风格和两种模式输入。状态由草稿管理手动修改。空标题和正文沿用原值，两份模式输入支持清空。 [草稿服务](../../backend/internal/defaultService/service/svc_draft.go) · [PS10 验收记录](../version/v1.0.15.md#验证结果) · [FR-8](2099-01-01-future-requirements.md#fr-8-草稿字段清空能力)
+- 工坊复用照片卡、详情灯箱与连拍精选弹窗，补图搜索由工坊维护。详情按当前照片顺序切换。详情处理入口与元数据编辑边界见 [FR-7](../future-requirements.md#fr-7-详情面板读写模式区分)。
+- Go 草稿服务保存照片顺序与组引用、文案、来源、风格和两种模式输入。状态由草稿管理手动修改。空标题和正文沿用原值，两份模式输入支持清空。 [草稿服务](../../backend/internal/defaultService/service/svc_draft.go) · [PS10 验收记录](../version/v1.0.15.md#验证结果) · [FR-8](../future-requirements.md#fr-8-草稿字段清空能力)
 - ZIP 在打包前检查原片是否可用，并为同名照片分配文件名。接口与路由见 [系统设计](system-design.md#41-go-backend-apiapiv1)。
 
 ### 文案上下文与结果
