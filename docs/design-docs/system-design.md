@@ -7,6 +7,7 @@
 
 ## 专题设计
 
+- [AI 照片资产质量](2026-08-26-ai-asset-quality-design.md)记录描述校验、向量版本和检索准入。
 - [Windows 桌面导入](2026-08-11-desktop-import-design.md)记录中转目录、收藏 NEF 迁移与同步边界。
 - [主题发现](2026-08-01-topic-discovery-feature-design.md)记录提案管线、版本重跑和工坊交接。
 - [连拍分组](2026-08-19-burst-grouping-design.md)记录双档识别、重算、组内取数与封面维护。
@@ -244,7 +245,7 @@ flowchart TD
 
 **VLM 队列**：
 
-- `POST /vlm/queue/start` — 启动批量 VLM（支持 force 重新处理）
+- `POST /vlm/queue/start` — 启动批量 VLM（普通批次处理缺描述，force 还纳入当前描述待复核的照片）
 - `POST /vlm/queue/stop` — 停止队列
 - `GET /vlm/queue/status` — 队列进度（total/completed/failed/current）
 - `GET /vlm/describe/progress` — 单张描述进度

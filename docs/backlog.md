@@ -58,7 +58,7 @@
 - **实施**：2026-10-30 用户手动完成修复；同时为 `extractJSONBlock` 补充用途注释。
 - **验收**：暂存代码已包含新增关键词，`validateVlmDescription` 会在描述包含该词时返回审核错误。按用户本轮说明「已修复」登记完成。
 - **验证记录**：AI 仅静态核对暂存差异与审核函数，未运行服务、调用真实 LLM 或修改业务数据。
-- **关联**：[人工维护记录](_archives/handmake-record-1.md)、[资产质量闭环专题](design-docs/2026-08-26-4-ai-asset-quality-loop-hub.md)；延续 AQL2-2 的坏图描述漏判修复。
+- **关联**：[人工维护记录](_archives/handmake-record-1.md)、[资产质量闭环设计](design-docs/2026-08-26-ai-asset-quality-design.md)；延续 AQL2-2 的坏图描述漏判修复。
 
 ### OBS3 Go 后端 Grafana 与 Prometheus 接入配置
 
