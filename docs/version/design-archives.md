@@ -13,3 +13,4 @@
 - [检索黄金用例与回归原稿](../_archives/golden-query/)
 - [Agent 多步任务原稿](../_archives/agent-runtime/)
 - [聚类结果审阅原稿](../_archives/cluster-review/)
+- [Web 照片上传原稿](../_archives/web-photo-upload/)

@@ -7,6 +7,7 @@
 
 ## 专题设计
 
+- [Web 照片上传](2026-06-18-web-photo-upload-design.md)记录原片、缩略图和同名处理。
 - [聚类结果审阅](2026-07-26-cluster-review-design.md)记录向量聚类、主题生成和标题评估。
 - [Agent 多步任务](2026-08-31-agent-tasks-design.md)记录目标准入、权威范围、恢复和多轮续跑。
 - [检索黄金用例与回归](2026-08-25-golden-query-design.md)记录用例契约、指标快照和三层回归。
