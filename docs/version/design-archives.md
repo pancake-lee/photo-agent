@@ -7,3 +7,4 @@
 - [组图检索原稿](../_archives/grouped-retrieval/)
 - [图文工坊原稿](../_archives/post-studio/)
 - [照片选择与已选展示原稿](../_archives/photo-selection/)
+- [主题发现原稿](../_archives/topic-discovery/)

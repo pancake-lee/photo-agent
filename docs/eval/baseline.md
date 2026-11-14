@@ -115,7 +115,7 @@
 > 数据管道各环节的正确性指标，跟踪属性解析、选题发现等流程的数据质量。
 > 指标来源：AI 评估模式下的 `sqlite3` 直接查询 + suggest API 调用。
 >
-> 📋 3.4 专题中枢：[主题发现专题中枢](../_archives/topic-discovery/2026-07-27-5-topic-discovery-hub.md)
+> 主题发现的旧稿入口见[历史设计归档索引](../version/design-archives.md)。
 >
 > 中枢文档：[2026-08-11-import-workflow-hub.md](../design-docs/2026-08-11-import-workflow-hub.md) — 导入工作流专题全部关联产物的汇总入口
 
