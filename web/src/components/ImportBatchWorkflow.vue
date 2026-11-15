@@ -185,10 +185,19 @@ async function runGrouping() {
   }
 }
 
-function decide(ids: string[], value: ImportDecision) {
+function decide(ids: string[], value: ImportDecision, successMessage?: string) {
   return perform('保存审阅决定', async () => {
-    if (batch.value) batch.value = await getImportBatchApp().DecideImportBatch(batch.value.id, ids, value)
+    if (!batch.value) return
+    batch.value = await getImportBatchApp().DecideImportBatch(batch.value.id, ids, value)
+    if (successMessage) message.success(successMessage)
   })
+}
+
+function keepOnlyCurrent(id: string) {
+  const otherIDs = groupMembers.value.filter((member) => member.id !== id).map((member) => member.id)
+  if (otherIDs.length) {
+    return decide(otherIDs, 'discarded', `已标记删除同组其余 ${otherIDs.length} 张照片，可撤销上一步`)
+  }
 }
 
 function toggleFavorite(ids: string[]) {
@@ -500,6 +509,8 @@ onUnmounted(() => {
         <NSpace>
           <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite([selected.id])">{{ favoriteLabel([selected.id]) }}</NButton>
           <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide([selected.id], 'discarded')">删除当前照片</NButton>
+          <NButton size="small" type="error" secondary :disabled="!!busy || grouping || groupMembers.length < 2"
+            @click="keepOnlyCurrent(selected.id)">只保留当前照片</NButton>
           <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(groupMembers.map((item) => item.id))">{{ favoriteLabel(groupMembers.map((item) => item.id)) }}</NButton>
           <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(groupMembers.map((item) => item.id), 'discarded')">删除整组</NButton>
         </NSpace>
