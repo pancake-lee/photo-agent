@@ -28,6 +28,8 @@
 - 软件设计与任务组织：分别读取 [DESIGN.md](docs/harness/DESIGN.md)、[PLANS.md](docs/harness/PLANS.md)。
 - 安全、可靠性与长期评分：按任务读取 [SECURITY.md](docs/harness/SECURITY.md)、[RELIABILITY.md](docs/harness/RELIABILITY.md)、[QUALITY_SCORE.md](docs/harness/QUALITY_SCORE.md)。
 - 代码修改：读取[通用代码规范](docs/harness/styles/code.md)，再选择 [Go](docs/harness/styles/golang.md)、[Python](docs/harness/styles/python.md)或 [TypeScript](docs/harness/styles/typescript.md)规范。
+- 文档组织、拆分与维护：读取[文档治理规范](docs/harness/DOCUMENTATION.md)。
+- 知识材料编写与学习笔记审阅：按任务读取[知识材料的聚焦与边界](docs/harness/DOCUMENTATION.md#知识材料的聚焦与边界)及[学习笔记评估要求](docs/harness/DOCUMENTATION.md#评估学习笔记)。
 - 文档输出：读取[文档规范](docs/harness/styles/markdown.md)，再选择[产品规格](docs/harness/styles/product-spec.md)、[设计记录](docs/harness/styles/design-doc.md)、[架构说明](docs/harness/styles/architecture.md)、[记录](docs/harness/styles/record.md)或[参考资料](docs/harness/styles/reference.md)写法。
 - Web 工具使用与验证：[Web 规范](docs/harness/styles/web.md)。
 
