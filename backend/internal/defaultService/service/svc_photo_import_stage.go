@@ -1,11 +1,14 @@
 package service
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"time"
 
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
@@ -120,8 +123,54 @@ func (s *PhotoServer) importStageImage(ctx khttp.Context) error {
 		return ctx.Result(http.StatusNotFound, map[string]string{"error": "暂存 JPG 不存在"})
 	}
 	ctx.Response().Header().Set("Cache-Control", "no-store")
+	if query.Get("size") == "thumbnail" {
+		if thumbnail, err := stagedImportThumbnail(ctx.Request().Context(), path); err == nil {
+			ctx.Response().Header().Set("Cache-Control", "private, max-age=3600")
+			path = thumbnail
+		}
+	}
 	http.ServeFile(ctx.Response(), ctx.Request(), path)
 	return nil
+}
+
+func stagedImportThumbnail(ctx context.Context, source string) (string, error) {
+	dir := filepath.Join(filepath.Dir(source), "thumbnails")
+	err := os.Mkdir(dir, 0755)
+	if err != nil && !os.IsExist(err) {
+		return "", err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("批次缩图位置不是目录")
+	}
+	target := filepath.Join(dir, filepath.Base(source))
+	info, err = os.Lstat(target)
+	if err == nil && info.Mode().IsRegular() {
+		return target, nil
+	}
+
+	temp, err := os.CreateTemp(dir, ".preview-*.jpg")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(temp.Name())
+	err = temp.Close()
+	if err != nil {
+		return "", err
+	}
+	thumbnailCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(thumbnailCtx, "convert", source, "-auto-orient",
+		"-resize", "512x512>", "-strip", "-quality", "82", temp.Name())
+	err = cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	err = os.Rename(temp.Name(), target)
+	return target, err
 }
 
 func (s *PhotoServer) archiveStagedJPG(ctx khttp.Context) error {

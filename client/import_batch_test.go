@@ -45,7 +45,7 @@ func TestScanImportBatchMixedSourcesAndCoveredDifference(t *testing.T) {
 	writeFile(t, filepath.Join(work, "ignored.JPG"), []byte("work copy"))
 
 	batch := &ImportBatch{
-		ID: strings.Repeat("a", 32), Activity: "202609-桂林", Reviewed: true, Complete: true,
+		ID: strings.Repeat("a", 32), Activity: "202609-桂林", Complete: true,
 		Sources: []ImportBatchSource{
 			{Path: filepath.Join(root, "local"), Role: "local"},
 			{Path: full, Role: "retained"}, {Path: favorites, Role: "favorite"},
@@ -66,7 +66,7 @@ func TestScanImportBatchMixedSourcesAndCoveredDifference(t *testing.T) {
 	if c1.Decision != batchFavorite || c1.NEF.Path != filepath.Join(card1, "DSC_0123.NEF") {
 		t.Fatalf("card one = %#v", c1)
 	}
-	if c2.Decision != batchPending || !c2.MissingFromExport || c2.NEF.Path != filepath.Join(card2, "DSC_0123.NEF") {
+	if c2.Decision != batchKept || !c2.MissingFromExport || c2.NEF.Path != filepath.Join(card2, "DSC_0123.NEF") {
 		t.Fatalf("card two = %#v", c2)
 	}
 	if iPad.Decision != batchFavorite || iPad.NEF.Path != filepath.Join(rawOnly, "DSC_0987.NEF") {
@@ -75,7 +75,7 @@ func TestScanImportBatchMixedSourcesAndCoveredDifference(t *testing.T) {
 	if len(collectImportRecycle(batch, "discarded")) != 0 {
 		t.Fatal("an inferred discard became eligible without human review")
 	}
-	err := batch.setDecisions([]string{c2.ID}, batchDiscarded, false)
+	err := batch.setDecisions([]string{c2.ID}, batchDiscarded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestScanImportBatchMixedSourcesAndCoveredDifference(t *testing.T) {
 		t.Fatalf("undo left the files eligible: %#v", items)
 	}
 
-	partial := &ImportBatch{Sources: batch.Sources, Reviewed: true}
+	partial := &ImportBatch{Sources: batch.Sources}
 	scanImportBatch(work, partial, nil)
 	for _, entry := range partial.Entries {
 		if entry.MissingFromExport {
@@ -106,11 +106,8 @@ func TestImportBatchPersistsDecisionAcrossMoveAndRequiresContent(t *testing.T) {
 		Sources: []ImportBatchSource{{Path: source, Role: "local"}}}
 	scanImportBatch(work, batch, nil)
 	id := batch.Entries[0].ID
-	err := batch.setDecisions([]string{id}, batchLater, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = saveImportBatch(work, batch)
+	batch.Entries[0].Decision, batch.Entries[0].Origin = "later", "manual"
+	err := saveImportBatch(work, batch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,12 +121,12 @@ func TestImportBatchPersistsDecisionAcrossMoveAndRequiresContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanImportBatch(work, batch, old)
-	if entry := batch.Entries[0]; entry.ID != id || entry.Decision != batchLater {
+	if entry := batch.Entries[0]; entry.ID != id || entry.Decision != "later" {
 		t.Fatalf("moved entry = %#v", entry)
 	}
 	writeFile(t, target, []byte("replacement"))
 	scanImportBatch(work, batch, old)
-	if entry := batch.Entries[0]; entry.ID == id || entry.Decision != batchPending {
+	if entry := batch.Entries[0]; entry.ID == id || entry.Decision != batchKept {
 		t.Fatalf("replacement inherited decision = %#v", entry)
 	}
 }
@@ -187,7 +184,7 @@ func TestRawOnlyCoveredDiscardUsesStartingJPGAsEvidence(t *testing.T) {
 	if len(batch.Entries) != 1 || !batch.Entries[0].ReferenceOnly || !batch.Entries[0].MissingFromExport {
 		t.Fatalf("expected one covered raw-only candidate: %#v", batch.Entries)
 	}
-	err := batch.setDecisions([]string{batch.Entries[0].ID}, batchDiscarded, false)
+	err := batch.setDecisions([]string{batch.Entries[0].ID}, batchDiscarded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,5 +230,33 @@ func TestLocalRecycleUnavailableRetainsOriginal(t *testing.T) {
 	}
 	if _, err = app.RecycleImportFiles(batch.ID, "imported", []string{filePath}, true); err == nil {
 		t.Fatal("permanent deletion for imported images was accepted")
+	}
+}
+
+func TestImportGroupReviewDecisions(t *testing.T) {
+	batch := &ImportBatch{Entries: []ImportBatchEntry{
+		{ID: "first", JPG: &ImportBatchFile{Path: "first.jpg"}, Decision: batchFavorite, Origin: "ipad"},
+		{ID: "second", JPG: &ImportBatchFile{Path: "second.jpg"}, Decision: "later"},
+		{ID: "third", JPG: &ImportBatchFile{Path: "third.jpg"}, Decision: batchKept},
+	}}
+	if !batch.Entries[1].canUpload() || !batch.Entries[2].canUpload() {
+		t.Fatal("untouched entries should be eligible for the confirmed import")
+	}
+	ids := []string{"first", "second"}
+	err := batch.setDecisions(ids, batchFavorite)
+	if err != nil || batch.Entries[1].Decision != batchFavorite || batch.Entries[2].Decision == batchFavorite {
+		t.Fatalf("group favorite: %#v, %v", batch.Entries, err)
+	}
+	batch.undoDecisions()
+	if batch.Entries[0].Decision != batchFavorite || batch.Entries[1].Decision != "later" {
+		t.Fatal("group favorite undo should restore each member's state")
+	}
+	err = batch.setDecisions(ids, batchDiscarded)
+	if err != nil || batch.Entries[0].canUpload() || batch.Entries[1].canUpload() || !batch.Entries[2].canUpload() {
+		t.Fatalf("group deletion: %#v, %v", batch.Entries, err)
+	}
+	batch.undoDecisions()
+	if batch.Entries[0].Decision != batchFavorite || batch.Entries[1].Decision != "later" {
+		t.Fatal("group deletion undo should restore each member's state")
 	}
 }

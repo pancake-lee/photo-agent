@@ -12,7 +12,8 @@ import type { PhotoListItem, BurstViewLevel } from '../types/photo'
 import { formatDate } from '../utils/format'
 
 const props = withDefaults(defineProps<{
-  photo: PhotoListItem
+  photo: Pick<PhotoListItem, 'id' | 'filename' | 'thumbnail_url' | 'has_nef' | 'burst_group_id' | 'burst_cover' | 'burst_count'>
+    & Partial<Pick<PhotoListItem, 'shot_at' | 'brand' | 'model' | 'lens' | 'iso' | 'aperture' | 'focal_length' | 'has_description'>>
   processing?: boolean
   embedProcessing?: boolean
   isEmbedded?: boolean
@@ -228,6 +229,7 @@ function formatExifTooltip(): string {
           </div>
         </template>
         <div class="photo-name">{{ photo.filename }}</div>
+        <slot name="actions" />
       </NCard>
     </template>
     <pre class="exif-tooltip">{{ formatExifTooltip() }}</pre>

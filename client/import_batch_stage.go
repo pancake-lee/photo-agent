@@ -8,7 +8,7 @@ import (
 )
 
 func (entry ImportBatchEntry) canStage() bool {
-	return entry.JPG != nil && !entry.Historical && !entry.ReferenceOnly &&
+	return entry.JPG != nil && !entry.Historical && !entry.ReferenceOnly && entry.Decision != batchDiscarded &&
 		(entry.Upload == nil || !entry.Upload.Verified)
 }
 

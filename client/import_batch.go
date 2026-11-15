@@ -22,7 +22,6 @@ const (
 	batchKept      = "kept"
 	batchFavorite  = "favorite"
 	batchDiscarded = "discarded"
-	batchLater     = "later"
 )
 
 type ImportBatchSource struct {
@@ -57,15 +56,14 @@ type ImportBatchEntry struct {
 	Historical        bool               `json:"historical,omitempty"`
 	ReferenceOnly     bool               `json:"reference_only,omitempty"`
 	ShotAt            string             `json:"shot_at,omitempty"`
-	Score             *ImportCullScore   `json:"score,omitempty"`
 	Upload            *ImportBatchUpload `json:"upload,omitempty"`
 }
 
 type ImportBatch struct {
+	Bursts    *ImportReviewBursts  `json:"bursts,omitempty"`
 	ID        string               `json:"id"`
 	Activity  string               `json:"activity"`
 	Sources   []ImportBatchSource  `json:"sources"`
-	Reviewed  bool                 `json:"reviewed"`
 	Complete  bool                 `json:"complete"`
 	Entries   []ImportBatchEntry   `json:"entries"`
 	Issues    []string             `json:"issues"`
@@ -476,14 +474,15 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 		full, fullUncertain := fullIndex.exportedJPG(jpg)
 		favorite, favoriteUncertain := favoriteIndex.exportedJPG(jpg)
 		start, _ := startIndex.exportedJPG(jpg)
-		entry.Inherited = batchPending
+		entry.Inherited = batchKept
+		if entry.ReferenceOnly {
+			entry.Inherited = batchPending
+		}
 		switch {
 		case len(favorite) == 1 || identicalImportFiles(favorite):
 			entry.Inherited, entry.Origin = batchFavorite, "ipad"
 		case len(favorite) > 1 || len(favoriteUncertain) > 0:
 			entry.Conflict = true
-		case (len(full) == 1 || identicalImportFiles(full)) && batch.Reviewed:
-			entry.Inherited, entry.Origin = batchKept, "ipad"
 		case identicalImportFiles(start) && len(full) == 0 && len(fullUncertain) == 0 &&
 			batch.Complete && len(batch.Issues) == 0:
 			entry.MissingFromExport = true
@@ -572,14 +571,14 @@ func mergeImportBatch(batch, previous *ImportBatch) {
 			continue
 		}
 		used[old.ID] = true
-		entry.ID, entry.Score, entry.Upload = old.ID, old.Score, old.Upload
+		entry.ID, entry.Upload = old.ID, old.Upload
 		entry.StagedServer, entry.StageError = old.StagedServer, old.StageError
 		if old.ShotAt != "" {
 			entry.ShotAt = old.ShotAt
 		}
 		if old.Origin == "manual" || old.Upload != nil && old.Upload.Verified {
 			entry.Decision, entry.Origin = old.Decision, old.Origin
-			entry.Conflict = entry.Conflict || entry.Inherited != batchPending &&
+			entry.Conflict = entry.Conflict || entry.Inherited == batchFavorite &&
 				old.Decision != entry.Inherited &&
 				(old.Conflict || old.Inherited != entry.Inherited)
 		}
@@ -603,14 +602,14 @@ func mergeImportBatch(batch, previous *ImportBatch) {
 
 func validBatchDecision(decision string) bool {
 	switch decision {
-	case batchKept, batchFavorite, batchDiscarded, batchPending, batchLater:
+	case batchKept, batchFavorite, batchDiscarded:
 		return true
 	default:
 		return false
 	}
 }
 
-func (batch *ImportBatch) setDecisions(ids []string, decision string, pendingOnly bool) error {
+func (batch *ImportBatch) setDecisions(ids []string, decision string) error {
 	if !validBatchDecision(decision) || len(ids) == 0 {
 		return fmt.Errorf("无效审阅决定")
 	}
@@ -621,12 +620,10 @@ func (batch *ImportBatch) setDecisions(ids []string, decision string, pendingOnl
 	undo := make([]ImportBatchUndo, 0, len(ids))
 	for i := range batch.Entries {
 		entry := &batch.Entries[i]
-		if !selected[entry.ID] || (pendingOnly &&
-			(entry.Decision != batchPending || entry.Conflict)) {
+		if !selected[entry.ID] {
 			continue
 		}
-		if entry.Historical || entry.JPG == nil || entry.ReferenceOnly && decision != batchDiscarded &&
-			decision != batchLater && decision != batchPending {
+		if entry.Historical || entry.JPG == nil || entry.ReferenceOnly && decision != batchDiscarded {
 			continue
 		}
 		if entry.Upload != nil && entry.Upload.Verified {
@@ -643,9 +640,23 @@ func (batch *ImportBatch) setDecisions(ids []string, decision string, pendingOnl
 }
 
 func (batch *ImportBatch) undoDecisions() {
+	moved := make(map[string]bool)
+	for _, group := range batch.Recycling {
+		for _, file := range group.Files {
+			switch file.Status {
+			case "staged", "sending", "deleting", "recycled", "deleted":
+				moved[file.Source] = true
+			case "restored":
+				delete(moved, file.Source)
+			}
+		}
+	}
 	for i := range batch.Entries {
 		entry := &batch.Entries[i]
 		if entry.Upload != nil && entry.Upload.Verified {
+			continue
+		}
+		if entry.JPG != nil && moved[entry.JPG.Path] || entry.NEF != nil && moved[entry.NEF.Path] {
 			continue
 		}
 		for _, undo := range batch.Undo {

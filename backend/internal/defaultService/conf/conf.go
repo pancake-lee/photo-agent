@@ -8,9 +8,6 @@ type Config struct {
 		PhotoSrc           string `default:"./data/photos_src"`
 		TimelineWindowDays int    `default:"7"`
 	}
-	AutoCull struct {
-		SourceDir string
-	}
 	VLM struct {
 		MaxImageSizeMB float64 `default:"1"`
 		APIKey         string

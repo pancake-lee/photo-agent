@@ -30,7 +30,7 @@ func TestClientUsesStagedJPGAndSendsOnlyNEFAtConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch := &ImportBatch{ID: strings.Repeat("a", 32), Activity: "demo", Entries: []ImportBatchEntry{{
-		ID: strings.Repeat("b", 32), JPG: jpg, NEF: nef, Decision: batchKept, Pair: "paired",
+		ID: strings.Repeat("b", 32), JPG: jpg, NEF: nef, Decision: batchPending, Pair: "paired",
 	}}}
 	err = saveImportBatch(importBatchRoot(), batch)
 	if err != nil {

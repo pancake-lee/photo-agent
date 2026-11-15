@@ -13,6 +13,7 @@ import { StarOutline, CheckmarkCircleOutline } from '@vicons/ionicons5'
 interface BurstMember {
   id: string
   thumbnail_url: string
+  image_url?: string
   filename: string
 }
 
@@ -130,7 +131,7 @@ function handleCurate() {
             <img
               v-if="selected"
               :key="selected.id"
-              :src="selected.thumbnail_url"
+              :src="selected.image_url || selected.thumbnail_url"
               :alt="selected.filename"
               class="burst-main-img"
               @click="emit('viewDetail', selected.id)"
@@ -143,7 +144,8 @@ function handleCurate() {
       <!-- 操作行：左侧当前照片文件名，右侧封面 / 精选操作 -->
       <div class="burst-actions">
         <span class="burst-filename">{{ selected?.filename ?? '' }}</span>
-        <div v-if="isCurate" class="burst-curate-actions">
+        <slot v-if="$slots.actions && selected" name="actions" :selected="selected" />
+        <div v-else-if="isCurate" class="burst-curate-actions">
           <span class="burst-selected-count">已选 {{ selectedIds.size }} 张</span>
           <NButton
             size="small"

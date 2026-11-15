@@ -35,7 +35,7 @@ func validImportActivity(activity string) bool {
 }
 
 func (a *App) ScanImportBatch(
-	id, activity string, sources []ImportBatchSource, reviewed, complete bool,
+	id, activity string, sources []ImportBatchSource, complete bool,
 ) (*ImportBatch, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
@@ -75,17 +75,17 @@ func (a *App) ScanImportBatch(
 	}
 	batch := &ImportBatch{
 		ID: id, Activity: activity, Sources: sources,
-		Reviewed: reviewed, Complete: complete,
+		Complete: complete,
 	}
 	scanImportBatch(root, batch, old)
 	return batch, saveImportBatch(root, batch)
 }
 
 func (a *App) DecideImportBatch(
-	id string, entries []string, decision string, pendingOnly bool,
+	id string, entries []string, decision string,
 ) (*ImportBatch, error) {
 	return a.editImportBatch(id, func(batch *ImportBatch) error {
-		return batch.setDecisions(entries, decision, pendingOnly)
+		return batch.setDecisions(entries, decision)
 	})
 }
 
@@ -143,6 +143,7 @@ func (a *App) SetImportShotAt(id, entryID, shotAt string) (*ImportBatch, error) 
 			entry := &batch.Entries[i]
 			if entry.ID == entryID && entry.JPG != nil && entry.Upload == nil {
 				entry.ShotAt = parsed
+				batch.Bursts = nil
 				return nil
 			}
 		}

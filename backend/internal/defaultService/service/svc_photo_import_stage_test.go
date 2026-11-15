@@ -2,14 +2,12 @@ package service
 
 import (
 	"bytes"
-	"context"
-	"fmt"
+	"image/jpeg"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -21,14 +19,12 @@ import (
 )
 
 func TestStagedReviewHTTP(t *testing.T) {
-	app, root := setupUserPathTest(t)
+	app, _ := setupUserPathTest(t)
 	router := khttp.NewServer(khttp.Timeout(50 * time.Millisecond))
 	(&PhotoServer{}).Reg(nil, router)
 	server := httptest.NewServer(router)
 	defer server.Close()
-	if runtime.GOOS != "windows" {
-		conf.C.AutoCull.SourceDir = fakeAutoCull(t, root, false)
-	}
+
 	jpg, nef := archiveTestJPG(t, 90), []byte("original NEF")
 	req := archiveTestRequest("stage-test", jpg, nef, true)
 	req.BatchID = strings.Repeat("a", 32)
@@ -69,26 +65,42 @@ func TestStagedReviewHTTP(t *testing.T) {
 	}
 	request(http.MethodGet, "stage/image?batch_id=../&sha256="+req.JPG, nil, http.StatusBadRequest, nil)
 
-	if conf.C.AutoCull.SourceDir != "" {
-		id := strings.Repeat("b", 32)
-		var job importCullJob
-		start := map[string]any{"batch_id": req.BatchID, "scene": "auto", "inputs": []importCullInput{{id, req.JPG}}}
-		request(http.MethodPost, "cull/start", start, 200, &job)
+	if _, err := exec.LookPath("convert"); err == nil {
+		thumb := doJSONRequest(t, server.Client(), http.MethodGet, base+imagePath+"&size=thumbnail", nil)
+		_, decodeErr := jpeg.DecodeConfig(thumb.Body)
+		thumb.Body.Close()
+		if decodeErr != nil || thumb.StatusCode != http.StatusOK ||
+			thumb.Header.Get("Cache-Control") == "no-store" {
+			t.Fatalf("server thumbnail status %d: %v", thumb.StatusCode, decodeErr)
+		}
+		at := req.JPGTime.Add(-time.Hour)
+		inputs := []importReviewBurstInput{
+			{ID: strings.Repeat("b", 32), SHA256: req.JPG, ShotAt: at},
+			{ID: strings.Repeat("c", 32), SHA256: req.JPG, ShotAt: at.Add(time.Second)},
+			{ID: strings.Repeat("d", 32), SHA256: req.JPG, ShotAt: at.Add(20 * time.Minute)},
+			{ID: strings.Repeat("e", 32), SHA256: req.JPG},
+		}
+		var job importReviewBurstJob
+		start := map[string]any{"batch_id": req.BatchID, "inputs": inputs}
+		request(http.MethodPost, "burst/start", start, 200, &job)
 		until := time.Now().Add(5 * time.Second)
 		for job.State == "running" && time.Now().Before(until) {
 			time.Sleep(20 * time.Millisecond)
-			var next importCullJob
-			request(http.MethodGet, "cull/status?id="+job.ID, nil, 200, &next)
+			var next importReviewBurstJob
+			request(http.MethodGet, "burst/status?id="+job.ID, nil, 200, &next)
 			job = next
 		}
-		if job.State != "completed" || job.Scores[id] == nil || job.Scores[id].Rating != 0 {
-			t.Fatalf("review job = %#v", job)
+		if job.State != "completed" || job.Groups == nil || len(job.Groups.Fine) != 1 ||
+			len(job.Groups.Fine[0]) != 2 || job.Groups.Fine[0][0] != inputs[0].ID ||
+			job.Groups.Fine[0][1] != inputs[1].ID {
+			t.Fatalf("review job = %#v, groups %#v", job, job.Groups)
 		}
 		digest, _, err := digestFile(filepath.Join(status.Root, status.Target))
 		if err != nil || digest != req.JPG {
-			t.Fatalf("runner changed staged JPG: %s %v", digest, err)
+			t.Fatalf("grouping changed staged JPG: %s %v", digest, err)
 		}
 	}
+
 	var archived archiveImportResult
 	request(http.MethodPost, "preview", req, 200, &archived)
 	if archived.JPGReady || !archived.JPGStaged || archived.NEFReady {
@@ -105,78 +117,5 @@ func TestStagedReviewHTTP(t *testing.T) {
 	row, err := data.PhotoDAO.GetByID(app, archived.PhotoID)
 	if err != nil || !archived.Verified || row.Timeline != req.Activity {
 		t.Fatalf("verified archive = %#v, row %#v, error %v", archived, row, err)
-	}
-}
-
-func fakeAutoCull(t *testing.T, root string, cancel bool) string {
-	t.Helper()
-	source := filepath.Join(root, "autocull")
-	python := filepath.Join(source, ".venv", "bin", "python")
-	if err := os.MkdirAll(filepath.Dir(python), 0700); err != nil {
-		t.Fatal(err)
-	}
-	action := `file=$(printf '%s' *.jpg)
-mkdir -p _cull_out/autocull
-printf 'filename,rating,tier,rank,why,cluster\n%s,0,tail,-1,test,3\n' "$file" > _cull_out/autocull/tiers.csv
-printf 'only the workspace copy changes' > "$file"`
-	if cancel {
-		action = "printf 'analyzing\\n'\nexec sleep 30"
-	}
-	script := fmt.Sprintf(`#!/bin/sh
-set -eu
-[ "$1" = "-m" ] && [ "$2" = "autocull" ]
-if [ "$3" = "--version" ]; then
-  printf 'autocull 1.4.9\n'
-  exit 0
-fi
-cd "$4"
-%s
-`, action)
-	if err := os.WriteFile(python, []byte(script), 0700); err != nil {
-		t.Fatal(err)
-	}
-	return source
-}
-
-func TestServerCullCancellationCleansWorkspace(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX AutoCull fixture")
-	}
-	root := t.TempDir()
-	executable := fakeAutoCull(t, root, true)
-	jpg := archiveTestJPG(t, 28)
-	req := archiveTestRequest("activity", jpg, nil, false)
-	err := os.WriteFile(filepath.Join(root, req.JPG+".jpg"), jpg, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	start := time.Now()
-	_, _, err = analyzeImportBatch(ctx, root, []importCullInput{{strings.Repeat("c", 32), req.JPG}}, executable, "auto", func(progress importCullProgress) {
-		if progress.Message == "analyzing" {
-			cancel()
-		}
-	})
-	if err != context.Canceled || time.Since(start) > 4*time.Second {
-		t.Fatalf("cancel error %v", err)
-	}
-	paths, err := filepath.Glob(filepath.Join(root, "cull-*"))
-	if err != nil || len(paths) != 0 {
-		t.Fatalf("orphaned analysis workspace: %v, %v", paths, err)
-	}
-}
-
-func TestReadCullScoresRejectsDuplicates(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tiers.csv")
-	raw := "\xef\xbb\xbffilename,rating,tier,rank,why,cluster\n" +
-		"a.jpg,4,top5,1,sharp,1\na.jpg,1,reject,-1,duplicate,\nb.jpg,0,tail,-1,good,3\n"
-	if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
-		t.Fatal(err)
-	}
-	manifest := map[string]importCullInput{"a.jpg": {"a", "digest-a"}, "b.jpg": {"b", "digest-b"}}
-	scores, err := readCullScores(path, manifest, "auto")
-	if err != nil || len(scores) != 1 || scores["b"] == nil || scores["b"].Rating != 0 {
-		t.Fatalf("scores %#v, error %v", scores, err)
 	}
 }

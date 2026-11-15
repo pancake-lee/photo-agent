@@ -30,7 +30,6 @@ export interface ImportEntry {
   shot_at?: string
   staged_server?: string
   stage_error?: string
-  score?: { rating: number; rank: number; tier: string; why: string; cluster: string }
   upload?: ImportUpload
 }
 
@@ -75,15 +74,15 @@ interface ImportSummary {
 
 export interface ImportBatch extends ImportSummary {
   sources: ImportSource[]
-  reviewed: boolean
   complete: boolean
   entries: ImportEntry[]
   issues: string[]
   undo?: unknown[]
   recycling?: ImportRecycleGroup[]
+  bursts?: { server: string; fine: string[][]; coarse: string[][] }
 }
 
-export interface ImportCullProgress {
+export interface ImportBurstProgress {
   batch_id: string
   done: number
   total: number
@@ -95,15 +94,14 @@ interface ImportBatchApp {
   ChooseImportSource(): Promise<string>
   ListImportBatches(): Promise<ImportSummary[]>
   GetImportBatch(id: string): Promise<ImportBatch>
-  ScanImportBatch(id: string, activity: string, sources: ImportSource[], reviewed: boolean, complete: boolean): Promise<ImportBatch>
-  DecideImportBatch(id: string, entries: string[], decision: ImportDecision, pendingOnly: boolean): Promise<ImportBatch>
+  ScanImportBatch(id: string, activity: string, sources: ImportSource[], complete: boolean): Promise<ImportBatch>
+  DecideImportBatch(id: string, entries: string[], decision: ImportDecision): Promise<ImportBatch>
   UndoImportBatch(id: string): Promise<ImportBatch>
   ResolveImportPair(id: string, entry: string, nefPath: string): Promise<ImportBatch>
   SetImportShotAt(id: string, entry: string, shotAt: string): Promise<ImportBatch>
   StageImportJPGs(id: string, server: string): Promise<ImportBatch>
-  AnalyzeImportBatch(id: string, server: string, scene: string): Promise<ImportBatch>
-  CancelImportCull(): Promise<void>
-  ClearImportCull(id: string): Promise<ImportBatch>
+  GroupImportBatch(id: string, server: string): Promise<ImportBatch>
+  CancelImportBursts(): Promise<void>
   PreviewImportUploads(id: string, server: string): Promise<ImportPlan[]>
   UploadImportBatch(id: string, server: string, plans: ImportPlan[]): Promise<ImportBatch>
   PreviewImportRecycle(id: string, kind: string): Promise<ImportRecycleFile[]>

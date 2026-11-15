@@ -34,10 +34,6 @@ Storage:
   # 时间线活动窗口天数，活动日前后各 N 天内的照片归入该活动。
   TimelineWindowDays: 7
 
-AutoCull:
-  # 服务器上的固定版本源码目录，空值时可上传并人工审阅。
-  SourceDir: ""
-
 VLM:
   APIKey: "your-vlm-api-key"
   Model: "gpt-4o-mini"

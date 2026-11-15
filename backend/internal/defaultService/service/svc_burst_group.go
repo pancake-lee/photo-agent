@@ -602,7 +602,11 @@ const (
 // loadGrayMatrix 用 ImageMagick 将缩略图缩放为 9x8 灰度，解析 TXT 输出为 72 个灰度值（行优先）。
 // dHash 与 SSIM 共用同一份矩阵，SSIM 无需再起 compare 进程。
 func loadGrayMatrix(imgPath string) ([]float64, error) {
-	cmd := exec.Command("convert", imgPath,
+	return loadGrayMatrixContext(context.Background(), imgPath)
+}
+
+func loadGrayMatrixContext(ctx context.Context, imgPath string) ([]float64, error) {
+	cmd := exec.CommandContext(ctx, "convert", imgPath,
 		"-resize", fmt.Sprintf("%dx%d!", burstGrayW, burstGrayH),
 		"-colorspace", "gray", "txt:-")
 	out, err := cmd.Output()

@@ -68,7 +68,7 @@ func parseImportShotTime(value string) string {
 
 func (entry ImportBatchEntry) canUpload() bool {
 	return !entry.Historical && entry.JPG != nil && !entry.ReferenceOnly && !entry.Conflict &&
-		entry.Pair != "review" && (entry.Decision == batchKept || entry.Decision == batchFavorite)
+		entry.Pair != "review" && entry.Decision != batchDiscarded
 }
 
 func (entry ImportBatchEntry) archiveManifest(activity string) importArchiveManifest {
