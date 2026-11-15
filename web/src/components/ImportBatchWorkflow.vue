@@ -10,6 +10,7 @@ import type {
 } from '../utils/importBatch'
 import { onWailsEvent, wailsApi, wailsError } from '../utils/wails'
 import { settings } from '../stores/settings'
+import { getApiBase } from '../config'
 
 const message = useMessage()
 const keepPlan = ref<string[]>([])
@@ -23,7 +24,6 @@ const complete = ref(false)
 const busy = ref('')
 const culling = ref(false)
 const progress = ref<ImportCullProgress>()
-const executable = ref(localStorage.getItem('import.autocull') ?? '')
 const scene = ref('auto')
 const filter = ref('all')
 const page = ref(1)
@@ -33,7 +33,9 @@ const imageLoading = ref(false)
 const preview = ref(false)
 const uploadPlan = ref<ImportPlan[]>()
 const uploadServer = ref('')
-const uploadProgress = ref<{ batch_id: string; completed: number; total: number; path: string }>()
+interface FileProgress { batch_id: string; completed: number; total: number; path: string }
+const uploadProgress = ref<FileProgress>()
+const stageProgress = ref<FileProgress>()
 const recycle = ref<{ kind: string; files: string[]; permanent: boolean }>()
 const shotEntry = ref<ImportEntry>()
 const shotAt = ref('')
@@ -43,6 +45,8 @@ const roleLabels: Record<ImportSourceRole, string> = {
   local: '本地原片', retained: 'iPad 留存', favorite: 'iPad 收藏', starting: 'iPad 起始范围',
 }
 const roles = Object.entries(roleLabels).map(([value, label]) => ({ label, value }))
+const hasIPadRetained = computed(() => sources.value.some((source) => source.role === 'retained'))
+const hasIPadStarting = computed(() => sources.value.some((source) => source.role === 'starting'))
 const decisions: { value: ImportDecision; label: string; key: string }[] = [
   { value: 'kept', label: '留存', key: '1' },
   { value: 'favorite', label: '收藏', key: '2' },
@@ -62,10 +66,21 @@ const scenes = Object.entries({
   auto: '自动', landscape: '风景', portrait: '人像', event: '活动',
   concert: '演出', wedding: '婚礼', sports: '运动', generic: '通用',
 }).map(([value, label]) => ({ label, value }))
+function canStage(entry: ImportEntry) {
+  return !!entry.jpg && !entry.reference_only && !entry.historical && !entry.upload?.verified
+}
+function isStaged(entry: ImportEntry) {
+  return !!settings.backendUrl && entry.staged_server === settings.backendUrl
+}
+const stageCandidates = computed(() => batch.value?.entries.filter(canStage) ?? [])
+const stagedCount = computed(() => stageCandidates.value.filter(isStaged).length)
+const stagedPending = computed(() => stageCandidates.value.filter((entry) =>
+  isStaged(entry) && entry.decision === 'pending' && !entry.conflict && entry.pair !== 'review',
+))
 const selected = computed(() => batch.value?.entries.filter((entry) => choice.value.includes(entry.id)) ?? [])
 const pendingCount = computed(() => batch.value?.entries.filter((entry) => entry.decision === 'pending' && entry.jpg && !entry.reference_only && !entry.historical).length ?? 0)
 const pendingBatch = computed(() => selected.value.filter((entry) =>
-  entry.jpg && entry.decision === 'pending' && !entry.conflict && !entry.reference_only && entry.pair !== 'review',
+  entry.jpg && isStaged(entry) && entry.decision === 'pending' && !entry.conflict && !entry.reference_only && entry.pair !== 'review',
 ))
 const filtered = computed(() => {
   const entries = batch.value?.entries ?? []
@@ -90,7 +105,6 @@ const progressValue = computed(() => {
 
 watch(filter, () => { page.value = 1 })
 watch(filtered, (list) => { page.value = Math.min(page.value, Math.max(1, Math.ceil(list.length / pageSize))) })
-watch(executable, (value) => localStorage.setItem('import.autocull', value))
 
 async function perform(label: string, fn: () => Promise<void>) {
   if (busy.value) return
@@ -110,6 +124,7 @@ async function selectBatch(id: string | null) {
     const loaded = id ? await getImportBatchApp().GetImportBatch(id) : undefined
     batch.value = loaded
     uploadProgress.value = undefined
+    stageProgress.value = undefined
     activity.value = loaded?.activity ?? ''
     sources.value = loaded?.sources.slice() ?? []
     reviewed.value = loaded?.reviewed ?? false
@@ -131,7 +146,9 @@ async function addSource() {
 async function scan() {
   await perform('扫描来源', async () => {
     batch.value = await getImportBatchApp().ScanImportBatch(
-      batch.value?.id ?? '', activity.value.trim(), sources.value, reviewed.value, complete.value,
+      batch.value?.id ?? '', activity.value.trim(), sources.value,
+      hasIPadRetained.value && reviewed.value,
+      hasIPadRetained.value && hasIPadStarting.value && complete.value,
     )
     choice.value = []
     await refreshBatches()
@@ -142,9 +159,9 @@ async function runCull() {
   const current = batch.value
   if (!current || culling.value) return
   culling.value = true
-  progress.value = { batch_id: current.id, done: 0, failed: 0, total: pendingCount.value, message: '正在准备待审照片' }
+  progress.value = { batch_id: current.id, done: 0, failed: 0, total: stagedPending.value.length, message: '服务器正在准备待审照片' }
   try {
-    batch.value = await getImportBatchApp().AnalyzeImportBatch(current.id, executable.value.trim(), scene.value)
+    batch.value = await getImportBatchApp().AnalyzeImportBatch(current.id, settings.backendUrl, scene.value)
     if (batch.value.entries.some((entry) => entry.score)) filter.value = 'recommended'
   } catch (error) {
     const reason = wailsError(error)
@@ -170,18 +187,40 @@ function toggle(id: string, enabled: boolean) {
   choice.value = enabled ? [...choice.value, id] : choice.value.filter((value) => value !== id)
 }
 
+function canPreview(entry: ImportEntry) {
+  return !!entry.jpg && (isStaged(entry) || !!entry.upload?.verified || !!entry.reference_only)
+}
+
 async function viewImages(entries: ImportEntry[]) {
-  const list = entries.flatMap((entry) => entry.jpg ? [entry.jpg.path] : [])
+  const list = entries.filter(canPreview)
   if (!list.length) return
   preview.value = true
   images.value = []
   imageLoading.value = true
   try {
-    images.value = await Promise.all(list.map(async (path) => ({
-      path, data: `data:image/jpeg;base64,${await wailsApi.previewImage(path)}`,
-    })))
+    images.value = await Promise.all(list.map(async (entry) => {
+      const jpg = entry.jpg!
+      const query = new URLSearchParams({ batch_id: batch.value?.id ?? '', sha256: jpg.sha256 })
+      const photoID = entry.upload?.photo_id
+      const data = entry.upload?.verified && photoID
+        ? `${getApiBase()}/photos/${encodeURIComponent(photoID)}/image`
+        : entry.reference_only
+          ? `data:image/jpeg;base64,${await wailsApi.previewImage(jpg.path)}`
+          : `${getApiBase()}/photo-import/stage/image?${query}`
+      return { path: jpg.path, data }
+    }))
   } catch (error) { message.error(wailsError(error)) }
   finally { imageLoading.value = false }
+}
+
+function stageJPGs() {
+  return perform('上传 JPG 到服务器', async () => {
+    if (!batch.value) return
+    stageProgress.value = { batch_id: batch.value.id, completed: 0, total: stageCandidates.value.length, path: '' }
+    batch.value = await getImportBatchApp().StageImportJPGs(batch.value.id, settings.backendUrl)
+    const failed = batch.value.entries.filter((entry) => entry.stage_error).length
+    if (failed) message.warning(`${failed} 张 JPG 暂存失败，可重试`)
+  })
 }
 
 function keyboard(event: KeyboardEvent) {
@@ -189,7 +228,7 @@ function keyboard(event: KeyboardEvent) {
       event.target instanceof HTMLElement && event.target.closest('input, textarea, button, [contenteditable], [role="combobox"]')) return
   if (keepPlan.value.length || uploadPlan.value || recycle.value || shotEntry.value || selected.value.length !== 1) return
   const entry = selected.value[0]
-  if (!entry?.jpg || entry.historical || entry.upload?.verified) return
+  if (!entry?.jpg || entry.historical || entry.upload?.verified || (!isStaged(entry) && !entry.reference_only)) return
   const decision = decisions.find((item) => item.key === event.key)
   if (decision) {
     event.preventDefault()
@@ -265,13 +304,17 @@ function saveShotAt() {
 
 let unsubscribeCull = () => {}
 let unsubscribeUpload = () => {}
+let unsubscribeStage = () => {}
 onMounted(() => {
   void perform('读取批次', refreshBatches)
   unsubscribeCull = onWailsEvent<ImportCullProgress>('import:cull', (value) => {
     if (value.batch_id === batch.value?.id) progress.value = value
   })
-  unsubscribeUpload = onWailsEvent<NonNullable<typeof uploadProgress.value>>('import:upload', (value) => {
+  unsubscribeUpload = onWailsEvent<FileProgress>('import:upload', (value) => {
     if (value.batch_id === batch.value?.id) uploadProgress.value = value
+  })
+  unsubscribeStage = onWailsEvent<FileProgress>('import:stage', (value) => {
+    if (value.batch_id === batch.value?.id) stageProgress.value = value
   })
   window.addEventListener('keydown', keyboard)
 })
@@ -279,6 +322,7 @@ onUnmounted(() => {
   if (culling.value) void getImportBatchApp().CancelImportCull()
   unsubscribeCull()
   unsubscribeUpload()
+  unsubscribeStage()
   window.removeEventListener('keydown', keyboard)
 })
 </script>
@@ -305,22 +349,45 @@ onUnmounted(() => {
           <NButton text :disabled="!!busy || culling" @click="sources.splice(index, 1)">移除</NButton>
         </li>
       </ul>
-      <NSpace class="form-row">
-        <NCheckbox v-model:checked="reviewed">iPad 已审完</NCheckbox>
-        <NCheckbox v-model:checked="complete">留存和收藏导出完整</NCheckbox>
-      </NSpace>
+      <fieldset v-if="hasIPadRetained || hasIPadStarting" class="ipad-options">
+        <legend>如何使用 iPad 的筛片结果</legend>
+        <div v-if="hasIPadRetained">
+          <NCheckbox v-model:checked="reviewed" :disabled="!!busy || culling">
+            把 iPad 留存目录中匹配到的照片标为留存
+          </NCheckbox>
+          <p>只粗筛过就留空，匹配到的照片仍可参与初筛。iPad 收藏照会标为收藏。</p>
+        </div>
+        <div v-if="hasIPadRetained && hasIPadStarting">
+          <NCheckbox v-model:checked="complete" :disabled="!!busy || culling">
+            根据完整导出找出待确认废片
+          </NCheckbox>
+          <p>确认这是完整的导出。属于 iPad 起始范围、且在留存和收藏中都找不到的照片会列为待确认废弃。</p>
+        </div>
+        <p v-else-if="hasIPadStarting">添加 iPad 留存目录后，即可对照导出核对废片。</p>
+      </fieldset>
       <NAlert v-if="batch?.issues.length" type="warning" title="部分来源读取失败" class="form-row">
         <div v-for="(issue, index) in batch.issues" :key="index">{{ issue }}</div>
       </NAlert>
     </NCard>
 
     <template v-if="batch">
+      <NCard title="上传待审 JPG">
+        <NSpace align="center">
+          <span>服务器已暂存 {{ stagedCount }} / {{ stageCandidates.length }} 张 JPG</span>
+          <NButton type="primary" :disabled="!stageCandidates.length || !!busy || culling"
+            :loading="busy === '上传 JPG 到服务器'" @click="stageJPGs">上传 JPG 到服务器</NButton>
+        </NSpace>
+        <p>先上传 JPG，再初筛或人工审阅。确认入库时补传所选照片的 NEF。</p>
+        <div v-if="stageProgress && busy === '上传 JPG 到服务器'" aria-live="polite">
+          <NProgress :percentage="Math.round(stageProgress.completed / Math.max(1, stageProgress.total) * 100)" processing />
+          <p>{{ stageProgress.completed }}/{{ stageProgress.total }} · {{ stageProgress.path }}</p>
+        </div>
+      </NCard>
       <NCard title="批次审阅">
         <NSpace align="center">
           <span>{{ batch.entries.length }} 条 · {{ pendingCount }} 张待审</span>
-          <NInput v-model:value="executable" placeholder="AutoCull 1.4.9 源码或 CLI 路径" style="width: 320px" />
           <NSelect v-model:value="scene" :options="scenes" style="width: 110px" />
-          <NButton :disabled="!pendingCount || culling || !!busy" :loading="culling" @click="runCull">AutoCull 初筛</NButton>
+          <NButton :disabled="!stagedPending.length || culling || !!busy" :loading="culling" @click="runCull">服务器 AutoCull 初筛</NButton>
           <NButton :disabled="!culling" @click="getImportBatchApp().CancelImportCull()">取消初筛</NButton>
           <NButton :disabled="!!busy || culling || !batch.entries.some((entry) => entry.score)" @click="perform('清除评分', async () => { if (batch) batch = await getImportBatchApp().ClearImportCull(batch.id) })">清除评分</NButton>
         </NSpace>
@@ -330,7 +397,7 @@ onUnmounted(() => {
         </div>
         <NSpace align="center" class="form-row">
           <NSelect v-model:value="filter" :options="filters" style="width: 188px" aria-label="审阅范围" />
-          <NButton :disabled="selected.filter((entry) => entry.jpg).length !== 2" @click="viewImages(selected)">并排比较</NButton>
+          <NButton :disabled="selected.filter(canPreview).length !== 2" @click="viewImages(selected)">并排比较</NButton>
           <NButton :disabled="!pendingBatch.length || !!busy" @click="keepPlan = pendingBatch.map((entry) => entry.id)">留存所选待审（{{ pendingBatch.length }}）</NButton>
           <NButton :disabled="!batch.undo?.length || !!busy" @click="perform('撤销', async () => { if (batch) batch = await getImportBatchApp().UndoImportBatch(batch.id) })">撤销</NButton>
         </NSpace>
@@ -340,8 +407,9 @@ onUnmounted(() => {
             <NCheckbox :checked="choice.includes(entry.id)" :aria-label="`选择 ${entry.jpg?.path ?? entry.nef?.path}`"
               @update:checked="(checked) => toggle(entry.id, checked)" />
             <div class="entry-info">
-              <NButton v-if="entry.jpg" text @click="viewImages([entry])">{{ entry.jpg.path }}</NButton>
+              <NButton v-if="entry.jpg" text :disabled="!canPreview(entry)" @click="viewImages([entry])">{{ entry.jpg.path }}</NButton>
               <div v-if="entry.nef">{{ entry.nef.path }}</div>
+              <NAlert v-if="entry.stage_error" type="error">{{ entry.stage_error }}</NAlert>
               <div v-if="entry.reference_only">起始范围证据 · 仅处理已确认废弃的 NEF</div>
               <div v-if="entry.missing_from_export">完整导出缺席 · 待确认废弃</div>
               <div v-if="entry.conflict">审阅结果需要核对{{ entry.inherited ? ` · iPad ${decisions.find((item) => item.value === entry.inherited)?.label}` : '' }}</div>
@@ -360,7 +428,7 @@ onUnmounted(() => {
             </div>
             <NSpace v-if="entry.jpg && !entry.historical && !entry.upload?.verified" class="decisions">
               <NButton v-for="item in decisions.filter((value) => !entry.reference_only || ['discarded', 'later', 'pending'].includes(value.value))"
-                :key="item.value" size="small" :disabled="!!busy"
+                :key="item.value" size="small" :disabled="!!busy || (!isStaged(entry) && !entry.reference_only)"
                 @click="decide([entry.id], item.value)">{{ item.label }} · {{ item.key }}</NButton>
             </NSpace>
           </li>
@@ -400,7 +468,7 @@ onUnmounted(() => {
         <li v-for="row in uploadPlan" :key="row.entry_id" class="plan">
           <div>{{ row.jpg }}<br v-if="row.nef" />{{ row.nef }}</div>
           <NAlert v-if="row.plan.error" type="error">{{ row.plan.error }}</NAlert>
-          <div v-else>{{ row.plan.root }} / {{ row.plan.target }}{{ row.plan.jpg_ready ? ' · JPG 已核验' : '' }}<br v-if="row.plan.nef_target" />{{ row.plan.nef_target }}</div>
+          <div v-else>{{ row.plan.root }} / {{ row.plan.target }}{{ row.plan.jpg_ready ? ' · JPG 已归档' : row.plan.jpg_staged ? ' · 使用服务器暂存 JPG' : '' }}<br v-if="row.plan.nef_target" />{{ row.plan.nef_target }}</div>
         </li>
       </ul>
       <NProgress v-if="uploadProgress && busy === '上传原片'" :percentage="Math.round(uploadProgress.completed / uploadProgress.total * 100)" processing />
@@ -419,7 +487,11 @@ onUnmounted(() => {
 
     <NModal v-model:show="preview" preset="card" title="审阅原片" class="preview-modal">
       <NSpin :show="imageLoading"><div class="compare">
-        <figure v-for="item in images" :key="item.path"><img :src="item.data" :alt="item.path" /><figcaption>{{ item.path }}</figcaption></figure>
+        <figure v-for="item in images" :key="item.path">
+          <img v-if="item.data" :src="item.data" :alt="item.path" @error="item.data = ''" />
+          <NEmpty v-else description="无法读取照片预览" />
+          <figcaption>{{ item.path }}</figcaption>
+        </figure>
       </div></NSpin>
     </NModal>
 
@@ -433,6 +505,8 @@ onUnmounted(() => {
 <style scoped>
 .batch-workflow { display: grid; gap: 16px; }
 .form-row { margin-top: 16px; }
+.ipad-options { display: grid; gap: 8px; margin: 16px 0 0; padding: 8px 16px; border: 1px solid var(--n-border-color); }
+.ipad-options p { margin: 4px 0 0; }
 .paths, .entries { margin: 8px 0 16px; padding: 0; list-style: none; overflow-wrap: anywhere; }
 .paths li { padding: 4px 0; }
 .paths li .n-button { margin-left: 8px; }

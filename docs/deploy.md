@@ -195,18 +195,25 @@ Go 后端监听 `Http.Addr`，Python Agent 监听 `Agent.Addr`，Web 前端监�
 
 在仓库根目录运行 `make client`，产物为 `bin/photo-agent.exe`。Windows 客户端的「设置」中填写可访问的 Go 后端地址。服务端启动时会自动创建批次核验与最近删除所需的数据表。
 
-初筛使用 AutoCull 1.4.9 的公开 CLI。可在导入页填写 CLI 可执行文件的绝对路径，或填写下面准备好的源码目录。[固定版本源码](https://github.com/923493524/autocull/tree/6679ad3b4c1fef09980acd6704bf5a2cef3612b8)
+在 Go 后端所在服务器准备 AutoCull 源码。GitHub 的 Windows 下载包是 1.4.8，以下固定提交的源码 CLI 自报 1.4.9。客户端通过服务器 API 发起分析。[Windows 下载包](https://github.com/923493524/autocull/releases/tag/v1.4.8) · [固定版本源码](https://github.com/923493524/autocull/tree/6679ad3b4c1fef09980acd6704bf5a2cef3612b8)
 
-```powershell
+```bash
 git clone https://github.com/923493524/autocull.git
 cd autocull
 git checkout 6679ad3b4c1fef09980acd6704bf5a2cef3612b8
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe tools\fetch_models.py
-.\.venv\Scripts\python.exe -m autocull --version
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python tools/fetch_models.py
+.venv/bin/python -m autocull --version
 ```
 
-打开「导入工作流」，添加原片和已有的 iPad 导出目录。批次支持直接人工审阅。选择「预览入库」核对本地原片与服务器目标，上传核验后可分别回收已入库及确认废弃的照片。
+在后端实际配置中填写源码目录的绝对路径，然后重启后端。容器部署时填写容器内可访问的路径。
+
+```yaml
+AutoCull:
+  SourceDir: "/opt/autocull"
+```
+
+在客户端打开「导入工作流」，添加来源并扫描，选择「上传 JPG 到服务器」。照片会存入 `Storage.PhotoSrc/.import-review/<批次号>/`。上传后可运行服务器 AutoCull 或直接人工审阅。选片结束后选择「预览入库」，已暂存的 JPG 由服务器归档，只需在客户端补传配对 NEF。暂存 JPG 按批次保留，便于继续复审和重试。
 
 从 Windows 回收站恢复归集目录后，在批次中选择「核对并恢复原路径」。服务器回收项在「图片管理 → 最近删除」恢复，保留 30 天。

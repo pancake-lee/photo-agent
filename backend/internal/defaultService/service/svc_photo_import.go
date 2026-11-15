@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image/jpeg"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ func archiveOperationContext(ctx context.Context) (*papp.AppCtx, context.CancelF
 var photoArchiveMu sync.Mutex
 
 type archiveImportRequest struct {
+	BatchID  string     `json:"batch_id,omitempty"`
 	Activity string     `json:"activity"`
 	Name     string     `json:"name"`
 	JPG      string     `json:"jpg_sha256"`
@@ -49,6 +51,7 @@ type archiveImportRequest struct {
 }
 
 type archiveImportResult struct {
+	JPGStaged bool   `json:"jpg_staged,omitempty"`
 	Target    string `json:"target"`
 	NEFTarget string `json:"nef_target,omitempty"`
 	Root      string `json:"root"`
@@ -258,6 +261,12 @@ func resolveArchiveImport(
 			return result, nil, err
 		}
 		result.Verified = state != nil && photo != nil && jpgReady && result.NEFReady && thumbPresent != ""
+		if req.BatchID != "" && !jpgReady {
+			result.JPGStaged, err = importStageReady(req.BatchID, req.JPG)
+			if err != nil {
+				return result, nil, err
+			}
+		}
 		return result, photo, nil
 	}
 	return result, nil, fmt.Errorf("无法分配归档文件名")
@@ -324,38 +333,48 @@ func writeVerifiedArchiveFile(
 	if err != nil {
 		return err
 	}
-	err = reserve()
-	if err != nil {
-		return err
+	if reserve != nil {
+		err = reserve()
+		if err != nil {
+			return err
+		}
 	}
 	dest := filepath.Join(root, target)
 	return os.Link(temp.Name(), dest)
 }
 
-func (s *PhotoServer) writeArchiveImport(ctx khttp.Context) error {
+func readArchiveMultipart(ctx khttp.Context) (archiveImportRequest, *multipart.Part, error) {
+	var req archiveImportRequest
 	request := ctx.Request()
 	request.Body = http.MaxBytesReader(ctx.Response(), request.Body, 2<<30)
 	reader, err := request.MultipartReader()
 	if err != nil {
-		return ctx.Result(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return req, nil, err
 	}
 	info, err := reader.NextPart()
 	if err != nil || info.FormName() != "manifest" {
-		return ctx.Result(http.StatusBadRequest, map[string]string{"error": "缺少导入清单"})
+		return req, nil, fmt.Errorf("缺少导入清单")
 	}
-	var req archiveImportRequest
 	err = json.NewDecoder(io.LimitReader(info, 8192)).Decode(&req)
 	if err != nil {
-		return ctx.Result(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return req, nil, err
 	}
 	file, err := reader.NextPart()
 	if err != nil {
-		return ctx.Result(http.StatusBadRequest, map[string]string{"error": "缺少上传文件"})
+		return req, nil, fmt.Errorf("缺少上传文件")
+	}
+	return req, file, nil
+}
+
+func (s *PhotoServer) writeArchiveImport(ctx khttp.Context) error {
+	req, file, err := readArchiveMultipart(ctx)
+	if err != nil {
+		return ctx.Result(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	photoArchiveMu.Lock()
 	defer photoArchiveMu.Unlock()
-	app, cancel := archiveOperationContext(request.Context())
+	app, cancel := archiveOperationContext(ctx.Request().Context())
 	defer cancel()
 	result, _, err := resolveArchiveImport(app, req)
 	if err == nil && req.Target != result.Target {

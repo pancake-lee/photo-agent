@@ -42,6 +42,8 @@ type ImportBatchFile struct {
 }
 
 type ImportBatchEntry struct {
+	StagedServer      string             `json:"staged_server,omitempty"`
+	StageError        string             `json:"stage_error,omitempty"`
 	ID                string             `json:"id"`
 	JPG               *ImportBatchFile   `json:"jpg,omitempty"`
 	NEF               *ImportBatchFile   `json:"nef,omitempty"`
@@ -571,6 +573,7 @@ func mergeImportBatch(batch, previous *ImportBatch) {
 		}
 		used[old.ID] = true
 		entry.ID, entry.Score, entry.Upload = old.ID, old.Score, old.Upload
+		entry.StagedServer, entry.StageError = old.StagedServer, old.StageError
 		if old.ShotAt != "" {
 			entry.ShotAt = old.ShotAt
 		}
@@ -582,10 +585,10 @@ func mergeImportBatch(batch, previous *ImportBatch) {
 		}
 	}
 	for _, entry := range previous.Entries {
-		if used[entry.ID] || entry.Upload == nil {
+		if used[entry.ID] || entry.Upload == nil && entry.StagedServer == "" {
 			continue
 		}
-		entry.Historical = entry.Upload.Verified || entry.Historical
+		entry.Historical = entry.Upload != nil && entry.Upload.Verified || entry.Historical
 		for _, current := range batch.Entries {
 			if current.ID == entry.ID {
 				entry.Historical = true
@@ -681,4 +684,15 @@ func listImportBatches(root string) ([]ImportBatchSummary, error) {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Activity < result[j].Activity })
 	return result, nil
+}
+
+func importFileDigest(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	digest := sha256.New()
+	_, err = io.Copy(digest, file)
+	return hex.EncodeToString(digest.Sum(nil)), err
 }

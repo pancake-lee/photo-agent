@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -135,77 +134,6 @@ func TestImportBatchPersistsDecisionAcrossMoveAndRequiresContent(t *testing.T) {
 	}
 }
 
-func TestReadCullScoresRejectsDuplicates(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tiers.csv")
-	raw := "\xef\xbb\xbffilename,rating,tier,rank,why,cluster\n" +
-		"a.jpg,4,top5,1,sharp,1\na.jpg,1,reject,-1,duplicate,\nb.jpg,2,p15_30,12,good,3\n"
-	writeFile(t, path, []byte(raw))
-	manifest := map[string]ImportBatchEntry{
-		"a.jpg": {ID: "a", JPG: &ImportBatchFile{SHA256: "digest-a"}},
-		"b.jpg": {ID: "b", JPG: &ImportBatchFile{SHA256: "digest-b"}},
-	}
-	scores, err := readCullScores(path, manifest, "auto")
-	if err != nil || len(scores) != 1 || scores["b"].Rank != 12 || scores["a"] != nil {
-		t.Fatalf("scores %#v, err %v", scores, err)
-	}
-}
-
-func TestAutoCullWorkspaceIsolatesOriginalAndXMP(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("CLI fixture uses POSIX shell")
-	}
-	root := t.TempDir()
-	source := batchTestDir(t, root, "source")
-	workspace := batchTestDir(t, root, "work")
-	path := filepath.Join(source, "DSC.JPG")
-	xmp := filepath.Join(source, "DSC.xmp")
-	writeFile(t, path, []byte("original JPG bytes"))
-	writeFile(t, xmp, []byte("original XMP bytes"))
-	cli := filepath.Join(root, "autocull")
-	script := `#!/bin/sh
-set -eu
-if [ "$1" = --version ]; then
-  printf 'autocull 1.4.9\n'
-  exit 0
-fi
-[ "$1" = run ]
-cd "$2"
-set -- *.jpg
-[ "$#" -eq 1 ]
-file="$1"
-mkdir -p _cull_out/autocull
-printf 'filename,rating,tier,rank,why,cluster\n%s,4,top5,1,sharp,3\n' "$file" > _cull_out/autocull/tiers.csv
-printf 'changed copy only' > "$file"
-printf 'new sidecar in workspace' > "${file%.jpg}.xmp"
-`
-	err := os.WriteFile(cli, []byte(script), 0700)
-	if err != nil {
-		t.Fatal(err)
-	}
-	file, err := inspectBatchFile(path, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	batch := &ImportBatch{Entries: []ImportBatchEntry{
-		{ID: "pending", JPG: file, Decision: batchPending},
-		{ID: "favorite", JPG: file, Decision: batchFavorite},
-	}}
-	scores, failures, err := analyzeImportBatch(context.Background(), workspace, batch, cli, "auto", func(ImportCullProgress) {})
-	if err != nil || len(scores) != 1 || len(failures) != 0 || scores["pending"].SHA256 != file.SHA256 {
-		t.Fatalf("scores %#v failures %#v err %v", scores, failures, err)
-	}
-	for p, expected := range map[string]string{path: "original JPG bytes", xmp: "original XMP bytes"} {
-		data, err := os.ReadFile(p)
-		if err != nil || string(data) != expected {
-			t.Fatalf("source %s changed: %v", p, err)
-		}
-	}
-	files, err := os.ReadDir(workspace)
-	if err != nil || len(files) != 0 {
-		t.Fatalf("orphaned workspace: %v %v", files, err)
-	}
-}
-
 func TestLocalRecycleResumeAndRestoreCollision(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.jpg")
@@ -236,50 +164,6 @@ func TestLocalRecycleResumeAndRestoreCollision(t *testing.T) {
 	got, _ = os.ReadFile(file.RestoredTo)
 	if string(got) != "original" {
 		t.Fatalf("restored data = %s", got)
-	}
-}
-
-func TestAutoCullCancellationStopsChildAndCleansWorkspace(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("CLI fixture uses POSIX shell")
-	}
-	root := t.TempDir()
-	work := batchTestDir(t, root, "cull")
-	cli := filepath.Join(root, "autocull")
-	script := `#!/bin/sh
-if [ "$1" = --version ]; then
-  printf 'autocull 1.4.9\n'
-  exit 0
-fi
-sleep 30 &
-printf 'analyzing\n'
-wait
-`
-	err := os.WriteFile(cli, []byte(script), 0700)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(root, "test.JPG")
-	writeFile(t, path, []byte("test"))
-	file, err := inspectBatchFile(path, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	batch := &ImportBatch{Entries: []ImportBatchEntry{{ID: "pending", JPG: file, Decision: batchPending}}}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	started := time.Now()
-	_, _, err = analyzeImportBatch(ctx, work, batch, cli, "auto", func(p ImportCullProgress) {
-		if p.Message == "analyzing" {
-			cancel()
-		}
-	})
-	if err != context.Canceled || time.Since(started) > 4*time.Second {
-		t.Fatalf("cancel exceeded deadline or misreported: %v", err)
-	}
-	remaining, err := os.ReadDir(work)
-	if err != nil || len(remaining) != 0 {
-		t.Fatalf("cancellation left workspace: %v %v", remaining, err)
 	}
 }
 

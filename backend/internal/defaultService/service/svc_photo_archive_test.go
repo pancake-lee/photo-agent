@@ -68,6 +68,11 @@ func (body *delayedArchiveBody) Read(target []byte) (int, error) {
 
 func archiveTestUpload(t *testing.T, server *httptest.Server, req archiveImportRequest, kind string, file []byte, code int) archiveImportResult {
 	t.Helper()
+	return archiveTestUploadAt(t, server, "file", req, kind, file, code)
+}
+
+func archiveTestUploadAt(t *testing.T, server *httptest.Server, path string, req archiveImportRequest, kind string, file []byte, code int) archiveImportResult {
+	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	raw, err := json.Marshal(req)
@@ -94,7 +99,7 @@ func archiveTestUpload(t *testing.T, server *httptest.Server, req archiveImportR
 	if kind == "nef" {
 		requestBody = &delayedArchiveBody{reader: &body}
 	}
-	resp, err := server.Client().Post(server.URL+"/api/v1/photo-import/file", writer.FormDataContentType(), requestBody)
+	resp, err := server.Client().Post(server.URL+"/api/v1/photo-import/"+path, writer.FormDataContentType(), requestBody)
 	if err != nil {
 		t.Fatal(err)
 	}

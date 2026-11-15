@@ -157,7 +157,7 @@ func countFiles(root string) (jpg, nef int64) {
 			return nil
 		}
 		if d.IsDir() {
-			if d.Name() == ".recently-deleted" {
+			if d.Name() == ".recently-deleted" || d.Name() == importStageDirectory {
 				return filepath.SkipDir
 			}
 			return nil

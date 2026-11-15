@@ -17,6 +17,7 @@ import (
 )
 
 type ImportBatchUpload struct {
+	JPGStaged bool   `json:"jpg_staged,omitempty"`
 	Server    string `json:"server,omitempty"`
 	Root      string `json:"root"`
 	Target    string `json:"target"`
@@ -36,6 +37,7 @@ type ImportUploadProgress struct {
 }
 
 type importArchiveManifest struct {
+	BatchID  string     `json:"batch_id,omitempty"`
 	Activity string     `json:"activity"`
 	Name     string     `json:"name"`
 	JPG      string     `json:"jpg_sha256"`
@@ -159,6 +161,7 @@ func (a *App) PreviewImportUploads(id, serverURL string) ([]ImportBatchPlan, err
 			continue
 		}
 		req := entry.archiveManifest(batch.Activity)
+		req.BatchID = id
 		if entry.Upload != nil && entry.Upload.Server == serverURL &&
 			(entry.Upload.JPGReady || entry.Upload.NEFReady) {
 			req.Target = entry.Upload.Target
@@ -191,6 +194,7 @@ func (a *App) PreviewImportUploads(id, serverURL string) ([]ImportBatchPlan, err
 		target := strings.ToLower(plan.Plan.Target)
 		if before := assigned[target]; before != "" && before != key {
 			req := entry.archiveManifest(batch.Activity)
+			req.BatchID = id
 			req.Name = importNameWithDigest(req)
 			plan.Plan, err = archiveRPC(context.Background(), serverURL, "preview", req, "", nil)
 			if err != nil {
@@ -222,11 +226,14 @@ func importNameWithDigest(req importArchiveManifest) string {
 
 func verifyImportLocalFiles(entry ImportBatchEntry, result ImportBatchUpload) error {
 	for i, file := range []*ImportBatchFile{entry.JPG, entry.NEF} {
-		if i == 0 && result.JPGReady || i == 1 && result.NEFReady {
+		if i == 0 && (result.JPGReady || result.JPGStaged) || i == 1 && result.NEFReady {
 			continue
 		}
 		if file == nil {
 			continue
+		}
+		if i == 0 {
+			return fmt.Errorf("请先上传 JPG 到服务器暂存区: %s", file.Path)
 		}
 		digest, err := importFileDigest(file.Path)
 		if err != nil {
@@ -262,6 +269,7 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 			continue
 		}
 		req := entry.archiveManifest(batch.Activity)
+		req.BatchID = id
 		req.Target = plan.Plan.Target
 		saveReceipt := func(receipt ImportBatchUpload) error {
 			receipt.Server = serverURL
@@ -277,7 +285,7 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 		}
 		if err == nil && !current.JPGReady {
 			before := current
-			current, err = archiveRPC(ctx, serverURL, "file", req, "jpg", entry.JPG)
+			current, err = archiveRPC(ctx, serverURL, "stage/archive", req, "", nil)
 			if err != nil {
 				current = before
 			} else if saveErr := saveReceipt(current); saveErr != nil {

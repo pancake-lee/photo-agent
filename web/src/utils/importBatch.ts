@@ -28,6 +28,8 @@ export interface ImportEntry {
   reference_only?: boolean
   missing_from_export?: boolean
   shot_at?: string
+  staged_server?: string
+  stage_error?: string
   score?: { rating: number; rank: number; tier: string; why: string; cluster: string }
   upload?: ImportUpload
 }
@@ -37,6 +39,8 @@ interface ImportUpload {
   target: string
   nef_target?: string
   jpg_ready: boolean
+  jpg_staged?: boolean
+  photo_id?: string
   nef_ready: boolean
   verified: boolean
   error?: string
@@ -96,7 +100,8 @@ interface ImportBatchApp {
   UndoImportBatch(id: string): Promise<ImportBatch>
   ResolveImportPair(id: string, entry: string, nefPath: string): Promise<ImportBatch>
   SetImportShotAt(id: string, entry: string, shotAt: string): Promise<ImportBatch>
-  AnalyzeImportBatch(id: string, executable: string, scene: string): Promise<ImportBatch>
+  StageImportJPGs(id: string, server: string): Promise<ImportBatch>
+  AnalyzeImportBatch(id: string, server: string, scene: string): Promise<ImportBatch>
   CancelImportCull(): Promise<void>
   ClearImportCull(id: string): Promise<ImportBatch>
   PreviewImportUploads(id: string, server: string): Promise<ImportPlan[]>
