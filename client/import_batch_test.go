@@ -260,3 +260,37 @@ func TestImportGroupReviewDecisions(t *testing.T) {
 		t.Fatal("group deletion undo should restore each member's state")
 	}
 }
+
+func TestImportBatchNamesAndRecycleFolders(t *testing.T) {
+	root := t.TempDir()
+	legacy := &ImportBatch{ID: strings.Repeat("a", 32), Activity: "桂林"}
+	if err := saveImportBatch(root, legacy); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"桂林-1", "桂林-2"} {
+		batch := &ImportBatch{ID: strings.Repeat(string(rune('b'+i)), 32), Activity: "桂林"}
+		var err error
+		batch.Name, err = importBatchName(root, batch)
+		if err != nil || batch.Name != want {
+			t.Fatalf("new batch name = %q, want %q: %v", batch.Name, want, err)
+		}
+		if err := saveImportBatch(root, batch); err != nil {
+			t.Fatal(err)
+		}
+		for kind, suffix := range map[string]string{"discarded": "-reject", "imported": "-keep"} {
+			dir, err := importRecycleDirectory(batch, root, kind)
+			if err != nil || filepath.Base(dir) != want+suffix {
+				t.Fatalf("%s folder = %q: %v", kind, dir, err)
+			}
+			batch.Recycling = append(batch.Recycling, ImportRecycleGroup{Directory: dir})
+			retry, err := importRecycleDirectory(batch, root, kind)
+			if err != nil || retry == dir || filepath.Base(retry) != filepath.Base(dir) {
+				t.Fatalf("later recycle folder = %q: %v", retry, err)
+			}
+		}
+	}
+	name, err := importBatchName(root, legacy)
+	if err != nil || name != "桂林" {
+		t.Fatalf("legacy batch name = %q: %v", name, err)
+	}
+}

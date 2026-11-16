@@ -46,6 +46,7 @@ type importReviewBurstJob struct {
 	cancel   context.CancelFunc
 	finished time.Time
 	inputKey [32]byte
+	batchID  string
 }
 
 var importReviewBurstJobs = struct {
@@ -103,7 +104,7 @@ func (s *PhotoServer) startImportReviewBurst(ctx khttp.Context) error {
 		}
 	}
 	jobCtx, cancel := context.WithTimeout(context.Background(), time.Hour)
-	job := &importReviewBurstJob{ID: putil.UUID(), State: "running", cancel: cancel, inputKey: inputKey,
+	job := &importReviewBurstJob{ID: putil.UUID(), State: "running", cancel: cancel, inputKey: inputKey, batchID: req.BatchID,
 		Progress: importReviewBurstProgress{Total: len(req.Inputs), Message: "准备计算连拍组"}}
 	importReviewBurstJobs.jobs[job.ID] = job
 	result := *job

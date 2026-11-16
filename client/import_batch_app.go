@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,13 @@ func (a *App) ListImportBatches() ([]ImportBatchSummary, error) {
 func (a *App) GetImportBatch(id string) (*ImportBatch, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
-	return loadImportBatch(importBatchRoot(), id)
+	root := importBatchRoot()
+	batch, err := loadImportBatch(root, id)
+	if err != nil {
+		return nil, err
+	}
+	batch.Name, err = importBatchName(root, batch)
+	return batch, err
 }
 
 func validImportActivity(activity string) bool {
@@ -73,9 +80,19 @@ func (a *App) ScanImportBatch(
 	if old != nil && old.Activity != activity {
 		return nil, fmt.Errorf("批次活动不可改名，请新建批次")
 	}
+	if old != nil && old.workflowStep() != "review" {
+		return nil, fmt.Errorf("返回选片后再重新扫描来源")
+	}
 	batch := &ImportBatch{
 		ID: id, Activity: activity, Sources: sources,
 		Complete: complete,
+	}
+	if old != nil {
+		batch.Name, batch.StageServers = old.Name, old.StageServers
+	}
+	batch.Name, err = importBatchName(root, batch)
+	if err != nil {
+		return nil, err
 	}
 	scanImportBatch(root, batch, old)
 	return batch, saveImportBatch(root, batch)
@@ -84,20 +101,20 @@ func (a *App) ScanImportBatch(
 func (a *App) DecideImportBatch(
 	id string, entries []string, decision string,
 ) (*ImportBatch, error) {
-	return a.editImportBatch(id, func(batch *ImportBatch) error {
+	return a.editImportReview(id, func(batch *ImportBatch) error {
 		return batch.setDecisions(entries, decision)
 	})
 }
 
 func (a *App) UndoImportBatch(id string) (*ImportBatch, error) {
-	return a.editImportBatch(id, func(batch *ImportBatch) error {
+	return a.editImportReview(id, func(batch *ImportBatch) error {
 		batch.undoDecisions()
 		return nil
 	})
 }
 
 func (a *App) ResolveImportPair(id, entryID, nefPath string) (*ImportBatch, error) {
-	return a.editImportBatch(id, func(batch *ImportBatch) error {
+	return a.editImportReview(id, func(batch *ImportBatch) error {
 		for i := range batch.Entries {
 			entry := &batch.Entries[i]
 			if entry.ID != entryID || entry.JPG == nil || entry.Upload != nil {
@@ -134,7 +151,7 @@ func (a *App) ResolveImportPair(id, entryID, nefPath string) (*ImportBatch, erro
 }
 
 func (a *App) SetImportShotAt(id, entryID, shotAt string) (*ImportBatch, error) {
-	return a.editImportBatch(id, func(batch *ImportBatch) error {
+	return a.editImportReview(id, func(batch *ImportBatch) error {
 		parsed := parseImportShotTime(shotAt)
 		if shotAt != "" && parsed == "" {
 			return fmt.Errorf("拍摄时间格式应为 YYYY-MM-DD HH:mm:ss")
@@ -151,6 +168,15 @@ func (a *App) SetImportShotAt(id, entryID, shotAt string) (*ImportBatch, error) 
 	})
 }
 
+func (a *App) editImportReview(id string, edit func(*ImportBatch) error) (*ImportBatch, error) {
+	return a.editImportBatch(id, func(batch *ImportBatch) error {
+		if batch.workflowStep() != "review" {
+			return fmt.Errorf("请在选片步骤修改照片")
+		}
+		return edit(batch)
+	})
+}
+
 func (a *App) editImportBatch(id string, edit func(*ImportBatch) error) (*ImportBatch, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
@@ -159,9 +185,90 @@ func (a *App) editImportBatch(id string, edit func(*ImportBatch) error) (*Import
 	if err != nil {
 		return nil, err
 	}
+	batch.Name, err = importBatchName(root, batch)
+	if err != nil {
+		return nil, err
+	}
 	err = edit(batch)
 	if err != nil {
 		return nil, err
 	}
 	return batch, saveImportBatch(root, batch)
+}
+
+func (batch *ImportBatch) workflowStep() string {
+	if batch.Step == "" {
+		return "review"
+	}
+	return batch.Step
+}
+
+func (a *App) AdvanceImportBatch(id, next string, leaveLocal bool) (*ImportBatch, error) {
+	return a.editImportBatch(id, func(batch *ImportBatch) error {
+		return batch.advance(next, leaveLocal)
+	})
+}
+
+func (batch *ImportBatch) advance(next string, leaveLocal bool) error {
+	step := batch.workflowStep()
+	switch {
+	case next == "review" && (step == "reject" || step == "archive"):
+	case step == "review" && next == "reject":
+		if len(batch.Entries) == 0 {
+			return fmt.Errorf("请先扫描照片来源")
+		}
+	case step == "reject" && next == "archive":
+		if err := checkImportRecycleStep(batch, "discarded", leaveLocal); err != nil {
+			return err
+		}
+	case step == "archive" && next == "keep":
+		for _, entry := range batch.Entries {
+			if entry.canUpload() && (entry.Upload == nil || !entry.Upload.Verified) {
+				return fmt.Errorf("仍有照片未通过入库核验，请重试或返回选片")
+			}
+		}
+	case step == "keep" && next == "finish":
+		if err := checkImportRecycleStep(batch, "imported", leaveLocal); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("请按当前导入步骤继续")
+	}
+	batch.Step = next
+	return nil
+}
+
+func (a *App) FinishImportBatch(id string) (*ImportBatch, error) {
+	return a.editImportBatch(id, func(batch *ImportBatch) error {
+		if batch.Step == "done" {
+			return nil
+		}
+		if batch.Step != "finish" {
+			return fmt.Errorf("请先完成入库和本地原片回收步骤")
+		}
+		servers := append([]string(nil), batch.StageServers...)
+		for _, entry := range batch.Entries {
+			servers = append(servers, entry.StagedServer)
+		}
+		if batch.Bursts != nil {
+			servers = append(servers, batch.Bursts.Server)
+		}
+		seen := make(map[string]bool)
+		for _, server := range servers {
+			if server == "" || seen[server] {
+				continue
+			}
+			seen[server] = true
+			err := cleanupImportStage(context.Background(), server, batch.ID)
+			if err != nil {
+				return fmt.Errorf("清理 %s 上的批次暂存失败: %w", server, err)
+			}
+		}
+		for i := range batch.Entries {
+			batch.Entries[i].StagedServer = ""
+		}
+		batch.StageServers, batch.Bursts, batch.Undo = nil, nil, nil
+		batch.Step = "done"
+		return nil
+	})
 }

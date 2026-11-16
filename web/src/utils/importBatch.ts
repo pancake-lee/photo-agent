@@ -2,6 +2,7 @@ import { getWailsApp } from './wails'
 
 export type ImportDecision = 'pending' | 'kept' | 'favorite' | 'discarded' | 'later'
 export type ImportSourceRole = 'local' | 'retained' | 'favorite' | 'starting'
+export type ImportStep = 'review' | 'reject' | 'archive' | 'keep' | 'finish' | 'done'
 
 export interface ImportSource {
   path: string
@@ -70,6 +71,8 @@ interface ImportRecycleGroup {
 interface ImportSummary {
   id: string
   activity: string
+  name: string
+  step?: ImportStep
 }
 
 export interface ImportBatch extends ImportSummary {
@@ -102,6 +105,8 @@ interface ImportBatchApp {
   StageImportJPGs(id: string, server: string): Promise<ImportBatch>
   GroupImportBatch(id: string, server: string): Promise<ImportBatch>
   CancelImportBursts(): Promise<void>
+  AdvanceImportBatch(id: string, next: ImportStep, leaveLocal: boolean): Promise<ImportBatch>
+  FinishImportBatch(id: string): Promise<ImportBatch>
   PreviewImportUploads(id: string, server: string): Promise<ImportPlan[]>
   UploadImportBatch(id: string, server: string, plans: ImportPlan[]): Promise<ImportBatch>
   PreviewImportRecycle(id: string, kind: string): Promise<ImportRecycleFile[]>

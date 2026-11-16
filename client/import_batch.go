@@ -60,15 +60,18 @@ type ImportBatchEntry struct {
 }
 
 type ImportBatch struct {
-	Bursts    *ImportReviewBursts  `json:"bursts,omitempty"`
-	ID        string               `json:"id"`
-	Activity  string               `json:"activity"`
-	Sources   []ImportBatchSource  `json:"sources"`
-	Complete  bool                 `json:"complete"`
-	Entries   []ImportBatchEntry   `json:"entries"`
-	Issues    []string             `json:"issues"`
-	Undo      []ImportBatchUndo    `json:"undo,omitempty"`
-	Recycling []ImportRecycleGroup `json:"recycling,omitempty"`
+	Bursts       *ImportReviewBursts  `json:"bursts,omitempty"`
+	ID           string               `json:"id"`
+	Activity     string               `json:"activity"`
+	Name         string               `json:"name,omitempty"`
+	Step         string               `json:"step,omitempty"`
+	StageServers []string             `json:"stage_servers,omitempty"`
+	Sources      []ImportBatchSource  `json:"sources"`
+	Complete     bool                 `json:"complete"`
+	Entries      []ImportBatchEntry   `json:"entries"`
+	Issues       []string             `json:"issues"`
+	Undo         []ImportBatchUndo    `json:"undo,omitempty"`
+	Recycling    []ImportRecycleGroup `json:"recycling,omitempty"`
 }
 
 type ImportBatchUndo struct {
@@ -672,6 +675,8 @@ func (batch *ImportBatch) undoDecisions() {
 type ImportBatchSummary struct {
 	ID       string `json:"id"`
 	Activity string `json:"activity"`
+	Name     string `json:"name"`
+	Step     string `json:"step,omitempty"`
 }
 
 func listImportBatches(root string) ([]ImportBatchSummary, error) {
@@ -691,10 +696,48 @@ func listImportBatches(root string) ([]ImportBatchSummary, error) {
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, ImportBatchSummary{ID: batch.ID, Activity: batch.Activity})
+		result = append(result, ImportBatchSummary{ID: batch.ID, Activity: batch.Activity, Name: batch.Name, Step: batch.Step})
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Activity < result[j].Activity })
+	used := make(map[string]bool)
+	for _, batch := range result {
+		if batch.Name != "" {
+			used[strings.ToLower(batch.Name)] = true
+		}
+	}
+	for i := range result {
+		if result[i].Name == "" {
+			result[i].Name = nextImportBatchName(result[i].Activity, used)
+			used[strings.ToLower(result[i].Name)] = true
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
+}
+
+func nextImportBatchName(activity string, used map[string]bool) string {
+	name := activity
+	for i := 1; used[strings.ToLower(name)]; i++ {
+		name = fmt.Sprintf("%s-%d", activity, i)
+	}
+	return name
+}
+
+func importBatchName(root string, batch *ImportBatch) (string, error) {
+	if batch.Name != "" {
+		return batch.Name, nil
+	}
+	list, err := listImportBatches(root)
+	if err != nil {
+		return "", err
+	}
+	used := make(map[string]bool)
+	for _, item := range list {
+		if item.ID == batch.ID {
+			return item.Name, nil
+		}
+		used[strings.ToLower(item.Name)] = true
+	}
+	return nextImportBatchName(batch.Activity, used), nil
 }
 
 func importFileDigest(path string) (string, error) {

@@ -118,6 +118,9 @@ func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
 	if err != nil {
 		return nil, err
 	}
+	if batch.workflowStep() != "review" {
+		return nil, fmt.Errorf("请在选片步骤计算连拍组")
+	}
 	inputs := importBurstInputs(batch, server)
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("请先上传可选片的 JPG")
@@ -155,7 +158,7 @@ func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
 			if job.Groups == nil {
 				return nil, fmt.Errorf("服务器未返回连拍分组")
 			}
-			return a.editImportBatch(id, func(latest *ImportBatch) error {
+			return a.editImportReview(id, func(latest *ImportBatch) error {
 				if !slices.Equal(inputs, importBurstInputs(latest, server)) {
 					return fmt.Errorf("批次照片已变化，请重新计算连拍组")
 				}

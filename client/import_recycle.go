@@ -113,6 +113,13 @@ func (a *App) PreviewImportRecycle(id, kind string) ([]ImportRecycleFile, error)
 		return nil, err
 	}
 	result := make([]ImportRecycleFile, 0)
+	for _, file := range pendingImportRecycle(batch, kind) {
+		result = append(result, ImportRecycleFile{Source: file.Path, SHA256: file.SHA256})
+	}
+	return result, nil
+}
+
+func pendingImportRecycle(batch *ImportBatch, kind string) []*ImportBatchFile {
 	done := make(map[string]bool)
 	for _, group := range batch.Recycling {
 		for _, file := range group.Files {
@@ -124,12 +131,63 @@ func (a *App) PreviewImportRecycle(id, kind string) ([]ImportRecycleFile, error)
 			}
 		}
 	}
+	var result []*ImportBatchFile
 	for _, file := range collectImportRecycle(batch, kind) {
 		if !done[file.Path] {
-			result = append(result, ImportRecycleFile{Source: file.Path, SHA256: file.SHA256})
+			result = append(result, file)
 		}
 	}
-	return result, nil
+	return result
+}
+
+func checkImportRecycleStep(batch *ImportBatch, kind string, leaveLocal bool) error {
+	for _, file := range pendingImportRecycle(batch, kind) {
+		if !leaveLocal {
+			return fmt.Errorf("还有本地文件待回收")
+		}
+		err := verifyRecycleDigest(file.Path, file.SHA256)
+		if err != nil {
+			return fmt.Errorf("请先核对回收站或恢复原片: %w", err)
+		}
+	}
+	return nil
+}
+
+func importRecycleDirectory(batch *ImportBatch, volume, kind string) (string, error) {
+	suffix := "-reject"
+	if kind == "imported" {
+		suffix = "-keep"
+	}
+	name := batch.Name + suffix
+	if !filepath.IsLocal(name) || filepath.Base(name) != name {
+		return "", fmt.Errorf("批次名无法用作回收目录: %s", name)
+	}
+	base := filepath.Join(volume, ".photo-agent-recycle")
+	// If another set of files is recycled later, preserve the visible folder
+	// name and give its recovery record a distinct original path.
+	for n := 1; ; n++ {
+		dir := filepath.Join(base, name)
+		if n > 1 {
+			dir = filepath.Join(base, fmt.Sprint(n), name)
+		}
+		used := false
+		for _, group := range batch.Recycling {
+			if strings.EqualFold(dir, group.Directory) {
+				used = true
+				break
+			}
+		}
+		if used {
+			continue
+		}
+		_, err := os.Lstat(dir)
+		if os.IsNotExist(err) {
+			return dir, nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
 }
 
 func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool) (*ImportBatch, error) {
@@ -140,8 +198,16 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 	if err != nil {
 		return nil, err
 	}
-	if kind != "imported" && kind != "discarded" || permanent && kind != "discarded" {
+	if kind != "imported" && kind != "discarded" || permanent {
 		return nil, fmt.Errorf("无效的清理类型")
+	}
+	if batch.Step != "" && (kind == "discarded" && batch.Step != "reject" ||
+		kind == "imported" && batch.Step != "keep") {
+		return nil, fmt.Errorf("请在对应的回收步骤操作")
+	}
+	batch.Name, err = importBatchName(root, batch)
+	if err != nil {
+		return nil, err
 	}
 	selected := make(map[string]bool)
 	for _, path := range paths {
@@ -177,22 +243,8 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 			continue
 		}
 		status := statusByPath[file.Path]
-		if status == "deleted" || status == "recycled" ||
-			status == "deleting" || !permanent && (status == "pending" || status == "staged") {
-			continue
-		}
-		if permanent {
-			if status == "staged" {
-				continue
-			}
-			group := work[""]
-			if group == nil {
-				group = &ImportRecycleGroup{Kind: "permanent", Status: "pending"}
-				work[""] = group
-			}
-			group.Files = append(group.Files, ImportRecycleFile{
-				Source: file.Path, SHA256: file.SHA256, Status: "pending",
-			})
+		if status == "deleted" || status == "recycled" || status == "deleting" ||
+			status == "pending" || status == "staged" {
 			continue
 		}
 		volume, err := importRecycleVolume(file.Path)
@@ -204,17 +256,11 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 		}
 		group := work[volume]
 		if group == nil {
-			label := "废片"
-			if kind == "imported" {
-				label = "已入库"
-			}
-			id, err := newImportBatchID()
+			dir, err := importRecycleDirectory(batch, volume, kind)
 			if err != nil {
 				return nil, err
 			}
-			name := batch.Activity + "-" + batch.ID[:8] + "-" + label + "-" + id[:8]
-			base := filepath.Join(volume, ".photo-agent-recycle")
-			group = &ImportRecycleGroup{Directory: filepath.Join(base, name), Kind: kind, Status: "pending"}
+			group = &ImportRecycleGroup{Directory: dir, Kind: kind, Status: "pending"}
 			work[volume] = group
 		}
 		rel, err := filepath.Rel(volume, file.Path)
@@ -238,7 +284,7 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 	for i := range batch.Recycling {
 		group := &batch.Recycling[i]
 		if group.Status == "recycled" || group.Status == "retained" || group.Status == "restored" || group.Status == "uncertain" ||
-			permanent && group.Kind != "permanent" || !permanent && group.Kind != kind {
+			group.Kind != kind {
 			continue
 		}
 		err = runImportRecycle(group, selected, func() error {
@@ -273,33 +319,10 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 			continue
 		}
 		item.Error = ""
-		var err error
-		if group.Kind == "permanent" {
-			if item.Status == "deleting" {
-				_, err = os.Lstat(item.Source)
-				if os.IsNotExist(err) {
-					item.Status = "deleted"
-					continue
-				}
-			}
-			err = verifyRecycleDigest(item.Source, item.SHA256)
-			if err == nil {
-				item.Status = "deleting"
-				err = save()
-				if err != nil {
-					return err
-				}
-				err = os.Remove(item.Source)
-			}
-			if err == nil {
-				item.Status = "deleted"
-			}
-		} else {
-			dest := filepath.Join(group.Directory, item.Relative)
-			err = stageImportRecycle(item.Source, dest, item.SHA256)
-			if err == nil {
-				item.Status = "staged"
-			}
+		dest := filepath.Join(group.Directory, item.Relative)
+		err := stageImportRecycle(item.Source, dest, item.SHA256)
+		if err == nil {
+			item.Status = "staged"
 		}
 		if err != nil {
 			item.Error = err.Error()
@@ -308,10 +331,6 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 		if err != nil {
 			return err
 		}
-	}
-	if group.Kind == "permanent" {
-		group.Status = "permanent"
-		return save()
 	}
 	for _, item := range group.Files {
 		if !selected[item.Source] || item.Status != "staged" {

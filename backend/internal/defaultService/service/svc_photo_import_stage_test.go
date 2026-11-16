@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -117,5 +118,27 @@ func TestStagedReviewHTTP(t *testing.T) {
 	row, err := data.PhotoDAO.GetByID(app, archived.PhotoID)
 	if err != nil || !archived.Verified || row.Timeline != req.Activity {
 		t.Fatalf("verified archive = %#v, row %#v, error %v", archived, row, err)
+	}
+
+	other := stageReq
+	other.BatchID = strings.Repeat("f", 32)
+	upload("stage/file", "jpg", other, jpg, http.StatusOK)
+	request(http.MethodPost, "stage/cleanup", map[string]string{"batch_id": "../" + req.Activity}, http.StatusBadRequest, nil)
+	cleanup := map[string]string{"batch_id": req.BatchID}
+	request(http.MethodPost, "stage/cleanup", cleanup, http.StatusOK, nil)
+	request(http.MethodPost, "stage/cleanup", cleanup, http.StatusOK, nil)
+	if _, err := os.Stat(filepath.Join(status.Root, req.BatchID)); !os.IsNotExist(err) {
+		t.Fatalf("batch staging directory survives cleanup: %v", err)
+	}
+	request(http.MethodGet, imagePath, nil, http.StatusNotFound, nil)
+	request(http.MethodPost, "stage/status", other, http.StatusOK, &status)
+	if !status.JPGStaged {
+		t.Fatal("another batch lost its staged JPG")
+	}
+	for name, want := range map[string][]byte{archived.Target: jpg, archived.NEFTarget: nef} {
+		contents, err := os.ReadFile(filepath.Join(archived.Root, name))
+		if err != nil || !bytes.Equal(contents, want) {
+			t.Fatalf("archive changed during cleanup for %s: %v", name, err)
+		}
 	}
 }

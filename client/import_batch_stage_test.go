@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -37,10 +38,26 @@ func TestClientUsesStagedJPGAndSendsOnlyNEFAtConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := make(chan string, 10)
+	var cleanupAttempts atomic.Int32
 	staged, jpgReady, nefReady := false, false, false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		endpoint := strings.TrimPrefix(r.URL.Path, "/api/v1/photo-import/")
 		calls <- endpoint
+		if endpoint == "stage/cleanup" {
+			var req struct {
+				BatchID string `json:"batch_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BatchID != batch.ID {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if cleanupAttempts.Add(1) == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]bool{"cleaned": true})
+			return
+		}
 		isFile := endpoint == "stage/file" || endpoint == "file"
 		if isFile {
 			req, file, kind, err := readTestReviewUpload(r)
@@ -72,6 +89,21 @@ func TestClientUsesStagedJPGAndSendsOnlyNEFAtConfirmation(t *testing.T) {
 	if err != nil || out.Entries[0].StagedServer != server.URL {
 		t.Fatalf("stage result %#v %v", out, err)
 	}
+	if _, err := app.FinishImportBatch(batch.ID); err == nil {
+		t.Fatal("cleanup should wait for the end of the workflow")
+	}
+	advance := func(step string, leaveLocal bool) {
+		t.Helper()
+		out, err := app.AdvanceImportBatch(batch.ID, step, leaveLocal)
+		if err != nil || out.Step != step {
+			t.Fatalf("continue to %s: %#v %v", step, out, err)
+		}
+	}
+	advance("reject", false)
+	advance("archive", false)
+	if _, err := app.AdvanceImportBatch(batch.ID, "keep", false); err == nil {
+		t.Fatal("local originals cannot be recycled before archive verification")
+	}
 	// Having a valid server copy is enough to proceed with the JPG absent locally.
 	err = os.Remove(jpgPath)
 	if err != nil {
@@ -85,12 +117,33 @@ func TestClientUsesStagedJPGAndSendsOnlyNEFAtConfirmation(t *testing.T) {
 	if err != nil || out.Entries[0].Upload == nil || !out.Entries[0].Upload.Verified {
 		t.Fatalf("confirm result %#v %v", out, err)
 	}
+	advance("keep", false)
+	if _, err := app.AdvanceImportBatch(batch.ID, "finish", false); err == nil {
+		t.Fatal("the remaining originals should require a decision")
+	}
+	writeFile(t, jpgPath, []byte("original jpg"))
+	advance("finish", true)
+	if _, err := app.FinishImportBatch(batch.ID); err == nil {
+		t.Fatal("cleanup should report that it failed")
+	}
+	resumed, err := app.GetImportBatch(batch.ID)
+	if err != nil || resumed.Step != "finish" || resumed.Entries[0].StagedServer != server.URL {
+		t.Fatalf("cleanup retry was not persisted: %#v %v", resumed, err)
+	}
+	out, err = app.FinishImportBatch(batch.ID)
+	if err != nil || out.Step != "done" || out.Entries[0].StagedServer != "" ||
+		!out.Entries[0].Upload.Verified {
+		t.Fatalf("cleanup result %#v %v", out, err)
+	}
+	if _, err := app.FinishImportBatch(batch.ID); err != nil {
+		t.Fatal(err)
+	}
 	close(calls)
 	var actual []string
 	for endpoint := range calls {
 		actual = append(actual, endpoint)
 	}
-	assertStrSlice(t, actual, []string{"stage/status", "stage/file", "preview", "preview", "stage/archive", "file", "finish"})
+	assertStrSlice(t, actual, []string{"stage/status", "stage/file", "preview", "preview", "stage/archive", "file", "finish", "stage/cleanup", "stage/cleanup"})
 }
 
 func readTestReviewUpload(r *http.Request) (importArchiveManifest, string, string, error) {

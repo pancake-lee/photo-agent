@@ -103,6 +103,7 @@ func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 		r.POST("/api/v1/photo-import/stage/file", s.writeImportStage)
 		r.GET("/api/v1/photo-import/stage/image", s.importStageImage)
 		r.POST("/api/v1/photo-import/stage/archive", s.archiveStagedJPG)
+		r.POST("/api/v1/photo-import/stage/cleanup", s.cleanupImportStage)
 		r.POST("/api/v1/photo-import/burst/start", s.startImportReviewBurst)
 		r.GET("/api/v1/photo-import/burst/status", s.getImportReviewBurst)
 		r.POST("/api/v1/photo-import/burst/cancel", s.cancelImportReviewBurst)

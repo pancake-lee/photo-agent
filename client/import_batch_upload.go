@@ -254,6 +254,13 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 	if err != nil {
 		return nil, err
 	}
+	if batch.Step != "" && batch.Step != "archive" {
+		return nil, fmt.Errorf("请在入库步骤上传原片")
+	}
+	batch.Name, err = importBatchName(root, batch)
+	if err != nil {
+		return nil, err
+	}
 	byID := make(map[string]ImportBatchPlan)
 	for _, plan := range plans {
 		if plan.Plan.Target != "" && plan.Plan.Error == "" {

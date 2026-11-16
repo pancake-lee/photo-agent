@@ -2,14 +2,14 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   NAlert, NButton, NCard, NCheckbox, NEmpty, NFormItem, NInput, NModal,
-  NPagination, NProgress, NSelect, NSpace, NSpin, NTag, useMessage,
+  NPagination, NProgress, NSelect, NSpace, NSpin, NStep, NSteps, NTag, useMessage,
 } from 'naive-ui'
 import PhotoCard from './PhotoCard.vue'
 import BurstGroupModal from './BurstGroupModal.vue'
 import type { BurstViewLevel } from '../types/photo'
 import { getImportBatchApp } from '../utils/importBatch'
 import type {
-  ImportBatch, ImportBurstProgress, ImportDecision, ImportEntry, ImportPlan, ImportSource, ImportSourceRole,
+  ImportBatch, ImportBurstProgress, ImportDecision, ImportEntry, ImportPlan, ImportSource, ImportSourceRole, ImportStep,
 } from '../utils/importBatch'
 import { onWailsEvent, wailsApi, wailsError } from '../utils/wails'
 import { settings } from '../stores/settings'
@@ -34,11 +34,15 @@ const images = ref<{ path: string; data: string }[]>([])
 const imageLoading = ref(false)
 const preview = ref(false)
 const uploadPlan = ref<ImportPlan[]>()
-const uploadServer = ref('')
+const archivePage = ref(1)
 interface FileProgress { batch_id: string; completed: number; total: number; path: string }
 const uploadProgress = ref<FileProgress>()
 const stageProgress = ref<FileProgress>()
-const recycle = ref<{ kind: string; files: string[]; permanent: boolean }>()
+const recycleFiles = ref<string[]>()
+const loadingStep = ref(false)
+const stepError = ref('')
+const preparing = ref<boolean>()
+let requestNumber = 0
 const shotEntry = ref<ImportEntry>()
 const shotAt = ref('')
 const pageSize = 30
@@ -49,6 +53,12 @@ const roleLabels: Record<ImportSourceRole, string> = {
 const roles = Object.entries(roleLabels).map(([value, label]) => ({ label, value }))
 const hasIPadRetained = computed(() => sources.value.some((source) => source.role === 'retained'))
 const hasIPadStarting = computed(() => sources.value.some((source) => source.role === 'starting'))
+const usesCompleteExport = computed(() => hasIPadRetained.value && hasIPadStarting.value && complete.value)
+const needsScan = computed(() => {
+  const saved = batch.value
+  return !saved || saved.complete !== usesCompleteExport.value || saved.sources.length !== sources.value.length ||
+    sources.value.some((source, index) => source.path !== saved.sources[index].path || source.role !== saved.sources[index].role)
+})
 const filters = [
   { label: '全部照片', value: 'all' },
   { label: '收藏', value: 'favorite' },
@@ -66,10 +76,42 @@ function canStage(entry: ImportEntry) {
 function isStaged(entry: ImportEntry) {
   return !!settings.backendUrl && entry.staged_server === settings.backendUrl
 }
+function canArchive(entry: ImportEntry) {
+  return canStage(entry) && !entry.conflict && entry.pair !== 'review'
+}
 const stageCandidates = computed(() => batch.value?.entries.filter(canStage) ?? [])
 const stagedCount = computed(() => stageCandidates.value.filter(isStaged).length)
+const steps = [
+  { key: 'prepare', title: '准备照片' }, { key: 'review', title: '选片' },
+  { key: 'reject', title: '回收废片' }, { key: 'archive', title: '入库' },
+  { key: 'keep', title: '回收已入库' }, { key: 'finish', title: '完成批次' },
+]
+const step = computed(() => {
+  if (!batch.value) return 'prepare'
+  const saved = batch.value.step ?? 'review'
+  if (saved === 'review' && (preparing.value ?? (stagedCount.value < stageCandidates.value.length))) return 'prepare'
+  return saved
+})
+const stepNumber = computed(() => step.value === 'done' ? steps.length : steps.findIndex((item) => item.key === step.value) + 1)
+const recycleKind = computed(() => step.value === 'reject' ? 'discarded' : 'imported')
+const recycleGroups = computed(() => {
+  const groups = batch.value?.recycling ?? []
+  const relevant = step.value === 'done' || step.value === 'finish' ? groups : groups.filter((group) => group.kind === recycleKind.value)
+  const latest = new Map(relevant.flatMap((group) => group.files.map((file) => [file.source, file] as const)))
+  return relevant.filter((group) => group.directory || group.files.some((file) => latest.get(file.source) === file))
+})
+const recycleFailed = computed(() => recycleGroups.value.some((group) => group.error || group.files.some((file) => file.error)))
+const verifiedCount = computed(() => batch.value?.entries.filter((entry) => entry.upload?.verified).length ?? 0)
+const archiveEntries = computed(() => batch.value?.entries.filter(canArchive) ?? [])
+const archiveIssues = computed(() => new Map(uploadPlan.value?.map((item) => [item.entry_id, item.plan.error])))
+const readyPlans = computed(() => uploadPlan.value?.filter((item) => !item.plan.error) ?? [])
+const shownArchiveEntries = computed(() => archiveEntries.value.slice((archivePage.value - 1) * pageSize, archivePage.value * pageSize))
+const reviewIssueCount = computed(() => batch.value?.entries.filter((entry) => !entry.historical &&
+  entry.decision !== 'discarded' && !entry.upload?.verified && needsReview(entry)).length ?? 0)
+const excludedCount = computed(() => batch.value?.entries.filter((entry) => !entry.historical &&
+  entry.decision !== 'discarded' && !entry.upload?.verified && !canArchive(entry) && needsReview(entry)).length ?? 0)
 const stagedEntries = computed(() => stageCandidates.value.filter((entry) =>
-  isStaged(entry) && !entry.conflict && entry.pair !== 'review',
+  isStaged(entry) && canArchive(entry),
 ))
 const entriesByID = computed(() => new Map((batch.value?.entries ?? []).map((entry) => [entry.id, entry])))
 const deletedCount = computed(() => (batch.value?.entries ?? []).filter((entry) => entry.decision === 'discarded').length)
@@ -117,6 +159,7 @@ const progressValue = computed(() => {
 })
 
 watch([filter, viewLevel], () => { page.value = 1 })
+watch([() => batch.value?.id, step, () => settings.backendUrl], () => { void loadStep() })
 watch(groupMembers, (members) => { if (!members.length && openGroup.value.length) openGroup.value = [] })
 watch(filtered, (list) => { page.value = Math.min(page.value, Math.max(1, Math.ceil(list.length / pageSize))) })
 
@@ -129,7 +172,7 @@ async function perform(label: string, fn: () => Promise<void>) {
 
 async function refreshBatches() {
   batches.value = (await getImportBatchApp().ListImportBatches()).map((item) => ({
-    label: `${item.activity} · ${item.id.slice(0, 8)}`, value: item.id,
+    label: item.name || item.activity, value: item.id,
   }))
 }
 
@@ -137,11 +180,13 @@ async function selectBatch(id: string | null) {
   await perform('打开批次', async () => {
     const loaded = id ? await getImportBatchApp().GetImportBatch(id) : undefined
     batch.value = loaded
+    preparing.value = undefined
     uploadProgress.value = undefined
     stageProgress.value = undefined
     activity.value = loaded?.activity ?? ''
     sources.value = loaded?.sources.slice() ?? []
     complete.value = loaded?.complete ?? false
+    filter.value = 'all'
     openGroup.value = []
     progress.value = undefined
     page.value = 1
@@ -160,8 +205,9 @@ async function scan() {
   await perform('扫描来源', async () => {
     batch.value = await getImportBatchApp().ScanImportBatch(
       batch.value?.id ?? '', activity.value.trim(), sources.value,
-      hasIPadRetained.value && hasIPadStarting.value && complete.value,
+      usesCompleteExport.value,
     )
+    preparing.value = undefined
     openGroup.value = []
     await refreshBatches()
   })
@@ -230,7 +276,7 @@ function photoCard(entry: ImportEntry) {
 }
 
 function canEdit(entry: ImportEntry) {
-  return !!entry.jpg && !entry.historical && !entry.upload?.verified &&
+  return step.value === 'review' && !!entry.jpg && !entry.historical && !entry.upload?.verified &&
     (isStaged(entry) || !!entry.reference_only) && entry.decision !== 'discarded'
 }
 
@@ -282,53 +328,85 @@ function stageJPGs() {
     batch.value = await getImportBatchApp().StageImportJPGs(batch.value.id, settings.backendUrl)
     const failed = batch.value.entries.filter((entry) => entry.stage_error).length
     if (failed) message.warning(`${failed} 张 JPG 暂存失败，可重试`)
+    else preparing.value = false
   })
 }
 
-function previewUpload() {
-  return perform('核对归档目标', async () => {
-    if (!batch.value) return
-    uploadServer.value = settings.backendUrl
-    const result = await getImportBatchApp().PreviewImportUploads(batch.value.id, uploadServer.value)
-    if (!result.length) { message.info('暂无可提交的留存或收藏照片'); return }
-    uploadPlan.value = result
-  })
+async function loadStep() {
+  const id = batch.value?.id
+  const current = step.value
+  const server = settings.backendUrl
+  const request = ++requestNumber
+  recycleFiles.value = undefined
+  uploadPlan.value = undefined
+  stepError.value = ''
+  loadingStep.value = false
+  if (!id || (current !== 'archive' && current !== 'reject' && current !== 'keep')) return
+  loadingStep.value = true
+  if (current === 'archive') archivePage.value = 1
+  try {
+    if (current === 'archive') {
+      const plans = await getImportBatchApp().PreviewImportUploads(id, server)
+      if (request === requestNumber) uploadPlan.value = plans
+    } else {
+      const files = await getImportBatchApp().PreviewImportRecycle(id, current === 'reject' ? 'discarded' : 'imported')
+      if (request === requestNumber) recycleFiles.value = files.map((file) => file.source)
+    }
+  } catch (error) {
+    if (request === requestNumber) stepError.value = wailsError(error)
+  } finally {
+    if (request === requestNumber) loadingStep.value = false
+  }
 }
 
 function upload() {
-  const plans = uploadPlan.value?.filter((item) => !item.plan.error)
+  const plans = readyPlans.value
   return perform('上传原片', async () => {
-    if (!batch.value || !plans?.length) return
+    if (!batch.value || !plans.length) return
     uploadProgress.value = { batch_id: batch.value.id, completed: 0, total: plans.length, path: '' }
-    batch.value = await getImportBatchApp().UploadImportBatch(batch.value.id, uploadServer.value, plans)
-    uploadPlan.value = undefined
+    batch.value = await getImportBatchApp().UploadImportBatch(batch.value.id, settings.backendUrl, plans)
     const verified = batch.value.entries.filter((entry) => entry.upload?.verified).length
     const failed = batch.value.entries.filter((entry) => entry.upload?.error).length
     message[failed ? 'warning' : 'success'](`已核验 ${verified} 张，待重试 ${failed} 张`)
+    await loadStep()
   })
 }
 
-function previewRecycle(kind: string, permanent = false) {
-  return perform('准备回收清单', async () => {
+function advance(next: ImportStep, leaveLocal = false) {
+  return perform('切换导入步骤', async () => {
     if (!batch.value) return
-    const files = await getImportBatchApp().PreviewImportRecycle(batch.value.id, kind)
-    if (!files.length) { message.info('暂无可处理的本地文件'); return }
-    recycle.value = { kind, files: files.map((file) => file.source), permanent }
+    batch.value = await getImportBatchApp().AdvanceImportBatch(batch.value.id, next, leaveLocal)
+    if (next === 'review') {
+      preparing.value = false
+      filter.value = 'all'
+    }
+    openGroup.value = []
   })
 }
 
 function submitRecycle() {
-  const plan = recycle.value
+  const paths = recycleFiles.value
+  const kind = recycleKind.value
   return perform('处理本地文件', async () => {
-    if (!batch.value || !plan) return
-    batch.value = await getImportBatchApp().RecycleImportFiles(batch.value.id, plan.kind, plan.files, plan.permanent)
-    recycle.value = undefined
+    if (!batch.value || !paths?.length) return
+    batch.value = await getImportBatchApp().RecycleImportFiles(batch.value.id, kind, paths, false)
+    await loadStep()
+  })
+}
+
+function finishBatch() {
+  return perform('清理服务器暂存', async () => {
+    if (!batch.value) return
+    batch.value = await getImportBatchApp().FinishImportBatch(batch.value.id)
+    message.success('批次已完成')
   })
 }
 
 function restoreLocal(directory: string) {
   return perform('恢复本地原片', async () => {
-    if (batch.value) batch.value = await getImportBatchApp().RestoreImportDirectory(batch.value.id, directory)
+    if (!batch.value) return
+    batch.value = await getImportBatchApp().RestoreImportDirectory(batch.value.id, directory)
+    await loadStep()
   })
 }
 
@@ -380,15 +458,22 @@ onUnmounted(() => {
       <NSpace align="center">
         <NSelect :value="batch?.id ?? null" :options="batches" placeholder="继续已有批次" clearable
           :disabled="!!busy || grouping" style="width: 280px" @update:value="selectBatch" />
-        <NButton :disabled="!batch || !!busy || grouping" @click="selectBatch(null)">新建批次</NButton>
+        <NButton v-if="batch" :disabled="!!busy || grouping" @click="selectBatch(null)">新建批次</NButton>
       </NSpace>
+      <NSteps class="form-row" :current="stepNumber" :status="step === 'done' ? 'finish' : 'process'" size="small">
+        <NStep v-for="item in steps" :key="item.key" :title="item.title" />
+      </NSteps>
+    </NCard>
+
+    <NCard v-if="step === 'prepare'" title="准备照片">
       <NFormItem label="服务器活动目录" class="form-row">
         <NInput v-model:value="activity" :disabled="!!batch || !!busy" placeholder="例如 202611-桂林" />
       </NFormItem>
       <NSpace align="center">
         <NSelect v-model:value="role" :options="roles" style="width: 180px" />
         <NButton :disabled="!!busy || grouping" @click="addSource">添加目录</NButton>
-        <NButton type="primary" :loading="busy === '扫描来源'" :disabled="!activity.trim() || !sources.length || !!busy || grouping" @click="scan">扫描来源</NButton>
+        <NButton :type="needsScan ? 'primary' : 'default'" :loading="busy === '扫描来源'"
+          :disabled="!activity.trim() || !sources.length || !!busy || grouping" @click="scan">{{ batch ? '重新扫描来源' : '扫描来源' }}</NButton>
       </NSpace>
       <ul v-if="sources.length" class="paths">
         <li v-for="(source, index) in sources" :key="`${source.role}/${source.path}`">
@@ -409,22 +494,29 @@ onUnmounted(() => {
       <NAlert v-if="batch?.issues.length" type="warning" title="部分来源读取失败" class="form-row">
         <div v-for="(issue, index) in batch.issues" :key="index">{{ issue }}</div>
       </NAlert>
+      <div v-if="batch && !needsScan" class="form-row">
+        <NSpace align="center">
+          <span>服务器已暂存 {{ stagedCount }} / {{ stageCandidates.length }} 张 JPG</span>
+          <NButton v-if="stagedCount < stageCandidates.length" type="primary" :disabled="!!busy || grouping"
+            :loading="busy === '上传 JPG 到服务器'" @click="stageJPGs">上传 JPG 并进入选片</NButton>
+          <NButton v-if="stagedCount || !stageCandidates.length" :type="stagedCount === stageCandidates.length ? 'primary' : 'default'" :disabled="!!busy || grouping"
+            @click="preparing = false">进入选片</NButton>
+        </NSpace>
+        <div v-if="stageProgress && busy === '上传 JPG 到服务器'" aria-live="polite">
+          <NProgress :percentage="Math.round(stageProgress.completed / Math.max(1, stageProgress.total) * 100)" processing />
+          <p>{{ stageProgress.completed }} / {{ stageProgress.total }} 张</p>
+        </div>
+      </div>
     </NCard>
 
     <template v-if="batch">
-      <NCard title="上传 JPG">
-        <NSpace align="center">
-          <span>服务器已暂存 {{ stagedCount }} / {{ stageCandidates.length }} 张 JPG</span>
-          <NButton type="primary" :disabled="!stageCandidates.length || !!busy || grouping"
-            :loading="busy === '上传 JPG 到服务器'" @click="stageJPGs">上传 JPG 到服务器</NButton>
-        </NSpace>
-        <p>上传 JPG 后可计算连拍组。确认入库时补传保留照片的 NEF。</p>
-        <div v-if="stageProgress && busy === '上传 JPG 到服务器'" aria-live="polite">
-          <NProgress :percentage="Math.round(stageProgress.completed / Math.max(1, stageProgress.total) * 100)" processing />
-          <p>{{ stageProgress.completed }}/{{ stageProgress.total }} · {{ stageProgress.path }}</p>
-        </div>
-      </NCard>
-      <NCard title="批次选片">
+      <NCard v-if="step === 'review'" title="选片">
+        <template #header-extra>
+          <NSpace>
+            <NButton :disabled="!!busy || grouping" @click="preparing = true">返回准备照片</NButton>
+            <NButton type="primary" :disabled="!batch.entries.length || !!busy || grouping" @click="advance('reject')">选片完成，下一步</NButton>
+          </NSpace>
+        </template>
         <NSpace align="center">
           <span>{{ stagedEntries.length }} 张可选 · {{ favoriteCount }} 张收藏 · {{ deletedCount }} 张标记删除</span>
           <NButton :disabled="!stagedEntries.length || grouping || !!busy" :loading="grouping" @click="runGrouping">计算连拍组</NButton>
@@ -441,6 +533,9 @@ onUnmounted(() => {
           <NButton :disabled="!batch.undo?.length || !!busy || grouping" @click="perform('撤销', async () => { if (batch) batch = await getImportBatchApp().UndoImportBatch(batch.id) })">撤销上一步</NButton>
         </NSpace>
         <p>照片默认留存。标记删除后可撤销，原片在确认回收时处理。</p>
+        <NAlert v-if="reviewIssueCount && filter !== 'review'" type="warning" class="form-row">
+          {{ reviewIssueCount }} 张照片有待核对的来源、配对或上传问题。 <NButton text @click="filter = 'review'">查看需核对照片</NButton>
+        </NAlert>
         <NEmpty v-if="!shown.length" :description="filter === 'all' && !stagedCount ? '上传 JPG 后开始选片' : '此范围暂无照片'" />
         <ul v-else class="review-grid">
           <li v-for="entry in shown" :key="entry.id">
@@ -480,24 +575,81 @@ onUnmounted(() => {
         </ul>
         <NPagination v-if="filtered.length > pageSize" v-model:page="page" :page-size="pageSize" :item-count="filtered.length" />
       </NCard>
-      <NCard title="入库与本地回收">
-        <NSpace>
-          <NButton type="primary" :disabled="!!busy || grouping" :loading="busy === '核对归档目标'" @click="previewUpload">预览入库</NButton>
-          <NButton :disabled="!!busy || grouping" @click="previewRecycle('imported')">回收已入库</NButton>
-          <NButton :disabled="!!busy || grouping" @click="previewRecycle('discarded')">回收废片</NButton>
-          <NButton type="error" secondary :disabled="!!busy || grouping" @click="previewRecycle('discarded', true)">永久删除废片</NButton>
+
+      <NCard v-if="step === 'reject' || step === 'keep'" :title="step === 'reject' ? '回收废片' : '回收已入库'">
+        <NSpin v-if="loadingStep" />
+        <NAlert v-else-if="stepError" type="error">{{ stepError }} <NButton text @click="loadStep">重试</NButton></NAlert>
+        <template v-else-if="recycleFiles">
+          <p v-if="recycleFiles.length">将 {{ recycleFiles.length }} 个本地文件移入 Windows 回收站，目录名为「{{ batch.name }}{{ step === 'reject' ? '-reject' : '-keep' }}」。</p>
+          <p v-else>{{ recycleGroups.length ? '这一项已处理。' : '这一步没有需要回收的文件。' }}</p>
+          <NSpace>
+            <NButton v-if="step === 'reject'" :disabled="!!busy" @click="advance('review')">返回选片</NButton>
+            <NButton v-if="recycleFiles.length > 0" type="primary" :loading="busy === '处理本地文件'" :disabled="!!busy"
+              @click="submitRecycle">{{ recycleFailed ? '重试回收' : step === 'reject' ? '回收废片' : '回收已入库' }}</NButton>
+            <NButton v-if="!recycleFiles.length" type="primary" :disabled="!!busy"
+              @click="advance(step === 'reject' ? 'archive' : 'finish')">{{ step === 'reject' ? '下一步，入库' : '下一步，完成批次' }}</NButton>
+            <NButton v-else-if="recycleFailed" :disabled="!!busy" @click="advance(step === 'reject' ? 'archive' : 'finish', true)">剩余文件留在原处，继续</NButton>
+          </NSpace>
+        </template>
+      </NCard>
+
+      <NCard v-if="step === 'archive'" title="入库">
+        <template #header-extra>
+          <NButton v-if="archiveEntries.length" type="primary" :loading="busy === '上传原片'"
+            :disabled="!readyPlans.length || !!busy || loadingStep" @click="upload">确认入库</NButton>
+          <NButton v-else type="primary" :disabled="!uploadPlan || !!busy" @click="advance('keep')">下一步，回收已入库</NButton>
+        </template>
+        <p>服务器活动目录 {{ batch.activity }} · 已核验 {{ verifiedCount }} 张</p>
+        <NAlert v-if="excludedCount" type="warning">{{ excludedCount }} 张照片仍需核对来源或配对，未列入本次入库。</NAlert>
+        <NSpace v-if="loadingStep" align="center"><NSpin size="small" />正在核对入库文件</NSpace>
+        <NAlert v-else-if="stepError" type="error">{{ stepError }} <NButton text @click="loadStep">重试</NButton></NAlert>
+        <template v-else-if="uploadPlan && busy !== '上传原片'">
+          <p v-if="uploadPlan.length">{{ readyPlans.length }} 张可入库<span v-if="uploadPlan.length > readyPlans.length">，{{ uploadPlan.length - readyPlans.length }} 张需处理</span></p>
+          <p v-else>没有待入库照片。</p>
+        </template>
+        <NProgress v-if="uploadProgress && busy === '上传原片'" :percentage="Math.round(uploadProgress.completed / uploadProgress.total * 100)" processing />
+        <ul v-if="shownArchiveEntries.length" class="review-grid" aria-label="待入库照片">
+          <li v-for="entry in shownArchiveEntries" :key="entry.id">
+            <PhotoCard v-if="imageURL(entry)" :photo="photoCard(entry)" :show-status="false" :show-embed="false"
+              :show-delete="false" :show-tooltip="false" view-level="all" @view-detail="showDetail" />
+            <NCard v-else size="small">{{ entryName(entry) }}</NCard>
+            <NAlert v-if="archiveIssues.get(entry.id)" type="error" class="review-issues">{{ archiveIssues.get(entry.id) }}</NAlert>
+          </li>
+        </ul>
+        <NPagination v-if="archiveEntries.length > pageSize" v-model:page="archivePage" :page-size="pageSize" :item-count="archiveEntries.length" />
+        <NSpace class="form-row">
+          <NButton :disabled="!!busy" @click="advance('review')">返回选片</NButton>
+          <NButton v-if="uploadPlan && uploadPlan.length > readyPlans.length" :disabled="!!busy" @click="loadStep">重新检查入库</NButton>
         </NSpace>
-        <p>未通过入库核验的原片留在原处。</p>
-        <div v-for="(group, index) in batch.recycling ?? []" :key="index" class="form-row">
+      </NCard>
+
+      <NCard v-if="step === 'finish' || step === 'done'" :title="step === 'done' ? '批次已完成' : '完成批次'">
+        <p>已核验 {{ verifiedCount }} 张照片。{{ step === 'done' ? '服务器暂存已清理。' : '完成后清理本批次的服务器暂存 JPG 和缩略图。' }}</p>
+        <p v-if="excludedCount">{{ excludedCount }} 张照片因来源或配对待核对，未入库。</p>
+        <NButton v-if="step === 'finish'" type="primary" :loading="busy === '清理服务器暂存'" :disabled="!!busy" @click="finishBatch">完成批次并清理暂存</NButton>
+        <NButton v-else type="primary" :disabled="!!busy" @click="selectBatch(null)">开始新批次</NButton>
+      </NCard>
+
+      <NCard v-if="recycleGroups.length && ['reject', 'keep', 'finish', 'done'].includes(step)" title="回收结果">
+        <div v-for="(group, index) in recycleGroups" :key="group.directory || index" class="form-row">
           <NSpace align="center">
             <NTag>{{ ({ recycled: '已回收', retained: '原位保留', restored: '已恢复', pending: '归集中', sending: '待核对回收', uncertain: '待核对回收站', permanent: '永久删除结果' } as Record<string, string>)[group.status] ?? group.status }}</NTag>
-            <span>{{ group.directory || (group.kind === 'permanent' ? '废片' : '原位置') }}</span>
-            <NButton v-if="group.directory && group.status !== 'restored'" size="small" :disabled="!!busy" @click="restoreLocal(group.directory)">核对并恢复原路径</NButton>
+            <span :title="group.directory">{{ group.directory.split(/[\\/]/).pop() || (group.kind === 'imported' ? '已入库原片' : '废片') }} · {{ group.files.length }} 个文件</span>
           </NSpace>
-          <div v-if="group.error">{{ group.error }}</div>
-          <ul class="paths">
-            <li v-for="file in group.files" :key="file.source">{{ file.source }} · {{ ({ recycled: '已回收', staged: '已归集', retained: '原位保留', restored: '已恢复', deleted: '已永久删除', pending: '待处理', deleting: '待核对删除' } as Record<string, string>)[file.status] ?? file.status }} {{ file.error }}<span v-if="file.restored_to && file.restored_to !== file.source"> · 恢复到 {{ file.restored_to }}</span></li>
-          </ul>
+          <details v-if="group.error || group.files.some((file) => file.error || file.restored_to && file.restored_to !== file.source)">
+            <summary>查看异常详情</summary>
+            <p v-if="group.error">{{ group.error }}</p>
+            <ul class="paths">
+              <li v-for="file in group.files.filter((item) => item.error || item.restored_to && item.restored_to !== item.source)" :key="file.source">
+                {{ file.source }} · {{ file.error || `恢复到 ${file.restored_to}` }}
+              </li>
+            </ul>
+          </details>
+          <details v-if="group.directory && group.status !== 'restored'">
+            <summary>恢复原片</summary>
+            <p>请先在 Windows 回收站还原目录，再核对并恢复到各自的原路径。</p>
+            <NButton size="small" :disabled="!!busy" @click="restoreLocal(group.directory)">核对并恢复原路径</NButton>
+          </details>
         </div>
       </NCard>
     </template>
@@ -516,28 +668,6 @@ onUnmounted(() => {
         </NSpace>
       </template>
     </BurstGroupModal>
-
-    <NModal :show="!!uploadPlan" preset="card" title="确认入库" class="batch-modal" :mask-closable="!busy" @update:show="(show) => { if (!show && !busy) uploadPlan = undefined }">
-      <ul class="paths">
-        <li v-for="row in uploadPlan" :key="row.entry_id" class="plan">
-          <div>{{ row.jpg }}<br v-if="row.nef" />{{ row.nef }}</div>
-          <NAlert v-if="row.plan.error" type="error">{{ row.plan.error }}</NAlert>
-          <div v-else>{{ row.plan.root }} / {{ row.plan.target }}{{ row.plan.jpg_ready ? ' · JPG 已归档' : row.plan.jpg_staged ? ' · 使用服务器暂存 JPG' : '' }}<br v-if="row.plan.nef_target" />{{ row.plan.nef_target }}</div>
-        </li>
-      </ul>
-      <NProgress v-if="uploadProgress && busy === '上传原片'" :percentage="Math.round(uploadProgress.completed / uploadProgress.total * 100)" processing />
-      <p v-if="uploadProgress && busy === '上传原片'" aria-live="polite">{{ uploadProgress.completed }}/{{ uploadProgress.total }} · {{ uploadProgress.path }}</p>
-      <NButton type="primary" :loading="busy === '上传原片'" :disabled="!uploadPlan?.some((row) => !row.plan.error)" @click="upload">上传并核验</NButton>
-    </NModal>
-
-    <NModal :show="!!recycle" preset="card" :title="recycle?.permanent ? '确认永久删除废片' : '确认移入 Windows 回收站'"
-      class="batch-modal" :mask-closable="!busy" @update:show="(show) => { if (!show && !busy) recycle = undefined }">
-      <p v-if="recycle?.permanent">这些废片会永久删除，无法从回收站恢复。</p>
-      <ul class="paths"><li v-for="path in recycle?.files" :key="path">{{ path }}</li></ul>
-      <NButton :type="recycle?.permanent ? 'error' : 'primary'" :loading="busy === '处理本地文件'" @click="submitRecycle">
-        {{ recycle?.permanent ? '永久删除废片' : '移入回收站' }}
-      </NButton>
-    </NModal>
 
     <NModal v-model:show="preview" preset="card" title="审阅原片" class="preview-modal">
       <NSpin :show="imageLoading"><div class="compare">
@@ -573,9 +703,7 @@ onUnmounted(() => {
 .review-grid li { min-width: 0; overflow-wrap: anywhere; }
 .review-actions { margin-top: 8px; }
 .review-issues { display: grid; gap: 8px; padding: 8px 0; }
-.plan { display: grid; gap: 4px; }
 .batch-modal { width: min(760px, 90vw); }
-.batch-modal .paths { max-height: 55vh; overflow: auto; }
 .preview-modal { width: min(1320px, 94vw); }
 .compare { display: flex; gap: 16px; }
 .compare figure { margin: 0; flex: 1; min-width: 0; }

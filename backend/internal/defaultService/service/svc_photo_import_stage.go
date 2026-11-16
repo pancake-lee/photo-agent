@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"backend/internal/defaultService/conf"
@@ -18,6 +19,8 @@ import (
 )
 
 const importStageDirectory = ".import-review"
+
+var importStageFiles sync.RWMutex
 
 func validReviewBatchID(id string) bool {
 	_, err := hex.DecodeString(id)
@@ -93,6 +96,8 @@ func (s *PhotoServer) writeImportStage(ctx khttp.Context) error {
 	if file.FormName() != "jpg" || !req.valid() || req.NEF != "" {
 		return ctx.Result(http.StatusBadRequest, map[string]string{"error": "暂存仅接收有效的 JPG"})
 	}
+	importStageFiles.RLock()
+	defer importStageFiles.RUnlock()
 	result, err := getImportStage(req)
 	if err != nil {
 		return apiPhotoArchiveError(ctx, err)
@@ -108,6 +113,52 @@ func (s *PhotoServer) writeImportStage(ctx khttp.Context) error {
 		}
 	}
 	return ctx.Result(http.StatusOK, result)
+}
+
+func (s *PhotoServer) cleanupImportStage(ctx khttp.Context) error {
+	var req struct {
+		BatchID string `json:"batch_id"`
+	}
+	ctx.Request().Body = http.MaxBytesReader(ctx.Response(), ctx.Request().Body, 4096)
+	err := ctx.Bind(&req)
+	if err != nil || !validReviewBatchID(req.BatchID) {
+		return ctx.Result(http.StatusBadRequest, map[string]string{"error": "无效的暂存批次"})
+	}
+	importStageFiles.Lock()
+	defer importStageFiles.Unlock()
+	importReviewBurstJobs.Lock()
+	defer importReviewBurstJobs.Unlock()
+	for _, job := range importReviewBurstJobs.jobs {
+		if job.batchID == req.BatchID && job.State == "running" {
+			return apiPhotoArchiveError(ctx, fmt.Errorf("请等待本批次连拍计算结束"))
+		}
+	}
+	err = removeImportStage(req.BatchID)
+	if err != nil {
+		return apiPhotoArchiveError(ctx, err)
+	}
+	return ctx.Result(http.StatusOK, map[string]bool{"cleaned": true})
+}
+
+func removeImportStage(batchID string) error {
+	if !validReviewBatchID(batchID) {
+		return fmt.Errorf("无效的暂存批次")
+	}
+	if conf.C.Storage.PhotoSrc == "" {
+		return fmt.Errorf("服务器未配置照片存储目录")
+	}
+	root := filepath.Join(conf.C.Storage.PhotoSrc, importStageDirectory)
+	info, err := os.Lstat(root)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("暂存位置不是目录")
+	}
+	return os.RemoveAll(filepath.Join(root, batchID))
 }
 
 func (s *PhotoServer) importStageImage(ctx khttp.Context) error {
@@ -175,6 +226,8 @@ func stagedImportThumbnail(ctx context.Context, source string) (string, error) {
 
 func (s *PhotoServer) archiveStagedJPG(ctx khttp.Context) error {
 	return importArchiveJSON(ctx, func(app *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
+		importStageFiles.RLock()
+		defer importStageFiles.RUnlock()
 		result, _, err := resolveArchiveImport(app, req)
 		if err != nil {
 			return result, err
