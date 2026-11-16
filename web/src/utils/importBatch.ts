@@ -82,6 +82,7 @@ export interface ImportBatch extends ImportSummary {
   complete: boolean
   entries: ImportEntry[]
   issues: string[]
+  empty_favorite_dirs?: string[]
   undo?: unknown[]
   recycling?: ImportRecycleGroup[]
   bursts?: { server: string; fine: string[][]; coarse: string[][] }

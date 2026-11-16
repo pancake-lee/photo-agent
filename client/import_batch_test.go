@@ -494,3 +494,40 @@ func TestScanImportBatchSourceModes(t *testing.T) {
 		t.Fatalf("existing batches should keep their source rules: %#v %v", legacy, err)
 	}
 }
+
+func TestScanReportsEmptyFavoriteDirectories(t *testing.T) {
+	root := t.TempDir()
+	local := batchTestDir(t, root, "local")
+	empty := batchTestDir(t, root, "empty-favorites")
+	unsupported := batchTestDir(t, root, "unsupported-favorites")
+	nested := batchTestDir(t, root, "favorites/nested")
+	missing := filepath.Join(root, "missing-favorites")
+	photo := []byte("jpg fixture")
+	writeFile(t, filepath.Join(local, "original.jpg"), photo)
+	writeFile(t, filepath.Join(unsupported, "IMG_001.HEIC"), []byte("unsupported"))
+	writeFile(t, filepath.Join(nested, "renamed.JPEG"), photo)
+
+	batch := &ImportBatch{
+		Mode: importModePC,
+		Sources: []ImportBatchSource{
+			{Path: local, Role: "local"},
+			{Path: empty, Role: "favorite"},
+			{Path: unsupported, Role: "favorite"},
+			{Path: filepath.Dir(nested), Role: "favorite"},
+			{Path: missing, Role: "favorite"},
+		},
+	}
+	work := filepath.Join(root, "work")
+	scanImportBatch(work, batch, nil)
+	assertStrSlice(t, batch.EmptyFavoriteDirs, []string{empty, unsupported})
+	if len(batch.Issues) != 1 || !strings.Contains(batch.Issues[0], missing) {
+		t.Fatalf("missing directory should be a read error: %v", batch.Issues)
+	}
+	if len(batch.Entries) != 1 || batch.Entries[0].Decision != batchFavorite {
+		t.Fatalf("valid files should still match: %#v", batch.Entries)
+	}
+
+	writeFile(t, filepath.Join(empty, "found.jpg"), photo)
+	scanImportBatch(work, batch, nil)
+	assertStrSlice(t, batch.EmptyFavoriteDirs, []string{unsupported})
+}

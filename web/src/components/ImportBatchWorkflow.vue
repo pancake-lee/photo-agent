@@ -155,7 +155,12 @@ const stagedEntries = computed(() => stageCandidates.value.filter((entry) =>
 ))
 const entriesByID = computed(() => new Map((batch.value?.entries ?? []).map((entry) => [entry.id, entry])))
 const deletedCount = computed(() => (batch.value?.entries ?? []).filter((entry) => entry.decision === 'discarded').length)
-const favoriteCount = computed(() => stagedEntries.value.filter((entry) => entry.decision === 'favorite').length)
+const favoriteEntries = computed(() => (batch.value?.entries ?? []).filter(isPreviewableFavorite))
+const ipadFavoriteCount = computed(() => favoriteEntries.value.filter((entry) => entry.origin === 'ipad').length)
+const hasFavoriteSource = computed(() => batch.value?.sources.some((source) => source.role === 'favorite'))
+const emptyFavoriteDirs = computed(() => batch.value?.empty_favorite_dirs?.filter((path) =>
+  activeSources.value.some((source) => source.role === 'favorite' && source.path === path),
+) ?? [])
 const burstGroups = computed(() => {
   const bursts = batch.value?.bursts
   if (!bursts || filter.value !== 'all' || viewLevel.value === 'all' || bursts.server !== settings.backendUrl) return []
@@ -180,7 +185,7 @@ const filtered = computed(() => {
     if (filter.value === 'discarded') return entry.decision === 'discarded'
     if (entry.decision === 'discarded') return false
     if (filter.value === 'review') return needsReview(entry)
-    if (filter.value === 'favorite') return entry.decision === 'favorite' && canPreview(entry)
+    if (filter.value === 'favorite') return isPreviewableFavorite(entry)
     return canPreview(entry)
   })
   return list.filter((entry) => {
@@ -189,6 +194,19 @@ const filtered = computed(() => {
   }).sort((a, b) => (a.shot_at ?? '').localeCompare(b.shot_at ?? ''))
 })
 const shown = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+const favoriteTags = computed(() => {
+  const tags = new Map<string, string>()
+  for (const entry of shown.value) {
+    const group = groupByEntry.value.get(entry.id)
+    if (group) {
+      const count = group.filter((id) => entriesByID.value.get(id)?.decision === 'favorite').length
+      if (count) tags.set(entry.id, `${count} 张已收藏`)
+    } else if (entry.decision === 'favorite') {
+      tags.set(entry.id, entry.origin === 'ipad' ? 'iPad 收藏' : '已收藏')
+    }
+  }
+  return tags
+})
 const previewEntry = computed(() => entriesByID.value.get(previewID.value))
 const previewGroup = computed(() => step.value === 'review' ? groupByEntry.value.get(previewID.value) ?? [] : [])
 const previewIDs = computed(() => step.value === 'archive'
@@ -329,6 +347,7 @@ function preparePhotos(rescan: boolean) {
       previewID.value = ''
       groupingError.value = ''
       progress.value = undefined
+      if (emptyFavoriteDirs.value.length) message.warning('所选 iPad 收藏目录中没有 JPG 或 JPEG 照片')
       await refreshBatches()
     }
     if (!batch.value?.entries.length || disposed) return
@@ -431,6 +450,10 @@ function showDetail(id: string) {
 
 function canPreview(entry: ImportEntry) {
   return !!entry.jpg && (isStaged(entry) || !!entry.upload?.verified || !!entry.reference_only)
+}
+
+function isPreviewableFavorite(entry: ImportEntry) {
+  return entry.decision === 'favorite' && canPreview(entry)
 }
 
 function clearBoundary() {
@@ -633,6 +656,17 @@ onUnmounted(() => {
       </NSteps>
     </NCard>
 
+    <NAlert v-if="emptyFavoriteDirs.length && (step === 'prepare' || step === 'review')"
+      type="warning" title="iPad 收藏目录中没有 JPG 或 JPEG 照片">
+      <p>{{ step === 'review' ? '可返回「准备照片」，更换收藏目录后重新扫描。' : '可更换收藏目录，再开始选片。' }}</p>
+      <ul class="source-warning-paths">
+        <li v-for="path in emptyFavoriteDirs" :key="path">{{ path }}</li>
+      </ul>
+    </NAlert>
+    <NAlert v-if="batch?.issues.length && (step === 'prepare' || step === 'review')" type="warning" title="部分来源读取失败">
+      <div v-for="(issue, index) in batch.issues" :key="index">{{ issue }}</div>
+    </NAlert>
+
     <NCard v-if="step === 'prepare'" title="准备照片">
       <NFormItem label="导入模式">
         <NRadioGroup v-model:value="mode" :disabled="!!batch || !!busy || grouping" aria-label="导入模式">
@@ -675,9 +709,6 @@ onUnmounted(() => {
         <NButton v-if="batch?.entries.length && !needsScan" text :disabled="!canPrepare || !!busy || grouping"
           @click="preparePhotos(true)">重新扫描来源</NButton>
       </NSpace>
-      <NAlert v-if="batch?.issues.length" type="warning" title="部分来源读取失败" class="form-row">
-        <div v-for="(issue, index) in batch.issues" :key="index">{{ issue }}</div>
-      </NAlert>
       <p v-if="busy === '扫描来源'" aria-live="polite">正在扫描来源目录</p>
       <div v-else-if="batch && !needsScan" class="form-row">
         <div v-if="stageProgress && busy === '上传 JPG 到服务器'" aria-live="polite">
@@ -699,7 +730,7 @@ onUnmounted(() => {
           </NSpace>
         </template>
         <NSpace align="center">
-          <span>{{ stagedEntries.length }} 张可选 · {{ favoriteCount }} 张收藏 · {{ deletedCount }} 张标记删除</span>
+          <span>{{ stagedEntries.length }} 张可选 · {{ favoriteEntries.length }} 张收藏<span v-if="hasFavoriteSource">（{{ ipadFavoriteCount }} 张来自 iPad）</span> · {{ deletedCount }} 张标记删除</span>
           <NSelect v-model:value="viewLevel" :options="viewLevels" :disabled="filter !== 'all' || !batch.bursts"
             style="width: 128px" aria-label="连拍展示" />
         </NSpace>
@@ -729,6 +760,7 @@ onUnmounted(() => {
               :show-delete="false" :show-tooltip="false" :view-level="viewLevel"
               @view-detail="showDetail" @open-burst-group="showDetail">
               <template #actions>
+                <NTag v-if="favoriteTags.has(entry.id)" size="small" type="warning" class="favorite-status">{{ favoriteTags.get(entry.id) }}</NTag>
                 <NSpace v-if="canEdit(entry)" class="review-actions" :size="4" @click.stop>
                   <NButton size="small" :type="targetIDs(entry).every((id) => entriesByID.get(id)?.decision === 'favorite') ? 'warning' : 'default'"
                     :disabled="!!busy || grouping" @click="toggleFavorite(targetIDs(entry))">{{ favoriteLabel(targetIDs(entry)) }}</NButton>
@@ -927,11 +959,13 @@ onUnmounted(() => {
 .source-field .paths { margin-bottom: 0; }
 .source-hint { font-size: 13px; }
 p.source-hint { margin: 4px 0 0; }
+.source-warning-paths { margin: 8px 0 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
 .paths { margin: 8px 0 16px; padding: 0; list-style: none; overflow-wrap: anywhere; }
 .paths li { padding: 4px 0; }
 .paths li .n-button { margin-left: 8px; }
 .review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 16px; padding: 0; list-style: none; }
 .review-grid li { min-width: 0; overflow-wrap: anywhere; }
+.favorite-status { margin-top: 8px; }
 .review-actions { margin-top: 8px; }
 .review-issues { display: grid; gap: 8px; padding: 8px 0; }
 .batch-modal { width: min(760px, 90vw); }

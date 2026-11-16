@@ -64,19 +64,20 @@ type ImportBatchEntry struct {
 }
 
 type ImportBatch struct {
-	Bursts       *ImportReviewBursts  `json:"bursts,omitempty"`
-	ID           string               `json:"id"`
-	Activity     string               `json:"activity"`
-	Name         string               `json:"name,omitempty"`
-	Step         string               `json:"step,omitempty"`
-	Mode         string               `json:"mode,omitempty"`
-	StageServers []string             `json:"stage_servers,omitempty"`
-	Sources      []ImportBatchSource  `json:"sources"`
-	Complete     bool                 `json:"complete"`
-	Entries      []ImportBatchEntry   `json:"entries"`
-	Issues       []string             `json:"issues"`
-	Undo         []ImportBatchUndo    `json:"undo,omitempty"`
-	Recycling    []ImportRecycleGroup `json:"recycling,omitempty"`
+	Bursts            *ImportReviewBursts  `json:"bursts,omitempty"`
+	ID                string               `json:"id"`
+	Activity          string               `json:"activity"`
+	Name              string               `json:"name,omitempty"`
+	Step              string               `json:"step,omitempty"`
+	Mode              string               `json:"mode,omitempty"`
+	StageServers      []string             `json:"stage_servers,omitempty"`
+	Sources           []ImportBatchSource  `json:"sources"`
+	Complete          bool                 `json:"complete"`
+	Entries           []ImportBatchEntry   `json:"entries"`
+	Issues            []string             `json:"issues"`
+	EmptyFavoriteDirs []string             `json:"empty_favorite_dirs,omitempty"`
+	Undo              []ImportBatchUndo    `json:"undo,omitempty"`
+	Recycling         []ImportRecycleGroup `json:"recycling,omitempty"`
 }
 
 type ImportBatchUndo struct {
@@ -235,6 +236,8 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 			batch.Issues = append(batch.Issues, fmt.Sprintf("%s: %v", source.Path, err))
 			continue
 		}
+		foundPhoto := false
+		issuesBefore := len(batch.Issues)
 		err = filepath.WalkDir(sourcePath, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				batch.Issues = append(batch.Issues, fmt.Sprintf("%s: %v", path, err))
@@ -250,6 +253,7 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 				!(isJpg(path) || source.Role == "local" && isNef(path)) {
 				return nil
 			}
+			foundPhoto = true
 			key := [2]string{path, source.Role}
 			if seen[key] {
 				return nil
@@ -269,6 +273,9 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 		})
 		if err != nil {
 			batch.Issues = append(batch.Issues, fmt.Sprintf("%s: %v", sourcePath, err))
+		}
+		if source.Role == "favorite" && !foundPhoto && len(batch.Issues) == issuesBefore {
+			batch.EmptyFavoriteDirs = append(batch.EmptyFavoriteDirs, source.Path)
 		}
 	}
 	return byRole
@@ -418,6 +425,7 @@ func identicalImportFiles(files []*ImportBatchFile) bool {
 func scanImportBatch(root string, batch, previous *ImportBatch) {
 	batch.Entries = make([]ImportBatchEntry, 0)
 	batch.Issues = make([]string, 0)
+	batch.EmptyFavoriteDirs = nil
 	if previous != nil {
 		batch.Recycling = previous.Recycling
 	}
