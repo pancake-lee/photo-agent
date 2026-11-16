@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"syscall"
@@ -62,6 +63,10 @@ func moveImportFile(source, target string) error {
 		return err
 	}
 	return windows.MoveFileEx(from, to, windows.MOVEFILE_WRITE_THROUGH)
+}
+
+func isImportCrossVolume(err error) bool {
+	return errors.Is(err, windows.ERROR_NOT_SAME_DEVICE)
 }
 
 func recycleCOMCall(object *[1]*[23]uintptr, index int, args ...uintptr) error {

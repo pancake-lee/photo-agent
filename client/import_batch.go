@@ -206,6 +206,12 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 	byRole := make(map[string][]*ImportBatchFile)
 	byPath := make(map[string]*ImportBatchFile)
 	seen := make(map[[2]string]bool)
+	recycleDirs := make(map[string]bool)
+	for _, group := range batch.Recycling {
+		if group.Directory != "" {
+			recycleDirs[strings.ToLower(group.Directory)] = true
+		}
+	}
 	for _, source := range batch.Sources {
 		sourcePath, err := filepath.Abs(source.Path)
 		if err == nil {
@@ -231,7 +237,7 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 				return nil
 			}
 			if entry.IsDir() {
-				if pathWithin(work, path) || strings.HasPrefix(entry.Name(), ".photo-agent-recycle") {
+				if pathWithin(work, path) || recycleDirs[strings.ToLower(path)] || entry.Name() == ".photo-agent-recycle" {
 					return filepath.SkipDir
 				}
 				return nil
@@ -408,6 +414,9 @@ func identicalImportFiles(files []*ImportBatchFile) bool {
 func scanImportBatch(root string, batch, previous *ImportBatch) {
 	batch.Entries = make([]ImportBatchEntry, 0)
 	batch.Issues = make([]string, 0)
+	if previous != nil {
+		batch.Recycling = previous.Recycling
+	}
 	role := scanBatchSources(root, batch)
 	var localJPG, nefList []*ImportBatchFile
 	for _, file := range role["local"] {
@@ -601,7 +610,6 @@ func mergeImportBatch(batch, previous *ImportBatch) {
 		}
 		batch.Entries = append(batch.Entries, entry)
 	}
-	batch.Recycling = previous.Recycling
 	batch.Undo = previous.Undo
 	if previous.Bursts != nil {
 		server := previous.Bursts.Server

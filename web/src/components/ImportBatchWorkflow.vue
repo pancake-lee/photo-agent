@@ -51,6 +51,9 @@ interface FileProgress {
 const uploadProgress = ref<FileProgress>()
 const stageProgress = ref<FileProgress>()
 const recycleFiles = ref<string[]>()
+const defaultRecycleDirectory = ref('')
+const recycleDirectory = ref('')
+const confirmRecycle = ref(false)
 const loadingStep = ref(false)
 const stepError = ref('')
 const preparing = ref<boolean>()
@@ -111,7 +114,8 @@ const recycleGroups = computed(() => {
   const groups = batch.value?.recycling ?? []
   const relevant = step.value === 'done' || step.value === 'finish' ? groups : groups.filter((group) => group.kind === recycleKind.value)
   const latest = new Map(relevant.flatMap((group) => group.files.map((file) => [file.source, file] as const)))
-  return relevant.filter((group) => group.directory || group.files.some((file) => latest.get(file.source) === file))
+  return relevant.filter((group) => group.files.length &&
+    (group.directory || group.files.some((file) => latest.get(file.source) === file)))
 })
 const recycleFailed = computed(() => recycleGroups.value.some((group) => group.error || group.files.some((file) => file.error)))
 const verifiedCount = computed(() => batch.value?.entries.filter((entry) => entry.upload?.verified).length ?? 0)
@@ -410,6 +414,7 @@ async function loadStep() {
   const server = settings.backendUrl
   const request = ++requestNumber
   recycleFiles.value = undefined
+  defaultRecycleDirectory.value = ''
   uploadPlan.value = undefined
   stepError.value = ''
   loadingStep.value = false
@@ -422,7 +427,10 @@ async function loadStep() {
       if (request === requestNumber) uploadPlan.value = plans
     } else {
       const files = await getImportBatchApp().PreviewImportRecycle(id, current === 'reject' ? 'discarded' : 'imported')
-      if (request === requestNumber) recycleFiles.value = files.map((file) => file.source)
+      if (request === requestNumber) {
+        recycleFiles.value = files.map((file) => file.source)
+        defaultRecycleDirectory.value = files[0]?.destination ?? ''
+      }
     }
   } catch (error) {
     if (request === requestNumber) stepError.value = wailsError(error)
@@ -459,10 +467,24 @@ function advance(next: ImportStep, leaveLocal = false) {
 function submitRecycle() {
   const paths = recycleFiles.value
   const kind = recycleKind.value
+  const parent = recycleDirectory.value.trim()
   return perform('处理本地文件', async () => {
-    if (!batch.value || !paths?.length) return
-    batch.value = await getImportBatchApp().RecycleImportFiles(batch.value.id, kind, paths, false)
+    if (!batch.value || !paths?.length || !parent) return
+    batch.value = await getImportBatchApp().RecycleImportFiles(batch.value.id, kind, paths, parent)
+    confirmRecycle.value = false
     await loadStep()
+  })
+}
+
+function openRecycleConfirmation() {
+  recycleDirectory.value = defaultRecycleDirectory.value
+  confirmRecycle.value = true
+}
+
+function chooseRecycleDirectory() {
+  return perform('选择归集位置', async () => {
+    const picked = await getImportBatchApp().ChooseImportRecycleDirectory()
+    if (picked) recycleDirectory.value = picked
   })
 }
 
@@ -471,14 +493,6 @@ function finishBatch() {
     if (!batch.value) return
     batch.value = await getImportBatchApp().FinishImportBatch(batch.value.id)
     message.success('批次已完成')
-  })
-}
-
-function restoreLocal(directory: string) {
-  return perform('恢复本地原片', async () => {
-    if (!batch.value) return
-    batch.value = await getImportBatchApp().RestoreImportDirectory(batch.value.id, directory)
-    await loadStep()
   })
 }
 
@@ -670,12 +684,12 @@ onUnmounted(() => {
         <NSpin v-if="loadingStep" />
         <NAlert v-else-if="stepError" type="error">{{ stepError }} <NButton text @click="loadStep">重试</NButton></NAlert>
         <template v-else-if="recycleFiles">
-          <p v-if="recycleFiles.length">将 {{ recycleFiles.length }} 个本地文件移入 Windows 回收站，目录名为「{{ batch.name }}{{ step === 'reject' ? '-reject' : '-keep' }}」。</p>
+          <p v-if="recycleFiles.length">有 {{ recycleFiles.length }} 个本地文件待移入 Windows 回收站。</p>
           <p v-else>{{ recycleGroups.length ? '这一项已处理。' : '这一步没有需要回收的文件。' }}</p>
           <NSpace>
             <NButton v-if="step === 'reject'" :disabled="!!busy" @click="advance('review')">返回选片</NButton>
             <NButton v-if="recycleFiles.length > 0" type="primary" :loading="busy === '处理本地文件'" :disabled="!!busy"
-              @click="submitRecycle">{{ recycleFailed ? '重试回收' : step === 'reject' ? '回收废片' : '回收已入库' }}</NButton>
+              @click="openRecycleConfirmation">{{ recycleFailed ? '重试回收' : step === 'reject' ? '回收废片' : '回收已入库' }}</NButton>
             <NButton v-if="!recycleFiles.length" type="primary" :disabled="!!busy"
               @click="advance(step === 'reject' ? 'archive' : 'finish')">{{ step === 'reject' ? '下一步，入库' : '下一步，完成批次' }}</NButton>
             <NButton v-else-if="recycleFailed" :disabled="!!busy" @click="advance(step === 'reject' ? 'archive' : 'finish', true)">剩余文件留在原处，继续</NButton>
@@ -721,6 +735,7 @@ onUnmounted(() => {
       </NCard>
 
       <NCard v-if="recycleGroups.length && ['reject', 'keep', 'finish', 'done'].includes(step)" title="回收结果">
+        <p v-if="recycleGroups.some((group) => group.status === 'recycled')">需要还原时，请在 Windows 回收站还原对应目录。</p>
         <div v-for="(group, index) in recycleGroups" :key="group.directory || index" class="form-row">
           <NSpace align="center">
             <NTag>{{ ({ recycled: '已回收', retained: '原位保留', restored: '已恢复', pending: '归集中', sending: '待核对回收', uncertain: '待核对回收站', permanent: '永久删除结果' } as Record<string, string>)[group.status] ?? group.status }}</NTag>
@@ -735,14 +750,24 @@ onUnmounted(() => {
               </li>
             </ul>
           </details>
-          <details v-if="group.directory && group.status !== 'restored'">
-            <summary>恢复原片</summary>
-            <p>请先在 Windows 回收站还原目录，再核对并恢复到各自的原路径。</p>
-            <NButton size="small" :disabled="!!busy" @click="restoreLocal(group.directory)">核对并恢复原路径</NButton>
-          </details>
         </div>
       </NCard>
     </template>
+
+    <NModal :show="confirmRecycle" preset="card" :title="step === 'reject' ? '确认回收废片' : '确认回收已入库'"
+      class="batch-modal" :mask-closable="!busy" :closable="!busy" @update:show="(show) => { if (!show && !busy) confirmRecycle = false }">
+      <p>先在所选位置建「{{ batch?.name }}{{ step === 'reject' ? '-reject' : '-keep' }}」文件夹，归集 {{ recycleFiles?.length ?? 0 }} 个文件，再将文件夹移入 Windows 回收站。</p>
+      <NFormItem label="归集位置">
+        <NInput v-model:value="recycleDirectory" :disabled="!!busy" />
+        <NButton :disabled="!!busy" @click="chooseRecycleDirectory">选择目录</NButton>
+      </NFormItem>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton :disabled="!!busy" @click="confirmRecycle = false">取消</NButton>
+          <NButton type="primary" :loading="busy === '处理本地文件'" :disabled="!recycleDirectory.trim() || !!busy" @click="submitRecycle">确认移入回收站</NButton>
+        </NSpace>
+      </template>
+    </NModal>
 
     <NModal :show="!!previewEntry" preset="card" :title="previewEntry ? entryName(previewEntry) : '照片预览'"
       class="preview-modal" :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"

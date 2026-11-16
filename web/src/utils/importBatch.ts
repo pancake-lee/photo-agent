@@ -55,6 +55,7 @@ export interface ImportPlan {
 
 interface ImportRecycleFile {
   source: string
+  destination?: string
   restored_to?: string
   status: string
   error?: string
@@ -95,6 +96,7 @@ export interface ImportBurstProgress {
 
 interface ImportBatchApp {
   ChooseImportSource(): Promise<string>
+  ChooseImportRecycleDirectory(): Promise<string>
   ListImportBatches(): Promise<ImportSummary[]>
   GetImportBatch(id: string): Promise<ImportBatch>
   ScanImportBatch(id: string, activity: string, sources: ImportSource[], complete: boolean): Promise<ImportBatch>
@@ -110,8 +112,7 @@ interface ImportBatchApp {
   PreviewImportUploads(id: string, server: string): Promise<ImportPlan[]>
   UploadImportBatch(id: string, server: string, plans: ImportPlan[]): Promise<ImportBatch>
   PreviewImportRecycle(id: string, kind: string): Promise<ImportRecycleFile[]>
-  RecycleImportFiles(id: string, kind: string, paths: string[], permanent: boolean): Promise<ImportBatch>
-  RestoreImportDirectory(id: string, directory: string): Promise<ImportBatch>
+  RecycleImportFiles(id: string, kind: string, paths: string[], parent: string): Promise<ImportBatch>
 }
 
 export const getImportBatchApp = () => getWailsApp<ImportBatchApp>()

@@ -15,6 +15,12 @@ func (a *App) ChooseImportSource() (string, error) {
 	})
 }
 
+func (a *App) ChooseImportRecycleDirectory() (string, error) {
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择回收归集位置",
+	})
+}
+
 func (a *App) ListImportBatches() ([]ImportBatchSummary, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()

@@ -3,12 +3,18 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"syscall"
 )
 
 func importRecycleVolume(path string) (string, error) {
 	return "", fmt.Errorf("卷不支持 Windows 回收站: %s", path)
+}
+
+func isImportCrossVolume(err error) bool {
+	return errors.Is(err, syscall.EXDEV)
 }
 
 func sendImportDirectoryToRecycleBin(path string) error {

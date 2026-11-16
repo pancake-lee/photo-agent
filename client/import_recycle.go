@@ -4,18 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 type ImportRecycleFile struct {
-	Source     string `json:"source"`
-	Relative   string `json:"relative"`
-	SHA256     string `json:"sha256"`
-	Status     string `json:"status"`
-	RestoredTo string `json:"restored_to,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Source      string `json:"source"`
+	Relative    string `json:"relative"`
+	SHA256      string `json:"sha256"`
+	Status      string `json:"status"`
+	RestoredTo  string `json:"restored_to,omitempty"`
+	Error       string `json:"error,omitempty"`
+	Destination string `json:"destination,omitempty"`
 }
 
 type ImportRecycleGroup struct {
@@ -114,7 +116,9 @@ func (a *App) PreviewImportRecycle(id, kind string) ([]ImportRecycleFile, error)
 	}
 	result := make([]ImportRecycleFile, 0)
 	for _, file := range pendingImportRecycle(batch, kind) {
-		result = append(result, ImportRecycleFile{Source: file.Path, SHA256: file.SHA256})
+		result = append(result, ImportRecycleFile{
+			Source: file.Path, SHA256: file.SHA256, Destination: filepath.Dir(file.Path),
+		})
 	}
 	return result, nil
 }
@@ -153,7 +157,7 @@ func checkImportRecycleStep(batch *ImportBatch, kind string, leaveLocal bool) er
 	return nil
 }
 
-func importRecycleDirectory(batch *ImportBatch, volume, kind string) (string, error) {
+func importRecycleDirectory(batch *ImportBatch, parent, kind string) (string, error) {
 	suffix := "-reject"
 	if kind == "imported" {
 		suffix = "-keep"
@@ -162,13 +166,10 @@ func importRecycleDirectory(batch *ImportBatch, volume, kind string) (string, er
 	if !filepath.IsLocal(name) || filepath.Base(name) != name {
 		return "", fmt.Errorf("批次名无法用作回收目录: %s", name)
 	}
-	base := filepath.Join(volume, ".photo-agent-recycle")
-	// If another set of files is recycled later, preserve the visible folder
-	// name and give its recovery record a distinct original path.
-	for n := 1; ; n++ {
-		dir := filepath.Join(base, name)
-		if n > 1 {
-			dir = filepath.Join(base, fmt.Sprint(n), name)
+	for n := 0; ; n++ {
+		dir := filepath.Join(parent, name)
+		if n > 0 {
+			dir = filepath.Join(parent, fmt.Sprintf("%s-%d%s", batch.Name, n, suffix))
 		}
 		used := false
 		for _, group := range batch.Recycling {
@@ -190,7 +191,22 @@ func importRecycleDirectory(batch *ImportBatch, volume, kind string) (string, er
 	}
 }
 
-func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool) (*ImportBatch, error) {
+func recycleRelativePath(parent, source string, used map[string]bool) string {
+	rel, err := filepath.Rel(parent, source)
+	if err != nil || !filepath.IsLocal(rel) {
+		rel = filepath.Base(source)
+	}
+	next := rel
+	ext := filepath.Ext(rel)
+	stem := strings.TrimSuffix(rel, ext)
+	for n := 1; used[strings.ToLower(next)]; n++ {
+		next = fmt.Sprintf("%s-%d%s", stem, n, ext)
+	}
+	used[strings.ToLower(next)] = true
+	return next
+}
+
+func (a *App) RecycleImportFiles(id, kind string, paths []string, parent string) (*ImportBatch, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
 	root := importBatchRoot()
@@ -198,8 +214,16 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 	if err != nil {
 		return nil, err
 	}
-	if kind != "imported" && kind != "discarded" || permanent {
+	if kind != "imported" && kind != "discarded" {
 		return nil, fmt.Errorf("无效的清理类型")
+	}
+	if !filepath.IsAbs(parent) {
+		return nil, fmt.Errorf("请确认要使用的归集位置")
+	}
+	parent = filepath.Clean(parent)
+	parentInfo, err := os.Lstat(parent)
+	if err != nil || !parentInfo.IsDir() {
+		return nil, fmt.Errorf("归集位置不是可访问的目录: %s", parent)
 	}
 	if batch.Step != "" && (kind == "discarded" && batch.Step != "reject" ||
 		kind == "imported" && batch.Step != "keep") {
@@ -213,8 +237,23 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 	for _, path := range paths {
 		selected[path] = true
 	}
-	requested := len(selected)
-	matched := make(map[string]bool)
+	eligible := collectImportRecycle(batch, kind)
+	matched := 0
+	for _, file := range eligible {
+		if selected[file.Path] {
+			matched++
+		}
+	}
+	if matched != len(selected) {
+		return nil, fmt.Errorf("清理清单已变化，请重新预览")
+	}
+	_, recycleErr := importRecycleVolume(parent)
+	if recycleErr == nil {
+		err = changeRecycleLocation(batch, kind, parent, selected, func() error { return saveImportBatch(root, batch) })
+		if err != nil {
+			return nil, err
+		}
+	}
 	statusByPath := make(map[string]string)
 	for _, group := range batch.Recycling {
 		for _, item := range group.Files {
@@ -228,12 +267,12 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 	if kind == "imported" {
 		unverified = verifyArchivedImportForRecycle(batch)
 	}
-	work := make(map[string]*ImportRecycleGroup)
-	for _, file := range collectImportRecycle(batch, kind) {
+	var work *ImportRecycleGroup
+	used := make(map[string]bool)
+	for _, file := range eligible {
 		if !selected[file.Path] {
 			continue
 		}
-		matched[file.Path] = true
 		if reason := unverified[file.Path]; reason != "" {
 			delete(selected, file.Path)
 			batch.Recycling = append(batch.Recycling, ImportRecycleGroup{
@@ -247,35 +286,25 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 			status == "pending" || status == "staged" {
 			continue
 		}
-		volume, err := importRecycleVolume(file.Path)
-		if err != nil {
-			group := &ImportRecycleGroup{Kind: kind, Status: "retained", Error: err.Error(),
+		if recycleErr != nil {
+			group := &ImportRecycleGroup{Kind: kind, Status: "retained", Error: recycleErr.Error(),
 				Files: []ImportRecycleFile{{Source: file.Path, SHA256: file.SHA256, Status: "retained"}}}
 			batch.Recycling = append(batch.Recycling, *group)
 			continue
 		}
-		group := work[volume]
-		if group == nil {
-			dir, err := importRecycleDirectory(batch, volume, kind)
+		if work == nil {
+			dir, err := importRecycleDirectory(batch, parent, kind)
 			if err != nil {
 				return nil, err
 			}
-			group = &ImportRecycleGroup{Directory: dir, Kind: kind, Status: "pending"}
-			work[volume] = group
+			work = &ImportRecycleGroup{Directory: dir, Kind: kind, Status: "pending"}
 		}
-		rel, err := filepath.Rel(volume, file.Path)
-		if err != nil || !filepath.IsLocal(rel) {
-			return nil, fmt.Errorf("文件不属于此卷: %s", file.Path)
-		}
-		group.Files = append(group.Files, ImportRecycleFile{
-			Source: file.Path, Relative: filepath.Join("原片", rel), SHA256: file.SHA256, Status: "pending",
+		work.Files = append(work.Files, ImportRecycleFile{
+			Source: file.Path, Relative: recycleRelativePath(parent, file.Path, used), SHA256: file.SHA256, Status: "pending",
 		})
 	}
-	if len(matched) != requested {
-		return nil, fmt.Errorf("清理清单已变化，请重新预览")
-	}
-	for _, group := range work {
-		batch.Recycling = append(batch.Recycling, *group)
+	if work != nil {
+		batch.Recycling = append(batch.Recycling, *work)
 	}
 	err = saveImportBatch(root, batch)
 	if err != nil {
@@ -284,7 +313,7 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 	for i := range batch.Recycling {
 		group := &batch.Recycling[i]
 		if group.Status == "recycled" || group.Status == "retained" || group.Status == "restored" || group.Status == "uncertain" ||
-			group.Kind != kind {
+			group.Kind != kind || recycleErr != nil || !strings.EqualFold(filepath.Dir(group.Directory), parent) {
 			continue
 		}
 		err = runImportRecycle(group, selected, func() error {
@@ -295,6 +324,42 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string, permanent bool
 		}
 	}
 	return batch, nil
+}
+
+func changeRecycleLocation(batch *ImportBatch, kind, parent string, selected map[string]bool, save func() error) error {
+	for i := range batch.Recycling {
+		group := &batch.Recycling[i]
+		if group.Kind != kind || group.Directory == "" ||
+			(group.Status != "pending" && group.Status != "sending") ||
+			strings.EqualFold(filepath.Dir(group.Directory), parent) {
+			continue
+		}
+		remaining := make([]ImportRecycleFile, 0, len(group.Files))
+		for j := range group.Files {
+			file := group.Files[j]
+			if !selected[file.Source] {
+				remaining = append(remaining, file)
+				continue
+			}
+			err := restoreImportRecycleFile(group.Directory, &file)
+			if err == nil {
+				err = verifyRecycleDigest(file.Source, file.SHA256)
+			}
+			if err != nil {
+				group.Files[j] = file
+				return errors.Join(fmt.Errorf("请先核对原片或 Windows 回收站后更改归集位置: %w", err), save())
+			}
+		}
+		group.Files = remaining
+		if len(remaining) == 0 {
+			group.Status, group.Error = "restored", ""
+		}
+		err := save()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save func() error) error {
@@ -340,7 +405,7 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 	}
 	_, err := importRecycleVolume(group.Directory)
 	if err == nil {
-		err = writeRecycleManifest(group)
+		err = verifyRecycleDirectory(group)
 	}
 	if err != nil {
 		group.Error = err.Error()
@@ -417,7 +482,16 @@ func stageImportRecycle(source, dest, digest string) error {
 		return err
 	}
 	destInfo, err := os.Lstat(dest)
-	if err == nil && os.SameFile(sourceInfo, destInfo) {
+	if err == nil {
+		if os.SameFile(sourceInfo, destInfo) {
+			return os.Remove(source)
+		}
+		// On another volume the verified copy may have finished before the app
+		// recorded or removed the original.
+		err = verifyRecycleDigest(dest, digest)
+		if err != nil {
+			return err
+		}
 		return os.Remove(source)
 	}
 	if err != nil && !os.IsNotExist(err) {
@@ -427,47 +501,77 @@ func stageImportRecycle(source, dest, digest string) error {
 	if err != nil {
 		return err
 	}
-	return moveImportFile(source, dest)
+	return moveVerifiedRecycleFile(source, dest, digest)
 }
 
-func writeRecycleManifest(group *ImportRecycleGroup) error {
-	var text strings.Builder
-	for _, item := range group.Files {
-		fmt.Fprintf(&text, "%s\t%s\t%s\n", item.SHA256, item.Relative, item.Source)
+func moveVerifiedRecycleFile(source, target, digest string) error {
+	err := moveImportFile(source, target)
+	if !isImportCrossVolume(err) {
+		return err
 	}
-	return os.WriteFile(filepath.Join(group.Directory, "原路径与摘要.tsv"), []byte(text.String()), 0600)
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	info, err := input.Stat()
+	if err != nil {
+		input.Close()
+		return err
+	}
+	temp, err := os.CreateTemp(filepath.Dir(target), ".recycle-*.tmp")
+	if err != nil {
+		input.Close()
+		return err
+	}
+	defer os.Remove(temp.Name())
+	_, copyErr := io.Copy(temp, input)
+	err = errors.Join(copyErr, temp.Sync(), temp.Close(), input.Close())
+	if err != nil {
+		return err
+	}
+	err = verifyRecycleDigest(temp.Name(), digest)
+	if err != nil {
+		return err
+	}
+	err = os.Chtimes(temp.Name(), info.ModTime(), info.ModTime())
+	if err != nil {
+		return err
+	}
+	err = moveImportFile(temp.Name(), target)
+	if err != nil {
+		return err
+	}
+	current, err := os.Lstat(source)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(info, current) || info.Size() != current.Size() || !info.ModTime().Equal(current.ModTime()) {
+		return fmt.Errorf("复制期间原片发生变化: %s", source)
+	}
+	return os.Remove(source)
 }
 
-// RestoreImportDirectory puts back files from a directory restored in Explorer,
-// or from a group that was staged when recycling stopped.
-func (a *App) RestoreImportDirectory(id, directory string) (*ImportBatch, error) {
-	return a.editImportBatch(id, func(batch *ImportBatch) error {
-		for i := range batch.Recycling {
-			group := &batch.Recycling[i]
-			if group.Directory != directory || directory == "" {
-				continue
-			}
-			var failures []string
-			for j := range group.Files {
-				file := &group.Files[j]
-				if file.Status == "restored" || file.Status == "retained" {
-					continue
-				}
-				err := restoreImportRecycleFile(directory, file)
-				if err != nil {
-					file.Error = err.Error()
-					failures = append(failures, err.Error())
-				} else {
-					file.Status, file.Error = "restored", ""
-				}
-			}
-			group.Error = strings.Join(failures, "；")
-			if len(failures) == 0 {
-				group.Status = "restored"
-			}
+func verifyRecycleDirectory(group *ImportRecycleGroup) error {
+	expected := make(map[string]bool)
+	for _, item := range group.Files {
+		if !filepath.IsLocal(item.Relative) {
+			return fmt.Errorf("无效的归集文件路径: %s", item.Relative)
+		}
+		err := verifyRecycleDigest(filepath.Join(group.Directory, item.Relative), item.SHA256)
+		if err != nil {
+			return err
+		}
+		expected[filepath.Join(group.Directory, item.Relative)] = true
+	}
+	return filepath.WalkDir(group.Directory, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || expected[path] ||
+			(filepath.Base(filepath.Dir(group.Directory)) == ".photo-agent-recycle" && path == filepath.Join(group.Directory, "原路径与摘要.tsv")) {
 			return nil
 		}
-		return fmt.Errorf("未知的归集目录")
+		return fmt.Errorf("归集目录中有不在本批次清单的文件: %s", path)
 	})
 }
 
@@ -498,7 +602,7 @@ func restoreImportRecycleFile(directory string, file *ImportRecycleFile) error {
 		if n > 0 {
 			target = fmt.Sprintf("%s-restored-%d%s", base, n, ext)
 		}
-		err = moveImportFile(staged, target)
+		err = moveVerifiedRecycleFile(staged, target, file.SHA256)
 		if errors.Is(err, os.ErrExist) {
 			continue
 		}
