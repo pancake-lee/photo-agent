@@ -862,7 +862,7 @@ onUnmounted(() => {
     </NModal>
 
     <NModal :show="!!previewEntry" preset="card" :title="previewEntry ? entryName(previewEntry) : '照片预览'"
-      class="preview-modal" :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"
+      :style="{ width: '95vw', height: '95vh' }" :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"
       @update:show="(show) => { if (!show) previewID = '' }">
       <template v-if="previewEntry">
         <div class="preview-frame">
@@ -924,7 +924,6 @@ onUnmounted(() => {
 .batch-modal { width: min(760px, 90vw); }
 .cleanup-list { display: grid; gap: 8px; padding: 0; max-height: 45vh; overflow: auto; list-style: none; }
 .cleanup-error { margin-top: 4px; }
-.preview-modal { width: 80vw; height: 80vh; }
 .preview-frame { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; overflow: hidden; background: #171717; }
 .preview-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; visibility: hidden; }
 .preview-image.visible { visibility: visible; }
