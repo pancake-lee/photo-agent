@@ -60,8 +60,6 @@ interface FileProgress {
 const uploadProgress = ref<FileProgress>()
 const stageProgress = ref<FileProgress>()
 const recycleFiles = ref<string[]>()
-const defaultRecycleDirectory = ref('')
-const recycleDirectory = ref('')
 const confirmRecycle = ref(false)
 const loadingStep = ref(false)
 const stepError = ref('')
@@ -496,9 +494,8 @@ async function continueWorkflow(promptForRecycle = true) {
       } else if (current === 'reject' || current === 'keep') {
         const files = await getImportBatchApp().PreviewImportRecycle(id, recycleKind.value)
         recycleFiles.value = files.map((file) => file.source)
-        defaultRecycleDirectory.value = files[0]?.destination ?? ''
         if (files.length || disposed) {
-          if (files.length && promptForRecycle && !disposed) openRecycleConfirmation()
+          if (files.length && promptForRecycle && !disposed) confirmRecycle.value = true
           return
         }
         await moveToStep(current === 'reject' ? 'archive' : 'finish')
@@ -555,28 +552,15 @@ async function moveToStep(next: ImportStep, leaveLocal = false) {
 function submitRecycle() {
   const paths = recycleFiles.value
   const kind = recycleKind.value
-  const parent = recycleDirectory.value.trim()
   return perform('处理本地文件', async () => {
-    if (!batch.value || !paths?.length || !parent) return
-    batch.value = await getImportBatchApp().RecycleImportFiles(batch.value.id, kind, paths, parent)
+    if (!batch.value || !paths?.length) return
+    batch.value = await getImportBatchApp().RecycleImportFiles(batch.value.id, kind, paths)
     const recycled = new Set((batch.value.recycling ?? []).flatMap((group) => group.files
       .filter((file) => file.status === 'recycled').map((file) => file.source)))
     const count = paths.filter((path) => recycled.has(path)).length
     if (count) message.success(`已将 ${count} 个文件移入 Windows 回收站`)
     confirmRecycle.value = false
     await continueWorkflow(false)
-  })
-}
-
-function openRecycleConfirmation() {
-  recycleDirectory.value = defaultRecycleDirectory.value
-  confirmRecycle.value = true
-}
-
-function chooseRecycleDirectory() {
-  return perform('选择归集位置', async () => {
-    const picked = await getImportBatchApp().ChooseImportRecycleDirectory()
-    if (picked) recycleDirectory.value = picked
   })
 }
 
@@ -786,7 +770,7 @@ onUnmounted(() => {
           <NSpace>
             <NButton v-if="step === 'reject'" :disabled="!!busy" @click="advance('review')">返回选片</NButton>
             <NButton v-if="recycleFiles.length > 0" type="primary" :loading="busy === '处理本地文件'" :disabled="!!busy"
-              @click="openRecycleConfirmation">{{ recycleFailed ? '重试回收' : step === 'reject' ? '回收废片' : '回收已入库' }}</NButton>
+              @click="confirmRecycle = true">{{ recycleFailed ? '重试回收' : step === 'reject' ? '回收废片' : '回收已入库' }}</NButton>
             <NButton v-if="recycleFiles.length && recycleFailed" :disabled="!!busy" @click="advance(step === 'reject' ? 'archive' : 'finish', true)">剩余文件留在原处，继续</NButton>
           </NSpace>
         </template>
@@ -879,15 +863,11 @@ onUnmounted(() => {
 
     <NModal :show="confirmRecycle" preset="card" :title="step === 'reject' ? '确认回收废片' : '确认回收已入库'"
       class="batch-modal" :mask-closable="!busy" :closable="!busy" @update:show="(show) => { if (!show && !busy) confirmRecycle = false }">
-      <p>先在所选位置建「{{ batch?.name }}{{ step === 'reject' ? '-reject' : '-keep' }}」文件夹，归集 {{ recycleFiles?.length ?? 0 }} 个文件，再将文件夹移入 Windows 回收站。</p>
-      <NFormItem label="归集位置">
-        <NInput v-model:value="recycleDirectory" :disabled="!!busy" />
-        <NButton :disabled="!!busy" @click="chooseRecycleDirectory">选择目录</NButton>
-      </NFormItem>
+      <p>将 {{ recycleFiles?.length ?? 0 }} 个文件在各自的原片目录归集后，移入 Windows 回收站。</p>
       <template #footer>
         <NSpace justify="end">
           <NButton :disabled="!!busy" @click="confirmRecycle = false">取消</NButton>
-          <NButton type="primary" :loading="busy === '处理本地文件'" :disabled="!recycleDirectory.trim() || !!busy" @click="submitRecycle">确认移入回收站</NButton>
+          <NButton type="primary" :loading="busy === '处理本地文件'" :disabled="!recycleFiles?.length || !!busy" @click="submitRecycle">确认移入回收站</NButton>
         </NSpace>
       </template>
     </NModal>

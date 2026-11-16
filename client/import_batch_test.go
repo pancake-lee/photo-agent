@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -221,10 +222,10 @@ func TestLocalRecycleUnavailableRetainsOriginal(t *testing.T) {
 	}
 	app := NewApp()
 	files, err := app.PreviewImportRecycle(batch.ID, "discarded")
-	if err != nil || len(files) != 1 || files[0].Destination != root {
-		t.Fatalf("default recycle location = %#v, %v", files, err)
+	if err != nil || len(files) != 1 || files[0].Source != filePath {
+		t.Fatalf("recycle preview = %#v, %v", files, err)
 	}
-	result, err := app.RecycleImportFiles(batch.ID, "discarded", []string{filePath}, root)
+	result, err := app.RecycleImportFiles(batch.ID, "discarded", []string{filePath})
 	if err != nil || len(result.Recycling) != 1 || result.Recycling[0].Status != "retained" {
 		t.Fatalf("unexpected recycle result: %#v %v", result, err)
 	}
@@ -232,8 +233,8 @@ func TestLocalRecycleUnavailableRetainsOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("original was changed on unsupported volume: %v", err)
 	}
-	if _, err = app.RecycleImportFiles(batch.ID, "discarded", []string{filePath}, "relative"); err == nil {
-		t.Fatal("relative recycle destination was accepted")
+	if _, err = app.RecycleImportFiles(batch.ID, "discarded", []string{"relative.jpg"}); err == nil {
+		t.Fatal("relative original path was accepted")
 	}
 }
 
@@ -321,15 +322,46 @@ func TestRecycleDirectoryRejectsUnrelatedFiles(t *testing.T) {
 	if err := verifyRecycleDirectory(group); err == nil {
 		t.Fatal("the chosen directory includes an unrelated file")
 	}
-	used := make(map[string]bool)
-	first := recycleRelativePath(root, source, used)
-	second := recycleRelativePath(root, filepath.Join(filepath.Dir(root), "original.jpg"), used)
-	if first != "original.jpg" || second != "original-1.jpg" {
-		t.Fatalf("duplicates received %q and %q", first, second)
+}
+
+func TestRecycleGroupsUseEachOriginalDirectory(t *testing.T) {
+	root := t.TempDir()
+	card := batchTestDir(t, root, "card")
+	nested := batchTestDir(t, card, "subfolder")
+	raw := batchTestDir(t, root, "raw")
+	unsupported := batchTestDir(t, root, "unsupported")
+	for _, test := range []struct{ kind, suffix string }{
+		{"discarded", "-reject"}, {"imported", "-keep"},
+	} {
+		t.Run(test.kind, func(t *testing.T) {
+			batch := &ImportBatch{Name: "活动"}
+			existing := batchTestDir(t, nested, batch.Name+test.suffix)
+			files := []*ImportBatchFile{
+				{Path: filepath.Join(card, "a.jpg")}, {Path: filepath.Join(raw, "a.nef")},
+				{Path: filepath.Join(card, "b.jpg")}, {Path: filepath.Join(nested, "a.jpg")},
+				{Path: filepath.Join(unsupported, "skip.jpg")},
+			}
+			planImportRecycleGroups(batch, test.kind, files, func(path string) (string, error) {
+				if path == unsupported {
+					return "", errors.New("回收站不可用")
+				}
+				return root, nil
+			})
+			groups := batch.Recycling
+			if len(groups) != 4 || groups[0].Directory != filepath.Join(card, batch.Name+test.suffix) ||
+				groups[1].Directory != filepath.Join(raw, batch.Name+test.suffix) ||
+				groups[2].Directory != filepath.Join(nested, batch.Name+"-1"+test.suffix) || groups[2].Directory == existing ||
+				groups[3].Status != "retained" || groups[3].Error == "" {
+				t.Fatalf("unexpected recycle groups: %#v", groups)
+			}
+			if len(groups[0].Files) != 2 || groups[0].Files[1].Relative != "b.jpg" || groups[2].Files[0].Relative != "a.jpg" {
+				t.Fatalf("original filenames or grouping changed: %#v", groups)
+			}
+		})
 	}
 }
 
-func TestIncompleteRecycleCanUseNewDestination(t *testing.T) {
+func TestIncompleteRecycleMovesBackBeforeReplanning(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "a.jpg")
 	writeFile(t, source, []byte("original"))
@@ -345,7 +377,7 @@ func TestIncompleteRecycleCanUseNewDestination(t *testing.T) {
 	batch := &ImportBatch{Recycling: []ImportRecycleGroup{{Kind: "discarded", Status: "pending", Directory: old,
 		Files: []ImportRecycleFile{{Source: source, SHA256: digest, Relative: filepath.Join("originals", "a.jpg"), Status: "staged"}},
 	}}}
-	if err := changeRecycleLocation(batch, "discarded", root, map[string]bool{source: true}, func() error { return nil }); err != nil {
+	if err := restoreMisplacedRecycleFiles(batch, "discarded", map[string]bool{source: true}, func() error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(oldFile); !os.IsNotExist(err) || batch.Recycling[0].Status != "restored" {
@@ -353,6 +385,27 @@ func TestIncompleteRecycleCanUseNewDestination(t *testing.T) {
 	}
 	if err := verifyRecycleDigest(source, digest); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUncertainLegacyRecycleIsNotReplanned(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "a.jpg")
+	batch := &ImportBatch{Recycling: []ImportRecycleGroup{{
+		Kind: "discarded", Status: "sending", Directory: filepath.Join(root, "previous", "old-reject"),
+		Files: []ImportRecycleFile{{Source: source, Relative: "a.jpg", Status: "staged"}},
+	}}}
+	selected := map[string]bool{source: true}
+	save := func() error { return nil }
+	if err := restoreMisplacedRecycleFiles(batch, "discarded", selected, save); err != nil {
+		t.Fatal(err)
+	}
+	group := &batch.Recycling[0]
+	if err := runImportRecycle(group, selected, save); err != nil {
+		t.Fatal(err)
+	}
+	if group.Status != "uncertain" || len(group.Files) != 1 || group.Files[0].Status != "staged" {
+		t.Fatalf("missing previous recycle directory should remain recorded: %#v", group)
 	}
 }
 
