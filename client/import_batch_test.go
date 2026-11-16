@@ -364,8 +364,80 @@ func TestImportUsesLocalFolderForBlankActivity(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", root)
 	local := batchTestDir(t, root, "桂林")
 	writeFile(t, filepath.Join(local, "a.JPG"), []byte("jpg fixture"))
-	batch, err := NewApp().ScanImportBatch("", "", []ImportBatchSource{{Path: local, Role: "local"}}, false)
+	batch, err := NewApp().ScanImportBatch("", "", []ImportBatchSource{{Path: local, Role: "local"}}, false, importModePC)
 	if err != nil || batch.Activity != "桂林" || batch.Name != "桂林" {
 		t.Fatalf("inferred activity = %#v %v", batch, err)
+	}
+}
+
+func TestScanImportBatchSourceModes(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("fixture redirects config using XDG_CONFIG_HOME")
+	}
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	local := ImportBatchSource{Path: batchTestDir(t, root, "local"), Role: "local"}
+	favorite := ImportBatchSource{Path: batchTestDir(t, root, "favorite"), Role: "favorite"}
+	starting := ImportBatchSource{Path: batchTestDir(t, root, "starting"), Role: "starting"}
+	retained := ImportBatchSource{Path: batchTestDir(t, root, "retained"), Role: "retained"}
+	writeFile(t, filepath.Join(local.Path, "original.jpg"), []byte("shared"))
+	writeFile(t, filepath.Join(favorite.Path, "renamed.jpg"), []byte("shared"))
+	writeFile(t, filepath.Join(favorite.Path, "favorite-only.jpg"), []byte("favorite only"))
+	writeFile(t, filepath.Join(starting.Path, "initial.jpg"), []byte("shared"))
+	writeFile(t, filepath.Join(starting.Path, "unselected.jpg"), []byte("unselected"))
+	writeFile(t, filepath.Join(retained.Path, "export.jpg"), []byte("shared"))
+
+	app := NewApp()
+	if _, err := app.ScanImportBatch("", "活动", []ImportBatchSource{favorite}, false, importModePC); err == nil {
+		t.Fatal("computer mode accepted a favorite folder without originals")
+	}
+	if _, err := app.ScanImportBatch("", "活动", []ImportBatchSource{local, retained}, false, importModeIPad); err == nil {
+		t.Fatal("iPad mode accepted a missing starting range")
+	}
+	if _, err := app.ScanImportBatch("", "活动", []ImportBatchSource{starting, favorite}, false, importModeIPad); err == nil {
+		t.Fatal("iPad mode accepted a missing retained export")
+	}
+
+	pc, err := app.ScanImportBatch("", "活动", []ImportBatchSource{local, favorite}, false, importModePC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pc, err = app.GetImportBatch(pc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pc.Mode != importModePC || len(pc.Entries) != 1 || pc.Entries[0].Decision != batchFavorite ||
+		pc.Entries[0].JPG.Root != local.Path {
+		t.Fatalf("computer mode should use originals and inherit matched favorites: %#v", pc)
+	}
+	ipadSources := []ImportBatchSource{starting, retained, favorite}
+	if _, err := app.ScanImportBatch(pc.ID, "活动", ipadSources, true, importModeIPad); err == nil {
+		t.Fatal("changing the mode of an existing batch should require a new batch")
+	}
+
+	ipad, err := app.ScanImportBatch("", "活动", ipadSources, true, importModeIPad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipad, err = app.GetImportBatch(ipad.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ipad.Mode != importModeIPad || len(ipad.Entries) != 2 {
+		t.Fatalf("iPad mode should include the retained and favorite-only exports: %#v", ipad)
+	}
+	for _, entry := range ipad.Entries {
+		if entry.Decision != batchFavorite || entry.JPG.Root == starting.Path {
+			t.Fatalf("starting exports are references and favorite exports are marked: %#v", entry)
+		}
+	}
+
+	legacy, err := app.ScanImportBatch("", "活动", []ImportBatchSource{favorite}, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err = app.ScanImportBatch(legacy.ID, legacy.Activity, legacy.Sources, legacy.Complete, "")
+	if err != nil || legacy.Mode != "" || len(legacy.Entries) != 2 {
+		t.Fatalf("existing batches should keep their source rules: %#v %v", legacy, err)
 	}
 }

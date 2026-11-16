@@ -2,6 +2,7 @@ import { getWailsApp } from './wails'
 
 export type ImportDecision = 'pending' | 'kept' | 'favorite' | 'discarded' | 'later'
 export type ImportSourceRole = 'local' | 'retained' | 'favorite' | 'starting'
+export type ImportMode = 'pc' | 'ipad'
 export type ImportStep = 'review' | 'reject' | 'archive' | 'keep' | 'finish' | 'done'
 
 export interface ImportSource {
@@ -77,6 +78,7 @@ export interface ImportSummary {
 }
 
 export interface ImportBatch extends ImportSummary {
+  mode?: ImportMode
   sources: ImportSource[]
   complete: boolean
   entries: ImportEntry[]
@@ -99,7 +101,7 @@ interface ImportBatchApp {
   ChooseImportRecycleDirectory(): Promise<string>
   ListImportBatches(): Promise<ImportSummary[]>
   GetImportBatch(id: string): Promise<ImportBatch>
-  ScanImportBatch(id: string, activity: string, sources: ImportSource[], complete: boolean): Promise<ImportBatch>
+  ScanImportBatch(id: string, activity: string, sources: ImportSource[], complete: boolean, mode: ImportMode | ''): Promise<ImportBatch>
   DecideImportBatch(id: string, entries: string[], decision: ImportDecision): Promise<ImportBatch>
   UndoImportBatch(id: string): Promise<ImportBatch>
   ResolveImportPair(id: string, entry: string, nefPath: string): Promise<ImportBatch>

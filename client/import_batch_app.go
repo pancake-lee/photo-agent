@@ -54,7 +54,7 @@ func validImportActivity(activity string) bool {
 }
 
 func (a *App) ScanImportBatch(
-	id, activity string, sources []ImportBatchSource, complete bool,
+	id, activity string, sources []ImportBatchSource, complete bool, mode string,
 ) (*ImportBatch, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
@@ -70,20 +70,33 @@ func (a *App) ScanImportBatch(
 	if !validImportActivity(activity) || len(sources) == 0 {
 		return nil, fmt.Errorf("填写有效的活动目录名，并至少添加一个来源")
 	}
-	hasRetained := false
+	roles := make(map[string]bool)
 	for _, source := range sources {
 		switch source.Role {
-		case "local", "favorite", "starting":
-		case "retained":
-			hasRetained = true
+		case "local", "favorite", "starting", "retained":
 		default:
 			return nil, fmt.Errorf("未知来源类型 %q", source.Role)
 		}
+		roles[source.Role] = true
 		if !filepath.IsAbs(source.Path) {
 			return nil, fmt.Errorf("需要绝对目录路径: %s", source.Path)
 		}
 	}
-	if complete && !hasRetained {
+	switch mode {
+	case importModePC:
+		if !roles["local"] || roles["starting"] || roles["retained"] || complete {
+			return nil, fmt.Errorf("电脑原片模式需要本地原片，可附加 iPad 收藏目录")
+		}
+	case importModeIPad:
+		if !roles["starting"] || !roles["retained"] {
+			return nil, fmt.Errorf("请选择 iPad 筛选前的 JPG 范围和筛选后的留存目录")
+		}
+	case "":
+		// Batches created before source modes keep their saved source rules.
+	default:
+		return nil, fmt.Errorf("未知导入模式 %q", mode)
+	}
+	if complete && !roles["retained"] {
 		return nil, fmt.Errorf("推导废弃需要完整留存导出目录")
 	}
 	var old *ImportBatch
@@ -100,12 +113,15 @@ func (a *App) ScanImportBatch(
 	if old != nil && old.Activity != activity {
 		return nil, fmt.Errorf("批次活动不可改名，请新建批次")
 	}
+	if old != nil && old.Mode != mode {
+		return nil, fmt.Errorf("批次导入模式不可修改，请新建批次")
+	}
 	if old != nil && old.workflowStep() != "review" {
 		return nil, fmt.Errorf("返回选片后再重新扫描来源")
 	}
 	batch := &ImportBatch{
 		ID: id, Activity: activity, Sources: sources,
-		Complete: complete,
+		Complete: complete, Mode: mode,
 	}
 	if old != nil {
 		batch.Name, batch.StageServers = old.Name, old.StageServers

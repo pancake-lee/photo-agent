@@ -23,6 +23,9 @@ const (
 	batchKept      = "kept"
 	batchFavorite  = "favorite"
 	batchDiscarded = "discarded"
+
+	importModePC   = "pc"
+	importModeIPad = "ipad"
 )
 
 type ImportBatchSource struct {
@@ -66,6 +69,7 @@ type ImportBatch struct {
 	Activity     string               `json:"activity"`
 	Name         string               `json:"name,omitempty"`
 	Step         string               `json:"step,omitempty"`
+	Mode         string               `json:"mode,omitempty"`
 	StageServers []string             `json:"stage_servers,omitempty"`
 	Sources      []ImportBatchSource  `json:"sources"`
 	Complete     bool                 `json:"complete"`
@@ -440,7 +444,11 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 	}
 	selectedIndex := newImportMatchIndex(selected)
 	exportUncertain := make(map[string]bool)
-	for _, file := range append(append([]*ImportBatchFile{}, role["retained"]...), role["favorite"]...) {
+	var exportedJPGs []*ImportBatchFile
+	if batch.Mode != importModePC {
+		exportedJPGs = slices.Concat(role["retained"], role["favorite"])
+	}
+	for _, file := range exportedJPGs {
 		matches, uncertain := selectedIndex.exportedJPG(file)
 		if len(matches) > 0 || seen[file.SHA256] {
 			continue

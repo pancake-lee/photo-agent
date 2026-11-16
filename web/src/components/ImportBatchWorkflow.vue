@@ -3,13 +3,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NCheckbox, NEmpty, NFormItem, NInput, NModal,
-  NPagination, NProgress, NSelect, NSpace, NSpin, NStep, NSteps, NTag, useMessage,
+  NPagination, NProgress, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NStep, NSteps, NTag, useMessage,
 } from 'naive-ui'
 import PhotoCard from './PhotoCard.vue'
 import type { BurstViewLevel } from '../types/photo'
 import { getImportBatchApp } from '../utils/importBatch'
 import type {
-  ImportBatch, ImportBurstProgress, ImportDecision, ImportEntry, ImportPlan, ImportSource, ImportSourceRole, ImportStep, ImportSummary,
+  ImportBatch, ImportBurstProgress, ImportDecision, ImportEntry, ImportMode, ImportPlan, ImportSource, ImportSourceRole, ImportStep, ImportSummary,
 } from '../utils/importBatch'
 import { onWailsEvent, wailsApi, wailsError } from '../utils/wails'
 import { settings } from '../stores/settings'
@@ -28,7 +28,7 @@ const continueOptions = computed(() => batches.value.filter((item) => item.step 
 const selectedBatchID = computed(() => continueOptions.value.find((option) => option.value === batch.value?.id)?.value ?? null)
 const activity = ref('')
 const sources = ref<ImportSource[]>([])
-const role = ref<ImportSourceRole>('local')
+const mode = ref<ImportMode>('pc')
 const complete = ref(false)
 const busy = ref('')
 const grouping = ref(false)
@@ -71,17 +71,33 @@ const shotEntry = ref<ImportEntry>()
 const shotAt = ref('')
 const pageSize = 30
 
-const roleLabels: Record<ImportSourceRole, string> = {
-  local: '本地原片', retained: 'iPad 留存', favorite: 'iPad 收藏', starting: 'iPad 起始范围',
+const scanMode = computed(() => batch.value ? batch.value.mode ?? '' : mode.value)
+const sourceFields = computed<{ role: ImportSourceRole; label: string; required: boolean; hint?: string }[]>(() => {
+  const fromIPad = mode.value === 'ipad'
+  const local = { role: 'local' as const, label: '本地原片', required: !fromIPad,
+    hint: fromIPad ? '用于匹配相机 JPG 和 NEF、核对本地废片。' : undefined }
+  const favorite = { role: 'favorite' as const, label: 'iPad 收藏', required: false,
+    hint: scanMode.value === 'pc' ? '为匹配到的本地原片标记收藏。' : '继承收藏标记，收藏导出中的独有照片也会加入选片。' }
+  if (!fromIPad) return [local, favorite]
+  return [
+    { role: 'starting', label: 'iPad 筛选前的 JPG 范围', required: true, hint: '选择当时导入 iPad 参与选片的那批 JPG。' },
+    { role: 'retained', label: 'iPad 筛选后的留存', required: true, hint: '选择筛选完成后导出的留存照片。' },
+    favorite,
+    local,
+  ]
+})
+const activeSources = computed(() => sources.value.filter((source) => sourceFields.value.some((field) => field.role === source.role)))
+function hasSource(role: ImportSourceRole) {
+  return activeSources.value.some((source) => source.role === role)
 }
-const roles = Object.entries(roleLabels).map(([value, label]) => ({ label, value }))
-const hasIPadRetained = computed(() => sources.value.some((source) => source.role === 'retained'))
-const hasIPadStarting = computed(() => sources.value.some((source) => source.role === 'starting'))
-const usesCompleteExport = computed(() => hasIPadRetained.value && hasIPadStarting.value && complete.value)
+const canCompareExports = computed(() => hasSource('retained') && hasSource('starting'))
+const usesCompleteExport = computed(() => canCompareExports.value && complete.value)
+const canPrepare = computed(() => !!activity.value.trim() && !!activeSources.value.length &&
+  (!scanMode.value || sourceFields.value.every((field) => !field.required || hasSource(field.role))))
 const needsScan = computed(() => {
   const saved = batch.value
-  return !saved || saved.complete !== usesCompleteExport.value || saved.sources.length !== sources.value.length ||
-    sources.value.some((source, index) => source.path !== saved.sources[index].path || source.role !== saved.sources[index].role)
+  return !saved || saved.complete !== usesCompleteExport.value || saved.sources.length !== activeSources.value.length ||
+    activeSources.value.some((source, index) => source.path !== saved.sources[index].path || source.role !== saved.sources[index].role)
 })
 const filters = [
   { label: '全部照片', value: 'all' },
@@ -239,6 +255,7 @@ function setBatch(loaded?: ImportBatch) {
   stepError.value = ''
   activity.value = loaded?.activity ?? ''
   sources.value = loaded?.sources.slice() ?? []
+  mode.value = loaded?.mode ?? (sources.value.some((source) => source.role === 'starting' || source.role === 'retained') ? 'ipad' : 'pc')
   complete.value = loaded?.complete ?? false
   filter.value = 'all'
   viewLevel.value = 'coarse'
@@ -289,12 +306,12 @@ function abandonBatches() {
   })
 }
 
-async function addSource() {
+async function addSource(role: ImportSourceRole) {
   await perform('选择目录', async () => {
     const picked = await getImportBatchApp().ChooseImportSource()
-    if (!picked || sources.value.some((source) => source.path === picked && source.role === role.value)) return
-    sources.value.push({ path: picked, role: role.value })
-    if (!activity.value.trim() && role.value === 'local') {
+    if (!picked || sources.value.some((source) => source.path === picked && source.role === role)) return
+    sources.value.push({ path: picked, role })
+    if (!activity.value.trim() && role === 'local') {
       const folder = picked.split(/[\\/]/).filter(Boolean).at(-1)
       if (folder && !folder.includes(':')) activity.value = folder
     }
@@ -303,10 +320,11 @@ async function addSource() {
 
 function preparePhotos(rescan: boolean) {
   return perform('准备照片', async () => {
+    if (!canPrepare.value) return
     if (rescan || needsScan.value || !batch.value?.entries.length) {
       busy.value = '扫描来源'
       batch.value = await getImportBatchApp().ScanImportBatch(
-        batch.value?.id ?? '', activity.value.trim(), sources.value, usesCompleteExport.value,
+        batch.value?.id ?? '', activity.value.trim(), activeSources.value, usesCompleteExport.value, scanMode.value,
       )
       activity.value = batch.value.activity
       preparing.value = true
@@ -632,34 +650,47 @@ onUnmounted(() => {
     </NCard>
 
     <NCard v-if="step === 'prepare'" title="准备照片">
+      <NFormItem label="导入模式">
+        <NRadioGroup v-model:value="mode" :disabled="!!batch || !!busy || grouping" aria-label="导入模式">
+          <NRadioButton value="pc">电脑原片</NRadioButton>
+          <NRadioButton value="ipad">按 iPad 选片结果导入</NRadioButton>
+        </NRadioGroup>
+      </NFormItem>
+      <NAlert v-if="batch && !batch.mode" type="info" class="form-row">此批次沿用创建时的来源规则。</NAlert>
+      <NFormItem v-for="field in sourceFields" :key="field.role" :label="field.label + (field.required ? '' : '（可选）')"
+        :required="!!scanMode && field.required" :show-feedback="false" class="source-field">
+        <div>
+          <NSpace align="center">
+            <NButton :disabled="!!busy || grouping" @click="addSource(field.role)" :aria-label="`添加${field.label}目录`">添加目录</NButton>
+            <span v-if="field.hint" class="source-hint">{{ field.hint }}</span>
+          </NSpace>
+          <ul v-if="hasSource(field.role)" class="paths">
+            <template v-for="(source, index) in sources" :key="`${source.role}/${source.path}`">
+              <li v-if="source.role === field.role">
+                <span>{{ source.path }}</span>
+                <NButton text :disabled="!!busy || grouping" :aria-label="`移除 ${source.path}`" @click="sources.splice(index, 1)">移除</NButton>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </NFormItem>
+      <div v-if="canCompareExports" class="form-row">
+        <NCheckbox v-model:checked="complete" :disabled="!!busy || grouping">
+          留存目录是完整导出，可以比对废片
+        </NCheckbox>
+        <p class="source-hint">在筛选前的 JPG 范围内，留存和收藏中都找不到的照片会列入「需核对」。</p>
+      </div>
       <NFormItem label="服务器活动目录" class="form-row">
         <NInput v-model:value="activity" :disabled="!!batch || !!busy" placeholder="例如 202611-桂林" />
       </NFormItem>
       <NSpace align="center">
-        <NSelect v-model:value="role" :options="roles" style="width: 180px" />
-        <NButton :disabled="!!busy || grouping" @click="addSource">添加目录</NButton>
         <NButton type="primary" :loading="busy === '扫描来源' || busy === '上传 JPG 到服务器'"
-          :disabled="!activity.trim() || !sources.length || !!busy || grouping" @click="preparePhotos(false)">
+          :disabled="!canPrepare || !!busy || grouping" @click="preparePhotos(false)">
           {{ !needsScan && stageFailureCount ? '重试上传 JPG' : '开始选片' }}
         </NButton>
-        <NButton v-if="batch?.entries.length && !needsScan" text :disabled="!!busy || grouping" @click="preparePhotos(true)">重新扫描来源</NButton>
+        <NButton v-if="batch?.entries.length && !needsScan" text :disabled="!canPrepare || !!busy || grouping"
+          @click="preparePhotos(true)">重新扫描来源</NButton>
       </NSpace>
-      <ul v-if="sources.length" class="paths">
-        <li v-for="(source, index) in sources" :key="`${source.role}/${source.path}`">
-          <span>{{ roleLabels[source.role] }} · {{ source.path }}</span>
-          <NButton text :disabled="!!busy || grouping" @click="sources.splice(index, 1)">移除</NButton>
-        </li>
-      </ul>
-      <fieldset v-if="hasIPadStarting" class="ipad-options">
-        <legend>如何使用 iPad 的筛片结果</legend>
-        <div v-if="hasIPadRetained && hasIPadStarting">
-          <NCheckbox v-model:checked="complete" :disabled="!!busy || grouping">
-            根据完整导出找出待确认废片
-          </NCheckbox>
-          <p>确认这是完整的导出。属于 iPad 起始范围、且在留存和收藏中都找不到的照片会列为待确认废弃。</p>
-        </div>
-        <p v-else-if="hasIPadStarting">添加 iPad 留存目录后，即可对照导出核对废片。</p>
-      </fieldset>
       <NAlert v-if="batch?.issues.length" type="warning" title="部分来源读取失败" class="form-row">
         <div v-for="(issue, index) in batch.issues" :key="index">{{ issue }}</div>
       </NAlert>
@@ -912,8 +943,10 @@ onUnmounted(() => {
 <style scoped>
 .batch-workflow { display: grid; gap: 16px; }
 .form-row { margin-top: 16px; }
-.ipad-options { display: grid; gap: 8px; margin: 16px 0 0; padding: 8px 16px; border: 1px solid var(--n-border-color); }
-.ipad-options p { margin: 4px 0 0; }
+.source-field { margin-top: 16px; }
+.source-field .paths { margin-bottom: 0; }
+.source-hint { font-size: 13px; }
+p.source-hint { margin: 4px 0 0; }
 .paths { margin: 8px 0 16px; padding: 0; list-style: none; overflow-wrap: anywhere; }
 .paths li { padding: 4px 0; }
 .paths li .n-button { margin-left: 8px; }
