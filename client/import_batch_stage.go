@@ -50,6 +50,7 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 		if !entry.canStage() {
 			continue
 		}
+		wasReadyForGrouping := entry.StagedServer == server && entry.canUpload()
 		req := entry.archiveManifest(batch.Activity)
 		req.BatchID, req.NEF, req.NEFTime = id, "", nil
 		status, stageErr := archiveRPC(ctx, server, "stage/status", req, "", nil)
@@ -72,13 +73,19 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 		} else {
 			entry.StagedServer, entry.StageError = server, ""
 		}
+		if wasReadyForGrouping != (entry.StagedServer == server && entry.canUpload()) {
+			batch.Bursts = nil
+		}
 		err = saveImportBatch(root, batch)
 		if err != nil {
 			return nil, err
 		}
 		completed++
 		if a.ctx != nil {
-			progress := ImportUploadProgress{BatchID: id, Completed: completed, Total: total, Path: entry.JPG.Path}
+			progress := ImportUploadProgress{
+				BatchID: id, Completed: completed, Total: total, Path: entry.JPG.Path,
+				EntryID: entry.ID, StagedOn: entry.StagedServer, Error: entry.StageError,
+			}
 			runtime.EventsEmit(a.ctx, "import:stage", progress)
 		}
 	}

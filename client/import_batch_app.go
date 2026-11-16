@@ -122,6 +122,7 @@ func (a *App) ResolveImportPair(id, entryID, nefPath string) (*ImportBatch, erro
 			}
 			if nefPath == "" && !entry.ReferenceOnly {
 				entry.NEF, entry.Pair = nil, "manual"
+				batch.Bursts = nil
 				return nil
 			}
 			for _, candidate := range entry.NEFCandidates {
@@ -136,6 +137,7 @@ func (a *App) ResolveImportPair(id, entryID, nefPath string) (*ImportBatch, erro
 					}
 				}
 				entry.NEF, entry.Pair = candidate, "manual"
+				batch.Bursts = nil
 				for j := range batch.Entries {
 					other := &batch.Entries[j]
 					if other.JPG == nil && other.NEF != nil && other.NEF.Path == nefPath {
@@ -267,7 +269,7 @@ func (a *App) FinishImportBatch(id string) (*ImportBatch, error) {
 		for i := range batch.Entries {
 			batch.Entries[i].StagedServer = ""
 		}
-		batch.StageServers, batch.Bursts, batch.Undo = nil, nil, nil
+		batch.StageServers = nil
 		batch.Step = "done"
 		return nil
 	})

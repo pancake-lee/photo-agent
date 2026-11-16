@@ -179,7 +179,7 @@ func computeImportReviewBursts(
 			path := filepath.Join(dir, input.SHA256+".jpg")
 			digest, _, err := digestFile(path)
 			if err == nil && digest == input.SHA256 {
-				gray, grayErr := loadGrayMatrixContext(ctx, path)
+				gray, grayErr := stagedImportGray(ctx, path)
 				if grayErr == nil {
 					photo := &data.PhotoDO{ID: input.ID, ShotAt: input.ShotAt}
 					list = append(list, burstPhotoInfo{photo: photo, gray: gray, valid: true})

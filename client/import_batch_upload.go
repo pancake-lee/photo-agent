@@ -34,6 +34,9 @@ type ImportUploadProgress struct {
 	Completed int    `json:"completed"`
 	Total     int    `json:"total"`
 	Path      string `json:"path"`
+	EntryID   string `json:"entry_id,omitempty"`
+	StagedOn  string `json:"staged_on,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 type importArchiveManifest struct {

@@ -67,6 +67,20 @@ func TestStagedReviewHTTP(t *testing.T) {
 	request(http.MethodGet, "stage/image?batch_id=../&sha256="+req.JPG, nil, http.StatusBadRequest, nil)
 
 	if _, err := exec.LookPath("convert"); err == nil {
+		staged := filepath.Join(status.Root, status.Target)
+		thumbnail := filepath.Join(filepath.Dir(staged), "thumbnails", filepath.Base(staged))
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			_, previewErr := os.Stat(thumbnail)
+			_, grayErr := os.Stat(staged + ".gray.json")
+			if previewErr == nil && grayErr == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("upload did not prepare the preview and grouping data: %v, %v", previewErr, grayErr)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
 		thumb := doJSONRequest(t, server.Client(), http.MethodGet, base+imagePath+"&size=thumbnail", nil)
 		_, decodeErr := jpeg.DecodeConfig(thumb.Body)
 		thumb.Body.Close()

@@ -24,9 +24,10 @@ const role = ref<ImportSourceRole>('local')
 const complete = ref(false)
 const busy = ref('')
 const grouping = ref(false)
+const groupingError = ref('')
 const progress = ref<ImportBurstProgress>()
 const filter = ref('all')
-const viewLevel = ref<BurstViewLevel>('fine')
+const viewLevel = ref<BurstViewLevel>('coarse')
 const openGroup = ref<string[]>([])
 const previewEntry = ref<ImportEntry>()
 const page = ref(1)
@@ -35,7 +36,15 @@ const imageLoading = ref(false)
 const preview = ref(false)
 const uploadPlan = ref<ImportPlan[]>()
 const archivePage = ref(1)
-interface FileProgress { batch_id: string; completed: number; total: number; path: string }
+interface FileProgress {
+  batch_id: string
+  completed: number
+  total: number
+  path: string
+  entry_id?: string
+  staged_on?: string
+  error?: string
+}
 const uploadProgress = ref<FileProgress>()
 const stageProgress = ref<FileProgress>()
 const recycleFiles = ref<string[]>()
@@ -43,6 +52,7 @@ const loadingStep = ref(false)
 const stepError = ref('')
 const preparing = ref<boolean>()
 let requestNumber = 0
+let disposed = false
 const shotEntry = ref<ImportEntry>()
 const shotAt = ref('')
 const pageSize = 30
@@ -187,10 +197,13 @@ async function selectBatch(id: string | null) {
     sources.value = loaded?.sources.slice() ?? []
     complete.value = loaded?.complete ?? false
     filter.value = 'all'
+    viewLevel.value = 'coarse'
     openGroup.value = []
+    groupingError.value = ''
     progress.value = undefined
     page.value = 1
   })
+  await ensureGrouping()
 }
 
 async function addSource() {
@@ -211,21 +224,30 @@ async function scan() {
     openGroup.value = []
     await refreshBatches()
   })
+  await ensureGrouping()
+}
+
+async function ensureGrouping() {
+  if (step.value === 'review' && stagedEntries.value.length && batch.value?.bursts?.server !== settings.backendUrl) {
+    await runGrouping()
+  }
+}
+
+async function enterReview() {
+  preparing.value = false
+  await ensureGrouping()
 }
 
 async function runGrouping() {
   const current = batch.value
-  if (!current || grouping.value) return
+  if (disposed || !current || grouping.value || !stagedEntries.value.length) return
   grouping.value = true
+  groupingError.value = ''
   progress.value = { batch_id: current.id, done: 0, failed: 0, total: stagedEntries.value.length, message: '服务器正在计算连拍组' }
   try {
     batch.value = await getImportBatchApp().GroupImportBatch(current.id, settings.backendUrl)
-    filter.value = 'all'
-    if (viewLevel.value === 'all') viewLevel.value = 'fine'
   } catch (error) {
-    const reason = wailsError(error)
-    if (reason.includes('context canceled')) message.info('已取消连拍计算')
-    else message.error(reason)
+    groupingError.value = wailsError(error)
   } finally {
     grouping.value = false
   }
@@ -328,7 +350,10 @@ function stageJPGs() {
     batch.value = await getImportBatchApp().StageImportJPGs(batch.value.id, settings.backendUrl)
     const failed = batch.value.entries.filter((entry) => entry.stage_error).length
     if (failed) message.warning(`${failed} 张 JPG 暂存失败，可重试`)
-    else preparing.value = false
+    if (stagedCount.value) {
+      preparing.value = false
+      await runGrouping()
+    }
   })
 }
 
@@ -410,10 +435,11 @@ function restoreLocal(directory: string) {
   })
 }
 
-function resolvePair(entry: ImportEntry, path: string) {
-  return perform('保存配对', async () => {
+async function resolvePair(entry: ImportEntry, path: string) {
+  await perform('保存配对', async () => {
     if (batch.value) batch.value = await getImportBatchApp().ResolveImportPair(batch.value.id, entry.id, path)
   })
+  await ensureGrouping()
 }
 
 function editShotAt(entry: ImportEntry) {
@@ -421,12 +447,13 @@ function editShotAt(entry: ImportEntry) {
   shotAt.value = entry.shot_at ?? ''
 }
 
-function saveShotAt() {
-  return perform('保存拍摄时间', async () => {
+async function saveShotAt() {
+  await perform('保存拍摄时间', async () => {
     if (!batch.value || !shotEntry.value) return
     batch.value = await getImportBatchApp().SetImportShotAt(batch.value.id, shotEntry.value.id, shotAt.value)
     shotEntry.value = undefined
   })
+  await ensureGrouping()
 }
 
 let unsubscribeBurst = () => {}
@@ -441,10 +468,18 @@ onMounted(() => {
     if (value.batch_id === batch.value?.id) uploadProgress.value = value
   })
   unsubscribeStage = onWailsEvent<FileProgress>('import:stage', (value) => {
-    if (value.batch_id === batch.value?.id) stageProgress.value = value
+    if (value.batch_id !== batch.value?.id || busy.value !== '上传 JPG 到服务器') return
+    stageProgress.value = value
+    const entry = value.entry_id ? entriesByID.value.get(value.entry_id) : undefined
+    if (entry) {
+      entry.staged_server = value.staged_on
+      entry.stage_error = value.error
+      if (value.staged_on === settings.backendUrl) preparing.value = false
+    }
   })
 })
 onUnmounted(() => {
+  disposed = true
   if (grouping.value) void getImportBatchApp().CancelImportBursts()
   unsubscribeBurst()
   unsubscribeUpload()
@@ -500,7 +535,7 @@ onUnmounted(() => {
           <NButton v-if="stagedCount < stageCandidates.length" type="primary" :disabled="!!busy || grouping"
             :loading="busy === '上传 JPG 到服务器'" @click="stageJPGs">上传 JPG 并进入选片</NButton>
           <NButton v-if="stagedCount || !stageCandidates.length" :type="stagedCount === stageCandidates.length ? 'primary' : 'default'" :disabled="!!busy || grouping"
-            @click="preparing = false">进入选片</NButton>
+            @click="enterReview">进入选片</NButton>
         </NSpace>
         <div v-if="stageProgress && busy === '上传 JPG 到服务器'" aria-live="polite">
           <NProgress :percentage="Math.round(stageProgress.completed / Math.max(1, stageProgress.total) * 100)" processing />
@@ -519,11 +554,16 @@ onUnmounted(() => {
         </template>
         <NSpace align="center">
           <span>{{ stagedEntries.length }} 张可选 · {{ favoriteCount }} 张收藏 · {{ deletedCount }} 张标记删除</span>
-          <NButton :disabled="!stagedEntries.length || grouping || !!busy" :loading="grouping" @click="runGrouping">计算连拍组</NButton>
-          <NButton v-if="grouping" @click="getImportBatchApp().CancelImportBursts()">取消计算</NButton>
           <NSelect v-model:value="viewLevel" :options="viewLevels" :disabled="filter !== 'all' || !batch.bursts"
             style="width: 128px" aria-label="连拍展示" />
         </NSpace>
+        <div v-if="stageProgress && busy === '上传 JPG 到服务器'" class="form-row" aria-live="polite">
+          <NProgress :percentage="Math.round(stageProgress.completed / Math.max(1, stageProgress.total) * 100)" :processing="stageProgress.completed < stageProgress.total" />
+          <p>已处理 {{ stageProgress.completed }} / {{ stageProgress.total }} 张 JPG</p>
+        </div>
+        <NAlert v-if="groupingError" type="warning" class="form-row">
+          {{ groupingError }} <NButton text :disabled="!!busy || grouping" @click="runGrouping">重试连拍计算</NButton>
+        </NAlert>
         <div v-if="progress" class="form-row" aria-live="polite">
           <NProgress :percentage="progressValue" :processing="grouping" />
           <p>{{ progress.message }} · {{ progress.done }}/{{ progress.total }}<span v-if="progress.failed"> · {{ progress.failed }} 张读取失败</span></p>

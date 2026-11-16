@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -601,6 +602,13 @@ func mergeImportBatch(batch, previous *ImportBatch) {
 		batch.Entries = append(batch.Entries, entry)
 	}
 	batch.Recycling = previous.Recycling
+	batch.Undo = previous.Undo
+	if previous.Bursts != nil {
+		server := previous.Bursts.Server
+		if slices.Equal(importBurstInputs(batch, server), importBurstInputs(previous, server)) {
+			batch.Bursts = previous.Bursts
+		}
+	}
 }
 
 func validBatchDecision(decision string) bool {
