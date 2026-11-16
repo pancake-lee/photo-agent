@@ -53,6 +53,7 @@ logs
 .qoder
 .claude
 .claude-plugin
+temp
 
 # Wails
 client/frontend/dist/*
