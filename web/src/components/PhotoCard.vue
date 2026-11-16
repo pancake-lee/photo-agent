@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<{
   embedBatchRunning?: boolean
   /** 连拍展示级别：all 全部展开 / fine 精细折叠 / coarse 模糊折叠 */
   viewLevel?: BurstViewLevel
+  groupFavoriteCount?: number
   /** 是否处于选择模式 */
   selectionMode?: boolean
   /** 是否已被选中 */
@@ -37,6 +38,7 @@ const props = withDefaults(defineProps<{
   showTooltip?: boolean
 }>(), {
   viewLevel: 'fine',
+  groupFavoriteCount: 0,
   selectionMode: false,
   selected: false,
   showStatus: true,
@@ -62,6 +64,9 @@ const isCollapsedCover = computed(
     props.viewLevel !== 'all' &&
     props.photo.burst_cover &&
     props.photo.burst_count > 1,
+)
+const isPartiallyFavorited = computed(() =>
+  isCollapsedCover.value && props.groupFavoriteCount > 0 && props.groupFavoriteCount < props.photo.burst_count,
 )
 
 function handleCardClick() {
@@ -127,7 +132,10 @@ function formatExifTooltip(): string {
             <div v-if="selectionMode" class="photo-select" @click.stop>
               <NCheckbox :checked="selected" @update:checked="emit('toggleSelect', photo.id)" />
             </div>
-            <div v-if="photo.has_nef" class="photo-nef-badge" :class="{ 'with-select': selectionMode }" title="有对应 NEF 原始文件">NEF</div>
+            <div v-if="photo.has_nef || isPartiallyFavorited" class="photo-badges" :class="{ 'with-select': selectionMode }">
+              <span v-if="photo.has_nef" class="photo-badge" title="有对应 NEF 原始文件">NEF</span>
+              <span v-if="isPartiallyFavorited" class="photo-badge" :title="`组内有 ${groupFavoriteCount} 张已收藏`">部分收藏</span>
+            </div>
             <div
               v-if="isCollapsedCover"
               class="photo-burst-badge"
@@ -263,19 +271,25 @@ function formatExifTooltip(): string {
   bottom: 6px;
   right: 6px;
 }
-.photo-nef-badge {
+.photo-badges {
   position: absolute;
   top: 4px;
   left: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.photo-badges.with-select {
+  left: 24px;
+}
+.photo-badge {
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
-}
-.photo-nef-badge.with-select {
-  left: 24px;
 }
 .photo-select {
   position: absolute;

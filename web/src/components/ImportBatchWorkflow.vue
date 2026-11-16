@@ -195,14 +195,19 @@ const filtered = computed(() => {
 })
 const shown = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
 const favoriteTags = computed(() => {
-  const tags = new Map<string, string>()
+  const tags = new Map<string, { label?: string; groupCount?: number }>()
   for (const entry of shown.value) {
     const group = groupByEntry.value.get(entry.id)
     if (group) {
       const count = group.filter((id) => entriesByID.value.get(id)?.decision === 'favorite').length
-      if (count) tags.set(entry.id, `${count} 张已收藏`)
+      if (count) {
+        tags.set(entry.id, {
+          groupCount: count,
+          label: count === group.length ? `${count} 张已收藏` : undefined,
+        })
+      }
     } else if (entry.decision === 'favorite') {
-      tags.set(entry.id, entry.origin === 'ipad' ? 'iPad 收藏' : '已收藏')
+      tags.set(entry.id, { label: entry.origin === 'ipad' ? 'iPad 收藏' : '已收藏' })
     }
   }
   return tags
@@ -758,9 +763,10 @@ onUnmounted(() => {
           <li v-for="entry in shown" :key="entry.id">
             <PhotoCard v-if="imageURL(entry)" :photo="photoCard(entry)" :show-status="false" :show-embed="false"
               :show-delete="false" :show-tooltip="false" :view-level="viewLevel"
+              :group-favorite-count="favoriteTags.get(entry.id)?.groupCount"
               @view-detail="showDetail" @open-burst-group="showDetail">
               <template #actions>
-                <NTag v-if="favoriteTags.has(entry.id)" size="small" type="warning" class="favorite-status">{{ favoriteTags.get(entry.id) }}</NTag>
+                <NTag v-if="favoriteTags.get(entry.id)?.label" size="small" type="warning" class="favorite-status">{{ favoriteTags.get(entry.id)?.label }}</NTag>
                 <NSpace v-if="canEdit(entry)" class="review-actions" :size="4" @click.stop>
                   <NButton size="small" :type="targetIDs(entry).every((id) => entriesByID.get(id)?.decision === 'favorite') ? 'warning' : 'default'"
                     :disabled="!!busy || grouping" @click="toggleFavorite(targetIDs(entry))">{{ favoriteLabel(targetIDs(entry)) }}</NButton>
