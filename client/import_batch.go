@@ -207,8 +207,9 @@ func pathWithin(root, path string) bool {
 		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatchFile {
+func scanBatchSources(work string, batch *ImportBatch) (map[string][]*ImportBatchFile, map[string]bool) {
 	byRole := make(map[string][]*ImportBatchFile)
+	favoriteNames := make(map[string]bool)
 	byPath := make(map[string]*ImportBatchFile)
 	seen := make(map[[2]string]bool)
 	recycleDirs := make(map[string]bool)
@@ -236,7 +237,7 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 			batch.Issues = append(batch.Issues, fmt.Sprintf("%s: %v", source.Path, err))
 			continue
 		}
-		foundPhoto := false
+		foundFavorite := false
 		issuesBefore := len(batch.Issues)
 		err = filepath.WalkDir(sourcePath, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -249,11 +250,22 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 				}
 				return nil
 			}
-			if !entry.Type().IsRegular() ||
-				!(isJpg(path) || source.Role == "local" && isNef(path)) {
+			if !entry.Type().IsRegular() {
 				return nil
 			}
-			foundPhoto = true
+			if source.Role == "favorite" {
+				if name := baseNameOf(entry.Name()); name != "" {
+					favoriteNames[name] = true
+					foundFavorite = true
+				}
+				// Only iPad workflows can also use a favorite JPG as an import source.
+				if batch.Mode == importModePC {
+					return nil
+				}
+			}
+			if !(isJpg(path) || source.Role == "local" && isNef(path)) {
+				return nil
+			}
 			key := [2]string{path, source.Role}
 			if seen[key] {
 				return nil
@@ -274,11 +286,11 @@ func scanBatchSources(work string, batch *ImportBatch) map[string][]*ImportBatch
 		if err != nil {
 			batch.Issues = append(batch.Issues, fmt.Sprintf("%s: %v", sourcePath, err))
 		}
-		if source.Role == "favorite" && !foundPhoto && len(batch.Issues) == issuesBefore {
+		if source.Role == "favorite" && !foundFavorite && len(batch.Issues) == issuesBefore {
 			batch.EmptyFavoriteDirs = append(batch.EmptyFavoriteDirs, source.Path)
 		}
 	}
-	return byRole
+	return byRole, favoriteNames
 }
 
 type importMatchIndex struct {
@@ -429,7 +441,7 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 	if previous != nil {
 		batch.Recycling = previous.Recycling
 	}
-	role := scanBatchSources(root, batch)
+	role, favoriteNames := scanBatchSources(root, batch)
 	var localJPG, nefList []*ImportBatchFile
 	for _, file := range role["local"] {
 		if isNef(file.Path) {
@@ -440,7 +452,6 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 	}
 	nefIndex := newImportMatchIndex(nefList)
 	fullIndex := newImportMatchIndex(role["retained"])
-	favoriteIndex := newImportMatchIndex(role["favorite"])
 	startIndex := newImportMatchIndex(role["starting"])
 
 	// Consider exported JPGs as originals where no camera JPG matches. Preserve
@@ -452,11 +463,7 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 	}
 	selectedIndex := newImportMatchIndex(selected)
 	exportUncertain := make(map[string]bool)
-	var exportedJPGs []*ImportBatchFile
-	if batch.Mode != importModePC {
-		exportedJPGs = slices.Concat(role["retained"], role["favorite"])
-	}
-	for _, file := range exportedJPGs {
+	for _, file := range role["retained"] {
 		matches, uncertain := selectedIndex.exportedJPG(file)
 		if len(matches) > 0 || seen[file.SHA256] {
 			continue
@@ -466,6 +473,24 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 		}
 		seen[file.SHA256] = true
 		selected = append(selected, file)
+		selectedIndex.add(file)
+	}
+	favoriteStart := len(selected)
+	for _, file := range role["favorite"] {
+		name := baseNameOf(filepath.Base(file.Path))
+		if len(selectedIndex.stem[name]) > 0 || seen[file.SHA256] {
+			continue
+		}
+		// A renamed copy can still be a duplicate import, even when its name
+		// cannot mark a selected photo as a favorite.
+		matches, _ := selectedIndex.exportedJPG(file)
+		if len(matches) > 0 {
+			continue
+		}
+		seen[file.SHA256] = true
+		selected = append(selected, file)
+	}
+	for _, file := range selected[favoriteStart:] {
 		selectedIndex.add(file)
 	}
 	reference := make(map[string]bool)
@@ -488,6 +513,13 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 		}
 	}
 
+	favoriteMatches := make(map[string][]*ImportBatchFile)
+	for _, jpg := range selected {
+		name := baseNameOf(filepath.Base(jpg.Path))
+		if favoriteNames[name] {
+			favoriteMatches[name] = append(favoriteMatches[name], jpg)
+		}
+	}
 	for _, jpg := range selected {
 		nef, candidates := nefIndex.pairedNEF(jpg)
 		entry := ImportBatchEntry{
@@ -501,16 +533,16 @@ func scanImportBatch(root string, batch, previous *ImportBatch) {
 			entry.Pair = "review"
 		}
 		full, fullUncertain := fullIndex.exportedJPG(jpg)
-		favorite, favoriteUncertain := favoriteIndex.exportedJPG(jpg)
+		favorite := favoriteMatches[baseNameOf(filepath.Base(jpg.Path))]
 		start, _ := startIndex.exportedJPG(jpg)
 		entry.Inherited = batchKept
 		if entry.ReferenceOnly {
 			entry.Inherited = batchPending
 		}
 		switch {
-		case len(favorite) == 1 || identicalImportFiles(favorite):
+		case identicalImportFiles(favorite):
 			entry.Inherited, entry.Origin = batchFavorite, "ipad"
-		case len(favorite) > 1 || len(favoriteUncertain) > 0:
+		case len(favorite) > 1:
 			entry.Conflict = true
 		case identicalImportFiles(start) && len(full) == 0 && len(fullUncertain) == 0 &&
 			batch.Complete && len(batch.Issues) == 0:

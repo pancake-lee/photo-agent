@@ -64,7 +64,7 @@ func TestScanImportBatchMixedSourcesAndCoveredDifference(t *testing.T) {
 	c1 := byPath[filepath.Join(card1, "DSC_0123.JPG")]
 	c2 := byPath[filepath.Join(card2, "DSC_0123.JPG")]
 	iPad := byPath[filepath.Join(full, "DSC_0987.JPG")]
-	if c1.Decision != batchFavorite || c1.NEF.Path != filepath.Join(card1, "DSC_0123.NEF") {
+	if c1.Decision != batchKept || c1.NEF.Path != filepath.Join(card1, "DSC_0123.NEF") {
 		t.Fatalf("card one = %#v", c1)
 	}
 	if c2.Decision != batchKept || !c2.MissingFromExport || c2.NEF.Path != filepath.Join(card2, "DSC_0123.NEF") {
@@ -435,6 +435,8 @@ func TestScanImportBatchSourceModes(t *testing.T) {
 	retained := ImportBatchSource{Path: batchTestDir(t, root, "retained"), Role: "retained"}
 	writeFile(t, filepath.Join(local.Path, "original.jpg"), []byte("shared"))
 	writeFile(t, filepath.Join(favorite.Path, "renamed.jpg"), []byte("shared"))
+	writeFile(t, filepath.Join(favorite.Path, "ORIGINAL.NEF"), []byte("raw marker"))
+	writeFile(t, filepath.Join(favorite.Path, "export.NEF"), []byte("raw marker"))
 	writeFile(t, filepath.Join(favorite.Path, "favorite-only.jpg"), []byte("favorite only"))
 	writeFile(t, filepath.Join(starting.Path, "initial.jpg"), []byte("shared"))
 	writeFile(t, filepath.Join(starting.Path, "unselected.jpg"), []byte("unselected"))
@@ -499,27 +501,27 @@ func TestScanReportsEmptyFavoriteDirectories(t *testing.T) {
 	root := t.TempDir()
 	local := batchTestDir(t, root, "local")
 	empty := batchTestDir(t, root, "empty-favorites")
-	unsupported := batchTestDir(t, root, "unsupported-favorites")
+	metadataOnly := batchTestDir(t, root, "metadata-only")
 	nested := batchTestDir(t, root, "favorites/nested")
 	missing := filepath.Join(root, "missing-favorites")
 	photo := []byte("jpg fixture")
 	writeFile(t, filepath.Join(local, "original.jpg"), photo)
-	writeFile(t, filepath.Join(unsupported, "IMG_001.HEIC"), []byte("unsupported"))
-	writeFile(t, filepath.Join(nested, "renamed.JPEG"), photo)
+	writeFile(t, filepath.Join(metadataOnly, ".DS_Store"), []byte("directory metadata"))
+	writeFile(t, filepath.Join(nested, "ORIGINAL.NEF"), nil)
 
 	batch := &ImportBatch{
 		Mode: importModePC,
 		Sources: []ImportBatchSource{
 			{Path: local, Role: "local"},
 			{Path: empty, Role: "favorite"},
-			{Path: unsupported, Role: "favorite"},
+			{Path: metadataOnly, Role: "favorite"},
 			{Path: filepath.Dir(nested), Role: "favorite"},
 			{Path: missing, Role: "favorite"},
 		},
 	}
 	work := filepath.Join(root, "work")
 	scanImportBatch(work, batch, nil)
-	assertStrSlice(t, batch.EmptyFavoriteDirs, []string{empty, unsupported})
+	assertStrSlice(t, batch.EmptyFavoriteDirs, []string{empty, metadataOnly})
 	if len(batch.Issues) != 1 || !strings.Contains(batch.Issues[0], missing) {
 		t.Fatalf("missing directory should be a read error: %v", batch.Issues)
 	}
@@ -527,7 +529,40 @@ func TestScanReportsEmptyFavoriteDirectories(t *testing.T) {
 		t.Fatalf("valid files should still match: %#v", batch.Entries)
 	}
 
-	writeFile(t, filepath.Join(empty, "found.jpg"), photo)
+	writeFile(t, filepath.Join(empty, "found.HEIC"), nil)
 	scanImportBatch(work, batch, nil)
-	assertStrSlice(t, batch.EmptyFavoriteDirs, []string{unsupported})
+	assertStrSlice(t, batch.EmptyFavoriteDirs, []string{metadataOnly})
+}
+
+func TestScanFavoriteNamesLeaveAmbiguousOriginalsForReview(t *testing.T) {
+	root := t.TempDir()
+	local := batchTestDir(t, root, "local")
+	secondCard := batchTestDir(t, local, "second-card")
+	favorites := batchTestDir(t, root, "favorites")
+	writeFile(t, filepath.Join(local, "DSC_0001.jpg"), []byte("first photo"))
+	writeFile(t, filepath.Join(secondCard, "dsc_0001.jpg"), []byte("different photo"))
+	writeFile(t, filepath.Join(local, "DSC_0002.jpg"), []byte("third photo"))
+	writeFile(t, filepath.Join(favorites, "DSC_0001.nef"), nil)
+	writeFile(t, filepath.Join(favorites, "dsc_0002.HEIC"), nil)
+	writeFile(t, filepath.Join(favorites, "DSC_0002.nef"), nil)
+
+	batch := &ImportBatch{Mode: importModePC, Sources: []ImportBatchSource{
+		{Path: local, Role: "local"}, {Path: favorites, Role: "favorite"},
+	}}
+	scanImportBatch(filepath.Join(root, "work"), batch, nil)
+	favoritesCount, conflicts := 0, 0
+	for _, entry := range batch.Entries {
+		if entry.Decision == batchFavorite {
+			favoritesCount++
+			if filepath.Base(entry.JPG.Path) != "DSC_0002.jpg" || entry.NEF != nil {
+				t.Fatalf("unexpected favorite: %#v", entry)
+			}
+		}
+		if entry.Conflict {
+			conflicts++
+		}
+	}
+	if favoritesCount != 1 || conflicts != 2 || len(batch.Entries) != 3 {
+		t.Fatalf("unambiguous names should match once and different same-name originals need review: %#v", batch.Entries)
+	}
 }

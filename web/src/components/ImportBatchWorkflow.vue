@@ -75,7 +75,7 @@ const sourceFields = computed<{ role: ImportSourceRole; label: string; required:
   const local = { role: 'local' as const, label: '本地原片', required: !fromIPad,
     hint: fromIPad ? '用于匹配相机 JPG 和 NEF、核对本地废片。' : undefined }
   const favorite = { role: 'favorite' as const, label: 'iPad 收藏', required: false,
-    hint: scanMode.value === 'pc' ? '为匹配到的本地原片标记收藏。' : '继承收藏标记，收藏导出中的独有照片也会加入选片。' }
+    hint: scanMode.value === 'pc' ? '按文件名标记收藏，忽略后缀。' : '按文件名标记收藏，忽略后缀。收藏目录独有的 JPG 也会加入选片。' }
   if (!fromIPad) return [local, favorite]
   return [
     { role: 'starting', label: 'iPad 筛选前的 JPG 范围', required: true, hint: '选择当时导入 iPad 参与选片的那批 JPG。' },
@@ -352,7 +352,7 @@ function preparePhotos(rescan: boolean) {
       previewID.value = ''
       groupingError.value = ''
       progress.value = undefined
-      if (emptyFavoriteDirs.value.length) message.warning('所选 iPad 收藏目录中没有 JPG 或 JPEG 照片')
+      if (emptyFavoriteDirs.value.length) message.warning('iPad 收藏目录中没有可用于匹配的文件')
       await refreshBatches()
     }
     if (!batch.value?.entries.length || disposed) return
@@ -662,7 +662,7 @@ onUnmounted(() => {
     </NCard>
 
     <NAlert v-if="emptyFavoriteDirs.length && (step === 'prepare' || step === 'review')"
-      type="warning" title="iPad 收藏目录中没有 JPG 或 JPEG 照片">
+      type="warning" title="iPad 收藏目录中没有可用于匹配的文件">
       <p>{{ step === 'review' ? '可返回「准备照片」，更换收藏目录后重新扫描。' : '可更换收藏目录，再开始选片。' }}</p>
       <ul class="source-warning-paths">
         <li v-for="path in emptyFavoriteDirs" :key="path">{{ path }}</li>
