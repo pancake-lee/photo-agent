@@ -9,6 +9,8 @@ BACKEND_PORT := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CO
 AGENT_PORT   := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Agent"]["Addr"].rsplit(":", 1)[1])')
 WEB_PORT     := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Web"]["Addr"].rsplit(":", 1)[1])')
 
+all: client start
+
 # ── 启动全部服务 ──────────────────────────────────────────
 start:
 	# 确保所有服务已停止
