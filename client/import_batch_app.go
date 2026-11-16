@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -30,7 +29,7 @@ func (a *App) ListImportBatches() ([]ImportBatchSummary, error) {
 		return nil, err
 	}
 	return slices.DeleteFunc(batches, func(batch ImportBatchSummary) bool {
-		return batch.Step == "done"
+		return batch.Step == "done" || batch.Step == "abandoned"
 	}), nil
 }
 
@@ -269,29 +268,38 @@ func (a *App) FinishImportBatch(id string) (*ImportBatch, error) {
 		if batch.Step != "finish" {
 			return fmt.Errorf("请先完成入库和本地原片回收步骤")
 		}
-		servers := append([]string(nil), batch.StageServers...)
-		for _, entry := range batch.Entries {
-			servers = append(servers, entry.StagedServer)
+		err := cleanupImportBatchStage(batch)
+		if err != nil {
+			return err
 		}
-		if batch.Bursts != nil {
-			servers = append(servers, batch.Bursts.Server)
-		}
-		seen := make(map[string]bool)
-		for _, server := range servers {
-			if server == "" || seen[server] {
-				continue
-			}
-			seen[server] = true
-			err := cleanupImportStage(context.Background(), server, batch.ID)
-			if err != nil {
-				return fmt.Errorf("清理 %s 上的批次暂存失败: %w", server, err)
-			}
-		}
-		for i := range batch.Entries {
-			batch.Entries[i].StagedServer = ""
-		}
-		batch.StageServers = nil
 		batch.Step = "done"
 		return nil
 	})
+}
+
+func (a *App) AbandonImportBatch(id string) error {
+	_, err := a.editImportBatch(id, func(batch *ImportBatch) error {
+		switch batch.Step {
+		case "abandoned":
+			return nil
+		case "done":
+			return fmt.Errorf("批次已完成")
+		case "abandoning":
+		default:
+			// Cleanup can succeed on one server and fail on another. Record the
+			// transition before cleanup so a partial batch cannot resume importing.
+			batch.Step = "abandoning"
+			err := saveImportBatch(importBatchRoot(), batch)
+			if err != nil {
+				return err
+			}
+		}
+		err := cleanupImportBatchStage(batch)
+		if err != nil {
+			return err
+		}
+		batch.Step = "abandoned"
+		return nil
+	})
+	return err
 }

@@ -69,11 +69,11 @@ interface ImportRecycleGroup {
   error?: string
 }
 
-interface ImportSummary {
+export interface ImportSummary {
   id: string
   activity: string
   name: string
-  step?: ImportStep
+  step?: ImportStep | 'abandoning' | 'abandoned'
 }
 
 export interface ImportBatch extends ImportSummary {
@@ -109,6 +109,7 @@ interface ImportBatchApp {
   CancelImportBursts(): Promise<void>
   AdvanceImportBatch(id: string, next: ImportStep, leaveLocal: boolean): Promise<ImportBatch>
   FinishImportBatch(id: string): Promise<ImportBatch>
+  AbandonImportBatch(id: string): Promise<void>
   PreviewImportUploads(id: string, server: string): Promise<ImportPlan[]>
   UploadImportBatch(id: string, server: string, plans: ImportPlan[]): Promise<ImportBatch>
   PreviewImportRecycle(id: string, kind: string): Promise<ImportRecycleFile[]>

@@ -92,6 +92,32 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 	return batch, nil
 }
 
+func cleanupImportBatchStage(batch *ImportBatch) error {
+	servers := append([]string(nil), batch.StageServers...)
+	for _, entry := range batch.Entries {
+		servers = append(servers, entry.StagedServer)
+	}
+	if batch.Bursts != nil {
+		servers = append(servers, batch.Bursts.Server)
+	}
+	seen := make(map[string]bool)
+	for _, server := range servers {
+		if server == "" || seen[server] {
+			continue
+		}
+		seen[server] = true
+		err := cleanupImportStage(context.Background(), server, batch.ID)
+		if err != nil {
+			return fmt.Errorf("清理 %s 上的批次暂存失败: %w", server, err)
+		}
+	}
+	for i := range batch.Entries {
+		batch.Entries[i].StagedServer = ""
+	}
+	batch.StageServers = nil
+	return nil
+}
+
 func cleanupImportStage(ctx context.Context, server, id string) error {
 	request := struct {
 		BatchID string `json:"batch_id"`

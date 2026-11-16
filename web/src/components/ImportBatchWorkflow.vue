@@ -9,7 +9,7 @@ import PhotoCard from './PhotoCard.vue'
 import type { BurstViewLevel } from '../types/photo'
 import { getImportBatchApp } from '../utils/importBatch'
 import type {
-  ImportBatch, ImportBurstProgress, ImportDecision, ImportEntry, ImportPlan, ImportSource, ImportSourceRole, ImportStep,
+  ImportBatch, ImportBurstProgress, ImportDecision, ImportEntry, ImportPlan, ImportSource, ImportSourceRole, ImportStep, ImportSummary,
 } from '../utils/importBatch'
 import { onWailsEvent, wailsApi, wailsError } from '../utils/wails'
 import { settings } from '../stores/settings'
@@ -18,7 +18,14 @@ import { getApiBase } from '../config'
 const message = useMessage()
 const router = useRouter()
 const batch = ref<ImportBatch>()
-const batches = ref<{ label: string; value: string }[]>([])
+const batches = ref<ImportSummary[]>([])
+const showCleanup = ref(false)
+const cleanupIDs = ref<string[]>([])
+const cleanupErrors = ref<Record<string, string>>({})
+const continueOptions = computed(() => batches.value.filter((item) => item.step !== 'abandoning').map((item) => ({
+  label: item.name || item.activity, value: item.id,
+})))
+const selectedBatchID = computed(() => continueOptions.value.find((option) => option.value === batch.value?.id)?.value ?? null)
 const activity = ref('')
 const sources = ref<ImportSource[]>([])
 const role = ref<ImportSourceRole>('local')
@@ -218,29 +225,63 @@ async function perform(label: string, fn: () => Promise<void>) {
 }
 
 async function refreshBatches() {
-  batches.value = (await getImportBatchApp().ListImportBatches()).map((item) => ({
-    label: item.name || item.activity, value: item.id,
-  }))
+  batches.value = await getImportBatchApp().ListImportBatches()
+}
+
+function setBatch(loaded?: ImportBatch) {
+  batch.value = loaded
+  preparing.value = undefined
+  uploadProgress.value = undefined
+  stageProgress.value = undefined
+  activity.value = loaded?.activity ?? ''
+  sources.value = loaded?.sources.slice() ?? []
+  complete.value = loaded?.complete ?? false
+  filter.value = 'all'
+  viewLevel.value = 'coarse'
+  previewID.value = ''
+  groupingError.value = ''
+  progress.value = undefined
+  page.value = 1
 }
 
 async function selectBatch(id: string | null) {
   await perform('打开批次', async () => {
     const loaded = id ? await getImportBatchApp().GetImportBatch(id) : undefined
-    batch.value = loaded
-    preparing.value = undefined
-    uploadProgress.value = undefined
-    stageProgress.value = undefined
-    activity.value = loaded?.activity ?? ''
-    sources.value = loaded?.sources.slice() ?? []
-    complete.value = loaded?.complete ?? false
-    filter.value = 'all'
-    viewLevel.value = 'coarse'
-    previewID.value = ''
-    groupingError.value = ''
-    progress.value = undefined
-    page.value = 1
+    setBatch(loaded)
   })
   await ensureGrouping()
+}
+
+function openCleanup() {
+  cleanupIDs.value = []
+  showCleanup.value = true
+}
+
+function toggleCleanup(id: string, checked: boolean) {
+  cleanupIDs.value = checked ? [...cleanupIDs.value, id] : cleanupIDs.value.filter((value) => value !== id)
+}
+
+function abandonBatches() {
+  return perform('废弃批次', async () => {
+    const selected = new Set(cleanupIDs.value)
+    if (batch.value && selected.has(batch.value.id)) setBatch()
+    const failed: Record<string, string> = {}
+    let removed = 0
+    for (const id of selected) {
+      try {
+        await getImportBatchApp().AbandonImportBatch(id)
+        batches.value = batches.value.filter((item) => item.id !== id)
+        removed++
+      } catch (error) {
+        failed[id] = wailsError(error)
+      }
+    }
+    cleanupErrors.value = failed
+    cleanupIDs.value = Object.keys(failed)
+    if (removed) message.success(`已废弃 ${removed} 个批次`)
+    if (!cleanupIDs.value.length) showCleanup.value = false
+    await refreshBatches()
+  })
 }
 
 async function addSource() {
@@ -499,7 +540,7 @@ function finishBatch() {
   return perform('清理服务器暂存', async () => {
     if (!batch.value) return
     batch.value = await getImportBatchApp().FinishImportBatch(batch.value.id)
-    batches.value = batches.value.filter((item) => item.value !== batch.value?.id)
+    batches.value = batches.value.filter((item) => item.id !== batch.value?.id)
     message.success('批次已完成')
   })
 }
@@ -563,8 +604,9 @@ onUnmounted(() => {
   <div class="batch-workflow">
     <NCard title="导入批次">
       <NSpace align="center">
-        <NSelect :value="step === 'done' ? null : batch?.id ?? null" :options="batches" placeholder="继续已有批次" clearable
-          :disabled="!!busy || grouping" style="width: 280px" @update:value="selectBatch" />
+        <NSelect :value="selectedBatchID" :options="continueOptions" placeholder="继续已有批次" clearable
+          :disabled="!continueOptions.length || !!busy || grouping" style="width: 280px" @update:value="selectBatch" />
+        <NButton v-if="batches.length" :disabled="!!busy || grouping" @click="openCleanup">清理批次</NButton>
         <NButton v-if="batch && step !== 'done'" :disabled="!!busy || grouping" @click="selectBatch(null)">新建批次</NButton>
       </NSpace>
       <NSteps class="form-row" :current="stepNumber" :status="step === 'done' ? 'finish' : 'process'" size="small">
@@ -765,6 +807,29 @@ onUnmounted(() => {
       </NCard>
     </template>
 
+    <NModal :show="showCleanup" preset="card" title="清理批次" class="batch-modal"
+      :mask-closable="!busy" :closable="!busy" @update:show="(show) => { if (!show && !busy) showCleanup = false }">
+      <p>勾选要废弃的批次。确认后清理所选批次的服务器暂存，并结束这些批次。</p>
+      <ul class="cleanup-list">
+        <li v-for="item in batches" :key="item.id">
+          <NSpace align="center">
+            <NCheckbox :checked="cleanupIDs.includes(item.id)" :disabled="!!busy" @update:checked="toggleCleanup(item.id, $event)">
+              {{ item.name || item.activity }}
+            </NCheckbox>
+            <NTag v-if="item.step === 'abandoning'" size="small" type="warning">清理待重试</NTag>
+          </NSpace>
+          <NAlert v-if="cleanupErrors[item.id]" type="error" class="cleanup-error">{{ cleanupErrors[item.id] }}</NAlert>
+        </li>
+      </ul>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton :disabled="!!busy" @click="showCleanup = false">关闭</NButton>
+          <NButton type="error" :disabled="!cleanupIDs.length || !!busy" :loading="busy === '废弃批次'"
+            @click="abandonBatches">{{ cleanupIDs.length ? `确认废弃 ${cleanupIDs.length} 个批次` : '确认废弃' }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
     <NModal :show="confirmRecycle" preset="card" :title="step === 'reject' ? '确认回收废片' : '确认回收已入库'"
       class="batch-modal" :mask-closable="!busy" :closable="!busy" @update:show="(show) => { if (!show && !busy) confirmRecycle = false }">
       <p>先在所选位置建「{{ batch?.name }}{{ step === 'reject' ? '-reject' : '-keep' }}」文件夹，归集 {{ recycleFiles?.length ?? 0 }} 个文件，再将文件夹移入 Windows 回收站。</p>
@@ -841,6 +906,8 @@ onUnmounted(() => {
 .review-actions { margin-top: 8px; }
 .review-issues { display: grid; gap: 8px; padding: 8px 0; }
 .batch-modal { width: min(760px, 90vw); }
+.cleanup-list { display: grid; gap: 8px; padding: 0; max-height: 45vh; overflow: auto; list-style: none; }
+.cleanup-error { margin-top: 4px; }
 .preview-modal { width: 80vw; height: 80vh; }
 .preview-frame { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; overflow: hidden; background: #171717; }
 .preview-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; visibility: hidden; }

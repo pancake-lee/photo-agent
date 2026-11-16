@@ -146,6 +146,86 @@ func TestClientUsesStagedJPGAndSendsOnlyNEFAtConfirmation(t *testing.T) {
 	assertStrSlice(t, actual, []string{"stage/status", "stage/file", "preview", "preview", "stage/archive", "file", "finish", "stage/cleanup", "stage/cleanup"})
 }
 
+func TestAbandonImportBatchRetriesOnlyStagingCleanup(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("fixture redirects the application config using XDG_CONFIG_HOME")
+	}
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	const abandonID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const doneID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	const draftID = "cccccccccccccccccccccccccccccccc"
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			BatchID string `json:"batch_id"`
+		}
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil || req.BatchID != abandonID || r.URL.Path != "/api/v1/photo-import/stage/cleanup" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]bool{"cleaned": true})
+	}))
+	defer server.Close()
+
+	local := filepath.Join(root, "original.JPG")
+	writeFile(t, local, []byte("original"))
+	for _, batch := range []ImportBatch{
+		{ID: doneID, Activity: "完成", Step: "done"},
+		{ID: draftID, Activity: "草稿"},
+		{ID: abandonID, Activity: "待废弃", Step: "archive", StageServers: []string{server.URL},
+			Entries: []ImportBatchEntry{{ID: "photo", JPG: &ImportBatchFile{Path: local},
+				StagedServer: server.URL, Upload: &ImportBatchUpload{PhotoID: "verified", Verified: true}}}},
+	} {
+		if err := saveImportBatch(importBatchRoot(), &batch); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := NewApp()
+	if err := app.AbandonImportBatch(doneID); err == nil {
+		t.Fatal("completed batches should stay completed")
+	}
+	if err := app.AbandonImportBatch(abandonID); err == nil {
+		t.Fatal("failed cleanup was reported as successful")
+	}
+	list, err := app.ListImportBatches()
+	if err != nil || len(list) != 2 {
+		t.Fatalf("retry list = %#v: %v", list, err)
+	}
+	for _, item := range list {
+		if item.ID == doneID || item.ID == abandonID && item.Step != "abandoning" {
+			t.Fatalf("unexpected resumable batch: %#v", item)
+		}
+	}
+	if _, err := app.AdvanceImportBatch(abandonID, "review", false); err == nil {
+		t.Fatal("a batch waiting for cleanup must not resume importing")
+	}
+	if err := app.AbandonImportBatch(abandonID); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.AbandonImportBatch(abandonID); err != nil || attempts.Load() != 2 {
+		t.Fatalf("discard retry was not idempotent: %d, %v", attempts.Load(), err)
+	}
+	list, err = app.ListImportBatches()
+	if err != nil || len(list) != 1 || list[0].ID != draftID {
+		t.Fatalf("active batches = %#v: %v", list, err)
+	}
+	batch, err := app.GetImportBatch(abandonID)
+	if err != nil || batch.Step != "abandoned" || len(batch.StageServers) != 0 ||
+		batch.Entries[0].StagedServer != "" || batch.Entries[0].Upload.PhotoID != "verified" {
+		t.Fatalf("discarded batch receipt = %#v: %v", batch, err)
+	}
+	data, err := os.ReadFile(local)
+	if err != nil || string(data) != "original" {
+		t.Fatalf("local original was changed: %q %v", data, err)
+	}
+}
+
 func readTestReviewUpload(r *http.Request) (importArchiveManifest, string, string, error) {
 	var req importArchiveManifest
 	reader, err := r.MultipartReader()
