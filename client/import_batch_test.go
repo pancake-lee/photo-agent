@@ -355,3 +355,17 @@ func TestIncompleteRecycleCanUseNewDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestImportUsesLocalFolderForBlankActivity(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("fixture redirects config using XDG_CONFIG_HOME")
+	}
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	local := batchTestDir(t, root, "桂林")
+	writeFile(t, filepath.Join(local, "a.JPG"), []byte("jpg fixture"))
+	batch, err := NewApp().ScanImportBatch("", "", []ImportBatchSource{{Path: local, Role: "local"}}, false)
+	if err != nil || batch.Activity != "桂林" || batch.Name != "桂林" {
+		t.Fatalf("inferred activity = %#v %v", batch, err)
+	}
+}

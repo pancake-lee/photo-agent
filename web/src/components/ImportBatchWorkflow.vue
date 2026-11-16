@@ -246,6 +246,10 @@ async function addSource() {
     const picked = await getImportBatchApp().ChooseImportSource()
     if (!picked || sources.value.some((source) => source.path === picked && source.role === role.value)) return
     sources.value.push({ path: picked, role: role.value })
+    if (!activity.value.trim() && role.value === 'local') {
+      const folder = picked.split(/[\\/]/).filter(Boolean).at(-1)
+      if (folder && !folder.includes(':')) activity.value = folder
+    }
   })
 }
 
@@ -255,6 +259,7 @@ async function scan() {
       batch.value?.id ?? '', activity.value.trim(), sources.value,
       usesCompleteExport.value,
     )
+    activity.value = batch.value.activity
     preparing.value = undefined
     previewID.value = ''
     await refreshBatches()

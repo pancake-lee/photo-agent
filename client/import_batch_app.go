@@ -53,6 +53,14 @@ func (a *App) ScanImportBatch(
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
 
+	if id == "" && strings.TrimSpace(activity) == "" {
+		for _, source := range sources {
+			if source.Role == "local" && filepath.IsAbs(source.Path) {
+				activity = filepath.Base(filepath.Clean(source.Path))
+				break
+			}
+		}
+	}
 	if !validImportActivity(activity) || len(sources) == 0 {
 		return nil, fmt.Errorf("填写有效的活动目录名，并至少添加一个来源")
 	}
