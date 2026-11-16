@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -24,7 +25,13 @@ func (a *App) ChooseImportRecycleDirectory() (string, error) {
 func (a *App) ListImportBatches() ([]ImportBatchSummary, error) {
 	a.batchMu.Lock()
 	defer a.batchMu.Unlock()
-	return listImportBatches(importBatchRoot())
+	batches, err := listImportBatches(importBatchRoot())
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(batches, func(batch ImportBatchSummary) bool {
+		return batch.Step == "done"
+	}), nil
 }
 
 func (a *App) GetImportBatch(id string) (*ImportBatch, error) {

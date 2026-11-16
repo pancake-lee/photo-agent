@@ -499,6 +499,7 @@ function finishBatch() {
   return perform('清理服务器暂存', async () => {
     if (!batch.value) return
     batch.value = await getImportBatchApp().FinishImportBatch(batch.value.id)
+    batches.value = batches.value.filter((item) => item.value !== batch.value?.id)
     message.success('批次已完成')
   })
 }
@@ -562,7 +563,7 @@ onUnmounted(() => {
   <div class="batch-workflow">
     <NCard title="导入批次">
       <NSpace align="center">
-        <NSelect :value="batch?.id ?? null" :options="batches" placeholder="继续已有批次" clearable
+        <NSelect :value="step === 'done' ? null : batch?.id ?? null" :options="batches" placeholder="继续已有批次" clearable
           :disabled="!!busy || grouping" style="width: 280px" @update:value="selectBatch" />
         <NButton v-if="batch && step !== 'done'" :disabled="!!busy || grouping" @click="selectBatch(null)">新建批次</NButton>
       </NSpace>
