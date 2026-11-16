@@ -566,3 +566,25 @@ func TestScanFavoriteNamesLeaveAmbiguousOriginalsForReview(t *testing.T) {
 		t.Fatalf("unambiguous names should match once and different same-name originals need review: %#v", batch.Entries)
 	}
 }
+
+func TestScanRejectsSameOriginalAndFavoriteDirectory(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("fixture redirects config using XDG_CONFIG_HOME")
+	}
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	original := batchTestDir(t, root, "original")
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(original, alias); err != nil {
+		t.Fatal(err)
+	}
+	for _, favorite := range []string{original, original + string(filepath.Separator) + ".", alias} {
+		t.Run(filepath.Base(favorite), func(t *testing.T) {
+			sources := []ImportBatchSource{{Path: original, Role: "local"}, {Path: favorite, Role: "favorite"}}
+			batch, err := NewApp().ScanImportBatch("", "活动", sources, false, importModePC)
+			if batch != nil || err == nil || !strings.Contains(err.Error(), "不能使用同一个目录") {
+				t.Fatalf("same directory was not rejected: %#v, %v", batch, err)
+			}
+		})
+	}
+}

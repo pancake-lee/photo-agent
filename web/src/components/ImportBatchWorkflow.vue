@@ -85,12 +85,20 @@ const sourceFields = computed<{ role: ImportSourceRole; label: string; required:
   ]
 })
 const activeSources = computed(() => sources.value.filter((source) => sourceFields.value.some((field) => field.role === source.role)))
+function sourcePathKey(path: string) {
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[a-z]:|^\/\//i.test(normalized) ? normalized.toLowerCase() : normalized
+}
+const duplicateSourcePath = computed(() => {
+  const originals = new Set(activeSources.value.filter((source) => source.role === 'local').map((source) => sourcePathKey(source.path)))
+  return activeSources.value.find((source) => source.role === 'favorite' && originals.has(sourcePathKey(source.path)))?.path
+})
 function hasSource(role: ImportSourceRole) {
   return activeSources.value.some((source) => source.role === role)
 }
 const canCompareExports = computed(() => hasSource('retained') && hasSource('starting'))
 const usesCompleteExport = computed(() => canCompareExports.value && complete.value)
-const canPrepare = computed(() => !!activity.value.trim() && !!activeSources.value.length &&
+const canPrepare = computed(() => !duplicateSourcePath.value && !!activity.value.trim() && !!activeSources.value.length &&
   (!scanMode.value || sourceFields.value.every((field) => !field.required || hasSource(field.role))))
 const needsScan = computed(() => {
   const saved = batch.value
@@ -277,6 +285,7 @@ function setBatch(loaded?: ImportBatch) {
   activity.value = loaded?.activity ?? ''
   sources.value = loaded?.sources.slice() ?? []
   mode.value = loaded?.mode ?? (sources.value.some((source) => source.role === 'starting' || source.role === 'retained') ? 'ipad' : 'pc')
+  if (duplicateSourcePath.value) preparing.value = true
   complete.value = loaded?.complete ?? false
   filter.value = 'all'
   viewLevel.value = 'coarse'
@@ -680,6 +689,10 @@ onUnmounted(() => {
         </NRadioGroup>
       </NFormItem>
       <NAlert v-if="batch && !batch.mode" type="info" class="form-row">此批次沿用创建时的来源规则。</NAlert>
+      <NAlert v-if="duplicateSourcePath" type="error" title="本地原片和 iPad 收藏使用了同一个目录" class="form-row">
+        请移除重复目录，或为 iPad 收藏选择另一个目录。
+        <p class="source-warning-paths">{{ duplicateSourcePath }}</p>
+      </NAlert>
       <NFormItem v-for="field in sourceFields" :key="field.role" :label="field.label + (field.required ? '' : '（可选）')"
         :required="!!scanMode && field.required" :show-feedback="false" class="source-field">
         <div>

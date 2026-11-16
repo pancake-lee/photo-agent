@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -93,6 +94,12 @@ func (a *App) ScanImportBatch(
 	if complete && !roles["retained"] {
 		return nil, fmt.Errorf("推导废弃需要完整留存导出目录")
 	}
+	if roles["local"] && roles["favorite"] {
+		err := validateImportFavoriteDirectories(sources)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var old *ImportBatch
 	var err error
 	root := importBatchRoot()
@@ -126,6 +133,30 @@ func (a *App) ScanImportBatch(
 	}
 	scanImportBatch(root, batch, old)
 	return batch, saveImportBatch(root, batch)
+}
+
+func validateImportFavoriteDirectories(sources []ImportBatchSource) error {
+	// The scanner reports unreadable paths. File identity here also detects aliases.
+	originals := make(map[string]os.FileInfo)
+	for _, source := range sources {
+		if source.Role == "local" {
+			path := filepath.Clean(source.Path)
+			originals[path], _ = os.Stat(path)
+		}
+	}
+	for _, source := range sources {
+		if source.Role != "favorite" {
+			continue
+		}
+		path := filepath.Clean(source.Path)
+		info, _ := os.Stat(path)
+		for original, originalInfo := range originals {
+			if path == original || (info != nil && originalInfo != nil && os.SameFile(info, originalInfo)) {
+				return fmt.Errorf("本地原片和 iPad 收藏不能使用同一个目录：%s", source.Path)
+			}
+		}
+	}
+	return nil
 }
 
 func (a *App) DecideImportBatch(
