@@ -5,7 +5,6 @@ import {
   NPagination, NProgress, NSelect, NSpace, NSpin, NStep, NSteps, NTag, useMessage,
 } from 'naive-ui'
 import PhotoCard from './PhotoCard.vue'
-import BurstGroupModal from './BurstGroupModal.vue'
 import type { BurstViewLevel } from '../types/photo'
 import { getImportBatchApp } from '../utils/importBatch'
 import type {
@@ -28,12 +27,16 @@ const groupingError = ref('')
 const progress = ref<ImportBurstProgress>()
 const filter = ref('all')
 const viewLevel = ref<BurstViewLevel>('coarse')
-const openGroup = ref<string[]>([])
-const previewEntry = ref<ImportEntry>()
+const previewID = ref('')
+const previewStrip = ref<HTMLDivElement>()
 const page = ref(1)
-const images = ref<{ path: string; data: string }[]>([])
-const imageLoading = ref(false)
-const preview = ref(false)
+const localPreview = ref('')
+const previewLoaded = ref(false)
+const previewFailed = ref(false)
+const originalReady = ref(false)
+const allowOriginal = ref(false)
+const boundary = ref<{ id: string; direction: -1 | 1 }>()
+let boundaryTimer: ReturnType<typeof setTimeout> | undefined
 const uploadPlan = ref<ImportPlan[]>()
 const archivePage = ref(1)
 interface FileProgress {
@@ -159,10 +162,14 @@ const filtered = computed(() => {
   }).sort((a, b) => (a.shot_at ?? '').localeCompare(b.shot_at ?? ''))
 })
 const shown = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
-const groupMembers = computed(() => openGroup.value.flatMap((id) => {
-  const entry = entriesByID.value.get(id)
-  return entry && entry.decision !== 'discarded' && canPreview(entry) ? [photoCard(entry)] : []
-}))
+const previewEntry = computed(() => entriesByID.value.get(previewID.value))
+const previewGroup = computed(() => step.value === 'review' ? groupByEntry.value.get(previewID.value) ?? [] : [])
+const previewIDs = computed(() => step.value === 'archive'
+  ? archiveEntries.value.filter(canPreview).map((entry) => entry.id)
+  : filtered.value.filter(canPreview).flatMap(targetIDs))
+const previewIndex = computed(() => previewIDs.value.indexOf(previewID.value))
+const previewThumbnail = computed(() => previewEntry.value ? localPreview.value || imageURL(previewEntry.value, true) : '')
+const previewOriginal = computed(() => previewEntry.value && allowOriginal.value ? imageURL(previewEntry.value) : '')
 const progressValue = computed(() => {
   const state = progress.value
   return state && state.total ? Math.min(100, Math.round(state.done / state.total * 100)) : 0
@@ -170,8 +177,32 @@ const progressValue = computed(() => {
 
 watch([filter, viewLevel], () => { page.value = 1 })
 watch([() => batch.value?.id, step, () => settings.backendUrl], () => { void loadStep() })
-watch(groupMembers, (members) => { if (!members.length && openGroup.value.length) openGroup.value = [] })
 watch(filtered, (list) => { page.value = Math.min(page.value, Math.max(1, Math.ceil(list.length / pageSize))) })
+watch(previewIDs, (ids, previous) => {
+  if (!previewID.value || ids.includes(previewID.value)) return
+  const index = previous.indexOf(previewID.value)
+  previewID.value = previous.slice(index + 1).find((id) => ids.includes(id)) ??
+    previous.slice(0, Math.max(0, index)).reverse().find((id) => ids.includes(id)) ?? ''
+})
+watch(previewID, async (id) => {
+  clearBoundary()
+  localPreview.value = ''
+  previewLoaded.value = false
+  previewFailed.value = false
+  originalReady.value = false
+  allowOriginal.value = false
+  const entry = entriesByID.value.get(id)
+  if (!entry?.reference_only || !entry.jpg) return
+  try {
+    const data = await wailsApi.previewImage(entry.jpg.path)
+    if (id === previewID.value) localPreview.value = `data:image/jpeg;base64,${data}`
+  } catch {
+    if (id === previewID.value) previewFailed.value = true
+  }
+})
+watch(previewID, () => {
+  previewStrip.value?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}, { flush: 'post' })
 
 async function perform(label: string, fn: () => Promise<void>) {
   if (busy.value) return
@@ -198,7 +229,7 @@ async function selectBatch(id: string | null) {
     complete.value = loaded?.complete ?? false
     filter.value = 'all'
     viewLevel.value = 'coarse'
-    openGroup.value = []
+    previewID.value = ''
     groupingError.value = ''
     progress.value = undefined
     page.value = 1
@@ -221,7 +252,7 @@ async function scan() {
       usesCompleteExport.value,
     )
     preparing.value = undefined
-    openGroup.value = []
+    previewID.value = ''
     await refreshBatches()
   })
   await ensureGrouping()
@@ -262,7 +293,7 @@ function decide(ids: string[], value: ImportDecision, successMessage?: string) {
 }
 
 function keepOnlyCurrent(id: string) {
-  const otherIDs = groupMembers.value.filter((member) => member.id !== id).map((member) => member.id)
+  const otherIDs = previewGroup.value.filter((memberID) => memberID !== id)
   if (otherIDs.length) {
     return decide(otherIDs, 'discarded', `已标记删除同组其余 ${otherIDs.length} 张照片，可撤销上一步`)
   }
@@ -311,36 +342,52 @@ function favoriteLabel(ids: string[]) {
   return (allFavorited ? '取消收藏' : '收藏') + (ids.length > 1 ? '整组' : '')
 }
 
-function openBurst(coverID: string) {
-  openGroup.value = groupByEntry.value.get(coverID) ?? []
-}
-
 function showDetail(id: string) {
   const entry = entriesByID.value.get(id)
-  if (entry) void viewImages([entry])
+  if (entry && canPreview(entry)) previewID.value = id
 }
 
 function canPreview(entry: ImportEntry) {
   return !!entry.jpg && (isStaged(entry) || !!entry.upload?.verified || !!entry.reference_only)
 }
 
-async function viewImages(entries: ImportEntry[]) {
-  const list = entries.filter(canPreview)
-  if (!list.length) return
-  previewEntry.value = list[0]
-  preview.value = true
-  images.value = []
-  imageLoading.value = true
-  try {
-    images.value = await Promise.all(list.map(async (entry) => {
-      const jpg = entry.jpg!
-      const data = entry.reference_only
-        ? `data:image/jpeg;base64,${await wailsApi.previewImage(jpg.path)}`
-        : imageURL(entry)
-      return { path: jpg.path, data }
-    }))
-  } catch (error) { message.error(wailsError(error)) }
-  finally { imageLoading.value = false }
+function clearBoundary() {
+  clearTimeout(boundaryTimer)
+  boundary.value = undefined
+}
+
+function navigatePreview(direction: -1 | 1) {
+  const next = previewIDs.value[previewIndex.value + direction]
+  if (previewIndex.value < 0 || !next) return
+  if (previewGroup.value.length && !previewGroup.value.includes(next) &&
+    (boundary.value?.id !== previewID.value || boundary.value.direction !== direction)) {
+    clearBoundary()
+    boundary.value = { id: previewID.value, direction }
+    boundaryTimer = setTimeout(clearBoundary, 5000)
+    return
+  }
+  previewID.value = next
+}
+
+function handlePreviewKey(event: KeyboardEvent) {
+  if (!previewID.value || shotEntry.value || event.defaultPrevented || event.repeat ||
+    event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+  const target = event.target
+  if (target instanceof HTMLElement && (target.isContentEditable || target.matches('input, textarea, select'))) return
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    navigatePreview(event.key === 'ArrowLeft' ? -1 : 1)
+    return
+  }
+  const entry = previewEntry.value
+  if (!entry || !canEdit(entry) || busy.value || grouping.value) return
+  if (event.key === 'Delete') {
+    event.preventDefault()
+    void decide([entry.id], 'discarded')
+  } else if (event.key.toLowerCase() === 'l' && !entry.reference_only) {
+    event.preventDefault()
+    void toggleFavorite([entry.id])
+  }
 }
 
 function stageJPGs() {
@@ -405,7 +452,7 @@ function advance(next: ImportStep, leaveLocal = false) {
       preparing.value = false
       filter.value = 'all'
     }
-    openGroup.value = []
+    previewID.value = ''
   })
 }
 
@@ -477,10 +524,13 @@ onMounted(() => {
       if (value.staged_on === settings.backendUrl) preparing.value = false
     }
   })
+  window.addEventListener('keydown', handlePreviewKey)
 })
 onUnmounted(() => {
   disposed = true
   if (grouping.value) void getImportBatchApp().CancelImportBursts()
+  clearBoundary()
+  window.removeEventListener('keydown', handlePreviewKey)
   unsubscribeBurst()
   unsubscribeUpload()
   unsubscribeStage()
@@ -581,7 +631,7 @@ onUnmounted(() => {
           <li v-for="entry in shown" :key="entry.id">
             <PhotoCard v-if="imageURL(entry)" :photo="photoCard(entry)" :show-status="false" :show-embed="false"
               :show-delete="false" :show-tooltip="false" :view-level="viewLevel"
-              @view-detail="showDetail" @open-burst-group="openBurst">
+              @view-detail="showDetail" @open-burst-group="showDetail">
               <template #actions>
                 <NSpace v-if="canEdit(entry)" class="review-actions" :size="4" @click.stop>
                   <NButton size="small" :type="targetIDs(entry).every((id) => entriesByID.get(id)?.decision === 'favorite') ? 'warning' : 'default'"
@@ -694,34 +744,45 @@ onUnmounted(() => {
       </NCard>
     </template>
 
-    <BurstGroupModal :show="groupMembers.length > 0" :group-id="openGroup[0] ?? ''"
-      :members="groupMembers" :cover-id="groupMembers[0]?.id ?? ''" :loading="false" mode="browse"
-      @close="openGroup = []" @view-detail="showDetail">
-      <template #actions="{ selected }">
-        <NSpace>
-          <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite([selected.id])">{{ favoriteLabel([selected.id]) }}</NButton>
-          <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide([selected.id], 'discarded')">删除当前照片</NButton>
-          <NButton size="small" type="error" secondary :disabled="!!busy || grouping || groupMembers.length < 2"
-            @click="keepOnlyCurrent(selected.id)">只保留当前照片</NButton>
-          <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(groupMembers.map((item) => item.id))">{{ favoriteLabel(groupMembers.map((item) => item.id)) }}</NButton>
-          <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(groupMembers.map((item) => item.id), 'discarded')">删除整组</NButton>
+    <NModal :show="!!previewEntry" preset="card" :title="previewEntry ? entryName(previewEntry) : '照片预览'"
+      class="preview-modal" :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"
+      @update:show="(show) => { if (!show) previewID = '' }">
+      <template v-if="previewEntry">
+        <div class="preview-frame">
+          <NSpin v-if="!previewLoaded && !previewFailed && !originalReady" size="small" />
+          <NEmpty v-if="previewFailed && !originalReady" description="无法读取照片预览" />
+          <img v-if="previewThumbnail" :key="`preview-${previewID}`" class="preview-image" :class="{ visible: previewLoaded }"
+            :src="previewThumbnail" :alt="entryName(previewEntry)"
+            @load="previewLoaded = true; allowOriginal = true" @error="previewFailed = true; allowOriginal = true" />
+          <img v-if="previewOriginal && previewOriginal !== previewThumbnail" :key="`original-${previewID}`"
+            class="preview-image" :class="{ visible: originalReady }" :src="previewOriginal" alt="" @load="originalReady = true" />
+          <button v-if="previewIndex > 0" type="button" class="preview-nav previous" aria-label="上一张（左方向键）" @click="navigatePreview(-1)">‹</button>
+          <button v-if="previewIndex >= 0 && previewIndex < previewIDs.length - 1" type="button" class="preview-nav next"
+            aria-label="下一张（右方向键）" @click="navigatePreview(1)">›</button>
+          <p v-if="boundary" class="preview-boundary" role="status">已到达{{ boundary.direction === -1 ? '第一张' : '最后一张' }}，再次操作跳出当前连拍组</p>
+        </div>
+        <NSpace v-if="canEdit(previewEntry)" align="center" class="preview-actions" :size="8">
+          <NButton v-if="!previewEntry.reference_only" size="small" :disabled="!!busy || grouping" title="L 快捷键"
+            @click="toggleFavorite([previewID])">{{ favoriteLabel([previewID]) }}</NButton>
+          <NButton size="small" type="error" secondary :disabled="!!busy || grouping" title="Delete 快捷键"
+            @click="decide([previewID], 'discarded')">删除当前照片</NButton>
+          <template v-if="previewGroup.length">
+            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="keepOnlyCurrent(previewID)">只保留当前照片</NButton>
+            <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(previewGroup)">{{ favoriteLabel(previewGroup) }}</NButton>
+            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(previewGroup, 'discarded')">删除整组</NButton>
+          </template>
+          <NButton v-if="!previewEntry.reference_only && !previewEntry.upload" size="small" text :disabled="!!busy || grouping"
+            @click="editShotAt(previewEntry)">{{ previewEntry.shot_at || '填写拍摄时间' }}</NButton>
         </NSpace>
+        <div v-if="previewGroup.length" ref="previewStrip" class="preview-strip" aria-label="连拍组照片">
+          <template v-for="id in previewGroup" :key="id">
+            <button v-if="entriesByID.get(id)" type="button" class="preview-thumb" :aria-pressed="id === previewID"
+              :aria-label="entryName(entriesByID.get(id)!)" @click="previewID = id">
+              <img :src="imageURL(entriesByID.get(id)!, true)" alt="" />
+            </button>
+          </template>
+        </div>
       </template>
-    </BurstGroupModal>
-
-    <NModal v-model:show="preview" preset="card" title="审阅原片" class="preview-modal">
-      <NSpin :show="imageLoading"><div class="compare">
-        <figure v-for="item in images" :key="item.path">
-          <img v-if="item.data" :src="item.data" :alt="item.path" @error="item.data = ''" />
-          <NEmpty v-else description="无法读取照片预览" />
-          <figcaption>{{ item.path }}</figcaption>
-        </figure>
-      </div></NSpin>
-      <NSpace v-if="previewEntry" align="center" class="form-row">
-        <span v-if="previewEntry.nef">{{ previewEntry.nef.path }}</span>
-        <NButton v-if="canEdit(previewEntry) && !previewEntry.reference_only && !previewEntry.upload" text :disabled="!!busy || grouping"
-          @click="editShotAt(previewEntry)">{{ previewEntry.shot_at || '填写拍摄时间' }}</NButton>
-      </NSpace>
     </NModal>
 
     <NModal :show="!!shotEntry" preset="card" title="修正拍摄时间" class="batch-modal" @update:show="(show) => { if (!show) shotEntry = undefined }">
@@ -744,9 +805,18 @@ onUnmounted(() => {
 .review-actions { margin-top: 8px; }
 .review-issues { display: grid; gap: 8px; padding: 8px 0; }
 .batch-modal { width: min(760px, 90vw); }
-.preview-modal { width: min(1320px, 94vw); }
-.compare { display: flex; gap: 16px; }
-.compare figure { margin: 0; flex: 1; min-width: 0; }
-.compare img { display: block; width: 100%; height: min(60vh, 620px); object-fit: contain; }
-.compare figcaption { overflow-wrap: anywhere; }
+.preview-modal { width: 80vw; height: 80vh; }
+.preview-frame { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; overflow: hidden; background: #171717; }
+.preview-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; visibility: hidden; }
+.preview-image.visible { visibility: visible; }
+.preview-nav { position: absolute; top: 0; bottom: 0; width: 16%; border: 0; background: transparent; color: white; font-size: 40px; text-shadow: 0 1px 6px black; cursor: pointer; }
+.preview-nav:hover, .preview-nav:focus-visible { background: rgb(0 0 0 / 30%); }
+.previous { left: 0; }
+.next { right: 0; }
+.preview-boundary { position: absolute; bottom: 16px; padding: 8px 16px; margin: 0; border-radius: 4px; color: white; background: rgb(0 0 0 / 80%); pointer-events: none; }
+.preview-actions, .preview-strip { margin-top: 8px; }
+.preview-strip { display: flex; gap: 8px; overflow-x: auto; }
+.preview-thumb { flex: 0 0 64px; height: 64px; padding: 0; border: 2px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; }
+.preview-thumb[aria-pressed="true"] { border-color: var(--primary-color, #18a058); }
+.preview-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 </style>
