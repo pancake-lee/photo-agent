@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NCheckbox, NEmpty, NFormItem, NInput, NModal,
   NPagination, NProgress, NSelect, NSpace, NSpin, NStep, NSteps, NTag, useMessage,
@@ -15,6 +16,7 @@ import { settings } from '../stores/settings'
 import { getApiBase } from '../config'
 
 const message = useMessage()
+const router = useRouter()
 const batch = ref<ImportBatch>()
 const batches = ref<{ label: string; value: string }[]>([])
 const activity = ref('')
@@ -562,7 +564,7 @@ onUnmounted(() => {
       <NSpace align="center">
         <NSelect :value="batch?.id ?? null" :options="batches" placeholder="继续已有批次" clearable
           :disabled="!!busy || grouping" style="width: 280px" @update:value="selectBatch" />
-        <NButton v-if="batch" :disabled="!!busy || grouping" @click="selectBatch(null)">新建批次</NButton>
+        <NButton v-if="batch && step !== 'done'" :disabled="!!busy || grouping" @click="selectBatch(null)">新建批次</NButton>
       </NSpace>
       <NSteps class="form-row" :current="stepNumber" :status="step === 'done' ? 'finish' : 'process'" size="small">
         <NStep v-for="item in steps" :key="item.key" :title="item.title" />
@@ -736,7 +738,10 @@ onUnmounted(() => {
         <p>已核验 {{ verifiedCount }} 张照片。{{ step === 'done' ? '服务器暂存已清理。' : '完成后清理本批次的服务器暂存 JPG 和缩略图。' }}</p>
         <p v-if="excludedCount">{{ excludedCount }} 张照片因来源或配对待核对，未入库。</p>
         <NButton v-if="step === 'finish'" type="primary" :loading="busy === '清理服务器暂存'" :disabled="!!busy" @click="finishBatch">完成批次并清理暂存</NButton>
-        <NButton v-else type="primary" :disabled="!!busy" @click="selectBatch(null)">开始新批次</NButton>
+        <NSpace v-else>
+          <NButton type="primary" @click="router.push({ name: 'photos', query: { activity: batch.activity } })">在图片管理查看导入结果</NButton>
+          <NButton :disabled="!!busy" @click="selectBatch(null)">开始新批次</NButton>
+        </NSpace>
       </NCard>
 
       <NCard v-if="recycleGroups.length && ['reject', 'keep', 'finish', 'done'].includes(step)" title="回收结果">

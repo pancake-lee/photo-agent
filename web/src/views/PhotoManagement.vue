@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NLayout, NLayoutContent, NLayoutHeader, NModal, NButton, NEmpty, NSpin, NAlert, NSpace, useMessage } from 'naive-ui'
 import PhotoArchiveActions from '../components/PhotoArchiveActions.vue'
 import PhotoDetail from '../components/PhotoDetail.vue'
@@ -24,6 +24,7 @@ import { getAgentBase, getApiBase } from '../config'
 import { downloadPhotos } from '../utils/downloadPhotos'
 
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const {
   photos, total, loading, loadingDown, loadingUp, noMoreDown, noMoreUp, error,
@@ -212,6 +213,30 @@ function handleConflictResolve(resolution: ConflictResolution) { conflictResolve
 function toggleSortOrder() { sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'; applyFilters() }
 function handleSegmentModeChange(mode: SegmentMode) { settings.segmentMode = mode; fetchSegments() }
 
+function applyActivityLink() {
+  const activity = route.query.activity
+  if (typeof activity !== 'string' || !activity) return
+  filterTimeline.value = activity
+  filterShotAtStart.value = ''
+  filterShotAtEnd.value = ''
+  searchFilename.value = ''
+}
+
+function resetPhotoFilters() {
+  if (route.query.activity) {
+    const query = { ...route.query }
+    delete query.activity
+    void router.replace({ query })
+  }
+  resetFilters()
+}
+
+watch(() => route.query.activity, (activity) => {
+  if (typeof activity !== 'string' || !activity) return
+  applyActivityLink()
+  void applyFilters()
+})
+
 watch(showConflictModal, (visible) => { if (!visible && conflictResolver.value) { conflictResolver.value('skip'); conflictResolver.value = null } })
 watch(photos, (list) => fetchEmbeddedIds(list.map((photo) => ({ id: photo.id, description: photo.description }))))
 watch(auxiliaryError, (text) => { if (text) message.error(text) })
@@ -239,6 +264,7 @@ watch(embedProcessingIds, (newIds, oldIds) => {
 onComplete(() => { relocateToStart(); fetchStats() })
 onEmbedComplete(() => { relocateToStart(); fetchStats(); fetchEmbedStats() })
 onMounted(async () => {
+  applyActivityLink()
   await applyFilters()
   fetchStats()
   fetchTimelines()
@@ -260,7 +286,7 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         :total="total" :stats="stats" :embed-stats="embedStats" :timelines="timelines" :burst-view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :sort-order="sortOrder"
         :vlm-running="vlmStatus.running" :vlm-completed="vlmStatus.completed" :vlm-total="vlmStatus.total" :embed-running="embedStatus.running" :embed-completed="embedStatus.completed" :embed-total="embedStatus.total" :burst-running="burstStatus.running" :burst-processed="burstStatus.processed" :burst-total="burstStatus.total"
         :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect" :download-loading="downloadLoading"
-        @apply-filters="applyFilters" @reset-filters="resetFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
+        @apply-filters="applyFilters" @reset-filters="resetPhotoFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
         @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @download-selection="downloadSelection" @go-to-post-studio="goToPostStudio"
       />
       <div class="archive-actions">
@@ -271,7 +297,7 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
       <PhotoListBrowser
         :photos="photos" :loading="loading" :loading-down="loadingDown" :loading-up="loadingUp" :no-more-down="noMoreDown" :no-more-up="noMoreUp" :error="error" :processing-ids="describeProcessingIds" :embed-processing-ids="embedProcessingIds" :embedded-ids="embeddedIds" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" :view-level="settings.burstViewLevel" :segment-mode="settings.segmentMode" :segments="segments" :relocate-to="relocateTo" :load-down="loadDown" :load-up="loadUp"
         :selection-mode="selectionMode" :selected-ids="selectedIds"
-        @view-detail="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @delete-photo="handleDeletePhoto" @open-burst-group="handleOpenBurstGroup" @retry="relocateToStart" @back-to-latest="resetFilters" @toggle-select="toggleSelect"
+        @view-detail="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @trigger-embed="handleTriggerEmbed" @delete-photo="handleDeletePhoto" @open-burst-group="handleOpenBurstGroup" @retry="relocateToStart" @back-to-latest="resetPhotoFilters" @toggle-select="toggleSelect"
       />
     </div></NLayoutContent>
   </NLayout>
