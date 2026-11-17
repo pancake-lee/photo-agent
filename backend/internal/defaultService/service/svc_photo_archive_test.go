@@ -37,6 +37,38 @@ func archiveTestJPG(t *testing.T, clr uint8) []byte {
 	return out.Bytes()
 }
 
+func TestPhotoImportTraceKeepsRequestIDAndMeasuresWrites(t *testing.T) {
+	batchID, requestID := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	root := t.TempDir()
+	body := archiveTestJPG(t, 42)
+	req := archiveTestRequest("活动", body, nil, false)
+	router := khttp.NewServer()
+	router.Route("/").POST("/trace", func(ctx khttp.Context) error {
+		trace := startPhotoImportTrace(ctx, batchID, "stage_upload")
+		err := writeVerifiedArchiveFile(root, "sample.jpg", req.JPG, req.JPGTime,
+			bytes.NewReader(body), nil, trace)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(http.StatusOK, trace.spans)
+	})
+	request := httptest.NewRequest(http.MethodPost, "/trace", nil)
+	request.Header.Set("X-Photo-Import-Request-ID", requestID)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("X-Photo-Import-Request-ID") != requestID {
+		t.Fatalf("trace did not return its request ID: %d %s", response.Code, response.Body)
+	}
+	var spans map[string]photoImportSpan
+	if err := json.Unmarshal(response.Body.Bytes(), &spans); err != nil {
+		t.Fatal(err)
+	}
+	if spans["stream_hash_write"].Bytes != int64(len(body)) || spans["file_sync"].Count != 1 ||
+		spans["publish_file"].Count != 1 {
+		t.Fatalf("stream, flush and publish were not measured: %#v", spans)
+	}
+}
+
 func archiveTestRequest(activity string, jpg, nef []byte, favorite bool) archiveImportRequest {
 	mod := time.Unix(1760000000, 456000000).UTC()
 	shot := mod.Add(-time.Hour)

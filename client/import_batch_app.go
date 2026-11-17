@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -131,8 +132,13 @@ func (a *App) ScanImportBatch(
 	if err != nil {
 		return nil, err
 	}
+	trace := startImportTrace(id, "scan")
+	start := time.Now()
 	scanImportBatch(root, batch, old)
-	return batch, saveImportBatch(root, batch)
+	trace.add("walk_hash_exif_match", start, 0)
+	err = trace.save(root, batch)
+	trace.finish(err, map[string]any{"entries": len(batch.Entries), "issues": len(batch.Issues)})
+	return batch, err
 }
 
 func validateImportFavoriteDirectories(sources []ImportBatchSource) error {

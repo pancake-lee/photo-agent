@@ -1,7 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
+	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,6 +24,66 @@ func batchTestDir(t *testing.T, root, name string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestImportRPCTraceCorrelatesWithServerAndOmitsFilePath(t *testing.T) {
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	batchID := strings.Repeat("a", 32)
+	fileData := []byte("fixture")
+	filePath := filepath.Join(t.TempDir(), "private-photo.jpg")
+	writeFile(t, filePath, fileData)
+
+	requestIDs := make(chan string, 1)
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("X-Photo-Import-Batch-ID") != batchID {
+			t.Error("batch ID missing from request")
+		}
+		requestIDs <- req.Header.Get("X-Photo-Import-Request-ID")
+		err := req.ParseMultipartForm(1 << 20)
+		if err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"target":"stage","jpg_staged":true}`))
+	}))
+	defer receiver.Close()
+
+	trace := startImportTrace(batchID, "stage")
+	file := &ImportBatchFile{Path: filePath, Size: int64(len(fileData))}
+	_, err := archiveRPC(trace.context(context.Background()), receiver.URL,
+		"stage/file", importArchiveManifest{BatchID: batchID}, "jpg", file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace.finish(nil, nil)
+	if strings.Contains(output.String(), "private-photo.jpg") {
+		t.Fatal("trace contains a local filename")
+	}
+	var rpc map[string]any
+	for _, line := range strings.Split(output.String(), "\n") {
+		_, raw, ok := strings.Cut(line, "import.trace ")
+		if !ok {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(raw), &event); err != nil {
+			t.Fatal(err)
+		}
+		if event["event"] == "stage/file" {
+			rpc = event
+		}
+	}
+	requestID := <-requestIDs
+	if !validImportBatchID(requestID) || rpc["request_id"] != requestID ||
+		rpc["batch_id"] != batchID || rpc["file_bytes"] != float64(len(fileData)) ||
+		rpc["http_status"] != float64(http.StatusOK) || rpc["jpg_staged"] != true {
+		t.Fatalf("trace did not describe the request: %#v", rpc)
+	}
 }
 
 func TestScanImportBatchMixedSourcesAndCoveredDifference(t *testing.T) {
@@ -141,11 +207,11 @@ func TestLocalRecycleResumeAndRestoreCollision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = stageImportRecycle(source, staged, digest)
+	err = stageImportRecycle(source, staged, digest, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = stageImportRecycle(source, staged, digest)
+	err = stageImportRecycle(source, staged, digest, nil)
 	if err != nil {
 		t.Fatalf("resume staging: %v", err)
 	}
@@ -312,7 +378,7 @@ func TestRecycleDirectoryRejectsUnrelatedFiles(t *testing.T) {
 		{Source: source, Relative: "original.jpg", SHA256: digest},
 	}}
 	target := filepath.Join(group.Directory, group.Files[0].Relative)
-	if err := stageImportRecycle(source, target, digest); err != nil {
+	if err := stageImportRecycle(source, target, digest, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := verifyRecycleDirectory(group); err != nil {
@@ -371,7 +437,7 @@ func TestIncompleteRecycleMovesBackBeforeReplanning(t *testing.T) {
 	}
 	old := filepath.Join(root, ".photo-agent-recycle", "old-reject")
 	oldFile := filepath.Join(old, "originals", "a.jpg")
-	if err := stageImportRecycle(source, oldFile, digest); err != nil {
+	if err := stageImportRecycle(source, oldFile, digest, nil); err != nil {
 		t.Fatal(err)
 	}
 	batch := &ImportBatch{Recycling: []ImportRecycleGroup{{Kind: "discarded", Status: "pending", Directory: old,
@@ -401,7 +467,7 @@ func TestUncertainLegacyRecycleIsNotReplanned(t *testing.T) {
 		t.Fatal(err)
 	}
 	group := &batch.Recycling[0]
-	if err := runImportRecycle(group, selected, save); err != nil {
+	if err := runImportRecycle(group, selected, save, nil); err != nil {
 		t.Fatal(err)
 	}
 	if group.Status != "uncertain" || len(group.Files) != 1 || group.Files[0].Status != "staged" {

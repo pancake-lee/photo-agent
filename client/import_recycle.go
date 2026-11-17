@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 type ImportRecycleFile struct {
@@ -71,7 +72,7 @@ func importRecycleEligible(entry ImportBatchEntry, kind string) bool {
 	return kind == "discarded" && entry.Decision == batchDiscarded && entry.Origin == "manual"
 }
 
-func verifyArchivedImportForRecycle(batch *ImportBatch) map[string]string {
+func verifyArchivedImportForRecycle(batch *ImportBatch, trace *importTrace) map[string]string {
 	failures := make(map[string]string)
 	for _, entry := range batch.Entries {
 		if !importRecycleEligible(entry, "imported") {
@@ -79,7 +80,7 @@ func verifyArchivedImportForRecycle(batch *ImportBatch) map[string]string {
 		}
 		receipt := entry.Upload
 		req := entry.archiveManifest(batch.Activity)
-		result, err := archiveRPC(context.Background(), receipt.Server, "preview", req, "", nil)
+		result, err := archiveRPC(trace.context(context.Background()), receipt.Server, "preview", req, "", nil)
 		if err == nil && (!result.Verified || result.PhotoID != receipt.PhotoID) {
 			err = fmt.Errorf("服务器未核验该照片及所需的原片")
 		}
@@ -93,7 +94,9 @@ func verifyArchivedImportForRecycle(batch *ImportBatch) map[string]string {
 					// A previous attempt may have already staged it.
 					continue
 				}
+				start := time.Now()
 				err = verifyRecycleDigest(file.Path, file.SHA256)
+				trace.add("verify_archived_local_hash", start, file.Size)
 				if err != nil {
 					break
 				}
@@ -191,8 +194,20 @@ func importRecycleDirectory(batch *ImportBatch, parent, kind string) (string, er
 	}
 }
 
-func (a *App) RecycleImportFiles(id, kind string, paths []string) (*ImportBatch, error) {
+func (a *App) RecycleImportFiles(id, kind string, paths []string) (_ *ImportBatch, retErr error) {
+	phase := "recycle"
+	if kind == "discarded" {
+		phase = "recycle_reject"
+	}
+	if kind == "imported" {
+		phase = "recycle_keep"
+	}
+	trace := startImportTrace(id, phase)
+	counters := map[string]any{"files": len(paths)}
+	defer func() { trace.finish(retErr, counters) }()
+	start := time.Now()
 	a.batchMu.Lock()
+	trace.add("batch_lock_wait", start, 0)
 	defer a.batchMu.Unlock()
 	root := importBatchRoot()
 	batch, err := loadImportBatch(root, id)
@@ -227,8 +242,10 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string) (*ImportBatch,
 	if matched != len(selected) {
 		return nil, fmt.Errorf("清理清单已变化，请重新预览")
 	}
-	save := func() error { return saveImportBatch(root, batch) }
+	save := func() error { return trace.save(root, batch) }
+	start = time.Now()
 	err = restoreMisplacedRecycleFiles(batch, kind, selected, save)
+	trace.add("restore_old_groups", start, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +260,8 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string) (*ImportBatch,
 	}
 	var unverified map[string]string
 	if kind == "imported" {
-		unverified = verifyArchivedImportForRecycle(batch)
+		unverified = verifyArchivedImportForRecycle(batch, trace)
+		counters["unverified_files"] = len(unverified)
 	}
 	var newlyPending []*ImportBatchFile
 	for _, file := range eligible {
@@ -265,7 +283,9 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string) (*ImportBatch,
 		}
 		newlyPending = append(newlyPending, file)
 	}
+	start = time.Now()
 	planImportRecycleGroups(batch, kind, newlyPending, importRecycleVolume)
+	trace.add("plan_recycle_groups", start, 0)
 	err = save()
 	if err != nil {
 		return nil, err
@@ -275,11 +295,22 @@ func (a *App) RecycleImportFiles(id, kind string, paths []string) (*ImportBatch,
 		if group.Kind != kind || (group.Status != "pending" && group.Status != "sending") {
 			continue
 		}
-		err = runImportRecycle(group, selected, save)
+		err = runImportRecycle(group, selected, save, trace)
 		if err != nil {
 			return nil, err
 		}
 	}
+	pendingPaths := make(map[string]bool)
+	for _, file := range pendingImportRecycle(batch, kind) {
+		pendingPaths[file.Path] = true
+	}
+	remaining := 0
+	for _, path := range paths {
+		if pendingPaths[path] {
+			remaining++
+		}
+	}
+	counters["remaining"], counters["failed"] = remaining, remaining
 	return batch, nil
 }
 
@@ -365,7 +396,7 @@ func restoreMisplacedRecycleFiles(batch *ImportBatch, kind string, selected map[
 	return nil
 }
 
-func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save func() error) error {
+func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save func() error, trace *importTrace) error {
 	if !slices.ContainsFunc(group.Files, func(file ImportRecycleFile) bool { return selected[file.Source] }) {
 		return nil
 	}
@@ -384,7 +415,9 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 			return err
 		}
 	}
+	start := time.Now()
 	_, err := importRecycleVolume(filepath.Dir(group.Directory))
+	trace.add("check_recycle_volume", start, 0)
 	if err != nil {
 		group.Error = err.Error()
 		return save()
@@ -404,7 +437,9 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 			return save()
 		}
 		dest := filepath.Join(group.Directory, item.Relative)
-		err := stageImportRecycle(item.Source, dest, item.SHA256)
+		start = time.Now()
+		err := stageImportRecycle(item.Source, dest, item.SHA256, trace)
+		trace.add("stage_recycle_file", start, 0)
 		if err == nil {
 			item.Status = "staged"
 		}
@@ -422,9 +457,13 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 			return save()
 		}
 	}
+	start = time.Now()
 	_, err = importRecycleVolume(group.Directory)
+	trace.add("check_recycle_volume", start, 0)
 	if err == nil {
+		start = time.Now()
 		err = verifyRecycleDirectory(group)
+		trace.add("verify_recycle_directory", start, 0)
 	}
 	if err != nil {
 		group.Error = err.Error()
@@ -435,7 +474,9 @@ func runImportRecycle(group *ImportRecycleGroup, selected map[string]bool, save 
 	if err != nil {
 		return err
 	}
+	start = time.Now()
 	err = sendImportDirectoryToRecycleBin(group.Directory)
+	trace.add("windows_recycle_bin", start, 0)
 	if err != nil {
 		group.Error = err.Error()
 		_, statErr := os.Lstat(group.Directory)
@@ -484,7 +525,7 @@ func verifyRecycleDigest(path, want string) error {
 	return nil
 }
 
-func stageImportRecycle(source, dest, digest string) error {
+func stageImportRecycle(source, dest, digest string, trace *importTrace) error {
 	_, sourceErr := os.Lstat(source)
 	if os.IsNotExist(sourceErr) {
 		return verifyRecycleDigest(dest, digest)
@@ -492,7 +533,9 @@ func stageImportRecycle(source, dest, digest string) error {
 	if sourceErr != nil {
 		return sourceErr
 	}
+	start := time.Now()
 	err := verifyRecycleDigest(source, digest)
+	trace.add("verify_recycle_source_hash", start, 0)
 	if err != nil {
 		return err
 	}
@@ -520,7 +563,10 @@ func stageImportRecycle(source, dest, digest string) error {
 	if err != nil {
 		return err
 	}
-	return moveVerifiedRecycleFile(source, dest, digest)
+	start = time.Now()
+	err = moveVerifiedRecycleFile(source, dest, digest)
+	trace.add("move_recycle_file", start, sourceInfo.Size())
+	return err
 }
 
 func moveVerifiedRecycleFile(source, target, digest string) error {

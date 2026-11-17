@@ -99,7 +99,10 @@ func importBurstInputs(batch *ImportBatch, server string) []reviewBurstInput {
 	return inputs
 }
 
-func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
+func (a *App) GroupImportBatch(id, server string) (_ *ImportBatch, retErr error) {
+	trace := startImportTrace(id, "burst")
+	counters := map[string]any{}
+	defer func() { trace.finish(retErr, counters) }()
 	a.burstMu.Lock()
 	if a.cancelBurst != nil {
 		a.burstMu.Unlock()
@@ -132,7 +135,9 @@ func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
 		Inputs  []reviewBurstInput `json:"inputs"`
 	}{id, inputs}
 	// Obtain the job ID even if cancellation arrives while the request starts.
+	start := time.Now()
 	err = reviewHTTP(context.Background(), server, "burst/start", request, &job)
+	trace.add("start_job", start, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +145,7 @@ func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
 		return nil, fmt.Errorf("服务器未返回连拍计算任务编号")
 	}
 	startedID := job.ID
+	counters["job_id"], counters["files"] = startedID, len(inputs)
 	defer func() {
 		if job.State == "running" && ctx.Err() != nil {
 			var result map[string]bool
@@ -150,6 +156,7 @@ func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
 	}()
 	for {
 		job.Progress.BatchID = id
+		counters["failed"] = job.Progress.Failed
 		if a.ctx != nil {
 			runtime.EventsEmit(a.ctx, "import:burst", job.Progress)
 		}
@@ -180,7 +187,9 @@ func (a *App) GroupImportBatch(id, server string) (*ImportBatch, error) {
 		case <-ticker.C:
 		}
 		var next reviewBurstJob
+		start := time.Now()
 		err = reviewHTTP(ctx, server, "burst/status?id="+url.QueryEscape(startedID), nil, &next)
+		trace.add("poll_job", start, 0)
 		if err != nil {
 			return nil, err
 		}

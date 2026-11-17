@@ -212,3 +212,13 @@ Go 后端监听 `Http.Addr`，Python Agent 监听 `Agent.Addr`，Web 前端监�
 「继续已有批次」只显示可以继续导入的批次。废弃中途停止的批次时，点「清理批次」，勾选后确认废弃。服务器暂存清理失败时，在同一入口重试。
 
 确认回收后，客户端在原片所在的各个目录归集文件并移入 Windows 回收站。需要还原时，在回收站还原对应的 `批次名-reject` 或 `批次名-keep` 目录。服务器回收项在「图片管理 → 最近删除」恢复，保留 30 天。
+
+### 导入性能记录
+
+客户端和 Go 后端更新后，用一批包含 JPG、配对 NEF 和废片的照片走完导入。提取日志里以 `import.trace` 标记的记录。
+
+- Windows 客户端日志位于 `%APPDATA%\photo-agent\photo-agent.log`，可在 PowerShell 运行 `Select-String -Path "$env:APPDATA\photo-agent\photo-agent.log" -Pattern 'import\.trace'`。
+- 使用 `make start` 启动的 Go 后端可运行 `rg 'import\.trace' logs/backend.log`。其他部署方式从 Go 服务日志提取相同记录。
+- 从最近一次 `phase=scan` 的 JSON 记录取 `batch_id`，用它筛选两端日志。用 `request_id` 对照上传或归档 RPC 与服务端处理，用 `job_id` 对照客户端连拍等待和服务端计算。
+
+`duration_ms` 是阶段总耗时，`spans` 记录细分动作的次数、累计时间及适用的字节数。子动作可嵌套，后台缩略图和特征计算可与上传重叠。客户端的 `request_written_ms` 从请求开始算起，包括连接和读取本地文件，服务端的 `stream_hash_write` 同时覆盖接收、哈希和写入。比较系统文件管理器操作时，记录文件数、总字节、源盘与目标和是否为重试，避免用不同条件的批次计算差距。

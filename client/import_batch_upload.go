@@ -8,9 +8,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -88,8 +90,42 @@ func (entry ImportBatchEntry) archiveManifest(activity string) importArchiveMani
 func archiveRPC(
 	ctx context.Context, base, endpoint string, manifest importArchiveManifest,
 	kind string, file *ImportBatchFile,
-) (ImportBatchUpload, error) {
+) (_ ImportBatchUpload, retErr error) {
 	var result ImportBatchUpload
+	trace := importTraceFrom(ctx)
+	var requestID string
+	var status int
+	if trace != nil {
+		start := time.Now()
+		requestID, _ = newImportBatchID()
+		bytes := int64(0)
+		if file != nil {
+			bytes = file.Size
+		}
+		var bodyWritten, firstByte atomic.Int64
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			WroteRequest: func(info httptrace.WroteRequestInfo) {
+				if info.Err == nil {
+					bodyWritten.Store(time.Since(start).Microseconds())
+				}
+			},
+			GotFirstResponseByte: func() { firstByte.Store(time.Since(start).Microseconds()) },
+		})
+		defer func() {
+			trace.add("rpc_"+endpoint, start, bytes)
+			fields := map[string]any{"batch_id": trace.batchID, "phase": trace.phase,
+				"event": endpoint, "request_id": requestID, "http_status": status, "started_at": start.UTC(),
+				"file_bytes": bytes, "duration_ms": traceMillis(time.Since(start)),
+				"outcome": importTraceOutcome(retErr), "jpg_staged": result.JPGStaged, "verified": result.Verified}
+			if written := bodyWritten.Load(); written > 0 {
+				fields["request_written_ms"] = float64(written) / 1000
+			}
+			if first := firstByte.Load(); first > 0 {
+				fields["first_response_ms"] = float64(first) / 1000
+			}
+			writeImportTrace(fields)
+		}()
+	}
 	payload, err := json.Marshal(manifest)
 	if err != nil {
 		return result, err
@@ -128,6 +164,10 @@ func archiveRPC(
 		return result, err
 	}
 	req.Header.Set("Content-Type", contentType)
+	if trace != nil {
+		req.Header.Set("X-Photo-Import-Request-ID", requestID)
+		req.Header.Set("X-Photo-Import-Batch-ID", trace.batchID)
+	}
 	timeout := uploadTimeout
 	if file == nil && endpoint == "preview" {
 		timeout = 15 * time.Second
@@ -138,6 +178,7 @@ func archiveRPC(
 		return result, err
 	}
 	defer resp.Body.Close()
+	status = resp.StatusCode
 	if resp.StatusCode != http.StatusOK {
 		var failure struct {
 			Error string `json:"error"`
@@ -153,7 +194,11 @@ func archiveRPC(
 	return result, err
 }
 
-func (a *App) PreviewImportUploads(id, serverURL string) ([]ImportBatchPlan, error) {
+func (a *App) PreviewImportUploads(id, serverURL string) (_ []ImportBatchPlan, retErr error) {
+	trace := startImportTrace(id, "archive_preview")
+	ctx := trace.context(context.Background())
+	counters := map[string]any{}
+	defer func() { trace.finish(retErr, counters) }()
 	batch, err := a.GetImportBatch(id)
 	if err != nil {
 		return nil, err
@@ -173,9 +218,9 @@ func (a *App) PreviewImportUploads(id, serverURL string) ([]ImportBatchPlan, err
 		if entry.NEF != nil {
 			plan.NEF = entry.NEF.Path
 		}
-		plan.Plan, err = archiveRPC(context.Background(), serverURL, "preview", req, "", nil)
+		plan.Plan, err = archiveRPC(ctx, serverURL, "preview", req, "", nil)
 		if err == nil {
-			err = verifyImportLocalFiles(entry, plan.Plan)
+			err = verifyImportLocalFiles(entry, plan.Plan, trace)
 		}
 		if err != nil {
 			plan.Plan.Error = err.Error()
@@ -199,7 +244,7 @@ func (a *App) PreviewImportUploads(id, serverURL string) ([]ImportBatchPlan, err
 			req := entry.archiveManifest(batch.Activity)
 			req.BatchID = id
 			req.Name = importNameWithDigest(req)
-			plan.Plan, err = archiveRPC(context.Background(), serverURL, "preview", req, "", nil)
+			plan.Plan, err = archiveRPC(ctx, serverURL, "preview", req, "", nil)
 			if err != nil {
 				plan.Plan.Error = err.Error()
 				continue
@@ -212,6 +257,13 @@ func (a *App) PreviewImportUploads(id, serverURL string) ([]ImportBatchPlan, err
 		}
 		assigned[target] = key
 	}
+	failed := 0
+	for _, plan := range plans {
+		if plan.Plan.Error != "" {
+			failed++
+		}
+	}
+	counters["files"], counters["failed"] = len(plans), failed
 	return plans, nil
 }
 
@@ -227,7 +279,7 @@ func importNameWithDigest(req importArchiveManifest) string {
 	return stem + "_" + suffix + ".jpg"
 }
 
-func verifyImportLocalFiles(entry ImportBatchEntry, result ImportBatchUpload) error {
+func verifyImportLocalFiles(entry ImportBatchEntry, result ImportBatchUpload, trace *importTrace) error {
 	for i, file := range []*ImportBatchFile{entry.JPG, entry.NEF} {
 		if i == 0 && (result.JPGReady || result.JPGStaged) || i == 1 && result.NEFReady {
 			continue
@@ -238,7 +290,9 @@ func verifyImportLocalFiles(entry ImportBatchEntry, result ImportBatchUpload) er
 		if i == 0 {
 			return fmt.Errorf("请先上传 JPG 到服务器暂存区: %s", file.Path)
 		}
+		start := time.Now()
 		digest, err := importFileDigest(file.Path)
+		trace.add("local_nef_hash", start, file.Size)
 		if err != nil {
 			return fmt.Errorf("%s: %w", file.Path, err)
 		}
@@ -249,8 +303,13 @@ func verifyImportLocalFiles(entry ImportBatchEntry, result ImportBatchUpload) er
 	return nil
 }
 
-func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (*ImportBatch, error) {
+func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (_ *ImportBatch, retErr error) {
+	trace := startImportTrace(id, "archive")
+	counters := map[string]any{"files": len(plans)}
+	defer func() { trace.finish(retErr, counters) }()
+	wait := time.Now()
 	a.batchMu.Lock()
+	trace.add("batch_lock_wait", wait, 0)
 	defer a.batchMu.Unlock()
 	root := importBatchRoot()
 	batch, err := loadImportBatch(root, id)
@@ -270,7 +329,9 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 			byID[plan.EntryID] = plan
 		}
 	}
-	ctx := context.Background()
+	ctx := trace.context(context.Background())
+	failed := 0
+	defer func() { counters["failed"] = failed }()
 	completed := 0
 	for i := range batch.Entries {
 		entry := &batch.Entries[i]
@@ -284,14 +345,14 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 		saveReceipt := func(receipt ImportBatchUpload) error {
 			receipt.Server = serverURL
 			entry.Upload = &receipt
-			return saveImportBatch(root, batch)
+			return trace.save(root, batch)
 		}
 		current, err := archiveRPC(ctx, serverURL, "preview", req, "", nil)
 		if err == nil && current.Target != req.Target {
 			err = fmt.Errorf("服务器目标已变，请重新预览")
 		}
 		if err == nil {
-			err = verifyImportLocalFiles(*entry, current)
+			err = verifyImportLocalFiles(*entry, current, trace)
 		}
 		if err == nil && !current.JPGReady {
 			before := current
@@ -319,6 +380,7 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 			}
 		}
 		if err != nil {
+			failed++
 			current.Error = err.Error()
 			current.Verified = false
 			if current.Target == "" {

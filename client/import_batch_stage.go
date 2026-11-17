@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -13,8 +14,13 @@ func (entry ImportBatchEntry) canStage() bool {
 		(entry.Upload == nil || !entry.Upload.Verified)
 }
 
-func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
+func (a *App) StageImportJPGs(id, server string) (_ *ImportBatch, retErr error) {
+	trace := startImportTrace(id, "stage")
+	counters := map[string]any{}
+	defer func() { trace.finish(retErr, counters) }()
+	wait := time.Now()
 	a.batchMu.Lock()
+	trace.add("batch_lock_wait", wait, 0)
 	defer a.batchMu.Unlock()
 	root := importBatchRoot()
 	batch, err := loadImportBatch(root, id)
@@ -33,7 +39,7 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 			batch.StageServers = append(batch.StageServers, entry.StagedServer)
 		}
 	}
-	err = saveImportBatch(root, batch)
+	err = trace.save(root, batch)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +50,10 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 		}
 	}
 	completed := 0
-	ctx := context.Background()
+	ctx := trace.context(context.Background())
+	reused, failed := 0, 0
+	counters["files"] = total
+	defer func() { counters["reused"], counters["failed"] = reused, failed }()
 	for i := range batch.Entries {
 		entry := &batch.Entries[i]
 		if !entry.canStage() {
@@ -54,10 +63,13 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 		req := entry.archiveManifest(batch.Activity)
 		req.BatchID, req.NEF, req.NEFTime = id, "", nil
 		status, stageErr := archiveRPC(ctx, server, "stage/status", req, "", nil)
+		if stageErr == nil && status.JPGStaged {
+			reused++
+		}
 		if stageErr == nil && !slices.Contains(batch.StageServers, server) {
 			// Persist the reachable staging server before it can receive any files.
 			batch.StageServers = append(batch.StageServers, server)
-			err = saveImportBatch(root, batch)
+			err = trace.save(root, batch)
 			if err != nil {
 				return nil, err
 			}
@@ -69,6 +81,7 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 			stageErr = fmt.Errorf("服务器尚未核验暂存 JPG")
 		}
 		if stageErr != nil {
+			failed++
 			entry.StagedServer, entry.StageError = "", stageErr.Error()
 		} else {
 			entry.StagedServer, entry.StageError = server, ""
@@ -76,7 +89,7 @@ func (a *App) StageImportJPGs(id, server string) (*ImportBatch, error) {
 		if wasReadyForGrouping != (entry.StagedServer == server && entry.canUpload()) {
 			batch.Bursts = nil
 		}
-		err = saveImportBatch(root, batch)
+		err = trace.save(root, batch)
 		if err != nil {
 			return nil, err
 		}

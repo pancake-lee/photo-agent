@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,7 +76,9 @@ func getImportStage(req archiveImportRequest) (archiveImportResult, error) {
 	if err != nil {
 		return result, err
 	}
+	start := time.Now()
 	result.JPGStaged, err = importStageReady(req.BatchID, req.JPG)
+	req.trace.add("verify_staged_jpg", start, 0)
 	return result, err
 }
 
@@ -85,6 +88,8 @@ func (s *PhotoServer) importStageStatus(ctx khttp.Context) error {
 	if err != nil {
 		return ctx.Result(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+	req.trace = startPhotoImportTrace(ctx, req.BatchID, "stage_status")
+	defer func() { req.trace.finish(err, nil) }()
 	result, err := getImportStage(req)
 	if err != nil {
 		return apiPhotoArchiveError(ctx, err)
@@ -100,11 +105,13 @@ func (s *PhotoServer) writeImportStage(ctx khttp.Context) error {
 	if file.FormName() != "jpg" || !req.valid() || req.NEF != "" {
 		return ctx.Result(http.StatusBadRequest, map[string]string{"error": "暂存仅接收有效的 JPG"})
 	}
+	req.trace = startPhotoImportTrace(ctx, req.BatchID, "stage_upload")
+	defer func() { req.trace.finish(err, nil) }()
 	result, err := saveStagedImport(req, file)
 	if err != nil {
 		return apiPhotoArchiveError(ctx, err)
 	}
-	prepareStagedImport(ctx.Request().Context(), filepath.Join(result.Root, result.Target))
+	prepareStagedImport(ctx.Request().Context(), filepath.Join(result.Root, result.Target), req.trace)
 	return ctx.Result(http.StatusOK, result)
 }
 
@@ -115,43 +122,61 @@ func saveStagedImport(req archiveImportRequest, file io.Reader) (archiveImportRe
 	if err != nil || result.JPGStaged {
 		return result, err
 	}
-	err = writeVerifiedArchiveFile(result.Root, result.Target, req.JPG, req.JPGTime, file, nil)
+	err = writeVerifiedArchiveFile(result.Root, result.Target, req.JPG, req.JPGTime, file, nil, req.trace)
 	if err != nil && !os.IsExist(err) {
 		return result, err
 	}
 	return getImportStage(req)
 }
 
-func prepareStagedImport(ctx context.Context, source string) {
+func prepareStagedImport(ctx context.Context, source string, trace *photoImportTrace) {
+	wait := time.Now()
+	defer func() { trace.add("preview_slot_wait", wait, 0) }()
 	select {
 	case importStagePreparation <- struct{}{}:
 	case <-ctx.Done():
 		return
 	}
+	prep := trace.fork("stage_prepare_preview")
 	go func() {
+		var err error
+		defer func() { prep.finish(err, nil) }()
 		defer func() { <-importStagePreparation }()
 		importStageFiles.RLock()
 		defer importStageFiles.RUnlock()
 		info, err := os.Lstat(source)
-		if err != nil || !info.Mode().IsRegular() {
+		if err != nil {
+			return
+		}
+		if !info.Mode().IsRegular() {
+			err = fmt.Errorf("暂存 JPG 不是普通文件")
 			return
 		}
 		work, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		// Requests for an uncached preview or grouping can retry the same work.
-		_, _ = stagedImportThumbnail(work, source)
-		_, _ = stagedImportGray(work, source)
+		start := time.Now()
+		_, thumbErr := stagedImportThumbnail(work, source, prep)
+		prep.add("thumbnail", start, 0)
+		start = time.Now()
+		_, grayErr := stagedImportGray(work, source, prep)
+		prep.add("gray_feature", start, 0)
+		err = errors.Join(thumbErr, grayErr)
 	}()
 }
 
-func stagedImportGray(ctx context.Context, source string) ([]float64, error) {
+func stagedImportGray(ctx context.Context, source string, trace *photoImportTrace) ([]float64, error) {
+	start := time.Now()
 	target := source + ".gray.json"
 	var gray []float64
 	raw, err := os.ReadFile(target)
 	if err == nil && json.Unmarshal(raw, &gray) == nil && len(gray) == burstGrayW*burstGrayH {
+		trace.add("gray_cache_hit", start, 0)
 		return gray, nil
 	}
+	start = time.Now()
 	gray, err = loadGrayMatrixContext(ctx, source)
+	trace.add("gray_generate", start, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -228,9 +253,13 @@ func (s *PhotoServer) importStageImage(ctx khttp.Context) error {
 	}
 	ctx.Response().Header().Set("Cache-Control", "no-store")
 	if query.Get("size") == "thumbnail" {
+		trace := startPhotoImportTrace(ctx, query.Get("batch_id"), "stage_preview_on_demand")
 		importStageFiles.RLock()
-		thumbnail, err := stagedImportThumbnail(ctx.Request().Context(), path)
+		thumbnail, err := stagedImportThumbnail(ctx.Request().Context(), path, trace)
 		importStageFiles.RUnlock()
+		if trace.spans["thumbnail_cache_hit"].Count == 0 {
+			trace.finish(err, nil)
+		}
 		if err == nil {
 			ctx.Response().Header().Set("Cache-Control", "private, max-age=3600")
 			path = thumbnail
@@ -240,7 +269,8 @@ func (s *PhotoServer) importStageImage(ctx khttp.Context) error {
 	return nil
 }
 
-func stagedImportThumbnail(ctx context.Context, source string) (string, error) {
+func stagedImportThumbnail(ctx context.Context, source string, trace *photoImportTrace) (string, error) {
+	start := time.Now()
 	dir := filepath.Join(filepath.Dir(source), "thumbnails")
 	err := os.Mkdir(dir, 0755)
 	if err != nil && !os.IsExist(err) {
@@ -256,6 +286,7 @@ func stagedImportThumbnail(ctx context.Context, source string) (string, error) {
 	target := filepath.Join(dir, filepath.Base(source))
 	info, err = os.Lstat(target)
 	if err == nil && info.Mode().IsRegular() {
+		trace.add("thumbnail_cache_hit", start, 0)
 		return target, nil
 	}
 
@@ -272,7 +303,9 @@ func stagedImportThumbnail(ctx context.Context, source string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(thumbnailCtx, "convert", source, "-auto-orient",
 		"-resize", "512x512>", "-strip", "-quality", "82", temp.Name())
+	start = time.Now()
 	err = cmd.Run()
+	trace.add("thumbnail_generate", start, 0)
 	if err != nil {
 		return "", err
 	}
@@ -281,7 +314,7 @@ func stagedImportThumbnail(ctx context.Context, source string) (string, error) {
 }
 
 func (s *PhotoServer) archiveStagedJPG(ctx khttp.Context) error {
-	return importArchiveJSON(ctx, func(app *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
+	return importArchiveJSON(ctx, "stage_archive", func(app *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
 		importStageFiles.RLock()
 		defer importStageFiles.RUnlock()
 		result, _, err := resolveArchiveImport(app, req)
@@ -307,7 +340,7 @@ func (s *PhotoServer) archiveStagedJPG(ctx khttp.Context) error {
 		}
 		defer input.Close()
 		reserve := func() error { return data.PhotoDAO.ReserveImportTarget(app, req.key(), result.Target) }
-		err = writeVerifiedArchiveFile(result.Root, result.Target, req.JPG, req.JPGTime, input, reserve)
+		err = writeVerifiedArchiveFile(result.Root, result.Target, req.JPG, req.JPGTime, input, reserve, req.trace)
 		if err != nil {
 			return result, err
 		}

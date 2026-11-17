@@ -103,6 +103,7 @@ func (s *PhotoServer) startImportReviewBurst(ctx khttp.Context) error {
 			delete(importReviewBurstJobs.jobs, id)
 		}
 	}
+	trace := startPhotoImportTrace(ctx, req.BatchID, "burst_compute")
 	jobCtx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	job := &importReviewBurstJob{ID: putil.UUID(), State: "running", cancel: cancel, inputKey: inputKey, batchID: req.BatchID,
 		Progress: importReviewBurstProgress{Total: len(req.Inputs), Message: "准备计算连拍组"}}
@@ -118,18 +119,21 @@ func (s *PhotoServer) startImportReviewBurst(ctx khttp.Context) error {
 			importReviewBurstJobs.Unlock()
 		}
 		work := filepath.Join(root, filepath.Dir(target))
-		groups, err := computeImportReviewBursts(jobCtx, work, req.Inputs, config, update)
+		groups, err := computeImportReviewBursts(jobCtx, work, req.Inputs, config, update, trace)
 		importReviewBurstJobs.Lock()
-		defer importReviewBurstJobs.Unlock()
+		failed := job.Progress.Failed
 		job.finished = time.Now()
 		if err != nil {
 			job.State, job.Error = "failed", err.Error()
 			if jobCtx.Err() == context.Canceled {
 				job.State = "canceled"
 			}
-			return
+		} else {
+			job.State, job.Groups = "completed", &groups
 		}
-		job.State, job.Groups = "completed", &groups
+		importReviewBurstJobs.Unlock()
+		trace.finish(err, map[string]any{"job_id": job.ID, "files": len(req.Inputs), "failed": failed,
+			"fine_groups": len(groups.Fine), "coarse_groups": len(groups.Coarse)})
 	}()
 	return ctx.Result(http.StatusOK, result)
 }
@@ -166,7 +170,7 @@ func (s *PhotoServer) cancelImportReviewBurst(ctx khttp.Context) error {
 // Missing capture times and files that cannot be read remain separate cards.
 func computeImportReviewBursts(
 	ctx context.Context, dir string, inputs []importReviewBurstInput, config burstConfig,
-	update func(importReviewBurstProgress),
+	update func(importReviewBurstProgress), trace *photoImportTrace,
 ) (reviewBurstGroups, error) {
 	list := make([]burstPhotoInfo, 0, len(inputs))
 	progress := importReviewBurstProgress{Total: len(inputs), Message: "计算连拍组"}
@@ -177,9 +181,13 @@ func computeImportReviewBursts(
 		progress.Done++
 		if input.ShotAt.After(time.Unix(946684800, 0)) {
 			path := filepath.Join(dir, input.SHA256+".jpg")
-			digest, _, err := digestFile(path)
+			start := time.Now()
+			digest, bytes, err := digestFile(path)
+			trace.add("verify_staged_jpg", start, bytes)
 			if err == nil && digest == input.SHA256 {
-				gray, grayErr := stagedImportGray(ctx, path)
+				start = time.Now()
+				gray, grayErr := stagedImportGray(ctx, path, trace)
+				trace.add("load_gray_feature", start, 0)
 				if grayErr == nil {
 					photo := &data.PhotoDO{ID: input.ID, ShotAt: input.ShotAt}
 					list = append(list, burstPhotoInfo{photo: photo, gray: gray, valid: true})
@@ -195,11 +203,13 @@ func computeImportReviewBursts(
 	if err := ctx.Err(); err != nil {
 		return reviewBurstGroups{}, err
 	}
+	start := time.Now()
 	sort.SliceStable(list, func(i, j int) bool { return list[i].photo.ShotAt.Before(list[j].photo.ShotAt) })
 	result := reviewBurstGroups{
 		Fine:   reviewBurstMemberIDs(splitBurstGroups(list, config.Fine)),
 		Coarse: reviewBurstMemberIDs(splitBurstGroups(list, config.Coarse)),
 	}
+	trace.add("group_similarity", start, 0)
 	progress.Message = "连拍组计算完成"
 	update(progress)
 	return result, nil

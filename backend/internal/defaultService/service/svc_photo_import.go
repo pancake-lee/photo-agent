@@ -22,6 +22,7 @@ import (
 
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/pancake-lee/pgo/pkg/papp"
+	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
 )
 
@@ -37,6 +38,77 @@ func archiveOperationContext(ctx context.Context) (*papp.AppCtx, context.CancelF
 
 var photoArchiveMu sync.Mutex
 
+type photoImportSpan struct {
+	Count int     `json:"count"`
+	MS    float64 `json:"ms"`
+	MaxMS float64 `json:"max_ms"`
+	Bytes int64   `json:"bytes,omitempty"`
+}
+
+type photoImportTrace struct {
+	batchID, requestID, phase string
+	start                     time.Time
+	spans                     map[string]photoImportSpan
+}
+
+func startPhotoImportTrace(ctx khttp.Context, batchID, phase string) *photoImportTrace {
+	if !validReviewBatchID(batchID) {
+		batchID = ctx.Request().Header.Get("X-Photo-Import-Batch-ID")
+		if !validReviewBatchID(batchID) {
+			batchID = ""
+		}
+	}
+	requestID := ctx.Request().Header.Get("X-Photo-Import-Request-ID")
+	if !validReviewBatchID(requestID) {
+		requestID = putil.UUID()
+	}
+	ctx.Response().Header().Set("X-Photo-Import-Request-ID", requestID)
+	return (&photoImportTrace{batchID: batchID, requestID: requestID}).fork(phase)
+}
+
+func (t *photoImportTrace) fork(phase string) *photoImportTrace {
+	return &photoImportTrace{batchID: t.batchID, requestID: t.requestID, phase: phase,
+		start: time.Now(), spans: make(map[string]photoImportSpan)}
+}
+
+func (t *photoImportTrace) add(name string, start time.Time, bytes int64) {
+	if t == nil {
+		return
+	}
+	span := t.spans[name]
+	ms := float64(time.Since(start).Microseconds()) / 1000
+	span.Count++
+	span.MS += ms
+	span.MaxMS = max(span.MaxMS, ms)
+	span.Bytes += bytes
+	t.spans[name] = span
+}
+
+func (t *photoImportTrace) finish(err error, fields map[string]any) {
+	if fields == nil {
+		fields = make(map[string]any)
+	}
+	fields["side"], fields["batch_id"], fields["request_id"] = "server", t.batchID, t.requestID
+	fields["phase"], fields["spans"] = t.phase, t.spans
+	fields["duration_ms"] = float64(time.Since(t.start).Microseconds()) / 1000
+	fields["started_at"] = t.start.UTC()
+	outcome := "ok"
+	if errors.Is(err, context.Canceled) {
+		outcome = "canceled"
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		outcome = "timeout"
+	} else if err != nil {
+		outcome = "error"
+	} else if failed, _ := fields["failed"].(int); failed > 0 {
+		outcome = "partial"
+	}
+	fields["outcome"] = outcome
+	raw, err := json.Marshal(fields)
+	if err == nil {
+		plogger.Infof("import.trace %s", raw)
+	}
+}
+
 type archiveImportRequest struct {
 	BatchID  string     `json:"batch_id,omitempty"`
 	Activity string     `json:"activity"`
@@ -48,6 +120,7 @@ type archiveImportRequest struct {
 	JPGTime  time.Time  `json:"jpg_time"`
 	NEFTime  *time.Time `json:"nef_time,omitempty"`
 	Target   string     `json:"target,omitempty"`
+	trace    *photoImportTrace
 }
 
 type archiveImportResult struct {
@@ -159,6 +232,8 @@ func archiveFileState(root, rel, want string) (present, matching bool, err error
 func resolveArchiveImport(
 	ctx *papp.AppCtx, req archiveImportRequest,
 ) (archiveImportResult, *data.PhotoDO, error) {
+	start := time.Now()
+	defer func() { req.trace.add("resolve_archive", start, 0) }()
 	result := archiveImportResult{Root: conf.C.Storage.PhotoSrc, NEFReady: req.NEF == ""}
 	if !req.valid() {
 		return result, nil, fmt.Errorf("导入清单无效")
@@ -224,12 +299,16 @@ func resolveArchiveImport(
 		if actual != "" {
 			target = actual
 		}
+		check := time.Now()
 		jpgPresent, jpgReady, err := archiveFileState(conf.C.Storage.PhotoSrc, target, req.JPG)
+		req.trace.add("verify_archive_jpg", check, 0)
 		if err != nil {
 			return result, nil, err
 		}
 		nefTarget := strings.TrimSuffix(target, filepath.Ext(target)) + ".nef"
+		check = time.Now()
 		nefPresent, nefReady, err := archiveFileState(conf.C.Storage.PhotoSrc, nefTarget, req.NEF)
+		req.trace.add("verify_archive_nef", check, 0)
 		if err != nil {
 			return result, nil, err
 		}
@@ -262,7 +341,9 @@ func resolveArchiveImport(
 		}
 		result.Verified = state != nil && photo != nil && jpgReady && result.NEFReady && thumbPresent != ""
 		if req.BatchID != "" && !jpgReady {
+			check := time.Now()
 			result.JPGStaged, err = importStageReady(req.BatchID, req.JPG)
+			req.trace.add("verify_staged_jpg", check, 0)
 			if err != nil {
 				return result, nil, err
 			}
@@ -273,14 +354,18 @@ func resolveArchiveImport(
 }
 
 func importArchiveJSON(
-	ctx khttp.Context, execute func(*papp.AppCtx, archiveImportRequest) (archiveImportResult, error),
+	ctx khttp.Context, phase string, execute func(*papp.AppCtx, archiveImportRequest) (archiveImportResult, error),
 ) error {
 	var req archiveImportRequest
 	err := ctx.Bind(&req)
 	if err != nil {
 		return ctx.Result(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
+	req.trace = startPhotoImportTrace(ctx, req.BatchID, phase)
+	defer func() { req.trace.finish(err, nil) }()
+	wait := time.Now()
 	photoArchiveMu.Lock()
+	req.trace.add("archive_lock_wait", wait, 0)
 	defer photoArchiveMu.Unlock()
 	app, cancel := archiveOperationContext(ctx.Request().Context())
 	defer cancel()
@@ -292,14 +377,14 @@ func importArchiveJSON(
 }
 
 func (s *PhotoServer) previewArchiveImport(ctx khttp.Context) error {
-	return importArchiveJSON(ctx, func(app *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
+	return importArchiveJSON(ctx, "archive_preview", func(app *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
 		result, _, err := resolveArchiveImport(app, req)
 		return result, err
 	})
 }
 
 func writeVerifiedArchiveFile(
-	root, target, want string, mtime time.Time, reader io.Reader, reserve func() error,
+	root, target, want string, mtime time.Time, reader io.Reader, reserve func() error, trace *photoImportTrace,
 ) error {
 	dir := filepath.Join(root, filepath.Dir(target))
 	err := os.MkdirAll(dir, 0755)
@@ -312,7 +397,9 @@ func writeVerifiedArchiveFile(
 	}
 	defer os.Remove(temp.Name())
 	digest := sha256.New()
-	_, err = io.Copy(io.MultiWriter(temp, digest), reader)
+	start := time.Now()
+	bytes, err := io.Copy(io.MultiWriter(temp, digest), reader)
+	trace.add("stream_hash_write", start, bytes)
 	if err == nil && hex.EncodeToString(digest.Sum(nil)) != want {
 		err = fmt.Errorf("文件摘要不符: %s", target)
 	}
@@ -323,7 +410,9 @@ func writeVerifiedArchiveFile(
 		}
 	}
 	if err == nil {
+		start = time.Now()
 		err = temp.Sync()
+		trace.add("file_sync", start, 0)
 	}
 	err = errors.Join(err, temp.Close())
 	if err != nil {
@@ -334,13 +423,18 @@ func writeVerifiedArchiveFile(
 		return err
 	}
 	if reserve != nil {
+		start = time.Now()
 		err = reserve()
+		trace.add("reserve_path", start, 0)
 		if err != nil {
 			return err
 		}
 	}
 	dest := filepath.Join(root, target)
-	return os.Link(temp.Name(), dest)
+	start = time.Now()
+	err = os.Link(temp.Name(), dest)
+	trace.add("publish_file", start, 0)
+	return err
 }
 
 func readArchiveMultipart(ctx khttp.Context) (archiveImportRequest, *multipart.Part, error) {
@@ -372,7 +466,11 @@ func (s *PhotoServer) writeArchiveImport(ctx khttp.Context) error {
 		return ctx.Result(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
+	req.trace = startPhotoImportTrace(ctx, req.BatchID, "archive_file")
+	defer func() { req.trace.finish(err, nil) }()
+	wait := time.Now()
 	photoArchiveMu.Lock()
+	req.trace.add("archive_lock_wait", wait, 0)
 	defer photoArchiveMu.Unlock()
 	app, cancel := archiveOperationContext(ctx.Request().Context())
 	defer cancel()
@@ -387,13 +485,13 @@ func (s *PhotoServer) writeArchiveImport(ctx khttp.Context) error {
 		switch file.FormName() {
 		case "jpg":
 			if !result.JPGReady {
-				err = writeVerifiedArchiveFile(result.Root, result.Target, req.JPG, req.JPGTime, file, reserve)
+				err = writeVerifiedArchiveFile(result.Root, result.Target, req.JPG, req.JPGTime, file, reserve, req.trace)
 			}
 		case "nef":
 			if !result.JPGReady || result.NEFTarget == "" {
 				err = fmt.Errorf("请先上传配对的 JPG 并提供 NEF 清单")
 			} else if !result.NEFReady {
-				err = writeVerifiedArchiveFile(result.Root, result.NEFTarget, req.NEF, *req.NEFTime, file, reserve)
+				err = writeVerifiedArchiveFile(result.Root, result.NEFTarget, req.NEF, *req.NEFTime, file, reserve, req.trace)
 			}
 		default:
 			err = fmt.Errorf("未知上传文件类型")
@@ -410,7 +508,7 @@ func (s *PhotoServer) writeArchiveImport(ctx khttp.Context) error {
 }
 
 func (s *PhotoServer) finishArchiveImport(ctx khttp.Context) error {
-	return importArchiveJSON(ctx, finishVerifiedArchive)
+	return importArchiveJSON(ctx, "archive_finish", finishVerifiedArchive)
 }
 
 func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
@@ -437,8 +535,10 @@ func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveI
 		}
 		thumbDir := filepath.Join(conf.C.Storage.PhotoPath, folder)
 		limit := int64(conf.C.VLM.MaxImageSizeMB * 1024 * 1024)
+		start := time.Now()
 		err = processToPhotoPath(filepath.Join(result.Root, result.Target),
 			base, thumbDir, limit, &req.JPGTime)
+		req.trace.add("archive_thumbnail", start, 0)
 		if err != nil {
 			return result, err
 		}
@@ -459,7 +559,9 @@ func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveI
 		}
 		state.Favorite = state.Favorite || prior.Favorite
 	}
+	start := time.Now()
 	err = data.PhotoDAO.SaveVerifiedImport(ctx, row, state, existing)
+	req.trace.add("save_photo", start, 0)
 	if err != nil {
 		return result, err
 	}
