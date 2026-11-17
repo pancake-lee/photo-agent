@@ -11,10 +11,24 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func (a *App) ChooseImportSource() (string, error) {
+func (a *App) ChooseImportSource(lastDirectory string) (string, error) {
 	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "选择照片来源目录",
+		Title:            "选择照片来源目录",
+		DefaultDirectory: nearestExistingImportDirectory(lastDirectory),
 	})
+}
+
+func nearestExistingImportDirectory(path string) string {
+	for dir := filepath.Clean(path); filepath.IsAbs(dir); dir = filepath.Dir(dir) {
+		info, err := os.Stat(dir)
+		if err == nil && info.IsDir() {
+			return dir
+		}
+		if filepath.Dir(dir) == dir {
+			break
+		}
+	}
+	return ""
 }
 
 func (a *App) ListImportBatches() ([]ImportBatchSummary, error) {

@@ -97,7 +97,7 @@ export interface ImportBurstProgress {
 }
 
 interface ImportBatchApp {
-  ChooseImportSource(): Promise<string>
+  ChooseImportSource(lastDirectory: string): Promise<string>
   ListImportBatches(): Promise<ImportSummary[]>
   GetImportBatch(id: string): Promise<ImportBatch>
   ScanImportBatch(id: string, activity: string, sources: ImportSource[], complete: boolean, mode: ImportMode | ''): Promise<ImportBatch>

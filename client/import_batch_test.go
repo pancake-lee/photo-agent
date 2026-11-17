@@ -654,3 +654,21 @@ func TestScanRejectsSameOriginalAndFavoriteDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestNearestExistingImportDirectory(t *testing.T) {
+	root := t.TempDir()
+	existing := batchTestDir(t, root, "活动")
+	file := filepath.Join(existing, "export.txt")
+	writeFile(t, file, nil)
+	for _, test := range []struct{ path, want string }{
+		{existing, existing},
+		{filepath.Join(existing, "missing", "also-missing"), existing},
+		{file, existing},
+		{"", ""},
+		{"relative/directory", ""},
+	} {
+		if got := nearestExistingImportDirectory(test.path); got != test.want {
+			t.Errorf("default directory for %q = %q, want %q", test.path, got, test.want)
+		}
+	}
+}

@@ -338,8 +338,11 @@ function abandonBatches() {
 
 async function addSource(role: ImportSourceRole) {
   await perform('选择目录', async () => {
-    const picked = await getImportBatchApp().ChooseImportSource()
-    if (!picked || sources.value.some((source) => source.path === picked && source.role === role)) return
+    const memoryKey = `photo-agent-import-directory:${role}`
+    const picked = await getImportBatchApp().ChooseImportSource(localStorage.getItem(memoryKey) ?? '')
+    if (!picked) return
+    localStorage.setItem(memoryKey, picked)
+    if (sources.value.some((source) => source.path === picked && source.role === role)) return
     sources.value.push({ path: picked, role })
     if (!activity.value.trim() && role === 'local') {
       const folder = picked.split(/[\\/]/).filter(Boolean).at(-1)
