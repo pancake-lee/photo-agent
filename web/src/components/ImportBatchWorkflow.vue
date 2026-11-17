@@ -916,7 +916,8 @@ onUnmounted(() => {
     </NModal>
 
     <NModal :show="confirmRecycle" preset="card" :title="step === 'reject' ? '确认回收废片' : '确认回收已入库'"
-      class="batch-modal" :mask-closable="!busy" :closable="!busy" @update:show="(show) => { if (!show && !busy) confirmRecycle = false }">
+      style="width: min(90vw, 520px)" :mask-closable="!busy" :closable="!busy"
+      @update:show="(show) => { if (!show && !busy) confirmRecycle = false }">
       <p>将 {{ recycleFiles?.length ?? 0 }} 个文件在各自的原片目录归集后，移入 Windows 回收站。</p>
       <template #footer>
         <NSpace justify="end">
