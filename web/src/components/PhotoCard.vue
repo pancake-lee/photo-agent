@@ -111,7 +111,8 @@ function formatExifTooltip(): string {
 </script>
 
 <template>
-  <NTooltip trigger="hover" :delay="300" :to="false" :disabled="!showTooltip">
+  <NTooltip trigger="hover" :delay="800" :to="false" :disabled="!showTooltip"
+    :keep-alive-on-hover="false" style="pointer-events: none">
     <template #trigger>
       <NCard
         :bordered="true"
