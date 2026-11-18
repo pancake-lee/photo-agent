@@ -197,7 +197,7 @@ const (
 
 // ListPhotoSegments 返回当前筛选 + 排序下每个分段的 key/label/count/offset。
 // offset 是该分段首张照片在完整排序列表中的 0 基位置，供前端据此定位窗口。
-// shot_at 零值照片不归入任何分段（排在流末尾，不进导航）。
+// 日期模式不为 shot_at 零值照片生成导航；活动模式按归属统计全部照片。
 func (*photoDAO) ListPhotoSegments(ctx *papp.AppCtx, params GetPhotoListParams, mode SegmentMode) ([]PhotoSegment, int64, error) {
 	gdb := photoListScope(ctx, params)
 
@@ -225,13 +225,13 @@ func (*photoDAO) ListPhotoSegments(ctx *papp.AppCtx, params GetPhotoListParams, 
 	accs := make(map[string]*acc)
 
 	for i, r := range rows {
-		if r.ShotAt.IsZero() {
-			continue // 零值拍摄时间不进导航
-		}
 		var key string
 		if mode == SegmentModeActivity {
 			key = r.Timeline
 		} else {
+			if r.ShotAt.IsZero() {
+				continue // 日期模式下，未知拍摄时间不进导航
+			}
 			key = r.ShotAt.UTC().Format("2006-01")
 		}
 		a, ok := accs[key]

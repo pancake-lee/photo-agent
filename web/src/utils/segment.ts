@@ -3,8 +3,8 @@
  *
  * 分段基于已加载照片流计算：照片已按拍摄时间升/降序排序，
  * 遍历时相邻照片分段键变化处即分割线位置。
- * shot_at 为空的照片归「未知时间」段，跟随其在本流中的自然落位
- * （升序在最后、降序在最前，与后端 SQL 排序一致），该段不进右侧导航。
+ * 日期模式中 shot_at 为空的照片归「未知时间」段，跟随其在本流中的自然落位
+ * 该段不进日期导航；活动模式始终使用活动归属。
  */
 import type { PhotoListItem } from '../types/photo'
 
@@ -29,10 +29,10 @@ const UNKNOWN_LABEL = '未知时间'
 
 /** 单张照片的分段键 */
 export function localSegmentKeyOf(photo: PhotoListItem, mode: SegmentMode): string {
+  if (mode === 'activity') return photo.timeline || ''
   if (!photo.shot_at) return ''
   const d = new Date(photo.shot_at)
   if (Number.isNaN(d.getTime())) return ''
-  if (mode === 'activity') return photo.timeline || ''
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
   if (mode === 'month') return `${year}-${month}`

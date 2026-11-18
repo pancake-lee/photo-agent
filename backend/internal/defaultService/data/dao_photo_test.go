@@ -187,7 +187,7 @@ func TestListPhotoSegments_Activity(t *testing.T) {
 	addPhoto(t, ctx, "p2", "", time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC))
 	addPhoto(t, ctx, "p3", "act-b", time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC))
 	addPhoto(t, ctx, "p4", "act-a", time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC))
-	addPhoto(t, ctx, "p5", "", time.Time{}) // 零值 + 空 timeline，不进导航
+	addPhoto(t, ctx, "p5", "", time.Time{}) // 零值 + 空 timeline，计入未分类
 
 	segments, total, err := PhotoDAO.ListPhotoSegments(ctx, GetPhotoListParams{
 		SortBy:    "shot_at",
@@ -210,7 +210,72 @@ func TestListPhotoSegments_Activity(t *testing.T) {
 	if segments[1].Key != "act-b" || segments[1].Offset != 3 || segments[1].Count != 1 {
 		t.Errorf("seg1 = %+v, want key=act-b offset=3 count=1", segments[1])
 	}
-	if segments[2].Key != "" || segments[2].Label != "未分类" || segments[2].Offset != 2 || segments[2].Count != 1 {
-		t.Errorf("seg2 = %+v, want key=\"\" label=未分类 offset=2 count=1", segments[2])
+	if segments[2].Key != "" || segments[2].Label != "未分类" || segments[2].Offset != 0 || segments[2].Count != 2 {
+		t.Errorf("seg2 = %+v, want key=\"\" label=未分类 offset=0 count=2", segments[2])
+	}
+}
+
+func TestListPhotoSegments_ActivityWithoutShotAt(t *testing.T) {
+	ctx, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	const activity = "202608-山西旅游"
+	base := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	addPhoto(t, ctx, "dated", activity, base)
+	addPhoto(t, ctx, "IMG_4182", activity, time.Time{})
+	addPhoto(t, ctx, "only-undated", "other", time.Time{})
+	addPhoto(t, ctx, "loose", "", time.Time{})
+
+	for _, sortOrder := range []string{"asc", "desc"} {
+		for _, filter := range []string{"", activity} {
+			t.Run(sortOrder+"/"+filter, func(t *testing.T) {
+				params := GetPhotoListParams{
+					Page: 1, PageSize: 100, Timeline: filter,
+					SortBy: "shot_at", SortOrder: sortOrder,
+				}
+				photos, _, err := PhotoDAO.GetPhotoList(ctx, params)
+				if err != nil {
+					t.Fatal(err)
+				}
+				segments, total, err := PhotoDAO.ListPhotoSegments(
+					ctx, params, SegmentModeActivity,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if total != int64(len(photos)) {
+					t.Fatalf("segment total %d differs from list %d", total, len(photos))
+				}
+				wantSegments := 3
+				if filter != "" {
+					wantSegments = 1
+				}
+				if len(segments) != wantSegments {
+					t.Fatalf("got %d segments, want %d", len(segments), wantSegments)
+				}
+				var count int64
+				for _, segment := range segments {
+					wantCount := int64(1)
+					if segment.Key == activity {
+						wantCount = 2
+					}
+					if segment.Count != wantCount {
+						t.Errorf("%q count = %d, want %d", segment.Key, segment.Count, wantCount)
+					}
+					for i, photo := range photos {
+						if photo.Timeline == segment.Key {
+							if segment.Offset != int64(i) {
+								t.Errorf("%q offset = %d, want %d", segment.Key, segment.Offset, i)
+							}
+							break
+						}
+					}
+					count += segment.Count
+				}
+				if count != total {
+					t.Errorf("navigation omitted photos: count %d, total %d", count, total)
+				}
+			})
+		}
 	}
 }
