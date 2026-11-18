@@ -68,6 +68,86 @@ func ListActivityLocations(ctx *papp.AppCtx) ([]ActivityLocation, error) {
 	return rows, nil
 }
 
+// RebindEmptyActivityRecycle keeps prior deletions recoverable after merging
+// empty activity directories. The caller first moves all live photos.
+func RebindEmptyActivityRecycle(ctx *papp.AppCtx, fromID, fromName, toID,
+	toName string,
+) (int, error) {
+	changed := 0
+	err := pdb.GetGormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		err := tx.Model(&model.Photo{}).
+			Where("activity_id = ? OR timeline = ?", fromID, fromName).Count(&count).Error
+		if err != nil {
+			return err
+		}
+		if count > 0 {
+			return fmt.Errorf("源活动仍含照片，不能合并空目录")
+		}
+		var items []model.PhotoRecycle
+		err = tx.Where("state <> ?", "purged").Find(&items).Error
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			var photo model.Photo
+			err = json.Unmarshal(item.PhotoJSON, &photo)
+			if err != nil {
+				return err
+			}
+			if photo.ActivityID != fromID {
+				continue
+			}
+			if photo.Timeline != fromName || item.State != "deleted" {
+				return fmt.Errorf("源活动有未完成或位置不一致的回收记录")
+			}
+			photo.ActivityID, photo.Timeline = toID, toName
+			photo.FilePath = filepath.Join(toName, photo.Filename)
+			var files []map[string]any
+			err = json.Unmarshal(item.FilesJSON, &files)
+			if err != nil {
+				return err
+			}
+			for _, file := range files {
+				for _, key := range []string{"original", "restore"} {
+					rel, ok := file[key].(string)
+					if ok && filepath.Dir(rel) == fromName {
+						file[key] = filepath.Join(toName, filepath.Base(rel))
+					}
+				}
+			}
+			photoJSON, marshalErr := json.Marshal(photo)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			filesJSON, marshalErr := json.Marshal(files)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			err = tx.Model(&model.PhotoRecycle{}).Where("id = ?", item.ID).
+				Updates(map[string]any{"photo_json": photoJSON, "files_json": filesJSON}).Error
+			if err != nil {
+				return err
+			}
+			var state model.PhotoArchive
+			err = tx.Where("photo_id = ?", photo.ID).Find(&state).Error
+			if err != nil {
+				return err
+			}
+			if state.ImportKey != "" {
+				err = tx.Model(&state).Update("import_key",
+					ArchiveImportKey(toName, state.JPGSHA256, state.NEFSHA256)).Error
+				if err != nil {
+					return err
+				}
+			}
+			changed++
+		}
+		return nil
+	})
+	return changed, err
+}
+
 func ArchiveImportKey(activity, jpg, nef string) string {
 	sum := sha256.Sum256([]byte(activity + "\x00" + jpg + "\x00" + nef))
 	return hex.EncodeToString(sum[:])

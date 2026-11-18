@@ -4,11 +4,42 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"backend/internal/pkg/db/model"
 
 	"github.com/pancake-lee/pgo/pkg/pdb"
 )
+
+func TestRebindEmptyActivityRecycleRollsBackUnfinishedRecord(t *testing.T) {
+	ctx, cleanup := setupTestDB(t)
+	defer cleanup()
+	g := pdb.GetGormDB()
+	var before []byte
+	for i, state := range []string{"deleted", "moving"} {
+		photo := model.Photo{ID: state, ActivityID: "source", Timeline: "旧活动", Filename: state + ".jpg"}
+		raw, err := json.Marshal(photo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			before = raw
+		}
+		item := model.PhotoRecycle{ID: state, PhotoID: state, Kind: "photo", State: state,
+			PhotoJSON: raw, FilesJSON: []byte(`[{"original":"旧活动/image.jpg"}]`), DeletedAt: time.Now()}
+		if err = g.Create(&item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := RebindEmptyActivityRecycle(ctx, "source", "旧活动", "target", "目标活动")
+	if err == nil {
+		t.Fatal("unfinished recycle record accepted")
+	}
+	item, err := PhotoDAO.FindRecycle(ctx, "deleted")
+	if err != nil || string(item.PhotoJSON) != string(before) || item.State != "deleted" {
+		t.Fatalf("partial rebind committed: %+v %v", item, err)
+	}
+}
 
 func TestLegacyActivityLocationMigrationPreservesIdentityAndProcessing(t *testing.T) {
 	ctx, cleanup := setupTestDB(t)

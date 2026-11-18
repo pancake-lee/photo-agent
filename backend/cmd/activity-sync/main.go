@@ -20,6 +20,9 @@ func main() {
 	restoreReport := flag.String("restore-report", "", "restore result JSON path")
 	inheritAI := flag.Bool("inherit-ai", false, "inherit locally validated legacy AI results")
 	forgetActivity := flag.String("forget-missing-activity", "", "confirmed externally deleted activity ID")
+	consolidateFrom := flag.String("consolidate-empty-activity", "", "empty source activity directory name")
+	consolidateInto := flag.String("consolidate-into", "", "destination activity directory name")
+	consolidateBackup := flag.String("consolidate-backup", "", "existing backup directory outside the photo library")
 	flag.Parse()
 	if *path == "" {
 		panic("必须使用 -c 指定配置文件")
@@ -46,6 +49,13 @@ func main() {
 	}
 	if *restorePlan != "" {
 		err = service.RestoreLegacyFavorites(context.Background(), *restorePlan, *restoreReport, *inheritAI, os.Stdout)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if *consolidateFrom != "" {
+		err = service.ConsolidateEmptyActivity(context.Background(),
+			*consolidateFrom, *consolidateInto, *consolidateBackup)
 		if err != nil {
 			panic(err)
 		}
