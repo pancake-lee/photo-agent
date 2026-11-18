@@ -172,11 +172,22 @@ func (s *PhotoServer) SearchPhotos(
 	// 连拍组信息，用于拼装 burst_cover/burst_count。查询失败时映射为空，仅不显示角标。
 	// burst 字段按本次请求的档位取对应分组列（缺省精细档）。
 	groupMap, _ := data.PhotoGroupDAO.GetByIDList(ctx, burstGroupIDsOf(photos, req.BurstProfile))
+	ids := make([]string, 0, len(photos))
+	for _, photo := range photos {
+		ids = append(ids, photo.ID)
+	}
+	favorites, favoriteCounts, err := data.PhotoDAO.GetPhotoFavoriteStatus(
+		ctx, ids, burstGroupIDsOf(photos, req.BurstProfile), req.BurstProfile,
+	)
+	if err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
 
 	items := make([]*api.PhotoItem, len(photos))
 	for i, p := range photos {
 		items[i] = photoDO2Item(p)
 		items[i].HasNef = nefSet[photoBasePath(p.FilePath)]
+		items[i].Favorite = favorites[p.ID]
 		groupID := p.BurstGroupID
 		if req.BurstProfile == "coarse" {
 			groupID = p.BurstGroupCoarseID
@@ -185,6 +196,7 @@ func (s *PhotoServer) SearchPhotos(
 			items[i].BurstGroupId = groupID
 			items[i].BurstCover = g.CoverPhotoID == p.ID
 			items[i].BurstCount = g.PhotoCount
+			items[i].GroupFavoriteCount = favoriteCounts[groupID]
 		}
 	}
 
@@ -306,6 +318,11 @@ func (s *PhotoServer) GetPhotoDetail(
 	}
 
 	item := photoDO2Item(photo)
+	state, err := data.PhotoDAO.GetArchiveState(ctx, photo.ID)
+	if err != nil {
+		return nil, ctx.Log.LogErr(err)
+	}
+	item.Favorite = state.Favorite
 
 	return &api.GetPhotoDetailResponse{
 		Photo:            item,

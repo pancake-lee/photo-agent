@@ -13,7 +13,7 @@ import { formatDate } from '../utils/format'
 
 const props = withDefaults(defineProps<{
   photo: Pick<PhotoListItem, 'id' | 'filename' | 'thumbnail_url' | 'has_nef' | 'burst_group_id' | 'burst_cover' | 'burst_count'>
-    & Partial<Pick<PhotoListItem, 'shot_at' | 'brand' | 'model' | 'lens' | 'iso' | 'aperture' | 'focal_length' | 'has_description'>>
+    & Partial<Pick<PhotoListItem, 'shot_at' | 'brand' | 'model' | 'lens' | 'iso' | 'aperture' | 'focal_length' | 'has_description' | 'favorite' | 'group_favorite_count'>>
   processing?: boolean
   embedProcessing?: boolean
   isEmbedded?: boolean
@@ -38,7 +38,6 @@ const props = withDefaults(defineProps<{
   showTooltip?: boolean
 }>(), {
   viewLevel: 'fine',
-  groupFavoriteCount: 0,
   selectionMode: false,
   selected: false,
   showStatus: true,
@@ -65,9 +64,13 @@ const isCollapsedCover = computed(
     props.photo.burst_cover &&
     props.photo.burst_count > 1,
 )
-const isPartiallyFavorited = computed(() =>
-  isCollapsedCover.value && props.groupFavoriteCount > 0 && props.groupFavoriteCount < props.photo.burst_count,
-)
+const favoriteCount = computed(() => props.groupFavoriteCount ?? props.photo.group_favorite_count ?? 0)
+const favoriteLabel = computed(() => {
+  if (isCollapsedCover.value && favoriteCount.value > 0) {
+    return favoriteCount.value < props.photo.burst_count ? '部分收藏' : '全组收藏'
+  }
+  return props.photo.favorite ? '已收藏' : ''
+})
 
 function handleCardClick() {
   if (props.selectionMode) {
@@ -133,9 +136,11 @@ function formatExifTooltip(): string {
             <div v-if="selectionMode" class="photo-select" @click.stop>
               <NCheckbox :checked="selected" @update:checked="emit('toggleSelect', photo.id)" />
             </div>
-            <div v-if="photo.has_nef || isPartiallyFavorited" class="photo-badges" :class="{ 'with-select': selectionMode }">
+            <div v-if="photo.has_nef || favoriteLabel" class="photo-badges"
+              :class="{ 'with-select': selectionMode, 'with-burst': isCollapsedCover }">
               <span v-if="photo.has_nef" class="photo-badge" title="有对应 NEF 原始文件">NEF</span>
-              <span v-if="isPartiallyFavorited" class="photo-badge" :title="`组内有 ${groupFavoriteCount} 张已收藏`">部分收藏</span>
+              <span v-if="favoriteLabel" class="photo-badge photo-favorite-badge"
+                :title="isCollapsedCover && favoriteCount > 0 ? `组内有 ${favoriteCount} 张已收藏` : '已收藏'">★ {{ favoriteLabel }}</span>
             </div>
             <div
               v-if="isCollapsedCover"
@@ -283,6 +288,14 @@ function formatExifTooltip(): string {
 }
 .photo-badges.with-select {
   left: 24px;
+}
+.photo-badges.with-select.with-burst {
+  top: 28px;
+  left: 4px;
+}
+.photo-badge.photo-favorite-badge {
+  color: #ffd166;
+  background: rgba(0, 0, 0, 0.75);
 }
 .photo-badge {
   padding: 1px 6px;

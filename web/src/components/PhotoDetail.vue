@@ -22,7 +22,7 @@ import { useEmbedStatus } from '../composables/useEmbedStatus'
 import { usePhotos } from '../composables/usePhotos'
 
 const { fetchEmbedInfo } = useEmbedStatus()
-const { updatePhotoShotAt } = usePhotos()
+const { updatePhotoShotAt, updatePhotoFavorite } = usePhotos()
 const message = useMessage()
 
 // 上/下一张导航列表项：只关心 id（用于定位与切换），label 仅备用
@@ -214,7 +214,7 @@ async function saveShotAt() {
         <div class="lightbox-panel">
           <div class="panel-header">
             <span class="panel-title">照片详情</span>
-          <PhotoFavoriteButton v-if="photo && showVlmActions" :id="photo.id" />
+          <PhotoFavoriteButton v-if="photo && showVlmActions" :id="photo.id" @changed="updatePhotoFavorite(photo.id, $event)" />
             <NButton size="small" @click="$emit('close')">
               <template #icon><NIcon :size="16"><CloseOutline /></NIcon></template>
               退出

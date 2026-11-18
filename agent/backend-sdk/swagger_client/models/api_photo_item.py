@@ -64,7 +64,9 @@ class ApiPhotoItem(object):
         'vlm_status': 'str',
         'vlm_reason': 'str',
         'embedding_status': 'str',
-        'embedding_description_time': 'str'
+        'embedding_description_time': 'str',
+        'favorite': 'bool',
+        'group_favorite_count': 'int'
     }
 
     attribute_map = {
@@ -105,10 +107,12 @@ class ApiPhotoItem(object):
         'vlm_status': 'vlmStatus',
         'vlm_reason': 'vlmReason',
         'embedding_status': 'embeddingStatus',
-        'embedding_description_time': 'embeddingDescriptionTime'
+        'embedding_description_time': 'embeddingDescriptionTime',
+        'favorite': 'favorite',
+        'group_favorite_count': 'groupFavoriteCount'
     }
 
-    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None, has_description=None, thumbnail_url=None, has_nef=None, burst_group_id=None, burst_cover=None, burst_count=None, ai_health_status=None, ai_health_reason=None, vlm_status=None, vlm_reason=None, embedding_status=None, embedding_description_time=None):  # noqa: E501
+    def __init__(self, id=None, filename=None, file_path=None, timeline=None, tags=None, description=None, objects=None, colors=None, scene=None, lighting=None, mood=None, composition=None, shot_at=None, width=None, height=None, brand=None, model=None, lens=None, focal_length=None, aperture=None, iso=None, exposure_time=None, latitude=None, longitude=None, altitude=None, imported_at=None, has_description=None, thumbnail_url=None, has_nef=None, burst_group_id=None, burst_cover=None, burst_count=None, ai_health_status=None, ai_health_reason=None, vlm_status=None, vlm_reason=None, embedding_status=None, embedding_description_time=None, favorite=None, group_favorite_count=None):  # noqa: E501
         """ApiPhotoItem - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self._filename = None
@@ -148,6 +152,8 @@ class ApiPhotoItem(object):
         self._vlm_reason = None
         self._embedding_status = None
         self._embedding_description_time = None
+        self._favorite = None
+        self._group_favorite_count = None
         self.discriminator = None
         if id is not None:
             self.id = id
@@ -225,6 +231,10 @@ class ApiPhotoItem(object):
             self.embedding_status = embedding_status
         if embedding_description_time is not None:
             self.embedding_description_time = embedding_description_time
+        if favorite is not None:
+            self.favorite = favorite
+        if group_favorite_count is not None:
+            self.group_favorite_count = group_favorite_count
 
     @property
     def id(self):
@@ -1023,6 +1033,48 @@ class ApiPhotoItem(object):
         """
 
         self._embedding_description_time = embedding_description_time
+
+    @property
+    def favorite(self):
+        """Gets the favorite of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The favorite of this ApiPhotoItem.  # noqa: E501
+        :rtype: bool
+        """
+        return self._favorite
+
+    @favorite.setter
+    def favorite(self, favorite):
+        """Sets the favorite of this ApiPhotoItem.
+
+
+        :param favorite: The favorite of this ApiPhotoItem.  # noqa: E501
+        :type: bool
+        """
+
+        self._favorite = favorite
+
+    @property
+    def group_favorite_count(self):
+        """Gets the group_favorite_count of this ApiPhotoItem.  # noqa: E501
+
+
+        :return: The group_favorite_count of this ApiPhotoItem.  # noqa: E501
+        :rtype: int
+        """
+        return self._group_favorite_count
+
+    @group_favorite_count.setter
+    def group_favorite_count(self, group_favorite_count):
+        """Sets the group_favorite_count of this ApiPhotoItem.
+
+
+        :param group_favorite_count: The group_favorite_count of this ApiPhotoItem.  # noqa: E501
+        :type: int
+        """
+
+        self._group_favorite_count = group_favorite_count
 
     def to_dict(self):
         """Returns the model properties as a dict"""

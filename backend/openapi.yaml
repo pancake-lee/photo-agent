@@ -1668,6 +1668,11 @@ components:
                     type: string
                 embeddingDescriptionTime:
                     type: string
+                favorite:
+                    type: boolean
+                groupFavoriteCount:
+                    type: integer
+                    format: int32
         api.PhotoSegment:
             type: object
             properties:

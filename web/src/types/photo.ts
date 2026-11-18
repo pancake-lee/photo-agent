@@ -21,10 +21,12 @@ export interface Photo {
   longitude: number | null
   altitude: number | null
   imported_at: string
+  favorite?: boolean
 }
 
 // 照片列表响应中的单项
 export interface PhotoListItem extends Photo {
+  group_favorite_count?: number
   has_description: boolean
   thumbnail_url: string
   has_nef: boolean

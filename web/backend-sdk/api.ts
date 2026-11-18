@@ -1446,6 +1446,18 @@ export interface ApiPhotoItem {
      * @memberof ApiPhotoItem
      */
     embeddingDescriptionTime?: string;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ApiPhotoItem
+     */
+    favorite?: boolean;
+    /**
+     *
+     * @type {number}
+     * @memberof ApiPhotoItem
+     */
+    groupFavoriteCount?: number;
 }
 /**
  * 
@@ -1718,7 +1730,7 @@ export interface ApiStopVlmQueueResponse {
     stopped?: boolean;
 }
 /**
- * TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+ * TimelineEventDetail 目录活动与隐藏文件元数据
  * @export
  * @interface ApiTimelineEventDetail
  */
@@ -5100,7 +5112,7 @@ export class TagServiceApi extends BaseAPI {
 export const TimelineServiceApiFetchParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * 删除时间线事件
+         * 删除空活动目录
          * @param {string} id 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5156,7 +5168,7 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
             };
         },
         /**
-         * 查询重算进度
+         * 查询最近一次目录同步计数
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -5178,7 +5190,7 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
             };
         },
         /**
-         * 时间线事件列表（含散片组只读展示）
+         * 活动目录列表（包含空目录）
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -5222,7 +5234,7 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
             };
         },
         /**
-         * 触发全量重算照片 timeline（异步，人工值保留）
+         * 同步目录活动（同步执行，成功返回 completed）
          * @param {ApiEmpty} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5253,7 +5265,7 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
             };
         },
         /**
-         * 保存时间线事件（新建与更新合一，id 为空则新建）
+         * 保存目录活动（id 为空创建目录，名称变更会改目录名）
          * @param {ApiSaveTimelineEventRequest} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5293,7 +5305,7 @@ export const TimelineServiceApiFetchParamCreator = function (configuration?: Con
 export const TimelineServiceApiFp = function(configuration?: Configuration) {
     return {
         /**
-         * 删除时间线事件
+         * 删除空活动目录
          * @param {string} id 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5329,7 +5341,7 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
-         * 查询重算进度
+         * 查询最近一次目录同步计数
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -5346,7 +5358,7 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
-         * 时间线事件列表（含散片组只读展示）
+         * 活动目录列表（包含空目录）
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -5380,7 +5392,7 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
-         * 触发全量重算照片 timeline（异步，人工值保留）
+         * 同步目录活动（同步执行，成功返回 completed）
          * @param {ApiEmpty} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5398,7 +5410,7 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
             };
         },
         /**
-         * 保存时间线事件（新建与更新合一，id 为空则新建）
+         * 保存目录活动（id 为空创建目录，名称变更会改目录名）
          * @param {ApiSaveTimelineEventRequest} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5425,7 +5437,7 @@ export const TimelineServiceApiFp = function(configuration?: Configuration) {
 export const TimelineServiceApiFactory = function (configuration?: Configuration, fetch?: FetchAPI, basePath?: string) {
     return {
         /**
-         * 删除时间线事件
+         * 删除空活动目录
          * @param {string} id 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5443,7 +5455,7 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
             return TimelineServiceApiFp(configuration).timelineServiceGetPhotosByTimeline(name, options)(fetch, basePath);
         },
         /**
-         * 查询重算进度
+         * 查询最近一次目录同步计数
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -5451,7 +5463,7 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
             return TimelineServiceApiFp(configuration).timelineServiceGetRecomputeTimelinesStatus(options)(fetch, basePath);
         },
         /**
-         * 时间线事件列表（含散片组只读展示）
+         * 活动目录列表（包含空目录）
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -5467,7 +5479,7 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
             return TimelineServiceApiFp(configuration).timelineServiceListTimelines(options)(fetch, basePath);
         },
         /**
-         * 触发全量重算照片 timeline（异步，人工值保留）
+         * 同步目录活动（同步执行，成功返回 completed）
          * @param {ApiEmpty} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5476,7 +5488,7 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
             return TimelineServiceApiFp(configuration).timelineServiceRecomputeTimelines(body, options)(fetch, basePath);
         },
         /**
-         * 保存时间线事件（新建与更新合一，id 为空则新建）
+         * 保存目录活动（id 为空创建目录，名称变更会改目录名）
          * @param {ApiSaveTimelineEventRequest} body 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -5495,7 +5507,7 @@ export const TimelineServiceApiFactory = function (configuration?: Configuration
  */
 export class TimelineServiceApi extends BaseAPI {
     /**
-     * 删除时间线事件
+     * 删除空活动目录
      * @param {string} id 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -5517,7 +5529,7 @@ export class TimelineServiceApi extends BaseAPI {
     }
 
     /**
-     * 查询重算进度
+     * 查询最近一次目录同步计数
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TimelineServiceApi
@@ -5527,7 +5539,7 @@ export class TimelineServiceApi extends BaseAPI {
     }
 
     /**
-     * 时间线事件列表（含散片组只读展示）
+     * 活动目录列表（包含空目录）
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TimelineServiceApi
@@ -5547,7 +5559,7 @@ export class TimelineServiceApi extends BaseAPI {
     }
 
     /**
-     * 触发全量重算照片 timeline（异步，人工值保留）
+     * 同步目录活动（同步执行，成功返回 completed）
      * @param {ApiEmpty} body 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -5558,7 +5570,7 @@ export class TimelineServiceApi extends BaseAPI {
     }
 
     /**
-     * 保存时间线事件（新建与更新合一，id 为空则新建）
+     * 保存目录活动（id 为空创建目录，名称变更会改目录名）
      * @param {ApiSaveTimelineEventRequest} body 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}

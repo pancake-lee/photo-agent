@@ -58,6 +58,8 @@ function adaptPhotoItem(item: ApiPhotoItem): PhotoListItem {
     has_description: item.hasDescription ?? false,
     thumbnail_url: item.id ? `${getApiBase()}/photos/${item.id}/image` : '',
     has_nef: item.hasNef ?? false,
+    favorite: item.favorite ?? false,
+    group_favorite_count: item.groupFavoriteCount ?? 0,
     burst_group_id: item.burstGroupId ?? '',
     burst_cover: item.burstCover ?? false,
     burst_count: item.burstCount ?? 0,
@@ -72,6 +74,7 @@ function adaptPhotoDetail(resp: ApiGetPhotoDetailResponse): PhotoDetail {
     file_path: photo?.filePath ?? '',
     timeline: photo?.timeline ?? '',
     tags: photo?.tags ?? '',
+    favorite: photo?.favorite ?? false,
     description: photo?.description ?? '',
     shot_at: adaptUnixSec(photo?.shotAt),
     width: photo?.width ?? 0,
@@ -180,6 +183,25 @@ const showDetail = ref(false)
 const detailLoading = ref(false)
 
 export function usePhotos() {
+  function updatePhotoFavorite(photoId: string, favorite: boolean) {
+    const target = photos.value.find((photo) => photo.id === photoId)
+      ?? burstModalMembers.value.find((photo) => photo.id === photoId)
+    const previous = target?.favorite
+      ?? (selectedPhoto.value?.id === photoId ? selectedPhoto.value.favorite : undefined)
+    if (selectedPhoto.value?.id === photoId) selectedPhoto.value.favorite = favorite
+    if (previous === favorite) return
+    const delta = previous === undefined ? 0 : Number(favorite) - Number(previous)
+    for (const list of [photos, burstModalMembers]) {
+      list.value = list.value.map((photo) => ({
+        ...photo,
+        favorite: photo.id === photoId ? favorite : photo.favorite,
+        group_favorite_count: target?.burst_group_id && photo.burst_group_id === target.burst_group_id
+          ? Math.max(0, (photo.group_favorite_count ?? 0) + delta)
+          : photo.group_favorite_count,
+      }))
+    }
+  }
+
   // 向下已到列表末尾 / 向上已到列表开头
   const noMoreDown = computed(() => windowStart.value + photos.value.length >= total.value)
   const noMoreUp = computed(() => windowStart.value <= 0)
@@ -537,6 +559,7 @@ export function usePhotos() {
   }
 
   return {
+    updatePhotoFavorite,
     photos,
     total,
     windowStart,

@@ -94,6 +94,47 @@ func (*photoDAO) SetArchiveFavorite(ctx *papp.AppCtx, id string, value bool) err
 	}).Create(&state).Error
 }
 
+// GetPhotoFavoriteStatus reads page favorites and complete group counts in bulk.
+func (*photoDAO) GetPhotoFavoriteStatus(ctx *papp.AppCtx, ids, groupIDs []string,
+	profile string,
+) (map[string]bool, map[string]int32, error) {
+	favorites := make(map[string]bool)
+	counts := make(map[string]int32)
+	g := pdb.GetGormDB().WithContext(ctx)
+	if len(ids) > 0 {
+		var states []PhotoArchiveDO
+		err := g.Select("photo_id", "favorite").Where("photo_id IN ?", ids).Find(&states).Error
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, state := range states {
+			favorites[state.PhotoID] = state.Favorite
+		}
+	}
+	if len(groupIDs) > 0 {
+		column := "burst_group_id"
+		if profile == "coarse" {
+			column = "burst_group_coarse_id"
+		}
+		var rows []struct {
+			GroupID string
+			Count   int32
+		}
+		err := g.Table("photos").
+			Select("photos."+column+" AS group_id, COUNT(*) AS count").
+			Joins("JOIN photo_archives ON photo_archives.photo_id = photos.id").
+			Where("photos."+column+" IN ? AND photo_archives.favorite = ? AND photos.file_type <> ?",
+				groupIDs, true, "nef").Group("photos." + column).Scan(&rows).Error
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, row := range rows {
+			counts[row.GroupID] = row.Count
+		}
+	}
+	return favorites, counts, nil
+}
+
 func (*photoDAO) ListArchiveActivity(ctx *papp.AppCtx, activity string) ([]PhotoDO, error) {
 	var rows []PhotoDO
 	err := pdb.GetGormDB().WithContext(ctx).

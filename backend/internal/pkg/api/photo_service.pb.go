@@ -234,6 +234,8 @@ type PhotoItem struct {
 	VlmReason                string                 `protobuf:"bytes,36,opt,name=vlm_reason,json=vlmReason,proto3" json:"vlm_reason,omitempty"`
 	EmbeddingStatus          string                 `protobuf:"bytes,37,opt,name=embedding_status,json=embeddingStatus,proto3" json:"embedding_status,omitempty"`
 	EmbeddingDescriptionTime string                 `protobuf:"bytes,38,opt,name=embedding_description_time,json=embeddingDescriptionTime,proto3" json:"embedding_description_time,omitempty"`
+	Favorite                 bool                   `protobuf:"varint,39,opt,name=favorite,proto3" json:"favorite,omitempty"`
+	GroupFavoriteCount       int32                  `protobuf:"varint,40,opt,name=group_favorite_count,json=groupFavoriteCount,proto3" json:"group_favorite_count,omitempty"` // 当前连拍档位组内已收藏的照片数
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -532,6 +534,20 @@ func (x *PhotoItem) GetEmbeddingDescriptionTime() string {
 		return x.EmbeddingDescriptionTime
 	}
 	return ""
+}
+
+func (x *PhotoItem) GetFavorite() bool {
+	if x != nil {
+		return x.Favorite
+	}
+	return false
+}
+
+func (x *PhotoItem) GetGroupFavoriteCount() int32 {
+	if x != nil {
+		return x.GroupFavoriteCount
+	}
+	return 0
 }
 
 type SearchPhotosResponse struct {
@@ -1960,7 +1976,7 @@ const file_photo_service_proto_rawDesc = "" +
 	"\n" +
 	"sort_order\x18\x0f \x01(\tR\tsortOrder\x12$\n" +
 	"\x0eburst_group_id\x18\x10 \x01(\tR\fburstGroupId\x12#\n" +
-	"\rburst_profile\x18\x11 \x01(\tR\fburstProfile\"\xfe\b\n" +
+	"\rburst_profile\x18\x11 \x01(\tR\fburstProfile\"\xcc\t\n" +
 	"\tPhotoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
@@ -2005,7 +2021,9 @@ const file_photo_service_proto_rawDesc = "" +
 	"\n" +
 	"vlm_reason\x18$ \x01(\tR\tvlmReason\x12)\n" +
 	"\x10embedding_status\x18% \x01(\tR\x0fembeddingStatus\x12<\n" +
-	"\x1aembedding_description_time\x18& \x01(\tR\x18embeddingDescriptionTime\"\xa4\x01\n" +
+	"\x1aembedding_description_time\x18& \x01(\tR\x18embeddingDescriptionTime\x12\x1a\n" +
+	"\bfavorite\x18' \x01(\bR\bfavorite\x120\n" +
+	"\x14group_favorite_count\x18( \x01(\x05R\x12groupFavoriteCount\"\xa4\x01\n" +
 	"\x14SearchPhotosResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x12\n" +

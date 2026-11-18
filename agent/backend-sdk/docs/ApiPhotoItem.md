@@ -41,6 +41,8 @@ Name | Type | Description | Notes
 **vlm_reason** | **str** |  | [optional] 
 **embedding_status** | **str** |  | [optional] 
 **embedding_description_time** | **str** |  | [optional] 
+**favorite** | **bool** |  | [optional]
+**group_favorite_count** | **int** |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

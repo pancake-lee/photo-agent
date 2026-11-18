@@ -148,6 +148,8 @@ message PhotoItem {
     string vlm_reason = 36;
     string embedding_status = 37;
     string embedding_description_time = 38;
+    bool favorite = 39;
+    int32 group_favorite_count = 40; // 当前连拍档位组内已收藏的照片数
 }
 
 message SearchPhotosResponse {

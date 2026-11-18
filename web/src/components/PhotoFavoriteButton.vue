@@ -4,6 +4,7 @@ import { NButton, useMessage } from 'naive-ui'
 import { getApiBase } from '../config'
 
 const props = defineProps<{ id: string }>()
+const emit = defineEmits<{ changed: [favorite: boolean] }>()
 const favorite = ref<boolean>()
 const saving = ref(false)
 const message = useMessage()
@@ -17,7 +18,10 @@ async function load(id: string, value?: boolean) {
   })
   const data = await response.json()
   if (!response.ok || typeof data.favorite !== 'boolean') throw new Error(data.error || '无法读取收藏状态')
-  if (id === props.id) favorite.value = data.favorite
+  if (id === props.id) {
+    favorite.value = data.favorite
+    emit('changed', data.favorite)
+  }
 }
 
 watch(() => props.id, (id) => {
