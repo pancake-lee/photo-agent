@@ -16,6 +16,6 @@
 - make 子进程继承大小写免代理名单，原有自定义条目保留；同一 venv 的 requests 在 make 环境下直连后端健康接口为 200。
 - Go Service/Data 回归通过。模拟活动目录被移走后，其他活动的公开 HTTP 列表和时间线仍可读；未确认照片保留，存在的目录拒绝清理；确认删除和重复执行均正确保留清理墓碑。
 - 当前真实照片列表、时间线接口恢复 200。除确认删除的照片 ID 外，其他照片与归档记录逐条相同。当前 1,828 条照片、1,220 个收藏，未恢复用户删除的源目录。
-- 备份：`/root/share/photo-agent/backups/2026-11-18-status-repair/`；过程日志：`local/status-repair/`。
+- 备份：`/root/share/photo-agent/backups/2026-11-18-status-repair/`；过程日志：`.local/status-repair/`。
 - 没有启动或重启用户服务，也没有并发改写运行中 Agent 的向量文件。常驻服务需用户再执行 make start，加载免代理配置和新同步逻辑；对应向量届时按 purged 墓碑自动清理。
 - 自评通过，9/10。OPS4 的常驻进程环境生效仍待用户重启验收。

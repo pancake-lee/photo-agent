@@ -16,7 +16,7 @@
 - 保留：17 个活动子目录，1,027 条照片记录、881 条归档记录、174 个收藏。逐条比较数据库记录，并核对 2,969 个活动原件和预览文件的大小、修改时间与 inode，均保持不变。
 - 向量：使用已有 Chroma 客户端删除旧照片对应文档，照片集合删除 1,178 条，粗分组集合删除 727 条，细分组集合删除 924 条。保留的 146 / 99 / 115 条文档在删除前后比较 ID、正文、metadata、向量的 SHA-256，均一致。
 - 备份：`/root/share/photo-agent/backups/2026-11-18-activity-directories/`，含 SQLite 一致性备份、Chroma 完整目录、旧照片记录、保留范围快照和清理结果。
-- 过程脚本与日志：`local/activity-directories/`，不提交到 Git。未调用真实 VLM 或 Embedding。
+- 过程脚本与日志：`.local/activity-directories/`，不提交到 Git。未调用真实 VLM 或 Embedding。
 
 原先运行的 Go 后端和 Python Agent 已停止，防止旧程序在清理及迁移期间写回数据。Web 开发服务由用户原有进程管理。
 
@@ -29,6 +29,6 @@
 - 前端：`web/` 下 `pnpm test` 通过，5 个文件、14 个用例；`pnpm build` 类型检查与生产构建通过。
 - Windows：使用已有 MinGW 编译器交叉编译成功，新客户端 `/root/share/photo-agent/exports/2026-11-18-photo-agent-windows.exe` 已包含新前端及活动回执兼容。
 - 自评：通过，9/10；核心流程具备隔离回归与真实库只读比对证据。Windows 窗口与真实用户交互仍需用户验收。
-- 证据：备份目录中的 `migration-result.json`、`cleanup-result.json`；详细运行输出在 `local/activity-directories/`。
+- 证据：备份目录中的 `migration-result.json`、`cleanup-result.json`；详细运行输出在 `.local/activity-directories/`。
 
 （用户）替换客户端并按原方式重启服务，在时间线中修改一个活动的名称、时间与备注，确认目录同名变化、照片预览和收藏仍正常。通过后回复“DIR2 已通过”。

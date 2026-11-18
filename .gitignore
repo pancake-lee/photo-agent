@@ -47,7 +47,6 @@ data/*
 
 # anything
 .local
-/local/
 .pids
 .env
 logs
