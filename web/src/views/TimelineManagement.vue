@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { NLayout, NLayoutContent, NLayoutHeader, NButton, NIcon, NInput,
   NDatePicker, NEmpty, NSpin, NSpace, NTag, NModal, NForm, NFormItem,
   NPopconfirm, useMessage } from 'naive-ui'
@@ -8,6 +9,7 @@ import { AddOutline, CreateOutline, TrashOutline, RefreshOutline,
 import { useTimelines, type TimelineEventItem } from '../composables/useTimelines'
 
 const message = useMessage()
+const router = useRouter()
 const { events, eventsLoading, eventsError, fetchEvents, saveEvent,
   deleteEvent, recompute } = useTimelines()
 const showEditModal = ref(false)
@@ -120,22 +122,27 @@ onMounted(fetchEvents)
             <div v-for="event in events" :key="event.id" class="event-item">
               <div class="event-date">{{ displayDate(event.date) }}</div>
               <div class="event-body">
-                <div class="event-name">{{ event.event }}</div>
-                <div v-if="event.note" class="event-note">{{ event.note }}</div>
-              </div>
-              <div class="event-meta">
-                <NTag size="small" :type="event.photo_count > 0 ? 'success' : 'default'">{{ event.photo_count }} 张</NTag>
-                <NButton size="tiny" quaternary aria-label="编辑活动" @click="openEdit(event)">
-                  <template #icon><NIcon><CreateOutline /></NIcon></template>
-                </NButton>
-                <NPopconfirm @positive-click="handleDelete(event)">
-                  <template #trigger>
-                    <NButton size="tiny" quaternary type="error" aria-label="删除空活动目录" :disabled="event.photo_count > 0">
-                      <template #icon><NIcon><TrashOutline /></NIcon></template>
+                <div class="event-heading">
+                  <div class="event-name">{{ event.event }}</div>
+                  <div class="event-meta">
+                    <NTag size="small" :type="event.photo_count > 0 ? 'success' : 'default'">{{ event.photo_count }} 张</NTag>
+                    <NButton size="small" secondary @click="router.push({ path: '/photos', query: { activity: event.event } })">
+                      查看图片
                     </NButton>
-                  </template>
-                  删除空活动目录「{{ event.event }}」及其时间、备注？非空目录无法删除。
-                </NPopconfirm>
+                    <NButton size="small" quaternary aria-label="编辑活动" @click="openEdit(event)">
+                      <template #icon><NIcon><CreateOutline /></NIcon></template>
+                    </NButton>
+                    <NPopconfirm @positive-click="handleDelete(event)">
+                      <template #trigger>
+                        <NButton size="small" quaternary type="error" aria-label="删除空活动目录" :disabled="event.photo_count > 0">
+                          <template #icon><NIcon><TrashOutline /></NIcon></template>
+                        </NButton>
+                      </template>
+                      删除空活动目录「{{ event.event }}」及其时间、备注？非空目录无法删除。
+                    </NPopconfirm>
+                  </div>
+                </div>
+                <div v-if="event.note" class="event-note">{{ event.note }}</div>
               </div>
             </div>
           </div>
@@ -244,17 +251,23 @@ onMounted(fetchEvents)
   flex: 1;
   min-width: 0;
 }
+.event-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
 .event-name {
   font-size: 14px;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .event-note {
   font-size: 12px;
   color: var(--n-text-color-3);
-  margin-top: 2px;
+  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -262,7 +275,7 @@ onMounted(fetchEvents)
 .event-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-shrink: 0;
 }
 .activity-hint { margin: 0; font-size: 13px; color: var(--n-text-color-3); }
