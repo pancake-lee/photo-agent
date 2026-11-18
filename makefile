@@ -4,6 +4,10 @@ PID_DIR := .local/.pids
 LOG_DIR := logs
 CONFIG_FILE ?= .local/my-config.yaml
 
+# 本机服务互访绕过代理，同时保留用户已有的排除名单。
+export NO_PROXY := localhost,127.0.0.1,::1,$(NO_PROXY),$(no_proxy)
+export no_proxy := $(NO_PROXY)
+
 # 从统一配置读取各服务端口，用于状态检查与兜底清理。
 BACKEND_PORT := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Http"]["Addr"].rsplit(":", 1)[1])')
 AGENT_PORT   := $(shell python3 -c 'import yaml; print(yaml.safe_load(open("$(CONFIG_FILE)"))["Agent"]["Addr"].rsplit(":", 1)[1])')
@@ -105,11 +109,11 @@ status:
 	@# HTTP 健康检查
 	@echo ""
 	@echo "🏥 HTTP 健康检查:"
-	@curl -sf -o /dev/null http://localhost:$(BACKEND_PORT)/api/v1/health \
+	@curl --noproxy '*' --connect-timeout 1 --max-time 3 -sf -o /dev/null http://localhost:$(BACKEND_PORT)/api/v1/health \
 		&& echo "  ● backend  ✓" || echo "  ○ backend  ✕"
-	@curl -sf -o /dev/null http://localhost:$(AGENT_PORT)/api/chat/health \
+	@curl --noproxy '*' --connect-timeout 1 --max-time 3 -sf -o /dev/null http://localhost:$(AGENT_PORT)/api/chat/health \
 		&& echo "  ● agent    ✓" || echo "  ○ agent    ✕"
-	@curl -sf -o /dev/null http://localhost:$(WEB_PORT) \
+	@curl --noproxy '*' --connect-timeout 1 --max-time 3 -sf -o /dev/null http://localhost:$(WEB_PORT) \
 		&& echo "  ● web      ✓" || echo "  ○ web      ✕"
 
 # ── 构建 Windows 客户端 ───────────────────────────────────
