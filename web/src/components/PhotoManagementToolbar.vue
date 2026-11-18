@@ -72,6 +72,7 @@ const emit = defineEmits<{
   clearSelection: []
   intervalSelect: []
   downloadSelection: []
+  moveSelection: []
   goToPostStudio: []
 }>()
 
@@ -134,7 +135,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="toolbarRef" class="toolbar">
+  <div ref="toolbarRef" class="toolbar" :class="{ 'is-selecting': selectionMode }">
     <div class="toolbar-left">
       <h3 class="toolbar-title">图片管理</h3>
       <!-- 内联模式：宽度充足 -->
@@ -260,12 +261,13 @@ onBeforeUnmount(() => {
         </NPopover>
       </div>
     </div>
-    <NSpace v-if="selectionMode" :wrap="false">
+    <NSpace v-if="selectionMode" :wrap="true">
       <span class="selection-count">已选 {{ selectedCount }} 张</span>
       <NButton @click="$emit('selectAll')">全选</NButton>
       <NButton :disabled="selectedCount === 0" @click="$emit('clearSelection')">取消全选</NButton>
       <NButton v-if="showIntervalSelect" @click="$emit('intervalSelect')">区间选择</NButton>
       <NButton :disabled="selectedCount === 0" :loading="downloadLoading" @click="$emit('downloadSelection')"><template #icon><NIcon><DownloadOutline /></NIcon></template>下载 ZIP</NButton>
+      <NButton :disabled="selectedCount === 0" @click="$emit('moveSelection')">修改活动</NButton>
       <NButton type="primary" :disabled="selectedCount === 0" @click="$emit('goToPostStudio')"><template #icon><NIcon><ImagesOutline /></NIcon></template>图文工坊</NButton>
       <NButton @click="$emit('toggleSelectionMode')"><template #icon><NIcon><CloseOutline /></NIcon></template>退出选择</NButton>
     </NSpace>
@@ -284,6 +286,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; }
+.toolbar.is-selecting { height: auto; min-height: 56px; flex-wrap: wrap; gap: 12px; padding: 12px 24px; box-sizing: border-box; }
 .toolbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .toolbar-title { margin: 0; font-size: 16px; white-space: nowrap; }
 .toolbar-inline { display: flex; align-items: center; gap: 12px; }

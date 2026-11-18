@@ -203,6 +203,8 @@ var burstGroups = &burstGroupManager{}
 func (s *PhotoServer) RebuildBurstGroups(
 	_ctx context.Context, _ *api.Empty,
 ) (*api.RebuildBurstGroupsResponse, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
 	ctx := papp.NewAppCtx(_ctx)
 
 	if burstGroups.isRunning() {

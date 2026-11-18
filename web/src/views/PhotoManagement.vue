@@ -10,6 +10,7 @@ import ConflictModal from '../components/ConflictModal.vue'
 import BurstGroupModal from '../components/BurstGroupModal.vue'
 import PhotoListBrowser from '../components/PhotoListBrowser.vue'
 import PhotoManagementToolbar from '../components/PhotoManagementToolbar.vue'
+import PhotoActivityMoveModal from '../components/PhotoActivityMoveModal.vue'
 import { usePhotos } from '../composables/usePhotos'
 import { useUpload } from '../composables/useUpload'
 import { useVlmQueue } from '../composables/useVlmQueue'
@@ -98,6 +99,7 @@ async function confirmBatchRepair() {
 }
 const selectedIds = ref<Set<string>>(new Set())
 const downloadLoading = ref(false)
+const showActivityMove = ref(false)
 const selectedCount = computed(() => selectedIds.value.size)
 // 恰好选中 2 张时显示「区间选择」按钮
 const showIntervalSelect = computed(() => selectedIds.value.size === 2)
@@ -138,6 +140,17 @@ function selectAllVisible() {
 
 function clearSelection() {
   selectedIds.value = new Set()
+}
+
+function handleActivityMoved() {
+  clearSelection()
+  closeDetail()
+  void applyFilters()
+  void fetchStats()
+  void fetchTimelines()
+  void syncGroupCollections().catch((error) => message.warning(
+    error instanceof Error ? error.message : '连拍组索引同步失败',
+  ))
 }
 
 async function downloadSelection() {
@@ -288,6 +301,7 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
         :selection-mode="selectionMode" :selected-count="selectedCount" :show-interval-select="showIntervalSelect" :download-loading="downloadLoading"
         @apply-filters="applyFilters" @reset-filters="resetPhotoFilters" @cycle-view-level="handleCycleViewLevel" @change-segment-mode="handleSegmentModeChange" @toggle-sort-order="toggleSortOrder" @start-vlm="handleStartVlm" @stop-vlm="handleStopVlm" @start-embed="handleStartEmbed" @stop-embed="handleStopEmbed" @rebuild-burst="handleRebuildBurst" @upload="openUploadModal"
         @toggle-selection-mode="toggleSelectionMode" @select-all="selectAllVisible" @clear-selection="clearSelection" @interval-select="intervalSelect" @download-selection="downloadSelection" @go-to-post-studio="goToPostStudio"
+        @move-selection="showActivityMove = true"
       />
       <div class="archive-actions">
         <PhotoArchiveActions :activity="filterTimeline" @changed="applyFilters(); fetchStats(); fetchSegments(); fetchTimelines()" />
@@ -301,6 +315,8 @@ onUnmounted(() => { stopBurstPolling(); stopDescribePolling(); stopEmbedProgress
       />
     </div></NLayoutContent>
   </NLayout>
+  <PhotoActivityMoveModal v-model:show="showActivityMove" :photo-ids="[...selectedIds]"
+    :burst-profile="settings.burstViewLevel" @changed="handleActivityMoved" />
   <PhotoDetail :show="showDetail" :photo="selectedPhoto" :loading="detailLoading" :nav-list="photoNavList" :describe-processing="detailDescribeProcessing" :embed-processing="detailEmbedProcessing" :validate-processing="detailValidateProcessing" :vlm-batch-running="vlmStatus.running" :embed-batch-running="embedStatus.running" :show-vlm-actions="true" @close="closeDetail" @navigate="fetchPhotoDetail" @trigger-describe="handleTriggerDescribe" @validate-description="handleValidateDescription" @trigger-embed="handleTriggerEmbed" @view-description="handleViewDescription" />
   <NModal v-model:show="showBatchConfirm" preset="card" :title="batchKind === 'vlm' ? '批量 VLM 审查' : '批量 Embedding 审查'" style="width: 640px">
     <NSpin :show="batchAuditLoading">

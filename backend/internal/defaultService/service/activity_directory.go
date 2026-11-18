@@ -327,6 +327,10 @@ func activityPreviewNames() (map[string]string, error) {
 }
 
 func syncActivityDirectoriesLocked(ctx *papp.AppCtx) ([]activityDirectory, error) {
+	err := recoverPendingActivityMove(ctx)
+	if err != nil {
+		return nil, err
+	}
 	list, err := readActivityDirectories(ctx)
 	if err != nil {
 		return nil, err
