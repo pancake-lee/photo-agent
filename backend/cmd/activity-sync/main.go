@@ -19,6 +19,7 @@ func main() {
 	restorePlan := flag.String("restore-plan", "", "local favorites restore manifest")
 	restoreReport := flag.String("restore-report", "", "restore result JSON path")
 	inheritAI := flag.Bool("inherit-ai", false, "inherit locally validated legacy AI results")
+	forgetActivity := flag.String("forget-missing-activity", "", "confirmed externally deleted activity ID")
 	flag.Parse()
 	if *path == "" {
 		panic("必须使用 -c 指定配置文件")
@@ -32,6 +33,12 @@ func main() {
 	err = pconfig.Scan(&conf.C)
 	if err != nil {
 		panic(err)
+	}
+	if *forgetActivity != "" {
+		err = service.ForgetMissingActivity(context.Background(), *forgetActivity)
+		if err != nil {
+			panic(err)
+		}
 	}
 	err = service.SyncActivityDirectories(context.Background())
 	if err != nil {

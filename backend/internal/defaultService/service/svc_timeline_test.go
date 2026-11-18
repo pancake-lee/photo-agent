@@ -302,3 +302,59 @@ func TestEmptyDirectoryRenameAndTimezoneOrdering(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMissingActivityDoesNotBlockOtherActivities(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	_, missing := importActivityTestPhoto(t, ctx, "202501-移走", true)
+	_, healthy := importActivityTestPhoto(t, ctx, "202502-保留", true)
+	row, err := data.PhotoDAO.GetByID(ctx, missing.PhotoID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.RemoveAll(filepath.Join(conf.C.Storage.PhotoSrc, row.Timeline))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := TimelineServer{}
+	list, err := server.ListEvents(ctx, &api.Empty{})
+	if err != nil || len(list.Events) != 1 || list.Events[0].Event != "202502-保留" {
+		t.Fatalf("missing directory blocked list: %+v %v", list, err)
+	}
+	router := khttp.NewServer()
+	(&PhotoServer{}).Reg(nil, router)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/photos?timeline="+url.QueryEscape("202502-保留"), nil))
+	var result api.SearchPhotosResponse
+	err = protojson.Unmarshal(response.Body.Bytes(), &result)
+	if err != nil || response.Code != http.StatusOK || len(result.Items) != 1 || result.Items[0].Id != healthy.PhotoID {
+		t.Fatalf("missing directory blocked search: %d %s %v", response.Code, response.Body, err)
+	}
+	if _, err = data.PhotoDAO.GetByID(ctx, missing.PhotoID); err != nil {
+		t.Fatal("unconfirmed missing photo was deleted")
+	}
+	err = ForgetMissingActivity(ctx, list.Events[0].Id)
+	if err == nil {
+		t.Fatal("present activity was purged")
+	}
+	err = ForgetMissingActivity(ctx, row.ActivityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = data.PhotoDAO.GetByID(ctx, missing.PhotoID); err == nil {
+		t.Fatal("confirmed deleted photo remains")
+	}
+	if _, err = os.Stat(filepath.Join(conf.C.Storage.PhotoPath, row.Timeline)); !os.IsNotExist(err) {
+		t.Fatalf("orphan preview remains: %v", err)
+	}
+	deleted, err := data.PhotoDAO.ListDeletedPhotoIDs(ctx, true)
+	if err != nil || len(deleted) != 1 || deleted[0] != missing.PhotoID {
+		t.Fatalf("missing purge tombstone: %+v %v", deleted, err)
+	}
+	if _, err = data.PhotoDAO.GetByID(ctx, healthy.PhotoID); err != nil {
+		t.Fatal("unrelated photo changed")
+	}
+	err = ForgetMissingActivity(ctx, row.ActivityID)
+	if err != nil {
+		t.Fatalf("cleanup is not retryable: %v", err)
+	}
+}

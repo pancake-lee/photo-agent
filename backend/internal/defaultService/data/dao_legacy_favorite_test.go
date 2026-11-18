@@ -32,3 +32,37 @@ func TestRestoredFavoriteKeepsLiveDescriptionAndPairManifest(t *testing.T) {
 		t.Fatal("missing merge target was recreated")
 	}
 }
+
+func TestForgetMissingPhotoKeepsPurgeIdentity(t *testing.T) {
+	ctx, cleanup := setupTestDB(t)
+	defer cleanup()
+	row := &model.Photo{ID: "externally-deleted", Filename: "gone.jpg"}
+	state := PhotoArchiveDO{PhotoID: row.ID, Favorite: true}
+	err := PhotoDAO.SaveVerifiedImport(ctx, row, state, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ForgetMissingPhoto(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = PhotoDAO.GetByID(ctx, row.ID); err == nil {
+		t.Fatal("photo still present")
+	}
+	after, err := PhotoDAO.GetArchiveState(ctx, row.ID)
+	if err != nil || after.Favorite {
+		t.Fatal("orphan archive state remains")
+	}
+	item, err := PhotoDAO.FindPhotoRecycle(ctx, row.ID, "photo")
+	if err != nil || item == nil || item.State != "purged" {
+		t.Fatalf("purge identity: %+v %v", item, err)
+	}
+	err = ForgetMissingPhoto(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := PhotoDAO.ListDeletedPhotoIDs(ctx, true)
+	if err != nil || len(ids) != 1 || ids[0] != row.ID {
+		t.Fatalf("purge retry duplicated identity: %+v %v", ids, err)
+	}
+}

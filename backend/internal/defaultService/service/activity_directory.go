@@ -20,6 +20,7 @@ import (
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"github.com/pancake-lee/pgo/pkg/papp"
+	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
 )
 
@@ -381,8 +382,12 @@ func syncActivityDirectoriesLocked(ctx *papp.AppCtx) ([]activityDirectory, error
 		}
 		delete(oldNames, id)
 	}
-	for _, old := range oldNames {
-		return nil, fmt.Errorf("活动目录缺失或稳定标识已被修改: %s", old)
+	if len(oldNames) > 0 {
+		for _, old := range oldNames {
+			plogger.Warnf("活动目录缺失，保留记录等待确认，其他活动继续可用: %s", old)
+		}
+		// Do not finalize legacy metadata retirement while directories are missing.
+		return list, nil
 	}
 	err = data.RetireLegacyTimelineEvents(ctx)
 	if err != nil {
@@ -476,5 +481,102 @@ func normalizeArchiveActivity(ctx *papp.AppCtx, req *archiveImportRequest) error
 	}
 	req.ActivityID = meta.ID
 	req.activityNormalized = true
+	return nil
+}
+
+// ForgetMissingActivity is an explicit maintenance action after the user
+// confirms an external deletion. It never restores files or infers deletion.
+func ForgetMissingActivity(ctx context.Context, id string) error {
+	if !validActivityID(id) {
+		return fmt.Errorf("活动标识无效")
+	}
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	app := papp.NewAppCtx(ctx)
+	locations, err := data.ListActivityLocations(app)
+	if err != nil {
+		return err
+	}
+	name := ""
+	for _, location := range locations {
+		if location.ActivityID != id {
+			continue
+		}
+		if name != "" && name != location.Timeline {
+			return fmt.Errorf("活动目录记录不一致")
+		}
+		name = location.Timeline
+	}
+	if name == "" {
+		return nil
+	}
+	if !archiveComponent(name) {
+		return fmt.Errorf("活动目录名无效")
+	}
+	_, err = os.Lstat(filepath.Join(conf.C.Storage.PhotoSrc, name))
+	if !os.IsNotExist(err) {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("活动目录仍存在，拒绝清理: %s", name)
+	}
+	photos, err := data.PhotoDAO.ListArchiveActivity(app, name)
+	if err != nil {
+		return err
+	}
+	known := map[string]bool{activityPreviewIDFile: true}
+	for _, photo := range photos {
+		if photo.ActivityID != id || !archiveComponent(photo.Filename) {
+			return fmt.Errorf("照片活动关联不一致")
+		}
+		known[photo.Filename] = true
+	}
+	err = archiveSafeDir(conf.C.Storage.PhotoPath, name)
+	if err != nil {
+		return err
+	}
+	preview := filepath.Join(conf.C.Storage.PhotoPath, name)
+	entries, readErr := os.ReadDir(preview)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return readErr
+	}
+	if readErr == nil {
+		marker := filepath.Join(preview, activityPreviewIDFile)
+		info, statErr := os.Lstat(marker)
+		if statErr != nil {
+			return statErr
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("活动预览标识无效")
+		}
+		raw, markerErr := os.ReadFile(marker)
+		if markerErr != nil {
+			return markerErr
+		}
+		if string(raw) != id {
+			return fmt.Errorf("活动预览标识不一致")
+		}
+		for _, entry := range entries {
+			if !known[entry.Name()] || !entry.Type().IsRegular() {
+				return fmt.Errorf("活动预览目录含未确认文件: %s", entry.Name())
+			}
+		}
+		for _, entry := range entries {
+			err = os.Remove(filepath.Join(preview, entry.Name()))
+			if err != nil {
+				return err
+			}
+		}
+		err = os.Remove(preview)
+		if err != nil {
+			return err
+		}
+	}
+	for _, photo := range photos {
+		err = data.ForgetMissingPhoto(app, photo.ID)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

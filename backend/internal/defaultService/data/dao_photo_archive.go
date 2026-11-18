@@ -227,3 +227,27 @@ func (*photoDAO) FindCompatibleArchivedImport(ctx *papp.AppCtx, activity, jpg, n
 	}
 	return &rows[0], nil
 }
+
+// ForgetMissingPhoto keeps a purge tombstone so the existing index lifecycle
+// can remove vectors without recreating an externally deleted original.
+func ForgetMissingPhoto(ctx *papp.AppCtx, id string) error {
+	if id == "" {
+		return errors.New("照片 ID 不能为空")
+	}
+	return pdb.GetGormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := tx.Delete(&model.Photo{}, "id = ?", id).Error
+		if err != nil {
+			return err
+		}
+		err = tx.Delete(&model.PhotoArchive{}, "photo_id = ?", id).Error
+		if err != nil {
+			return err
+		}
+		err = tx.Exec("DELETE FROM ai_processing_history WHERE photo_id = ?", id).Error
+		if err != nil {
+			return err
+		}
+		item := model.PhotoRecycle{ID: "missing-photo-" + id, PhotoID: id, Kind: "photo", State: "purged", DeletedAt: time.Now().UTC()}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&item).Error
+	})
+}
