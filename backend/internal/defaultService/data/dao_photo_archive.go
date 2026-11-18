@@ -2,6 +2,7 @@ package data
 
 import (
 	"errors"
+	"path/filepath"
 	"time"
 
 	"backend/internal/pkg/db/model"
@@ -27,7 +28,7 @@ func (*photoDAO) FindArchivedImport(ctx *papp.AppCtx, key string) (*PhotoArchive
 func (*photoDAO) FindByArchivePath(ctx *papp.AppCtx, path string) (*PhotoDO, error) {
 	var row PhotoDO
 	err := pdb.GetGormDB().WithContext(ctx).
-		Where("file_path = ? COLLATE NOCASE", path).Take(&row).Error
+		Where("timeline = ? AND filename = ? COLLATE NOCASE", archiveFolder(path), filepath.Base(path)).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -93,20 +94,11 @@ func (*photoDAO) SetArchiveFavorite(ctx *papp.AppCtx, id string, value bool) err
 	}).Create(&state).Error
 }
 
-func (*photoDAO) ListImportedActivities(ctx *papp.AppCtx) ([]string, error) {
-	names := make([]string, 0)
-	err := pdb.GetGormDB().WithContext(ctx).Table("photos").
-		Joins("JOIN photo_archives ON photo_archives.photo_id = photos.id").
-		Where("photo_archives.import_key <> '' AND photos.timeline <> ''").
-		Distinct("photos.timeline").Order("photos.timeline").Pluck("photos.timeline", &names).Error
-	return names, err
-}
-
 func (*photoDAO) ListArchiveActivity(ctx *papp.AppCtx, activity string) ([]PhotoDO, error) {
 	var rows []PhotoDO
 	err := pdb.GetGormDB().WithContext(ctx).
 		Where("timeline = ? AND file_type <> ?", activity, "nef").
-		Order("file_path").Find(&rows).Error
+		Order("filename").Find(&rows).Error
 	return rows, err
 }
 
@@ -205,4 +197,33 @@ func (*photoDAO) ListRecycleWork(ctx *papp.AppCtx, cutoff time.Time) ([]PhotoRec
 			[]string{"moving", "restoring"}, "deleted", cutoff).
 		Find(&items).Error
 	return items, err
+}
+
+func archiveFolder(path string) string {
+	folder := filepath.Dir(path)
+	if folder == "." {
+		return ""
+	}
+	return folder
+}
+
+// FindCompatibleArchivedImport reuses the same JPG when a favorites-only
+// import omits an already archived NEF, or a later import adds that NEF.
+// Ambiguous copies are left to normal path conflict resolution.
+func (*photoDAO) FindCompatibleArchivedImport(ctx *papp.AppCtx, activity, jpg, nef string) (*PhotoArchiveDO, error) {
+	var rows []PhotoArchiveDO
+	query := pdb.GetGormDB().WithContext(ctx).Table("photo_archives").
+		Select("photo_archives.*").Joins("JOIN photos ON photos.id = photo_archives.photo_id").
+		Where("photos.timeline = ? AND photo_archives.jpgsha256 = ?", activity, jpg)
+	if nef != "" {
+		query = query.Where("photo_archives.nefsha256 IN ?", []string{"", nef})
+	}
+	err := query.Limit(2).Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) != 1 {
+		return nil, nil
+	}
+	return &rows[0], nil
 }

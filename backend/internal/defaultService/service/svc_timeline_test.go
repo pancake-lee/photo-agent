@@ -1,158 +1,304 @@
 package service
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"backend/internal/defaultService/conf"
+	"backend/internal/defaultService/data"
+	"backend/internal/pkg/api"
+
+	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/pancake-lee/pgo/pkg/papp"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// mkEntry 构造时间线事件
-func mkEntry(date string) TimelineEntry {
-	t, _ := time.ParseInLocation("2006-01-02", date, time.Local)
-	return TimelineEntry{Date: t, Event: "事件-" + date}
+func importActivityTestPhoto(t *testing.T, ctx context.Context, name string, favorite bool) (archiveImportRequest, archiveImportResult) {
+	t.Helper()
+	app := papp.NewAppCtx(ctx)
+	jpg := archiveTestJPG(t, 51)
+	req := archiveTestRequest(name, jpg, nil, favorite)
+	plan, _, err := resolveArchiveImport(app, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Target = plan.Target
+	err = os.MkdirAll(filepath.Join(conf.C.Storage.PhotoSrc, name), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, plan.Target), jpg, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := finishVerifiedArchive(app, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return req, result
 }
 
-// mkScatteredPhoto 构造散片候选照片
-func mkScatteredPhoto(id, shotAt string) scatteredPhoto {
-	t, _ := time.ParseInLocation("2006-01-02 15:04", shotAt, time.Local)
-	return scatteredPhoto{PhotoID: id, ShotAt: t}
-}
-
-func TestIsScatteredName(t *testing.T) {
-	cases := []struct {
-		name string
-		want bool
-	}{
-		{"2026-08-散片1", true},
-		{"2026-08-散片12", true},
-		{"2026-8-散片1", false},      // 月份非两位
-		{"202608-散片1", false},      // 无月分隔
-		{"2026-08-散片a", false},     // 序号非数字
-		{"2026-08-散片", false},      // 无序号
-		{"兰圃", false},              // 普通事件名
-		{"散片-2026-08", false},      // 顺序错
-		{"2026-08-散片1-散片2", false}, // 多段
+func TestDirectoryActivitiesRenameAndFavoriteMerge(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	req, result := importActivityTestPhoto(t, ctx, "202601-旅行", false)
+	server := TimelineServer{}
+	events, err := server.ListEvents(ctx, &api.Empty{})
+	if err != nil || len(events.Events) != 1 {
+		t.Fatalf("events: %+v %v", events, err)
 	}
-	for _, c := range cases {
-		if got := isScatteredName(c.name); got != c.want {
-			t.Errorf("isScatteredName(%q) = %v, want %v", c.name, got, c.want)
-		}
+	id := events.Events[0].Id
+	renamed := "202601-旅行新名"
+	_, err = server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Id: id, Event: renamed, Date: "2026-01-05T12:34:56+08:00", Note: "活动备注"})
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestSplitScatteredPhotos(t *testing.T) {
-	windowDays := 7
-	entries := []TimelineEntry{
-		mkEntry("2026-05-10"),
-		mkEntry("2026-06-20"),
+	row, err := data.PhotoDAO.GetByID(ctx, result.PhotoID)
+	if err != nil || row.Timeline != renamed || row.FilePath != filepath.Join(renamed, row.Filename) || row.ActivityID != id {
+		t.Fatalf("renamed row: %+v %v", row, err)
 	}
-
-	// 事件 2026-05-10 覆盖约 [05-03, 05-16]（含与下一事件的中点截断），
-	// 事件 2026-06-20 覆盖约 [06-13, 06-27]。
-	photos := []scatteredPhoto{
-		// 事件 1 之前
-		mkScatteredPhoto("p1", "2026-05-01 10:00"),
-		// 事件 1 与事件 2 之间跨两个月：5 月尾巴 + 6 月头
-		mkScatteredPhoto("p2", "2026-05-20 10:00"),
-		mkScatteredPhoto("p3", "2026-05-28 10:00"),
-		mkScatteredPhoto("p4", "2026-06-05 10:00"),
-		mkScatteredPhoto("p5", "2026-06-10 10:00"),
-		// 事件 2 之后
-		mkScatteredPhoto("p6", "2026-07-15 10:00"),
-		// 命中事件 1（窗口内），不算散片
-		mkScatteredPhoto("h1", "2026-05-12 10:00"),
-		// 命中事件 2（窗口内）
-		mkScatteredPhoto("h2", "2026-06-21 10:00"),
+	if _, err = os.Stat(filepath.Join(conf.C.Storage.PhotoPath, row.FilePath)); err != nil {
+		t.Fatal(err)
 	}
-
-	groups := splitScatteredPhotos(photos, entries, windowDays)
-	if len(groups) != 4 {
-		t.Fatalf("groups = %d, want 4（事件前 / 5 月尾 / 6 月头 / 事件后）, got %+v", len(groups), groups)
+	req.Activity, req.Target, req.Favorite = renamed, row.FilePath, true
+	repeated, err := finishVerifiedArchive(ctx, req)
+	if err != nil || repeated.PhotoID != result.PhotoID {
+		t.Fatalf("dedup: %+v %v", repeated, err)
 	}
-
-	wantNames := []string{"2026-05-散片1", "2026-05-散片2", "2026-06-散片1", "2026-07-散片1"}
-	wantCounts := []int{1, 2, 2, 1}
-	for i, g := range groups {
-		if g.Name != wantNames[i] {
-			t.Errorf("group[%d].Name = %q, want %q", i, g.Name, wantNames[i])
-		}
-		if len(g.IDList) != wantCounts[i] {
-			t.Errorf("group[%d] size = %d, want %d", i, len(g.IDList), wantCounts[i])
-		}
+	state, err := data.PhotoDAO.GetArchiveState(ctx, row.ID)
+	if err != nil || !state.Favorite {
+		t.Fatalf("favorite merge: %+v %v", state, err)
 	}
-}
-
-func TestSplitScatteredPhotosEmpty(t *testing.T) {
-	if got := splitScatteredPhotos(nil, []TimelineEntry{mkEntry("2026-05-10")}, 7); got != nil {
-		t.Errorf("empty photos should return nil, got %+v", got)
+	manual := "202601-服务器改名"
+	err = os.Rename(filepath.Join(conf.C.Storage.PhotoSrc, renamed), filepath.Join(conf.C.Storage.PhotoSrc, manual))
+	if err != nil {
+		t.Fatal(err)
 	}
-	// 无事件时全部照片都是散片
-	groups := splitScatteredPhotos(
-		[]scatteredPhoto{mkScatteredPhoto("p1", "2026-05-01 10:00")},
-		nil, 7,
-	)
-	if len(groups) != 1 || groups[0].Name != "2026-05-散片1" {
-		t.Errorf("no-event groups = %+v, want single 2026-05-散片1", groups)
+	router := khttp.NewServer()
+	(&PhotoServer{}).Reg(nil, router)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/photos?timeline="+url.QueryEscape(manual), nil))
+	var search api.SearchPhotosResponse
+	if err = protojson.Unmarshal(response.Body.Bytes(), &search); err != nil || response.Code != http.StatusOK || len(search.Items) != 1 || search.Items[0].Timeline != manual {
+		t.Fatalf("renamed HTTP search: %d %s %v", response.Code, response.Body, err)
 	}
-}
-
-func TestSplitScatteredPhotosCrossYearAndMonthlySequence(t *testing.T) {
-	entries := []TimelineEntry{
-		mkEntry("2026-12-15"),
-		mkEntry("2027-01-15"),
-		mkEntry("2027-01-25"),
+	second := manual + "-再次"
+	err = os.Rename(filepath.Join(conf.C.Storage.PhotoSrc, manual), filepath.Join(conf.C.Storage.PhotoSrc, second))
+	if err != nil {
+		t.Fatal(err)
 	}
-	photos := []scatteredPhoto{
-		mkScatteredPhoto("dec", "2026-12-28 10:00"),
-		mkScatteredPhoto("jan1", "2027-01-05 10:00"),
-		mkScatteredPhoto("hit", "2027-01-15 10:00"),
-		mkScatteredPhoto("jan2", "2027-01-20 10:00"),
+	manual = second
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/photos/"+row.ID+"/image?size=original", nil))
+	if response.Code != http.StatusOK || response.Body.Len() == 0 {
+		t.Fatalf("renamed image: %d %s", response.Code, response.Body)
 	}
-
-	groups := splitScatteredPhotos(photos, entries, 3)
-	wantNames := []string{"2026-12-散片1", "2027-01-散片1", "2027-01-散片2"}
-	if len(groups) != len(wantNames) {
-		t.Fatalf("groups = %d, want %d: %+v", len(groups), len(wantNames), groups)
+	events, err = server.ListEvents(ctx, &api.Empty{})
+	if err != nil || len(events.Events) != 1 || events.Events[0].Id != id || events.Events[0].Event != manual || events.Events[0].Note != "活动备注" {
+		t.Fatalf("external rename: %+v %v", events, err)
 	}
-	for i, want := range wantNames {
-		if groups[i].Name != want {
-			t.Errorf("group[%d].Name = %q, want %q", i, groups[i].Name, want)
-		}
+	row, err = data.PhotoDAO.GetByID(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(conf.C.Storage.PhotoPath, row.FilePath)); err != nil {
+		t.Fatal(err)
+	}
+	stale := req
+	stale.Activity, stale.Target, stale.PhotoID = renamed, filepath.Join(renamed, row.Filename), row.ID
+	replay, err := finishVerifiedArchive(ctx, stale)
+	if err != nil || replay.PhotoID != row.ID || replay.Activity != manual {
+		t.Fatalf("old receipt: %+v %v", replay, err)
+	}
+	if _, err = os.Stat(filepath.Join(conf.C.Storage.PhotoSrc, renamed)); !os.IsNotExist(err) {
+		t.Fatal("old activity name was recreated")
+	}
+	_, err = server.DeleteEvent(ctx, &api.DeleteTimelineEventRequest{Id: id})
+	if err == nil {
+		t.Fatal("nonempty activity was deleted")
 	}
 }
 
-func TestFindEventByTimeWindow(t *testing.T) {
-	windowDays := 7
-	entries := []TimelineEntry{
-		{Date: dateOf("2026-05-10"), Event: "活动A"},
-		{Date: dateOf("2026-06-20"), Event: "活动B"},
+func TestDirectoryActivitiesMetadataValidationAndEmptyCRUD(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	server := TimelineServer{}
+	created, err := server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Event: "202602-空活动", Note: "可编辑"})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	cases := []struct {
-		shotAt string
-		want   string
-	}{
-		{"2026-05-10 12:00", "活动A"}, // 活动当天
-		{"2026-05-05 12:00", "活动A"}, // 前 5 天
-		{"2026-05-17 12:00", "活动A"}, // 后 7 天（同月无下一事件，min(中点, +7d)）
-		{"2026-06-21 12:00", "活动B"}, // 活动B 当天
-		{"2026-05-30 12:00", ""},    // 两活动之间空隙
-		{"2024-01-01 12:00", ""},    // 远早于所有活动
+	_, err = server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Event: "../escape"})
+	if err == nil {
+		t.Fatal("invalid name accepted")
 	}
-	for _, c := range cases {
-		got := findEventByTime(shotAtOf(c.shotAt), entries, windowDays)
-		if got != c.want {
-			t.Errorf("findEventByTime(%q) = %q, want %q", c.shotAt, got, c.want)
-		}
+	_, err = server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Event: "202602-空活动"})
+	if err == nil {
+		t.Fatal("existing directory overwritten")
+	}
+	_, err = server.DeleteEvent(ctx, &api.DeleteTimelineEventRequest{Id: created.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, result := importActivityTestPhoto(t, ctx, "202603-活动", true)
+	meta, err := readActivityMetadata("202603-活动")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Mkdir(filepath.Join(conf.C.Storage.PhotoSrc, "202603-复制"), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = writeActivityMetadata("202603-复制", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = SyncActivityDirectories(ctx); err == nil {
+		t.Fatal("duplicate stable ID accepted")
+	}
+	row, err := data.PhotoDAO.GetByID(ctx, result.PhotoID)
+	if err != nil || row.Timeline != "202603-活动" {
+		t.Fatalf("conflict changed records: %+v %v", row, err)
+	}
+	err = os.Remove(filepath.Join(conf.C.Storage.PhotoSrc, "202603-复制", activityMetadataFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Remove(filepath.Join(conf.C.Storage.PhotoSrc, "202603-复制"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, "202603-活动", activityMetadataFile), []byte("broken"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = SyncActivityDirectories(ctx); err == nil {
+		t.Fatal("corrupt metadata silently replaced")
 	}
 }
 
-// dateOf / shotAtOf 测试辅助
-func dateOf(s string) time.Time {
-	t, _ := time.ParseInLocation("2006-01-02", s, time.Local)
-	return t
+func TestDirectoryRenameRestoresRecycledPhotoToCurrentActivity(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	_, result := importActivityTestPhoto(t, ctx, "202604-活动", true)
+	err := startPhotoRecycle(ctx, result.PhotoID, "photo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := data.PhotoDAO.FindPhotoRecycle(ctx, result.PhotoID, "photo")
+	if err != nil || item == nil {
+		t.Fatalf("recycle: %+v %v", item, err)
+	}
+	err = os.Rename(filepath.Join(conf.C.Storage.PhotoSrc, "202604-活动"), filepath.Join(conf.C.Storage.PhotoSrc, "202604-改名"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = restorePhotoRecycle(ctx, item.ID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, err := data.PhotoDAO.GetByID(ctx, result.PhotoID)
+	if err != nil || row.Timeline != "202604-改名" {
+		t.Fatalf("restore: %+v %v", row, err)
+	}
+	if _, err = os.Stat(filepath.Join(conf.C.Storage.PhotoSrc, row.FilePath)); err != nil {
+		t.Fatal(err)
+	}
+	state, err := data.PhotoDAO.GetArchiveState(ctx, row.ID)
+	if err != nil || !state.Favorite {
+		t.Fatalf("restored favorite: %+v %v", state, err)
+	}
 }
 
-func shotAtOf(s string) time.Time {
-	t, _ := time.ParseInLocation("2006-01-02 15:04", s, time.Local)
-	return t
+func TestFavoritesJPGReimportReusesArchivedPair(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	jpg, nef := archiveTestJPG(t, 88), []byte("paired raw original")
+	req := archiveTestRequest("202605-活动", jpg, nef, false)
+	plan, _, err := resolveArchiveImport(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Target = plan.Target
+	err = os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, plan.Target), jpg, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(conf.C.Storage.PhotoSrc, plan.NEFTarget), nef, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := finishVerifiedArchive(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	favorite := archiveTestRequest(req.Activity, jpg, nil, true)
+	// Favorites exports may have a different filename but identical bytes.
+	favorite.Name = "favorite-export.JPG"
+	chosen, _, err := resolveArchiveImport(ctx, favorite)
+	if err != nil || chosen.PhotoID != original.PhotoID || chosen.Target != req.Target {
+		t.Fatalf("favorite dedup: %+v %v", chosen, err)
+	}
+	favorite.Target = chosen.Target
+	merged, err := finishVerifiedArchive(ctx, favorite)
+	if err != nil || merged.PhotoID != original.PhotoID {
+		t.Fatalf("merge: %+v %v", merged, err)
+	}
+	state, err := data.PhotoDAO.GetArchiveState(ctx, original.PhotoID)
+	if err != nil || !state.Favorite || state.NEFSHA256 != req.NEF {
+		t.Fatalf("pair/favorite changed: %+v %v", state, err)
+	}
+	all, err := data.PhotoDAO.GetAll(ctx)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("duplicate photos: %d %v", len(all), err)
+	}
+	raw, err := os.ReadFile(filepath.Join(conf.C.Storage.PhotoSrc, plan.NEFTarget))
+	if err != nil || string(raw) != string(nef) {
+		t.Fatal("existing NEF was changed")
+	}
+}
+
+func TestEmptyDirectoryRenameAndTimezoneOrdering(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	server := TimelineServer{}
+	first, err := server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Event: "later", Date: "2026-01-05T20:00:00Z"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Event: "earlier", Date: "2026-01-06T01:00:00+08:00"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := server.ListEvents(ctx, &api.Empty{})
+	if err != nil || events.Events[0].Id != first.Id {
+		t.Fatalf("timezone order: %+v %v", events, err)
+	}
+	preview := filepath.Join(conf.C.Storage.PhotoPath, "later")
+	err = os.MkdirAll(preview, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ensureActivityPreviewID(preview, first.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Id: first.Id, Event: "renamed-empty"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(conf.C.Storage.PhotoPath, "renamed-empty", activityPreviewIDFile)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = server.DeleteEvent(ctx, &api.DeleteTimelineEventRequest{Id: first.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = server.SaveEvent(ctx, &api.SaveTimelineEventRequest{Event: "later"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = SyncActivityDirectories(ctx); err != nil {
+		t.Fatal(err)
+	}
 }

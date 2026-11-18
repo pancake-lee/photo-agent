@@ -13,6 +13,7 @@ import (
 
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
+	"backend/internal/pkg/api"
 
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/pancake-lee/pgo/pkg/papp"
@@ -168,6 +169,10 @@ func moveVerifiedArchiveFile(from, to, want string) error {
 }
 
 func startPhotoRecycle(ctx *papp.AppCtx, id, kind string, selected *archivedFile) error {
+	_, syncErr := syncActivityDirectoriesLocked(ctx)
+	if syncErr != nil {
+		return syncErr
+	}
 	item, err := data.PhotoDAO.FindPhotoRecycle(ctx, id, kind)
 	if err != nil {
 		return err
@@ -335,6 +340,17 @@ func restorePhotoRecycle(ctx *papp.AppCtx, id string, now time.Time) error {
 }
 
 func continuePhotoRestore(ctx *papp.AppCtx, item *data.PhotoRecycleDO) error {
+	_, syncErr := syncActivityDirectoriesLocked(ctx)
+	if syncErr != nil {
+		return syncErr
+	}
+	current, lookupErr := data.PhotoDAO.FindRecycle(ctx, item.ID)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if current != nil {
+		item = current
+	}
 	row, files, err := recycleData(item)
 	if err != nil {
 		return err
@@ -705,9 +721,10 @@ func (s *PhotoServer) photoDeletedIDs(ctx khttp.Context) error {
 }
 
 func (s *PhotoServer) listImportedActivities(ctx khttp.Context) error {
-	names, err := data.PhotoDAO.ListImportedActivities(papp.NewAppCtx(ctx.Request().Context()))
+	server := TimelineServer{}
+	result, err := server.ListTimelines(ctx.Request().Context(), &api.Empty{})
 	if err != nil {
 		return apiPhotoArchiveError(ctx, err)
 	}
-	return ctx.Result(http.StatusOK, names)
+	return ctx.Result(http.StatusOK, result.Timelines)
 }

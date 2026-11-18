@@ -129,6 +129,7 @@ export function useTimelines() {
         }, 1500)
       }
     }
+    if (st === 'completed') await onComplete?.()
     return st
   }
 

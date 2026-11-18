@@ -13,8 +13,9 @@ const TableNamePhoto = "photos"
 // Photo mapped from table <photos>
 type Photo struct {
 	ID                       string    `gorm:"column:id;primaryKey" json:"id"`
+	ActivityID               string    `gorm:"column:activity_id;not null;default:'';index" json:"activity_id"`
 	Filename                 string    `gorm:"column:filename;not null" json:"filename"`
-	FilePath                 string    `gorm:"column:file_path;not null" json:"file_path"`
+	FilePath                 string    `gorm:"column:file_path;->;default:''" json:"file_path"`
 	FileType                 string    `gorm:"column:file_type;not null;default:'jpg'" json:"file_type"`
 	Timeline                 string    `gorm:"column:timeline;not null" json:"timeline"`
 	TimelineManual           int32     `gorm:"column:timeline_manual;not null" json:"timeline_manual"`

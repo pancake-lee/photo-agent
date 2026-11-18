@@ -179,27 +179,19 @@ photos 表 description → 分块器（chunk_strategy 配置控制）→ Embeddi
 - 聚合：同一照片多 chunk 只保留距离最小的一条
 - 自动截断：相邻距离比值 ≥1.8 时截断（Max Ratio Gap），保留相关性高的结果
 
-### 3.7 时间线归属与重算
+### 3.7 活动目录与时间线同步
 
-时间线管理维护 SQLite 中的活动事件。Go 后端复用同一套日期窗口进行导入匹配和全量重算。产品行为与验收见 [时间线管理规格](../product-specs/photo-agent.md#28-时间线管理)。
+拍摄活动直接对应 `Storage.PhotoSrc` 下的普通一级子目录，隐藏工作目录不参与。目录名为活动名称的事实来源；活动时间、备注和稳定 UUID 写在目录内的 `.photo-agent.json`，日期支持 `YYYY-MM-DD` 或带时区的 RFC3339，也可留空。首次迁移尽量继承旧事件日期、备注，其余从照片时间或目录年月初始化。
 
-```mermaid
-flowchart TD
-    A[触发重算] --> B[读取活动与照片]
-    B --> C{人工指定或拍摄时间无效}
-    C -->|是| D[保留原归属]
-    C -->|否| E{命中活动窗口}
-    E -->|是| F[写入活动名]
-    E -->|否| G[生成并写入散片组名]
-    D --> H[返回重算进度与计数]
-    F --> H
-    G --> H
-```
+- 照片位置：数据库保存 `activity_id`、`timeline`（可查询的当前目录名缓存）及 `filename`。API `file_path` 由目录名和文件名组合，不再持久化完整或相对文件路径；旧 `file_path` 列清空并停止写入，旧人工归属标记不再参与决策。
+- 同步：启动及位置相关请求之前扫描目录，根据稳定 ID 识别外部改名，同步名称缓存、展示预览、导入去重键和回收记录；不重新执行 VLM 或 Embedding，向量仍通过照片 ID 关联。相同目录元数据 ID、大小写冲突、损坏元数据或缺失已绑定目录均报错，不猜测合并。
+- 改名：客户端修改活动名会改源目录，按同一同步流程迁移预览并更新数据库。预览附带身份标识，支持移动后、数据库提交前中断的重试。数据库写入失败会尝试回滚预览；客户端操作失败会尝试恢复原目录和元数据，返回包含恢复失败原因的错误。
+- 导入：回执返回稳定活动 ID 与当前名称，后续请求也可携带照片 ID，使旧回执在活动改名后仍能定位。相同活动内按 JPG 摘要复用已归档图片，收藏用逻辑或合并；缺省 NEF 的收藏导入不会覆盖已有配对。不同 JPG 内容继续按冲突规则另存。
+- 边界：存在正式上传保留位置时禁止改名；直接在文件系统改名遇到此情况，需要先恢复原名并完成导入。正在选片且尚无归档回执的批次，改名后需重新选择当前活动。
+- 删除：只能删除没有照片记录、有效回收记录、上传保留位置且目录为空的活动。活动时间不参与文件归属，也不生成散片组。
+- 兼容：原重算 API 改为同步执行目录核对，成功返回 `completed`，状态接口返回本次核对数量。旧事件 CRUD 转接目录服务；旧 `timeline_events` 表保留 schema，完成迁移后清空，不再维护活动副本。
 
-- 活动匹配 · 使用后端本地日期和配置窗口。区间从活动日前若干天起，右端取窗口上限与下一活动中点中较早的一天。重叠时按活动日期顺序取首个命中。 [匹配规则](../../backend/internal/defaultService/service/timeline.go#L65) · [配置模板](../../configs/config.yaml#L35)
-- 散片分组 · 设计按活动间隔及本地月份切分，同月组序号按时间递增。当前重算先剔除活动照片，再把剩余照片交给分组函数。实际流程可能把同月、分处活动两侧的散片合并。跨月与同月多段验收以完整重算为准。 [重算入口](../../backend/internal/defaultService/service/svc_timeline.go#L374) · [分组实现](../../backend/internal/defaultService/service/timeline.go#L126)
-- 数据职责 · 活动事件保存日期、名称和备注。照片保存活动名或散片名及人工标记，通过名称逻辑关联。散片清单从现存照片归属聚合，图片管理读取事件和散片清单。旧 JSON 导入属于 v1.0.10 的迁移历史。 [存储定义](../../backend/sql/timeline_events.sql) · [版本记录](../version/v1.0.10.md#时间线顶栏与可维护性lb5-lb8)
-- 执行反馈 · 重算在后端异步执行，同一时刻接受一次任务。页面轮询进度与计数。写入失败记入后端日志，当前状态接口只有运行标记和计数，结束后需结合结果及日志判断部分失败。 [服务契约](../../backend/proto/timeline_service.proto) · [管理页](../../web/src/views/TimelineManagement.vue)
+实现入口：[目录同步](../../backend/internal/defaultService/service/activity_directory.go)、[活动服务](../../backend/internal/defaultService/service/svc_timeline.go)、[数据迁移](../../backend/internal/defaultService/data/dao_activity.go)。产品验收见[时间线管理](../product-specs/photo-agent.md#28-时间线管理)。
 
 ---
 
@@ -249,9 +241,9 @@ flowchart TD
 - `GET /timelines/:name/photos` — 某时间线下照片
 - `GET /timeline-events` — 时间线事件列表
 - `POST /timeline-events` — 新建或更新活动事件
-- `POST /timeline-events/recompute` — 重算时间线归属
-- `GET /timeline-events/recompute/status` — 重算进度
-- `DELETE /timeline-events/:id` — 删除时间线事件
+- `POST /timeline-events/recompute` — 同步活动目录，成功返回 completed
+- `GET /timeline-events/recompute/status` — 最近一次目录同步计数
+- `DELETE /timeline-events/:id` — 删除空活动目录
 
 **连拍分组**：
 
@@ -387,8 +379,8 @@ Vite 开发代理：
 
 `photos` 表由 GORM 生成（`backend/internal/pkg/db/model/photos.gen.go`），字段按职责分组：
 
-- **标识**：`id`（主键）、`filename`、`file_path`、`file_type`
-- **组织**：`timeline`（时间线活动名）、`timeline_manual`（是否手动指定）、`tags`（JSON 数组字符串）、`burst_group_id` / `burst_group_coarse_id`（精细/粗略连拍组）
+- **标识**：`id`（主键）、`activity_id`（活动稳定标识）、`filename`、`file_type`；API 的 `file_path` 为组合投影
+- **组织**：`timeline`（当前活动目录名缓存）、`tags`（JSON 数组字符串）、`burst_group_id` / `burst_group_coarse_id`（精细/粗略连拍组）
 - **AI 描述**：`description`（VLM 原始输出，含 ```json 结构化块）、`description_model`、`description_time`、`description_raw`、`embedding_status`、`embedding_description_time`
 - **结构化属性**（VLM 提取，文本类型）：`objects`、`colors`、`scene`、`lighting`、`mood`、`composition`
 - **EXIF**：`shot_at`、`width`、`height`、`brand`、`model`、`lens`、`focal_length`（文本格式如 "35mm"）、`aperture`、`iso`、`exposure_time`
@@ -485,7 +477,7 @@ photo-agent/
 
 - **Go**：
   - `internal/defaultService/service/file_util.go`：EXIF 提取 + 图片尺寸读取 + ImageMagick 压缩
-  - `internal/defaultService/service/timeline.go`：从数据库读取活动事件，提供日期匹配和散片分组。见 [时间线归属与重算](#37-时间线归属与重算)
+  - `internal/defaultService/service/activity_directory.go`：读取活动目录和元数据，识别改名并同步路径相关状态。见 [活动目录与时间线同步](#37-活动目录与时间线同步)
 - **Python**：
   - `internal/evals/`：RAG 检索评估（黄金查询 + MRR/P@10 指标）与聚类规则评估
   - `scripts/`：检索回归脚本；照片嵌入由 VLM/Embedding 队列闭环完成

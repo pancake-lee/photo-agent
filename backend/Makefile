@@ -86,7 +86,7 @@ dbSqlPath?=./sql
 dbCodePath?=./internal/pkg/db
 .PHONY: gorm
 gorm:
-	rm -rf ${dbCodePath}/model/
+	rm -f ${dbCodePath}/model/*.gen.go
 	rm -rf ${dbCodePath}/query/
 
 # 	最初用的是GORM的[gentool]，后来因为前后还要嵌入我自己的逻辑，

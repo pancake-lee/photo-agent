@@ -1,150 +1,89 @@
 <script setup lang="ts">
-/**
- * TimelineManagement — 时间线管理页。
- *
- * 活动事件的增删改 + 全量重算（进度轮询）+ 散片组只读展示。
- * 重算语义：人工改过的 timeline 保留，事件匹配 + 散片名自动填充其余照片。
- */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import {
-  NLayout,
-  NLayoutContent,
-  NLayoutHeader,
-  NButton,
-  NIcon,
-  NInput,
-  NDatePicker,
-  NEmpty,
-  NSpin,
-  NSpace,
-  NTag,
-  NTooltip,
-  NModal,
-  NForm,
-  NFormItem,
-  NPopconfirm,
-  useMessage,
-} from 'naive-ui'
-import {
-  AddOutline,
-  CreateOutline,
-  TrashOutline,
-  RefreshOutline,
-  CalendarOutline,
-} from '@vicons/ionicons5'
+import { ref, onMounted } from 'vue'
+import { NLayout, NLayoutContent, NLayoutHeader, NButton, NIcon, NInput,
+  NDatePicker, NEmpty, NSpin, NSpace, NTag, NModal, NForm, NFormItem,
+  NPopconfirm, useMessage } from 'naive-ui'
+import { AddOutline, CreateOutline, TrashOutline, RefreshOutline,
+  CalendarOutline } from '@vicons/ionicons5'
 import { useTimelines, type TimelineEventItem } from '../composables/useTimelines'
 
 const message = useMessage()
-
-const {
-  events,
-  scattered,
-  eventsLoading,
-  eventsError,
-  recomputeStatus,
-  fetchEvents,
-  saveEvent,
-  deleteEvent,
-  recompute,
-  fetchRecomputeStatus,
-  stopPolling,
-} = useTimelines()
-
-// ── 事件编辑弹窗 ──
+const { events, eventsLoading, eventsError, fetchEvents, saveEvent,
+  deleteEvent, recompute } = useTimelines()
 const showEditModal = ref(false)
-const editingId = ref('') // 空串 = 新建
+const editingId = ref('')
 const formDate = ref<number | null>(null)
 const formEvent = ref('')
 const formNote = ref('')
 const saving = ref(false)
+const syncing = ref(false)
 
 function openCreate() {
   editingId.value = ''
-  formDate.value = Date.now()
+  formDate.value = null
   formEvent.value = ''
   formNote.value = ''
   showEditModal.value = true
 }
 
-function openEdit(e: TimelineEventItem) {
-  editingId.value = e.id
-  formDate.value = new Date(e.date + 'T00:00:00').getTime()
-  formEvent.value = e.event
-  formNote.value = e.note
+function openEdit(event: TimelineEventItem) {
+  editingId.value = event.id
+  formDate.value = event.date ? new Date(event.date.length === 10
+    ? `${event.date}T00:00:00` : event.date).getTime() : null
+  formEvent.value = event.event
+  formNote.value = event.note
   showEditModal.value = true
 }
 
+function displayDate(date: string): string {
+  if (!date) return '未设置时间'
+  return date.length === 10 ? date : new Date(date).toLocaleString('zh-CN')
+}
+
 async function handleSave() {
-  if (!formDate.value || !formEvent.value.trim()) {
-    message.warning('请填写日期和活动名')
+  if (!formEvent.value.trim()) {
+    message.warning('请填写活动目录名')
     return
   }
-  const d = new Date(formDate.value)
-  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   saving.value = true
   try {
-    await saveEvent({
-      id: editingId.value || undefined,
-      date: dateStr,
-      event: formEvent.value.trim(),
-      note: formNote.value.trim(),
-    })
-    message.success(editingId.value ? '事件已更新' : '事件已创建')
+    await saveEvent({ id: editingId.value || undefined,
+      date: formDate.value === null ? '' : new Date(formDate.value).toISOString(),
+      event: formEvent.value.trim(), note: formNote.value.trim() })
+    message.success(editingId.value ? '活动已更新' : '活动目录已创建')
     showEditModal.value = false
     await fetchEvents()
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : '保存失败')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存失败')
   } finally {
     saving.value = false
   }
 }
 
-async function handleDelete(e: TimelineEventItem) {
+async function handleDelete(event: TimelineEventItem) {
   try {
-    await deleteEvent(e.id)
-    message.success(`已删除「${e.event}」（照片需重算后清理该 timeline）`)
+    await deleteEvent(event.id)
+    message.success(`已删除空活动目录「${event.event}」`)
     await fetchEvents()
-  } catch (err) {
-    message.error(err instanceof Error ? err.message : '删除失败')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 
-// ── 重算 ──
-const recomputing = computed(() => recomputeStatus.value.running)
-const recomputePercent = computed(() => {
-  const { processed, total } = recomputeStatus.value
-  if (total <= 0) return 0
-  return Math.min(100, Math.round((processed / total) * 100))
-})
-
-async function handleRecompute() {
+async function handleSync() {
+  syncing.value = true
   try {
-    const st = await recompute(async () => {
-      const s = recomputeStatus.value
-      message.success(
-        `时间线重算完成：事件匹配 ${s.event_count} 张 / 散片填充 ${s.scattered_count} 张`,
-      )
-      await fetchEvents()
-    })
-    if (st === 'already_running') {
-      message.info('时间线重算已在进行中')
-    } else {
-      message.success('时间线重算已启动')
-    }
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : '启动失败')
+    await recompute()
+    await fetchEvents()
+    message.success('活动目录已同步')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '同步失败')
+  } finally {
+    syncing.value = false
   }
 }
 
-// ── 初始化 ──
-onMounted(() => {
-  fetchEvents()
-  fetchRecomputeStatus()
-})
-
-onUnmounted(() => {
-  stopPolling()
-})
+onMounted(fetchEvents)
 </script>
 
 <template>
@@ -154,114 +93,49 @@ onUnmounted(() => {
         <h3 class="toolbar-title">时间线管理</h3>
         <NSpace :wrap="false">
           <NButton type="primary" @click="openCreate">
-            <template #icon>
-              <NIcon><AddOutline /></NIcon>
-            </template>
+            <template #icon><NIcon><AddOutline /></NIcon></template>
             新建活动
           </NButton>
-          <NButton :loading="recomputing" @click="handleRecompute">
-            <template #icon>
-              <NIcon><RefreshOutline /></NIcon>
-            </template>
-            重算时间线
+          <NButton :loading="syncing" @click="handleSync">
+            <template #icon><NIcon><RefreshOutline /></NIcon></template>
+            同步目录
           </NButton>
         </NSpace>
       </div>
     </NLayoutHeader>
-
     <NLayoutContent>
       <div class="content-wrapper">
-        <!-- 重算进度条 -->
-        <div v-if="recomputing" class="recompute-bar">
-          <NSpin size="small" />
-          <span>正在重算 {{ recomputeStatus.processed }}/{{ recomputeStatus.total }}（{{ recomputePercent }}%）</span>
-        </div>
-        <!-- 重算结果摘要（未在跑且有数据时） -->
-        <div v-else-if="recomputeStatus.total > 0" class="recompute-bar done">
-          <span>
-            上次重算：事件匹配 {{ recomputeStatus.event_count }} 张 / 散片填充 {{ recomputeStatus.scattered_count }} 张
-          </span>
-        </div>
-
-        <div class="columns">
-          <!-- 活动事件列表 -->
-          <div class="column">
-            <div class="column-title">
-              <NIcon><CalendarOutline /></NIcon>
-              <span>活动事件</span>
-              <NTag size="small" type="info">{{ events.length }}</NTag>
-            </div>
-
-            <div v-if="eventsLoading" class="column-state">
-              <NSpin size="large" />
-            </div>
-            <NEmpty v-else-if="eventsError" class="column-state" :description="eventsError" />
-            <NEmpty
-              v-else-if="events.length === 0"
-              class="column-state"
-              description="暂无活动事件，点击右上角「新建活动」"
-            />
-            <div v-else class="event-list">
-              <div v-for="e in events" :key="e.id" class="event-item">
-                <div class="event-date">{{ e.date }}</div>
-                <div class="event-body">
-                  <div class="event-name">{{ e.event }}</div>
-                  <div v-if="e.note" class="event-note">{{ e.note }}</div>
-                </div>
-                <div class="event-meta">
-                  <NTooltip trigger="hover">
-                    <template #trigger>
-                      <NTag size="small" :type="e.photo_count > 0 ? 'success' : 'default'">
-                        {{ e.photo_count }} 张
-                      </NTag>
-                    </template>
-                    该活动名下的照片数
-                  </NTooltip>
-                  <NButton size="tiny" quaternary @click="openEdit(e)">
-                    <template #icon>
-                      <NIcon><CreateOutline /></NIcon>
-                    </template>
-                  </NButton>
-                  <NPopconfirm @positive-click="handleDelete(e)">
-                    <template #trigger>
-                      <NButton size="tiny" quaternary type="error">
-                        <template #icon>
-                          <NIcon><TrashOutline /></NIcon>
-                        </template>
-                      </NButton>
-                    </template>
-                    删除活动「{{ e.event }}」？已归入该活动的照片 timeline 将在下次重算时清理。
-                  </NPopconfirm>
-                </div>
-              </div>
-            </div>
+        <p class="activity-hint">活动与照片库的子目录一一对应，修改活动名会同时修改目录名。时间和备注可单独编辑。</p>
+        <div class="column">
+          <div class="column-title">
+            <NIcon><CalendarOutline /></NIcon>
+            <span>拍摄活动</span>
+            <NTag size="small" type="info">{{ events.length }}</NTag>
           </div>
-
-          <!-- 散片组（只读） -->
-          <div class="column">
-            <div class="column-title">
-              <NIcon><CalendarOutline /></NIcon>
-              <span>散片组</span>
-              <NTag size="small" type="info">{{ scattered.length }}</NTag>
-            </div>
-
-            <div v-if="eventsLoading" class="column-state">
-              <NSpin size="large" />
-            </div>
-            <NEmpty
-              v-else-if="scattered.length === 0"
-              class="column-state"
-              description="暂无散片组，重算时间线后自动生成"
-            />
-            <div v-else class="event-list">
-              <div v-for="g in scattered" :key="g.event" class="event-item scattered">
-                <div class="event-date">{{ g.date }}</div>
-                <div class="event-body">
-                  <div class="event-name">{{ g.event }}</div>
-                </div>
-                <div class="event-meta">
-                  <NTag size="small">{{ g.photo_count }} 张</NTag>
-                </div>
+          <div v-if="eventsLoading" class="column-state"><NSpin size="large" /></div>
+          <NEmpty v-else-if="eventsError" class="column-state" :description="eventsError" />
+          <NEmpty v-else-if="events.length === 0" class="column-state"
+            description="暂无活动目录，可导入照片或新建活动" />
+          <div v-else class="event-list">
+            <div v-for="event in events" :key="event.id" class="event-item">
+              <div class="event-date">{{ displayDate(event.date) }}</div>
+              <div class="event-body">
+                <div class="event-name">{{ event.event }}</div>
+                <div v-if="event.note" class="event-note">{{ event.note }}</div>
+              </div>
+              <div class="event-meta">
+                <NTag size="small" :type="event.photo_count > 0 ? 'success' : 'default'">{{ event.photo_count }} 张</NTag>
+                <NButton size="tiny" quaternary aria-label="编辑活动" @click="openEdit(event)">
+                  <template #icon><NIcon><CreateOutline /></NIcon></template>
+                </NButton>
+                <NPopconfirm @positive-click="handleDelete(event)">
+                  <template #trigger>
+                    <NButton size="tiny" quaternary type="error" aria-label="删除空活动目录" :disabled="event.photo_count > 0">
+                      <template #icon><NIcon><TrashOutline /></NIcon></template>
+                    </NButton>
+                  </template>
+                  删除空活动目录「{{ event.event }}」及其时间、备注？非空目录无法删除。
+                </NPopconfirm>
               </div>
             </div>
           </div>
@@ -269,23 +143,17 @@ onUnmounted(() => {
       </div>
     </NLayoutContent>
   </NLayout>
-
-  <!-- 事件编辑弹窗 -->
-  <NModal
-    v-model:show="showEditModal"
-    preset="card"
-    :title="editingId ? '编辑活动' : '新建活动'"
-    style="width: 420px"
-  >
-    <NForm label-placement="left" label-width="64">
-      <NFormItem label="日期" required>
-        <NDatePicker v-model:value="formDate" type="date" style="width: 100%" />
+  <NModal v-model:show="showEditModal" preset="card"
+    :title="editingId ? '编辑活动' : '新建活动'" style="width: 480px; max-width: calc(100vw - 32px)">
+    <NForm label-placement="top">
+      <NFormItem label="活动目录名" required>
+        <NInput v-model:value="formEvent" placeholder="如：202608-山西旅游" maxlength="180" />
       </NFormItem>
-      <NFormItem label="活动名" required>
-        <NInput v-model:value="formEvent" placeholder="如：兰圃" maxlength="100" />
+      <NFormItem label="活动时间">
+        <NDatePicker v-model:value="formDate" type="datetime" clearable style="width: 100%" />
       </NFormItem>
       <NFormItem label="备注">
-        <NInput v-model:value="formNote" type="textarea" :rows="2" placeholder="可选" />
+        <NInput v-model:value="formNote" type="textarea" :rows="3" placeholder="可选" />
       </NFormItem>
     </NForm>
     <template #footer>
@@ -330,26 +198,6 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 16px;
 }
-.recompute-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: var(--n-color-embedded);
-  font-size: 13px;
-  color: var(--n-text-color-2);
-}
-.recompute-bar.done {
-  color: var(--n-text-color-3);
-}
-.columns {
-  display: flex;
-  gap: 24px;
-  align-items: flex-start;
-  flex: 1;
-  min-height: 0;
-}
 .column {
   flex: 1;
   min-width: 0;
@@ -386,9 +234,6 @@ onUnmounted(() => {
   border-radius: 8px;
   background: var(--n-card-color);
 }
-.event-item.scattered {
-  background: var(--n-color-embedded);
-}
 .event-date {
   font-size: 13px;
   color: var(--n-text-color-3);
@@ -419,5 +264,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+}
+.activity-hint { margin: 0; font-size: 13px; color: var(--n-text-color-3); }
+@media (max-width: 640px) {
+  .event-item { flex-wrap: wrap; gap: 8px; }
+  .event-date { width: 100%; }
+  .content-wrapper { padding: 16px; }
+  .toolbar { padding: 0 16px; }
 }
 </style>

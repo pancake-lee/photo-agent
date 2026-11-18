@@ -27,6 +27,13 @@ func Migrate() error {
 		}
 	}
 
+	if !g.Migrator().HasColumn(&model.Photo{}, "activity_id") {
+		err := g.Exec("ALTER TABLE photos ADD COLUMN activity_id TEXT NOT NULL DEFAULT ''").Error
+		if err != nil {
+			return err
+		}
+	}
+
 	// photos 表按需补列
 	if !g.Migrator().HasColumn(&model.Photo{}, "file_type") {
 		if err := g.Migrator().AddColumn(&model.Photo{}, "FileType"); err != nil {

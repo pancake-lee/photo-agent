@@ -19,33 +19,33 @@ service TimelineService {
             get: "/api/v1/timelines/{name}/photos"
         };
     }
-    // 时间线事件列表（含散片组只读展示）
+    // 活动目录列表（包含空目录）
     rpc ListEvents (Empty) returns (ListTimelineEventsResponse) {
         option (google.api.http) = {
             get: "/api/v1/timeline-events"
         };
     }
-    // 保存时间线事件（新建与更新合一，id 为空则新建）
+    // 保存目录活动（id 为空创建目录，名称变更会改目录名）
     rpc SaveEvent (SaveTimelineEventRequest) returns (SaveTimelineEventResponse) {
         option (google.api.http) = {
             post: "/api/v1/timeline-events"
             body: "*"
         };
     }
-    // 删除时间线事件
+    // 删除空活动目录
     rpc DeleteEvent (DeleteTimelineEventRequest) returns (Empty) {
         option (google.api.http) = {
             delete: "/api/v1/timeline-events/{id}"
         };
     }
-    // 触发全量重算照片 timeline（异步，人工值保留）
+    // 同步目录活动（同步执行，成功返回 completed）
     rpc RecomputeTimelines (Empty) returns (RecomputeTimelinesResponse) {
         option (google.api.http) = {
             post: "/api/v1/timeline-events/recompute"
             body: "*"
         };
     }
-    // 查询重算进度
+    // 查询最近一次目录同步计数
     rpc GetRecomputeTimelinesStatus (Empty) returns (GetRecomputeTimelinesStatusResponse) {
         option (google.api.http) = {
             get: "/api/v1/timeline-events/recompute/status"
@@ -76,24 +76,24 @@ message GetPhotosByTimelineResponse {
 // --------------------------------------------------
 // ListEvents / SaveEvent / DeleteEvent
 
-// TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+// TimelineEventDetail 目录活动与隐藏文件元数据
 message TimelineEventDetail {
     string id = 1;
-    string date = 2;      // YYYY-MM-DD；散片组为该组首张照片所在月（YYYY-MM）
-    string event = 3;     // 活动名；散片组为散片名（YYYY-MM-散片N）
+    string date = 2;      // YYYY-MM-DD 或带时区 RFC3339，可空
+    string event = 3;     // 当前目录名
     string note = 4;
     int32 photo_count = 5; // 该事件/散片组下照片数
-    bool is_scattered = 6; // 是否散片组（自动生成，不可编辑）
+    bool is_scattered = 6; // 兼容旧接口，目录模式固定为 false
 }
 
 message ListTimelineEventsResponse {
-    repeated TimelineEventDetail events = 1;       // 人工维护的活动事件（按日期排序）
-    repeated TimelineEventDetail scattered = 2;    // 散片组（按时间排序）
+    repeated TimelineEventDetail events = 1;       // 目录活动（按活动时间倒序）
+    repeated TimelineEventDetail scattered = 2;    // 兼容旧接口，目录模式返回空列表
 }
 
 message SaveTimelineEventRequest {
     string id = 1;    // 为空则新建
-    string date = 2;  // YYYY-MM-DD
+    string date = 2;  // YYYY-MM-DD 或带时区 RFC3339，可空
     string event = 3;
     string note = 4;
 }
@@ -110,13 +110,13 @@ message DeleteTimelineEventRequest {
 // RecomputeTimelines / GetRecomputeTimelinesStatus
 
 message RecomputeTimelinesResponse {
-    string status = 1; // running | already_running
+    string status = 1; // completed
 }
 
 message GetRecomputeTimelinesStatusResponse {
     bool running = 1;
     int32 processed = 2;
     int32 total = 3;
-    int32 event_count = 4;       // 事件匹配照片数
-    int32 scattered_count = 5;   // 散片填充照片数（跑完时为最终值）
+    int32 event_count = 4;       // 目录同步照片数
+    int32 scattered_count = 5;   // 兼容旧接口，目录模式固定为 0
 }

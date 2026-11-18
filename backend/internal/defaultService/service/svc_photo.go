@@ -80,12 +80,13 @@ func auditPhotoItem(photo *data.PhotoDO, reason string) map[string]any {
 // Reg 向 Kratos gRPC/HTTP 服务器注册本服务。
 // HTTP 路由在生成的 RegisterPhotoServiceHTTPServer 基础上，额外注册文件上传和图片 serving。
 func (s *PhotoServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
+	RegisterActivitySynchronization(grpcSrv, httpSrv)
 	if grpcSrv != nil {
 		api.RegisterPhotoServiceServer(grpcSrv, s)
 	}
 	if httpSrv != nil {
 		// 额外注册非 proto 映射的原始 HTTP 路由
-		r := httpSrv.Route("/")
+		r := httpSrv.Route("/", activityDirectoryFilter)
 		// 静态路由必须在生成的 /photos/{id} 之前注册，否则会被当成照片 ID。
 		r.GET("/api/v1/photos/ai-audit", s.AIAuditHandler)
 		r.POST("/api/v1/photos/download", s.DownloadPhotosHandler)
@@ -826,7 +827,16 @@ func nefConflictInfo(filename string, newShotAt *time.Time) map[string]any {
 }
 
 func createPhotoRecord(ctx *papp.AppCtx, filename string, folder string, fileType string, shotAt *time.Time) (string, error) {
+	var activityID string
+	if folder != "" {
+		meta, err := ensureActivityMetadata(ctx, folder)
+		if err != nil {
+			return "", err
+		}
+		activityID = meta.ID
+	}
 	photoDO := newPhotoRecord(ctx, putil.UUID(), filename, folder, fileType, shotAt)
+	photoDO.ActivityID = activityID
 	if err := data.PhotoDAO.Add(ctx, photoDO); err != nil {
 		return "", fmt.Errorf("create photo record failed: %w", err)
 	}
@@ -853,11 +863,7 @@ func newPhotoRecord(ctx *papp.AppCtx, id, filename, folder, fileType string, sho
 	// 拍摄时间：EXIF 缺失时按文件修改日期兜底
 	resolvedShotAt := resolveShotAt(ei, srcPath)
 
-	timeline := ""
-	if resolvedShotAt != nil {
-		entries, _ := loadTimeline(ctx)
-		timeline = findEventByTime(*resolvedShotAt, entries, conf.C.Storage.TimelineWindowDays)
-	}
+	timeline := folder
 
 	width, height := 0, 0
 	if fileType != "nef" {
@@ -917,17 +923,17 @@ func overwritePhoto(ctx *papp.AppCtx, photoID, filename string, folder string, s
 	// 拍摄时间：EXIF 缺失时按文件修改日期兜底
 	resolvedShotAt := resolveShotAt(ei, srcPath)
 
-	timeline := ""
-	if resolvedShotAt != nil {
-		entries, _ := loadTimeline(ctx)
-		timeline = findEventByTime(*resolvedShotAt, entries, conf.C.Storage.TimelineWindowDays)
-	}
+	timeline := folder
 
 	width, height := getImageSize(srcPath)
 
-	updates := map[string]any{"description": "", "file_path": relPath}
-	if timeline != "" {
-		updates["timeline"] = timeline
+	updates := map[string]any{"description": "", "timeline": timeline, "filename": filename}
+	if folder != "" {
+		meta, err := ensureActivityMetadata(ctx, folder)
+		if err != nil {
+			return err
+		}
+		updates["activity_id"] = meta.ID
 	}
 	if ei.Brand != "" {
 		updates["brand"] = ei.Brand

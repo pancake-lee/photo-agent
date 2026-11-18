@@ -110,28 +110,33 @@ func (t *photoImportTrace) finish(err error, fields map[string]any) {
 }
 
 type archiveImportRequest struct {
-	BatchID  string     `json:"batch_id,omitempty"`
-	Activity string     `json:"activity"`
-	Name     string     `json:"name"`
-	JPG      string     `json:"jpg_sha256"`
-	NEF      string     `json:"nef_sha256,omitempty"`
-	Favorite bool       `json:"favorite"`
-	ShotAt   *time.Time `json:"shot_at,omitempty"`
-	JPGTime  time.Time  `json:"jpg_time"`
-	NEFTime  *time.Time `json:"nef_time,omitempty"`
-	Target   string     `json:"target,omitempty"`
-	trace    *photoImportTrace
+	activityNormalized bool
+	ActivityID         string     `json:"activity_id,omitempty"`
+	PhotoID            string     `json:"photo_id,omitempty"`
+	BatchID            string     `json:"batch_id,omitempty"`
+	Activity           string     `json:"activity"`
+	Name               string     `json:"name"`
+	JPG                string     `json:"jpg_sha256"`
+	NEF                string     `json:"nef_sha256,omitempty"`
+	Favorite           bool       `json:"favorite"`
+	ShotAt             *time.Time `json:"shot_at,omitempty"`
+	JPGTime            time.Time  `json:"jpg_time"`
+	NEFTime            *time.Time `json:"nef_time,omitempty"`
+	Target             string     `json:"target,omitempty"`
+	trace              *photoImportTrace
 }
 
 type archiveImportResult struct {
-	JPGStaged bool   `json:"jpg_staged,omitempty"`
-	Target    string `json:"target"`
-	NEFTarget string `json:"nef_target,omitempty"`
-	Root      string `json:"root"`
-	JPGReady  bool   `json:"jpg_ready"`
-	NEFReady  bool   `json:"nef_ready"`
-	Verified  bool   `json:"verified"`
-	PhotoID   string `json:"photo_id,omitempty"`
+	ActivityID string `json:"activity_id,omitempty"`
+	Activity   string `json:"activity,omitempty"`
+	JPGStaged  bool   `json:"jpg_staged,omitempty"`
+	Target     string `json:"target"`
+	NEFTarget  string `json:"nef_target,omitempty"`
+	Root       string `json:"root"`
+	JPGReady   bool   `json:"jpg_ready"`
+	NEFReady   bool   `json:"nef_ready"`
+	Verified   bool   `json:"verified"`
+	PhotoID    string `json:"photo_id,omitempty"`
 }
 
 func archiveComponent(value string) bool {
@@ -153,8 +158,7 @@ func (req archiveImportRequest) valid() bool {
 }
 
 func (req archiveImportRequest) key() string {
-	sum := sha256.Sum256([]byte(req.Activity + "\x00" + req.JPG + "\x00" + req.NEF))
-	return hex.EncodeToString(sum[:])
+	return data.ArchiveImportKey(req.Activity, req.JPG, req.NEF)
 }
 
 func digestFile(path string) (string, int64, error) {
@@ -238,9 +242,20 @@ func resolveArchiveImport(
 	if !req.valid() {
 		return result, nil, fmt.Errorf("导入清单无效")
 	}
+	err := normalizeArchiveActivity(ctx, &req)
+	if err != nil {
+		return result, nil, err
+	}
+	result.ActivityID, result.Activity = req.ActivityID, req.Activity
 	state, err := data.PhotoDAO.FindArchivedImport(ctx, req.key())
 	if err != nil {
 		return result, nil, err
+	}
+	if state == nil {
+		state, err = data.PhotoDAO.FindCompatibleArchivedImport(ctx, req.Activity, req.JPG, req.NEF)
+		if err != nil {
+			return result, nil, err
+		}
 	}
 	base := strings.TrimSuffix(sanitizeFilename(req.Name, ".jpg"), ".jpg")
 	if len(base) > 110 {
@@ -313,14 +328,15 @@ func resolveArchiveImport(
 			return result, nil, err
 		}
 		// A NEF-only position is reserved only after a matching JPG has landed.
-		conflict := (jpgPresent && !jpgReady) || (nefPresent && (!nefReady || !jpgReady)) ||
+		conflict := (jpgPresent && !jpgReady) || (nefPresent && (!jpgReady || req.NEF != "" && !nefReady)) ||
 			(photo != nil && (photo.Timeline != req.Activity || !jpgReady))
 		if photo != nil && state == nil {
 			prior, stateErr := data.PhotoDAO.GetArchiveState(ctx, photo.ID)
 			if stateErr != nil {
 				return result, nil, stateErr
 			}
-			conflict = conflict || prior.ImportKey != "" && prior.ImportKey != req.key()
+			compatible := prior.JPGSHA256 == req.JPG && (req.NEF == "" || prior.NEFSHA256 == "" || prior.NEFSHA256 == req.NEF)
+			conflict = conflict || prior.ImportKey != "" && prior.ImportKey != req.key() && !compatible
 		}
 		if conflict {
 			if preferred != "" || req.Target != "" {
@@ -339,7 +355,7 @@ func resolveArchiveImport(
 		if err != nil {
 			return result, nil, err
 		}
-		result.Verified = state != nil && photo != nil && jpgReady && result.NEFReady && thumbPresent != ""
+		result.Verified = state != nil && photo != nil && jpgReady && result.NEFReady && thumbPresent != "" && (req.NEF == "" || state.NEFSHA256 == req.NEF)
 		if req.BatchID != "" && !jpgReady {
 			check := time.Now()
 			result.JPGStaged, err = importStageReady(req.BatchID, req.JPG)
@@ -369,6 +385,10 @@ func importArchiveJSON(
 	defer photoArchiveMu.Unlock()
 	app, cancel := archiveOperationContext(ctx.Request().Context())
 	defer cancel()
+	err = normalizeArchiveActivity(app, &req)
+	if err != nil {
+		return ctx.Result(http.StatusConflict, map[string]string{"error": err.Error()})
+	}
 	result, err := execute(app, req)
 	if err != nil {
 		return ctx.Result(http.StatusConflict, map[string]string{"error": err.Error()})
@@ -474,6 +494,10 @@ func (s *PhotoServer) writeArchiveImport(ctx khttp.Context) error {
 	defer photoArchiveMu.Unlock()
 	app, cancel := archiveOperationContext(ctx.Request().Context())
 	defer cancel()
+	err = normalizeArchiveActivity(app, &req)
+	if err != nil {
+		return ctx.Result(http.StatusConflict, map[string]string{"error": err.Error()})
+	}
 	result, _, err := resolveArchiveImport(app, req)
 	if err == nil && req.Target != result.Target {
 		err = fmt.Errorf("归档位置已变化，请刷新预览")
@@ -512,6 +536,10 @@ func (s *PhotoServer) finishArchiveImport(ctx khttp.Context) error {
 }
 
 func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveImportResult, error) {
+	err := normalizeArchiveActivity(ctx, &req)
+	if err != nil {
+		return archiveImportResult{}, err
+	}
 	result, row, err := resolveArchiveImport(ctx, req)
 	if err != nil {
 		return result, err
@@ -520,6 +548,12 @@ func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveI
 		return result, fmt.Errorf("归档位置已变化或文件尚未核验")
 	}
 	if result.Verified {
+		if req.Favorite {
+			err = data.PhotoDAO.SetArchiveFavorite(ctx, row.ID, true)
+			if err != nil {
+				return result, err
+			}
+		}
 		return result, nil
 	}
 	existing := row != nil
@@ -545,7 +579,12 @@ func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveI
 	}
 	if !existing {
 		row = newPhotoRecord(ctx, putil.UUID(), base, folder, "jpg", req.ShotAt)
-		row.Timeline, row.TimelineManual = req.Activity, 1
+		meta, metadataErr := readActivityMetadata(req.Activity)
+		if metadataErr != nil {
+			return result, metadataErr
+		}
+		row.ActivityID = meta.ID
+		row.Timeline, row.TimelineManual = req.Activity, 0
 	}
 
 	state := data.PhotoArchiveDO{
@@ -558,6 +597,10 @@ func finishVerifiedArchive(ctx *papp.AppCtx, req archiveImportRequest) (archiveI
 			return result, stateErr
 		}
 		state.Favorite = state.Favorite || prior.Favorite
+		if req.NEF == "" {
+			state.NEFSHA256 = prior.NEFSHA256
+			state.ImportKey = data.ArchiveImportKey(req.Activity, req.JPG, state.NEFSHA256)
+		}
 	}
 	start := time.Now()
 	err = data.PhotoDAO.SaveVerifiedImport(ctx, row, state, existing)

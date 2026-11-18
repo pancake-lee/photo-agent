@@ -601,7 +601,7 @@ paths:
         get:
             tags:
                 - TimelineService
-            description: 时间线事件列表（含散片组只读展示）
+            description: 活动目录列表（包含空目录）
             operationId: TimelineService_ListEvents
             responses:
                 "200":
@@ -613,7 +613,7 @@ paths:
         post:
             tags:
                 - TimelineService
-            description: 保存时间线事件（新建与更新合一，id 为空则新建）
+            description: 保存目录活动（id 为空创建目录，名称变更会改目录名）
             operationId: TimelineService_SaveEvent
             requestBody:
                 content:
@@ -632,7 +632,7 @@ paths:
         post:
             tags:
                 - TimelineService
-            description: 触发全量重算照片 timeline（异步，人工值保留）
+            description: 同步目录活动（同步执行，成功返回 completed）
             operationId: TimelineService_RecomputeTimelines
             requestBody:
                 content:
@@ -651,7 +651,7 @@ paths:
         get:
             tags:
                 - TimelineService
-            description: 查询重算进度
+            description: 查询最近一次目录同步计数
             operationId: TimelineService_GetRecomputeTimelinesStatus
             responses:
                 "200":
@@ -664,7 +664,7 @@ paths:
         delete:
             tags:
                 - TimelineService
-            description: 删除时间线事件
+            description: 删除空活动目录
             operationId: TimelineService_DeleteEvent
             parameters:
                 - name: id
@@ -1788,7 +1788,7 @@ components:
                     format: int32
                 isScattered:
                     type: boolean
-            description: TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+            description: TimelineEventDetail 目录活动与隐藏文件元数据
         api.TimelineEventInfo:
             type: object
             properties:

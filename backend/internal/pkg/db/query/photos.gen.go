@@ -28,6 +28,7 @@ func newPhoto(db *gorm.DB, opts ...gen.DOOption) photo {
 	tableName := _photo.photoDo.TableName()
 	_photo.ALL = field.NewAsterisk(tableName)
 	_photo.ID = field.NewString(tableName, "id")
+	_photo.ActivityID = field.NewString(tableName, "activity_id")
 	_photo.Filename = field.NewString(tableName, "filename")
 	_photo.FilePath = field.NewString(tableName, "file_path")
 	_photo.FileType = field.NewString(tableName, "file_type")
@@ -73,6 +74,7 @@ type photo struct {
 
 	ALL                      field.Asterisk
 	ID                       field.String
+	ActivityID               field.String
 	Filename                 field.String
 	FilePath                 field.String
 	FileType                 field.String
@@ -124,6 +126,7 @@ func (p photo) As(alias string) *photo {
 func (p *photo) updateTableName(table string) *photo {
 	p.ALL = field.NewAsterisk(table)
 	p.ID = field.NewString(table, "id")
+	p.ActivityID = field.NewString(table, "activity_id")
 	p.Filename = field.NewString(table, "filename")
 	p.FilePath = field.NewString(table, "file_path")
 	p.FileType = field.NewString(table, "file_type")
@@ -184,6 +187,7 @@ func (p *photo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 func (p *photo) fillFieldMap() {
 	p.fieldMap = make(map[string]field.Expr, 35)
 	p.fieldMap["id"] = p.ID
+	p.fieldMap["activity_id"] = p.ActivityID
 	p.fieldMap["filename"] = p.Filename
 	p.fieldMap["file_path"] = p.FilePath
 	p.fieldMap["file_type"] = p.FileType

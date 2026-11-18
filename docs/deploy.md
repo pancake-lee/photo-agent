@@ -222,3 +222,15 @@ Go 后端监听 `Http.Addr`，Python Agent 监听 `Agent.Addr`，Web 前端监�
 - 从最近一次 `phase=scan` 的 JSON 记录取 `batch_id`，用它筛选两端日志。用 `request_id` 对照上传或归档 RPC 与服务端处理，用 `job_id` 对照客户端连拍等待和服务端计算。
 
 `duration_ms` 是阶段总耗时，`spans` 记录细分动作的次数、累计时间及适用的字节数。子动作可嵌套，后台缩略图和特征计算可与上传重叠。客户端的 `request_written_ms` 从请求开始算起，包括连接和读取本地文件，服务端的 `stream_hash_write` 同时覆盖接收、哈希和写入。比较系统文件管理器操作时，记录文件数、总字节、源盘与目标和是否为重试，避免用不同条件的批次计算差距。
+
+## 活动目录维护
+
+每个拍摄活动对应 `Storage.PhotoSrc` 下的一个普通一级子目录。`.photo-agent.json` 保存活动 ID、时间和备注，备份或改名时一起保留，保持 `id` 不变。时间线页面可修改目录名、具体时间和备注；服务器直接改目录名后，下一次读取活动或照片会自动同步。正式上传未结束时先完成导入，再改名。
+
+后端启动时自动迁移旧照片路径并同步活动。也可在停止后端和 Agent 后，从 `backend/` 单独执行，不启动服务：
+
+```bash
+go run ./cmd/activity-sync -c ../.local/my-config.yaml
+```
+
+迁移前保留 SQLite 和图片目录备份。当前照片 ID、收藏及 AI 处理结果沿用；旧根目录收藏的一次性打包、清理与恢复位置见[执行记录](_agents/2026-11-18-activity-directories.md)。

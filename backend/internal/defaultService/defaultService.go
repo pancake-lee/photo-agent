@@ -35,6 +35,11 @@ func main() {
 		plogger.Fatalf("scan config failed: %v", err)
 	}
 
+	err = service.SyncActivityDirectories(context.Background())
+	if err != nil {
+		plogger.Fatalf("Activity directory migration failed: %v", err)
+	}
+
 	// 注册所有服务：genCURD 标准 CRUD + 业务扩展服务
 	var defaultSvr service.DefaultCURDServer
 	var photoSvr service.PhotoServer

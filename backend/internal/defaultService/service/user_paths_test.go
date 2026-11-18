@@ -36,7 +36,6 @@ func setupUserPathTest(t *testing.T) (*papp.AppCtx, string) {
 	previous := conf.C
 	conf.C.Storage.PhotoSrc = filepath.Join(tempDir, "source")
 	conf.C.Storage.PhotoPath = filepath.Join(tempDir, "thumb")
-	conf.C.Storage.TimelineWindowDays = 7
 	t.Cleanup(func() {
 		conf.C = previous
 		if sqlDB, err := gdb.DB(); err == nil {

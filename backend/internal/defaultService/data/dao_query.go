@@ -77,7 +77,7 @@ func GetPhotoSchema() []PhotoSchemaField {
 	fields := make([]PhotoSchemaField, 0, typ.NumField())
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
-		if !field.IsExported() {
+		if !field.IsExported() || field.Name == "FilePath" {
 			continue
 		}
 		fields = append(fields, PhotoSchemaField{

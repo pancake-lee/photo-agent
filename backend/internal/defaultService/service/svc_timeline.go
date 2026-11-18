@@ -2,25 +2,23 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sort"
+	kratoserrors "github.com/go-kratos/kratos/v2/errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"backend/internal/defaultService/conf"
 	"backend/internal/defaultService/data"
 	"backend/internal/pkg/api"
-	"backend/internal/pkg/perr"
-
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/pancake-lee/pgo/pkg/papp"
-	"github.com/pancake-lee/pgo/pkg/plogger"
 	"github.com/pancake-lee/pgo/pkg/putil"
 )
 
-// TimelineServer 时间线服务
 type TimelineServer struct {
 	api.UnimplementedTimelineServiceServer
 }
@@ -34,392 +32,258 @@ func (s *TimelineServer) Reg(grpcSrv *grpc.Server, httpSrv *khttp.Server) {
 	}
 }
 
-// ListTimelines 列出所有时间线（照片库实际存在的 timeline 值），
-// 按事件表日期顺序排列，散片组按时间序混入，事件表未出现的值排最后。
-func (s *TimelineServer) ListTimelines(_ctx context.Context, _ *api.Empty) (*api.ListTimelinesResponse, error) {
-	ctx := papp.NewAppCtx(_ctx)
-
-	timelines, err := data.PhotoDAO.GetDistinctTimelineList(ctx)
+func (s *TimelineServer) ListTimelines(ctx context.Context, _ *api.Empty) (*api.ListTimelinesResponse, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	list, err := syncActivityDirectoriesLocked(papp.NewAppCtx(ctx))
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, err
 	}
-
-	sorted := sortTimelinesByEventOrder(ctx, timelines)
-	return &api.ListTimelinesResponse{Timelines: sorted}, nil
+	result := &api.ListTimelinesResponse{Timelines: make([]string, 0, len(list))}
+	for _, item := range list {
+		result.Timelines = append(result.Timelines, item.Name)
+	}
+	return result, nil
 }
 
-// GetPhotosByTimeline 查询某个时间线下的所有照片，按 shot_at 倒序。
-func (s *TimelineServer) GetPhotosByTimeline(_ctx context.Context, req *api.GetPhotosByTimelineRequest) (*api.GetPhotosByTimelineResponse, error) {
-	ctx := papp.NewAppCtx(_ctx)
-
-	if req.Name == "" {
-		return &api.GetPhotosByTimelineResponse{}, nil
-	}
-
-	photos, err := data.PhotoDAO.GetPhotosByTimeline(ctx, req.Name)
+func (s *TimelineServer) GetPhotosByTimeline(ctx context.Context, req *api.GetPhotosByTimelineRequest) (*api.GetPhotosByTimelineResponse, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	app := papp.NewAppCtx(ctx)
+	_, err := syncActivityDirectoriesLocked(app)
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, err
 	}
-
-	items := make([]*api.PhotoItem, len(photos))
-	for i, p := range photos {
-		items[i] = photoDO2Item(p)
-	}
-
-	return &api.GetPhotosByTimelineResponse{
-		Timeline: req.Name,
-		Items:    items,
-		Total:    int32(len(items)),
-	}, nil
-}
-
-// sortTimelinesByEventOrder 按事件表日期顺序排列 timelines，
-// 散片名按其年月排入对应位置，事件表未出现的条目排在最后，相对顺序保持不变。
-func sortTimelinesByEventOrder(ctx *papp.AppCtx, timelines []string) []string {
-	entries, err := loadTimeline(ctx)
-	if err != nil || len(entries) == 0 {
-		return timelines
-	}
-
-	// 事件名 → 序号；散片名 → 按年月折算的排序键（比该月最后一个事件大、比下月事件小）
-	orderMap := make(map[string]int, len(entries))
-	for i, e := range entries {
-		if _, exists := orderMap[e.Event]; !exists {
-			orderMap[e.Event] = i
-		}
-	}
-	scatteredOrder := func(name string) (int, bool) {
-		if !isScatteredName(name) {
-			return 0, false
-		}
-		// 散片排在同年月最后一个事件之后：序号 = 最后同月事件序号 + 1，
-		// 同月多个散片组按名内 N 排序由 name 本身的字典序补充
-		last := -1
-		for i, e := range entries {
-			if monthOf(e.Date) == name[:7] && i > last {
-				last = i
-			}
-		}
-		if last == -1 {
-			return 0, false // 该月无事件，排最后
-		}
-		return last + 1, true
-	}
-
-	sorted := make([]string, len(timelines))
-	copy(sorted, timelines)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		keyOf := func(name string) (int, bool) {
-			if o, ok := orderMap[name]; ok {
-				return o, true
-			}
-			return scatteredOrder(name)
-		}
-		oi, hasI := keyOf(sorted[i])
-		oj, hasJ := keyOf(sorted[j])
-		if !hasI && !hasJ {
-			return i < j
-		}
-		if !hasI {
-			return false
-		}
-		if !hasJ {
-			return true
-		}
-		return oi < oj
-	})
-
-	return sorted
-}
-
-// --------------------------------------------------
-// 时间线事件 CRUD
-// --------------------------------------------------
-
-// ListEvents 事件列表 + 散片组只读展示。
-func (s *TimelineServer) ListEvents(_ctx context.Context, _ *api.Empty) (*api.ListTimelineEventsResponse, error) {
-	ctx := papp.NewAppCtx(_ctx)
-
-	events, err := data.TimelineEventDAO.GetTimelineEventsOrderByDate(ctx)
+	photos, err := data.PhotoDAO.GetPhotosByTimeline(app, req.Name)
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, err
 	}
+	result := &api.GetPhotosByTimelineResponse{Timeline: req.Name, Total: int32(len(photos)), Items: make([]*api.PhotoItem, 0, len(photos))}
+	for _, photo := range photos {
+		result.Items = append(result.Items, photoDO2Item(photo))
+	}
+	return result, nil
+}
 
-	// 每个 timeline 值的照片数（活动 + 散片）
-	photos, err := data.PhotoDAO.GetAll(ctx)
+func (s *TimelineServer) ListEvents(ctx context.Context, _ *api.Empty) (*api.ListTimelineEventsResponse, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	app := papp.NewAppCtx(ctx)
+	list, err := syncActivityDirectoriesLocked(app)
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, err
 	}
-	countMap := make(map[string]int32, len(photos))
-	for _, p := range photos {
-		if p.Timeline != "" {
-			countMap[p.Timeline]++
+	photos, err := data.PhotoDAO.GetAll(app)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int32)
+	for _, photo := range photos {
+		if photo.FileType != "nef" {
+			counts[photo.Timeline]++
 		}
 	}
-
-	resp := &api.ListTimelineEventsResponse{
-		Events:    make([]*api.TimelineEventDetail, 0, len(events)),
-		Scattered: make([]*api.TimelineEventDetail, 0),
+	result := &api.ListTimelineEventsResponse{Events: make([]*api.TimelineEventDetail, 0, len(list)), Scattered: []*api.TimelineEventDetail{}}
+	for _, item := range list {
+		result.Events = append(result.Events, &api.TimelineEventDetail{Id: item.Metadata.ID, Date: item.Metadata.Date, Event: item.Name, Note: item.Metadata.Note, PhotoCount: counts[item.Name]})
 	}
-	// 展示层倒序：DAO 按日期升序返回（供重算匹配用），此处新的排前面
-	for i := len(events) - 1; i >= 0; i-- {
-		e := events[i]
-		resp.Events = append(resp.Events, &api.TimelineEventDetail{
-			Id:         e.ID,
-			Date:       e.EventDate.Local().Format("2006-01-02"),
-			Event:      e.Event,
-			Note:       e.Note,
-			PhotoCount: countMap[e.Event],
-		})
-	}
+	return result, nil
+}
 
-	// 散片组：按 timeline 值聚合，只读
-	scatterSet := make(map[string]struct{})
-	for name := range countMap {
-		if isScatteredName(name) {
-			scatterSet[name] = struct{}{}
+// SaveEvent renames the source directory and commits the same identity through
+// normal reconciliation. Metadata owns date/note; its name is never duplicated.
+func (s *TimelineServer) SaveEvent(ctx context.Context, req *api.SaveTimelineEventRequest) (*api.SaveTimelineEventResponse, error) {
+	name := strings.TrimSpace(req.Event)
+	if !archiveComponent(name) || !validActivityDate(req.Date) {
+		return nil, api.ErrorInvalidArgument("活动目录名或时间无效")
+	}
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	app := papp.NewAppCtx(ctx)
+	list, err := syncActivityDirectoriesLocked(app)
+	if err != nil {
+		return nil, err
+	}
+	root := conf.C.Storage.PhotoSrc
+	err = os.MkdirAll(root, 0755)
+	if err != nil {
+		return nil, err
+	}
+	var current *activityDirectory
+	for i := range list {
+		if list[i].Metadata.ID == req.Id {
+			current = &list[i]
+			break
 		}
 	}
-	scatterNames := make([]string, 0, len(scatterSet))
-	for name := range scatterSet {
-		scatterNames = append(scatterNames, name)
+	if req.Id != "" && current == nil {
+		return nil, kratoserrors.NotFound("ACTIVITY_NOT_FOUND", "活动目录不存在")
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(scatterNames))) // YYYY-MM-散片N 字典序即时间序，倒序=新的在前
-	for _, name := range scatterNames {
-		resp.Scattered = append(resp.Scattered, &api.TimelineEventDetail{
-			Date:        name[:7],
-			Event:       name,
-			PhotoCount:  countMap[name],
-			IsScattered: true,
-		})
-	}
-
-	return resp, nil
-}
-
-// SaveEvent 保存事件（新建与更新合一，id 为空则新建）。
-func (s *TimelineServer) SaveEvent(_ctx context.Context, req *api.SaveTimelineEventRequest) (*api.SaveTimelineEventResponse, error) {
-	ctx := papp.NewAppCtx(_ctx)
-
-	event := strings.TrimSpace(req.Event)
-	if event == "" {
-		return nil, ctx.Log.LogErr(perr.ErrParamInvalid)
-	}
-	date, err := time.ParseInLocation("2006-01-02", req.Date, time.Local)
-	if err != nil {
-		return nil, ctx.Log.LogErr(perr.ErrParamInvalid)
-	}
-
-	if req.Id == "" {
-		do := &data.TimelineEventDO{
-			ID:        putil.UUID(),
-			EventDate: date,
-			Event:     event,
-			Note:      req.Note,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+	if current == nil || current.Name != name {
+		actual, err := caseInsensitiveFileName(root, name)
+		if err != nil {
+			return nil, err
 		}
-		if err := data.TimelineEventDAO.Add(ctx, do); err != nil {
-			return nil, ctx.Log.LogErr(err)
+		if actual != "" {
+			return nil, fmt.Errorf("活动目录已存在: %s", actual)
 		}
-		return &api.SaveTimelineEventResponse{Id: do.ID}, nil
 	}
-
-	do, err := data.TimelineEventDAO.GetByID(ctx, req.Id)
+	if current == nil {
+		err = os.Mkdir(filepath.Join(root, name), 0755)
+		if err != nil {
+			return nil, err
+		}
+		meta := activityMetadata{Version: 1, ID: putil.UUID(), Date: req.Date, Note: req.Note}
+		err = writeActivityMetadata(name, meta)
+		if err != nil {
+			return nil, errors.Join(err, os.Remove(filepath.Join(root, name)))
+		}
+		return &api.SaveTimelineEventResponse{Id: meta.ID}, nil
+	}
+	old := current.Name
+	meta := current.Metadata
+	meta.Date, meta.Note = req.Date, req.Note
+	if old != name {
+		busy, err := data.HasActivityReservations(app, old)
+		if err != nil {
+			return nil, err
+		}
+		if busy {
+			return nil, fmt.Errorf("请完成活动中的导入后再改名")
+		}
+		err = os.Rename(filepath.Join(root, old), filepath.Join(root, name))
+		if err != nil {
+			return nil, err
+		}
+	}
+	rollback := func() error {
+		if old == name {
+			return writeActivityMetadata(old, current.Metadata)
+		}
+		moveErr := os.Rename(filepath.Join(root, name), filepath.Join(root, old))
+		if moveErr != nil {
+			return moveErr
+		}
+		metadataErr := writeActivityMetadata(old, current.Metadata)
+		_, syncErr := syncActivityDirectoriesLocked(app)
+		return errors.Join(metadataErr, syncErr)
+	}
+	err = writeActivityMetadata(name, meta)
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, errors.Join(err, rollback())
 	}
-	do.EventDate = date
-	do.Event = event
-	do.Note = req.Note
-	do.UpdatedAt = time.Now()
-	if err := data.TimelineEventDAO.UpdateByID(ctx, do); err != nil {
-		return nil, ctx.Log.LogErr(err)
-	}
-	return &api.SaveTimelineEventResponse{Id: do.ID}, nil
-}
-
-// DeleteEvent 删除事件（照片 timeline 不动，等待下次重算清理过期值）。
-func (s *TimelineServer) DeleteEvent(_ctx context.Context, req *api.DeleteTimelineEventRequest) (*api.Empty, error) {
-	ctx := papp.NewAppCtx(_ctx)
-
-	if req.Id == "" {
-		return nil, ctx.Log.LogErr(perr.ErrParamInvalid)
-	}
-	if err := data.TimelineEventDAO.DelByID(ctx, req.Id); err != nil {
-		return nil, ctx.Log.LogErr(err)
-	}
-	return &api.Empty{}, nil
-}
-
-// --------------------------------------------------
-// 全量重算
-// --------------------------------------------------
-
-// timelineRecomputeManager 重算运行时状态（模式与 burstGroupManager 一致）
-type timelineRecomputeManager struct {
-	mu             sync.Mutex
-	running        bool
-	processed      int32
-	total          int32
-	eventCount     int32
-	scatteredCount int32
-}
-
-func (m *timelineRecomputeManager) snapshot() *api.GetRecomputeTimelinesStatusResponse {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return &api.GetRecomputeTimelinesStatusResponse{
-		Running:        m.running,
-		Processed:      m.processed,
-		Total:          m.total,
-		EventCount:     m.eventCount,
-		ScatteredCount: m.scatteredCount,
-	}
-}
-
-func (m *timelineRecomputeManager) isRunning() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.running
-}
-
-// start 返回 false 表示已在运行中。
-func (m *timelineRecomputeManager) start(total int32) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.running {
-		return false
-	}
-	m.running = true
-	m.processed = 0
-	m.total = total
-	m.eventCount = 0
-	m.scatteredCount = 0
-	return true
-}
-
-func (m *timelineRecomputeManager) stop(eventCount, scatteredCount int32) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.running = false
-	m.eventCount = eventCount
-	m.scatteredCount = scatteredCount
-}
-
-func (m *timelineRecomputeManager) setProcessed(n int32) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.processed = n
-}
-
-// 全局时间线重算管理器
-var timelineRecompute = &timelineRecomputeManager{}
-
-// RecomputeTimelines 触发全量重算照片 timeline（异步后台执行）。
-func (s *TimelineServer) RecomputeTimelines(
-	_ctx context.Context, _ *api.Empty,
-) (*api.RecomputeTimelinesResponse, error) {
-	ctx := papp.NewAppCtx(_ctx)
-
-	if timelineRecompute.isRunning() {
-		return &api.RecomputeTimelinesResponse{Status: "already_running"}, nil
-	}
-
-	photos, err := data.PhotoDAO.GetAllPhotosOrderByShotAt(ctx)
+	_, err = syncActivityDirectoriesLocked(app)
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, errors.Join(err, rollback())
 	}
-	entries, err := loadTimeline(ctx)
+	return &api.SaveTimelineEventResponse{Id: meta.ID}, nil
+}
+
+// DeleteEvent only removes an empty activity. Photo/recycle operations retain
+// ownership of their files and must be completed before deleting the directory.
+func (s *TimelineServer) DeleteEvent(ctx context.Context, req *api.DeleteTimelineEventRequest) (*api.Empty, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	app := papp.NewAppCtx(ctx)
+	list, err := syncActivityDirectoriesLocked(app)
 	if err != nil {
-		return nil, ctx.Log.LogErr(err)
+		return nil, err
 	}
-
-	if !timelineRecompute.start(int32(len(photos))) {
-		return &api.RecomputeTimelinesResponse{Status: "already_running"}, nil
-	}
-
-	go runTimelineRecompute(photos, entries)
-	return &api.RecomputeTimelinesResponse{Status: "running"}, nil
-}
-
-// GetRecomputeTimelinesStatus 轮询重算进度。
-func (s *TimelineServer) GetRecomputeTimelinesStatus(
-	_ctx context.Context, _ *api.Empty,
-) (*api.GetRecomputeTimelinesStatusResponse, error) {
-	return timelineRecompute.snapshot(), nil
-}
-
-// runTimelineRecompute 后台执行全量重算。
-//
-// 重算语义（保留人工值）：
-//   - timeline_manual=1 的照片不动
-//   - 其余按事件表匹配，匹配上给事件名
-//   - 匹配不上的给散片名（事件间空隙按月切段）
-//   - 写回统一清 manual 标记（事件与散片都是自动产物）
-func runTimelineRecompute(photos []*data.PhotoDO, entries []TimelineEntry) {
-	eventCount, scatteredCount, err := recomputeTimelines(photos, entries, conf.C.Storage.TimelineWindowDays)
-	if err != nil {
-		plogger.Errorf("timeline recompute failed: %v", err)
-	}
-	timelineRecompute.stop(eventCount, scatteredCount)
-	plogger.Infof("timeline recompute done: event %d / scattered %d photos from %d photos",
-		eventCount, scatteredCount, len(photos))
-}
-
-// validTimelineShotAtFloor shot_at 有效下界（与连拍分组同口径），早于该时间视为零值记录
-var validTimelineShotAtFloor = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-
-// recomputeTimelines 重算主体（与 DB 交互，进度经 manager 上报）。
-func recomputeTimelines(photos []*data.PhotoDO, entries []TimelineEntry, windowDays int) (int32, int32, error) {
-	ctx := newAppCtxForBackground()
-
-	// 1. 分类：手动的不动；事件匹配的按事件名分桶；其余进散片候选
-	var scatteredCandidates []scatteredPhoto
-	eventBuckets := make(map[string][]string) // 事件名 → 照片 id 列表
-	processed := int32(0)
-
-	for _, p := range photos {
-		// shot_at 零值（0001 年）记录不参与重算
-		if p.ShotAt.Before(validTimelineShotAtFloor) {
-			processed++
+	for _, item := range list {
+		if item.Metadata.ID != req.Id {
 			continue
 		}
-		if p.TimelineManual == 1 {
-			processed++
-			continue
+		locations, err := data.ListActivityLocations(app)
+		if err != nil {
+			return nil, err
 		}
-		if event := findEventByTime(p.ShotAt, entries, windowDays); event != "" {
-			eventBuckets[event] = append(eventBuckets[event], p.ID)
-		} else {
-			scatteredCandidates = append(scatteredCandidates, scatteredPhoto{
-				PhotoID: p.ID,
-				ShotAt:  p.ShotAt,
-			})
+		for _, location := range locations {
+			if location.ActivityID == req.Id {
+				return nil, fmt.Errorf("活动含照片或最近删除记录，不能删除")
+			}
 		}
-		processed++
-		timelineRecompute.setProcessed(processed)
+		busy, err := data.HasActivityReservations(app, item.Name)
+		if err != nil {
+			return nil, err
+		}
+		if busy {
+			return nil, fmt.Errorf("活动含尚未完成的导入，不能删除")
+		}
+		dir := filepath.Join(conf.C.Storage.PhotoSrc, item.Name)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.Name() != activityMetadataFile {
+				return nil, fmt.Errorf("活动目录非空，不能删除")
+			}
+		}
+		preview := filepath.Join(conf.C.Storage.PhotoPath, item.Name)
+		if filepath.Clean(preview) != filepath.Clean(dir) {
+			previewEntries, previewErr := os.ReadDir(preview)
+			if previewErr != nil && !os.IsNotExist(previewErr) {
+				return nil, previewErr
+			}
+			for _, entry := range previewEntries {
+				if entry.Name() != activityPreviewIDFile {
+					return nil, fmt.Errorf("活动预览目录非空，不能删除")
+				}
+			}
+			if previewErr == nil {
+				if len(previewEntries) > 0 {
+					err = os.Remove(filepath.Join(preview, activityPreviewIDFile))
+					if err != nil {
+						return nil, err
+					}
+				}
+				err = os.Remove(preview)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		err = os.Remove(filepath.Join(dir, activityMetadataFile))
+		if err != nil {
+			return nil, err
+		}
+		err = os.Remove(dir)
+		if err != nil {
+			return nil, errors.Join(err, writeActivityMetadata(item.Name, item.Metadata))
+		}
+		return &api.Empty{}, nil
 	}
+	return nil, kratoserrors.NotFound("ACTIVITY_NOT_FOUND", "活动目录不存在")
+}
 
-	// 2. 散片分组
-	scatteredGroups := splitScatteredPhotos(scatteredCandidates, entries, windowDays)
+var activitySyncStatus struct {
+	sync.Mutex
+	processed int32
+}
 
-	// 3. 写回：事件桶
-	var eventCount, scatteredCount int32
-	for event, idList := range eventBuckets {
-		if err := data.PhotoDAO.UpdatePhotosTimelineBatch(ctx, idList, event); err != nil {
-			return eventCount, scatteredCount, fmt.Errorf("update event timeline %q failed: %w", event, err)
-		}
-		eventCount += int32(len(idList))
+// RecomputeTimelines is retained as a compatibility endpoint. Synchronization
+// now follows directories exclusively and never changes ownership by shot time.
+func (s *TimelineServer) RecomputeTimelines(ctx context.Context, _ *api.Empty) (*api.RecomputeTimelinesResponse, error) {
+	photoArchiveMu.Lock()
+	defer photoArchiveMu.Unlock()
+	app := papp.NewAppCtx(ctx)
+	_, err := syncActivityDirectoriesLocked(app)
+	if err != nil {
+		return nil, err
 	}
-
-	// 4. 写回：散片组
-	for _, g := range scatteredGroups {
-		if err := data.PhotoDAO.UpdatePhotosTimelineBatch(ctx, g.IDList, g.Name); err != nil {
-			return eventCount, scatteredCount, fmt.Errorf("update scattered timeline %q failed: %w", g.Name, err)
-		}
-		scatteredCount += int32(len(g.IDList))
+	photos, err := data.PhotoDAO.GetAll(app)
+	if err != nil {
+		return nil, err
 	}
+	activitySyncStatus.Lock()
+	activitySyncStatus.processed = int32(len(photos))
+	activitySyncStatus.Unlock()
+	return &api.RecomputeTimelinesResponse{Status: "completed"}, nil
+}
 
-	return eventCount, scatteredCount, nil
+func (s *TimelineServer) GetRecomputeTimelinesStatus(context.Context, *api.Empty) (*api.GetRecomputeTimelinesStatusResponse, error) {
+	activitySyncStatus.Lock()
+	defer activitySyncStatus.Unlock()
+	count := activitySyncStatus.processed
+	return &api.GetRecomputeTimelinesStatusResponse{Processed: count, Total: count, EventCount: count}, nil
 }

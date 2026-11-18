@@ -19,16 +19,18 @@ import (
 )
 
 type ImportBatchUpload struct {
-	JPGStaged bool   `json:"jpg_staged,omitempty"`
-	Server    string `json:"server,omitempty"`
-	Root      string `json:"root"`
-	Target    string `json:"target"`
-	NEFTarget string `json:"nef_target,omitempty"`
-	JPGReady  bool   `json:"jpg_ready"`
-	NEFReady  bool   `json:"nef_ready"`
-	Verified  bool   `json:"verified"`
-	PhotoID   string `json:"photo_id,omitempty"`
-	Error     string `json:"error,omitempty"`
+	ActivityID string `json:"activity_id,omitempty"`
+	Activity   string `json:"activity,omitempty"`
+	JPGStaged  bool   `json:"jpg_staged,omitempty"`
+	Server     string `json:"server,omitempty"`
+	Root       string `json:"root"`
+	Target     string `json:"target"`
+	NEFTarget  string `json:"nef_target,omitempty"`
+	JPGReady   bool   `json:"jpg_ready"`
+	NEFReady   bool   `json:"nef_ready"`
+	Verified   bool   `json:"verified"`
+	PhotoID    string `json:"photo_id,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 type ImportUploadProgress struct {
@@ -42,16 +44,18 @@ type ImportUploadProgress struct {
 }
 
 type importArchiveManifest struct {
-	BatchID  string     `json:"batch_id,omitempty"`
-	Activity string     `json:"activity"`
-	Name     string     `json:"name"`
-	JPG      string     `json:"jpg_sha256"`
-	NEF      string     `json:"nef_sha256,omitempty"`
-	Favorite bool       `json:"favorite"`
-	ShotAt   string     `json:"shot_at,omitempty"`
-	JPGTime  time.Time  `json:"jpg_time"`
-	NEFTime  *time.Time `json:"nef_time,omitempty"`
-	Target   string     `json:"target,omitempty"`
+	ActivityID string     `json:"activity_id,omitempty"`
+	PhotoID    string     `json:"photo_id,omitempty"`
+	BatchID    string     `json:"batch_id,omitempty"`
+	Activity   string     `json:"activity"`
+	Name       string     `json:"name"`
+	JPG        string     `json:"jpg_sha256"`
+	NEF        string     `json:"nef_sha256,omitempty"`
+	Favorite   bool       `json:"favorite"`
+	ShotAt     string     `json:"shot_at,omitempty"`
+	JPGTime    time.Time  `json:"jpg_time"`
+	NEFTime    *time.Time `json:"nef_time,omitempty"`
+	Target     string     `json:"target,omitempty"`
 }
 
 type ImportBatchPlan struct {
@@ -80,6 +84,12 @@ func (entry ImportBatchEntry) archiveManifest(activity string) importArchiveMani
 	req := importArchiveManifest{
 		Activity: activity, Name: filepath.Base(entry.JPG.Path), JPG: entry.JPG.SHA256,
 		Favorite: entry.Decision == batchFavorite, ShotAt: entry.ShotAt, JPGTime: entry.JPG.ModTime,
+	}
+	if entry.Upload != nil {
+		req.ActivityID, req.PhotoID = entry.Upload.ActivityID, entry.Upload.PhotoID
+		if entry.Upload.Activity != "" {
+			req.Activity = entry.Upload.Activity
+		}
 	}
 	if entry.NEF != nil {
 		req.NEF, req.NEFTime = entry.NEF.SHA256, &entry.NEF.ModTime
@@ -342,14 +352,27 @@ func (a *App) UploadImportBatch(id, serverURL string, plans []ImportBatchPlan) (
 		req := entry.archiveManifest(batch.Activity)
 		req.BatchID = id
 		req.Target = plan.Plan.Target
+		if plan.Plan.ActivityID != "" {
+			req.ActivityID = plan.Plan.ActivityID
+		}
+		if plan.Plan.Activity != "" {
+			req.Activity = plan.Plan.Activity
+		}
 		saveReceipt := func(receipt ImportBatchUpload) error {
 			receipt.Server = serverURL
+			if receipt.Activity != "" {
+				batch.Activity = receipt.Activity
+			}
 			entry.Upload = &receipt
 			return trace.save(root, batch)
 		}
 		current, err := archiveRPC(ctx, serverURL, "preview", req, "", nil)
 		if err == nil && current.Target != req.Target {
-			err = fmt.Errorf("服务器目标已变，请重新预览")
+			if req.ActivityID != "" && req.ActivityID == current.ActivityID && filepath.Base(current.Target) == filepath.Base(req.Target) {
+				req.Activity, req.Target = current.Activity, current.Target
+			} else {
+				err = fmt.Errorf("服务器目标已变，请重新预览")
+			}
 		}
 		if err == nil {
 			err = verifyImportLocalFiles(*entry, current, trace)
