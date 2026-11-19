@@ -28,7 +28,7 @@
 - 自动回归：`backend/` 下 `go test ./...` 通过；覆盖客户端改名、外部改名、带时区排序、空活动改名及删除、重复/损坏元数据、旧路径迁移回滚、收藏 JPG 复用 JPG/NEF、旧回执以及回收恢复。`client/` 下 `go test ./...` 通过。
 - 前端：`web/` 下 `pnpm test` 通过，5 个文件、14 个用例；`pnpm build` 类型检查与生产构建通过。
 - Windows：使用已有 MinGW 编译器交叉编译成功，新客户端 `/root/share/photo-agent/exports/2026-11-18-photo-agent-windows.exe` 已包含新前端及活动回执兼容。
-- 自评：通过，9/10；核心流程具备隔离回归与真实库只读比对证据。Windows 窗口与真实用户交互仍需用户验收。
+- 自评：通过，9/10；核心流程具备隔离回归与真实库只读比对证据。Windows 窗口与真实用户交互的验收结果见下方记录。
 - 证据：备份目录中的 `migration-result.json`、`cleanup-result.json`；详细运行输出在 `.local/activity-directories/`。
 
-（用户）替换客户端并按原方式重启服务，在时间线中修改一个活动的名称、时间与备注，确认目录同名变化、照片预览和收藏仍正常。通过后回复“DIR2 已通过”。
+用户验收：2026-11-19，用户确认持续使用，DIR2 已通过。当前任务状态见 [backlog DIR2](../backlog.md#dir2-目录活动与路径存储迁移)。
