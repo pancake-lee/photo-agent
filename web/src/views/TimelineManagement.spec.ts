@@ -11,7 +11,7 @@ vi.mock('../backend-sdk-client', () => ({
     timelineServiceListEvents: vi.fn().mockResolvedValue({
       events: [
         { id: 'shanxi', event: '202608-山西旅游', photoCount: 5 },
-        { id: 'empty', event: '202611-待整理 & 旅行', photoCount: 0 },
+        { id: 'empty', event: '202611-待整理 & 旅行', photoCount: 0, note: '很长的备注不会改变各行操作所在列' },
       ],
     }),
   },
@@ -46,6 +46,11 @@ describe('时间线活动图片入口', () => {
 
     const rows = container.querySelectorAll('.event-item')
     expect(rows).toHaveLength(2)
+    expect(container.querySelector('.event-list > table')).not.toBeNull()
+    for (const row of rows) {
+      expect(row.querySelectorAll('td')).toHaveLength(4)
+      expect(row.querySelector('td:last-child')?.classList.contains('event-actions')).toBe(true)
+    }
     for (const [index, name] of ['202608-山西旅游', '202611-待整理 & 旅行'].entries()) {
       const button = [...rows[index]!.querySelectorAll('button')]
         .find((item) => item.textContent?.trim() === '查看图片')

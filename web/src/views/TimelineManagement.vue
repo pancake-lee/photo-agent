@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NLayout, NLayoutContent, NLayoutHeader, NButton, NIcon, NInput,
   NDatePicker, NEmpty, NSpin, NSpace, NTag, NModal, NForm, NFormItem,
-  NPopconfirm, useMessage } from 'naive-ui'
+  NPopconfirm, NTable, useMessage } from 'naive-ui'
 import { AddOutline, CreateOutline, TrashOutline, RefreshOutline,
   CalendarOutline } from '@vicons/ionicons5'
 import { useTimelines, type TimelineEventItem } from '../composables/useTimelines'
@@ -119,32 +119,37 @@ onMounted(fetchEvents)
           <NEmpty v-else-if="events.length === 0" class="column-state"
             description="暂无活动目录，可导入照片或新建活动" />
           <div v-else class="event-list">
-            <div v-for="event in events" :key="event.id" class="event-item">
-              <div class="event-date">{{ displayDate(event.date) }}</div>
-              <div class="event-body">
-                <div class="event-heading">
-                  <div class="event-name">{{ event.event }}</div>
-                  <div class="event-meta">
-                    <NTag size="small" :type="event.photo_count > 0 ? 'success' : 'default'">{{ event.photo_count }} 张</NTag>
-                    <NButton size="small" secondary @click="router.push({ path: '/photos', query: { activity: event.event } })">
-                      查看图片
-                    </NButton>
-                    <NButton size="small" quaternary aria-label="编辑活动" @click="openEdit(event)">
-                      <template #icon><NIcon><CreateOutline /></NIcon></template>
-                    </NButton>
-                    <NPopconfirm @positive-click="handleDelete(event)">
-                      <template #trigger>
-                        <NButton size="small" quaternary type="error" aria-label="删除空活动目录" :disabled="event.photo_count > 0">
-                          <template #icon><NIcon><TrashOutline /></NIcon></template>
-                        </NButton>
-                      </template>
-                      删除空活动目录「{{ event.event }}」及其时间、备注？非空目录无法删除。
-                    </NPopconfirm>
-                  </div>
-                </div>
-                <div v-if="event.note" class="event-note">{{ event.note }}</div>
-              </div>
-            </div>
+            <NTable size="small" :bordered="false" class="event-table">
+              <thead><tr><th>时间</th><th>活动</th><th>照片</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="event in events" :key="event.id" class="event-item">
+                  <td class="event-date">{{ displayDate(event.date) }}</td>
+                  <td class="event-body">
+                    <div class="event-name" :title="event.event">{{ event.event }}</div>
+                    <div v-if="event.note" class="event-note" :title="event.note">{{ event.note }}</div>
+                  </td>
+                  <td><NTag size="small" :type="event.photo_count > 0 ? 'success' : 'default'">{{ event.photo_count }} 张</NTag></td>
+                  <td class="event-actions">
+                    <div class="event-meta">
+                      <NButton size="small" secondary @click="router.push({ path: '/photos', query: { activity: event.event } })">
+                        查看图片
+                      </NButton>
+                      <NButton size="small" quaternary aria-label="编辑活动" @click="openEdit(event)">
+                        <template #icon><NIcon><CreateOutline /></NIcon></template>
+                      </NButton>
+                      <NPopconfirm @positive-click="handleDelete(event)">
+                        <template #trigger>
+                          <NButton size="small" quaternary type="error" aria-label="删除空活动目录" :disabled="event.photo_count > 0">
+                            <template #icon><NIcon><TrashOutline /></NIcon></template>
+                          </NButton>
+                        </template>
+                        删除空活动目录「{{ event.event }}」及其时间、备注？非空目录无法删除。
+                      </NPopconfirm>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </NTable>
           </div>
         </div>
       </div>
@@ -227,61 +232,16 @@ onMounted(fetchEvents)
   justify-content: center;
   min-height: 200px;
 }
-.event-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.event-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  border: 1px solid var(--n-border-color);
-  border-radius: 8px;
-  background: var(--n-card-color);
-}
-.event-date {
-  font-size: 13px;
-  color: var(--n-text-color-3);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.event-body {
-  flex: 1;
-  min-width: 0;
-}
-.event-heading {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
-.event-name {
-  font-size: 14px;
-  font-weight: 500;
-  min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-.event-note {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.event-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
+.event-list { overflow-x: auto; }
+.event-table { width: max-content; max-width: 100%; }
+.event-table :deep(th), .event-table :deep(td) { vertical-align: middle; }
+.event-date { font-size: 13px; color: var(--n-text-color-3); white-space: nowrap; }
+.event-name { font-size: 14px; font-weight: 500; }
+.event-name, .event-note { max-width: 32rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-note { margin-top: 4px; font-size: 12px; color: var(--n-text-color-3); }
+.event-meta { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .activity-hint { margin: 0; font-size: 13px; color: var(--n-text-color-3); }
 @media (max-width: 640px) {
-  .event-item { flex-wrap: wrap; gap: 8px; }
-  .event-date { width: 100%; }
   .content-wrapper { padding: 16px; }
   .toolbar { padding: 0 16px; }
 }
