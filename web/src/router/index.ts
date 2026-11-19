@@ -43,6 +43,11 @@ const routes = [
     component: () => import('../views/ChatView.vue'),
   },
   {
+    path: '/recently-deleted',
+    name: 'recently-deleted',
+    component: () => import('../views/RecentlyDeleted.vue'),
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('../views/SettingsView.vue'),

@@ -14,6 +14,7 @@ import {
   GitNetworkOutline,
   TimeOutline,
   StarOutline,
+  TrashOutline,
 } from '@vicons/ionicons5'
 import type { MenuOption } from 'naive-ui'
 import { h, type Component } from 'vue'
@@ -105,6 +106,7 @@ const selectedKey = computed(() => {
   if (path === '/timelines') return '/timelines'
   if (path === '/golden-queries') return '/golden-queries'
   if (path === '/cluster') return '/cluster'
+  if (path === '/recently-deleted') return '/recently-deleted'
   if (path === '/suggest') return '/suggest'
   if (path === '/post-studio') return '/post-studio'
   if (path === '/drafts') return '/drafts'
@@ -291,6 +293,14 @@ onMounted(() => window.addEventListener('keydown', onKeydown))
         >
           <NIcon size="18"><GitNetworkOutline /></NIcon>
           <span class="bottom-item-text">组图发现</span>
+        </div>
+        <div
+          class="bottom-item"
+          :class="{ active: selectedKey === '/recently-deleted' }"
+          @click="router.push('/recently-deleted')"
+        >
+          <NIcon size="18"><TrashOutline /></NIcon>
+          <span class="bottom-item-text">最近删除</span>
         </div>
         <div
           class="bottom-item"
