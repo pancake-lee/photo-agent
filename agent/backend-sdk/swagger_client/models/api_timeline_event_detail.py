@@ -32,7 +32,8 @@ class ApiTimelineEventDetail(object):
         'event': 'str',
         'note': 'str',
         'photo_count': 'int',
-        'is_scattered': 'bool'
+        'is_scattered': 'bool',
+        'has_favorites': 'bool'
     }
 
     attribute_map = {
@@ -41,10 +42,11 @@ class ApiTimelineEventDetail(object):
         'event': 'event',
         'note': 'note',
         'photo_count': 'photoCount',
-        'is_scattered': 'isScattered'
+        'is_scattered': 'isScattered',
+        'has_favorites': 'hasFavorites'
     }
 
-    def __init__(self, id=None, _date=None, event=None, note=None, photo_count=None, is_scattered=None):  # noqa: E501
+    def __init__(self, id=None, _date=None, event=None, note=None, photo_count=None, is_scattered=None, has_favorites=None):  # noqa: E501
         """ApiTimelineEventDetail - a model defined in Swagger"""  # noqa: E501
         self._id = None
         self.__date = None
@@ -52,6 +54,7 @@ class ApiTimelineEventDetail(object):
         self._note = None
         self._photo_count = None
         self._is_scattered = None
+        self._has_favorites = None
         self.discriminator = None
         if id is not None:
             self.id = id
@@ -65,6 +68,8 @@ class ApiTimelineEventDetail(object):
             self.photo_count = photo_count
         if is_scattered is not None:
             self.is_scattered = is_scattered
+        if has_favorites is not None:
+            self.has_favorites = has_favorites
 
     @property
     def id(self):
@@ -191,6 +196,27 @@ class ApiTimelineEventDetail(object):
         """
 
         self._is_scattered = is_scattered
+
+    @property
+    def has_favorites(self):
+        """Gets the has_favorites of this ApiTimelineEventDetail.  # noqa: E501
+
+
+        :return: The has_favorites of this ApiTimelineEventDetail.  # noqa: E501
+        :rtype: bool
+        """
+        return self._has_favorites
+
+    @has_favorites.setter
+    def has_favorites(self, has_favorites):
+        """Sets the has_favorites of this ApiTimelineEventDetail.
+
+
+        :param has_favorites: The has_favorites of this ApiTimelineEventDetail.  # noqa: E501
+        :type: bool
+        """
+
+        self._has_favorites = has_favorites
 
     def to_dict(self):
         """Returns the model properties as a dict"""

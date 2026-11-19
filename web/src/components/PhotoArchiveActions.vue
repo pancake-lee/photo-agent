@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { NAlert, NButton, NEmpty, NModal, NSpace, NSpin, useMessage } from 'naive-ui'
 import { getApiBase } from '../config'
 
-const props = defineProps<{ activity: string }>()
+const props = defineProps<{ activity: string; disabled?: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
 const message = useMessage()
 
@@ -82,7 +82,7 @@ watch(() => props.activity, (activity) => { if (activity !== cleanActivity.value
 
 <template>
   <NSpace>
-    <NButton size="small" :disabled="!activity || activity === 'none' || pending" @click="openCleanup">删除非收藏图片的 NEF</NButton>
+    <NButton size="small" :disabled="disabled || !activity || activity === 'none' || pending" @click="openCleanup">清理未收藏 NEF</NButton>
   </NSpace>
   <NModal v-model:show="cleaning" preset="card" :title="`删除非收藏图片的 NEF · ${cleanActivity}`" class="archive-modal" :mask-closable="!pending">
     <NSpin :show="pending">

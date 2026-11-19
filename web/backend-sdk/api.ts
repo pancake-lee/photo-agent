@@ -1771,6 +1771,12 @@ export interface ApiTimelineEventDetail {
      * @memberof ApiTimelineEventDetail
      */
     isScattered?: boolean;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ApiTimelineEventDetail
+     */
+    hasFavorites?: boolean;
 }
 /**
  * --------------------------------------------------  tbl : timeline_events

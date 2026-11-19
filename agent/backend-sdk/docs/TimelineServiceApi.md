@@ -17,7 +17,7 @@ Method | HTTP request | Description
 
 
 
-删除时间线事件
+删除空活动目录
 
 ### Example
 ```python
@@ -111,7 +111,7 @@ No authorization required
 
 
 
-查询重算进度
+查询最近一次目录同步计数
 
 ### Example
 ```python
@@ -154,7 +154,7 @@ No authorization required
 
 
 
-时间线事件列表（含散片组只读展示）
+活动目录列表（包含空目录）
 
 ### Example
 ```python
@@ -240,7 +240,7 @@ No authorization required
 
 
 
-触发全量重算照片 timeline（异步，人工值保留）
+同步目录活动（同步执行，成功返回 completed）
 
 ### Example
 ```python
@@ -287,7 +287,7 @@ No authorization required
 
 
 
-保存时间线事件（新建与更新合一，id 为空则新建）
+保存目录活动（id 为空创建目录，名称变更会改目录名）
 
 ### Example
 ```python

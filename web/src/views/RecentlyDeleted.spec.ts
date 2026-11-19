@@ -60,6 +60,23 @@ describe('独立最近删除页面', () => {
     expect(container!.querySelectorAll('.recent-items li')).toHaveLength(0)
   })
 
+  it('批量恢复只提交勾选的可恢复项目', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response(items))
+      .mockResolvedValueOnce(response([{ id: 'nef', status: 'restored' }]))
+      .mockResolvedValueOnce(response([]))
+    vi.stubGlobal('fetch', fetch)
+    mountPage()
+    await vi.waitFor(() => expect(container!.querySelectorAll('.recent-items li')).toHaveLength(2))
+    container!.querySelector<HTMLElement>('[aria-label="选择 one.NEF"]')!.click()
+    container!.querySelector<HTMLElement>('[aria-label="选择 old.JPG"]')!.click()
+    await vi.waitFor(() => expect(container!.textContent).toContain('恢复所选（1）'))
+    const batch = [...container!.querySelectorAll('button')]
+      .find((button) => button.textContent?.includes('恢复所选'))!
+    batch.click()
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
+    expect(fetch.mock.calls[1]![1]).toMatchObject({ method: 'POST', body: '["nef"]' })
+  })
+
   it('加载失败显示原因，可刷新重试', async () => {
     const fetch = vi.fn().mockRejectedValueOnce(new Error('连接失败'))
       .mockResolvedValueOnce(response([]))

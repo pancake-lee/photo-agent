@@ -34,7 +34,7 @@ class TimelineServiceApi(object):
     def timeline_service_delete_event(self, id, **kwargs):  # noqa: E501
         """timeline_service_delete_event  # noqa: E501
 
-        删除时间线事件  # noqa: E501
+        删除空活动目录  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_delete_event(id, async_req=True)
@@ -56,7 +56,7 @@ class TimelineServiceApi(object):
     def timeline_service_delete_event_with_http_info(self, id, **kwargs):  # noqa: E501
         """timeline_service_delete_event  # noqa: E501
 
-        删除时间线事件  # noqa: E501
+        删除空活动目录  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_delete_event_with_http_info(id, async_req=True)
@@ -224,7 +224,7 @@ class TimelineServiceApi(object):
     def timeline_service_get_recompute_timelines_status(self, **kwargs):  # noqa: E501
         """timeline_service_get_recompute_timelines_status  # noqa: E501
 
-        查询重算进度  # noqa: E501
+        查询最近一次目录同步计数  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_get_recompute_timelines_status(async_req=True)
@@ -245,7 +245,7 @@ class TimelineServiceApi(object):
     def timeline_service_get_recompute_timelines_status_with_http_info(self, **kwargs):  # noqa: E501
         """timeline_service_get_recompute_timelines_status  # noqa: E501
 
-        查询重算进度  # noqa: E501
+        查询最近一次目录同步计数  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_get_recompute_timelines_status_with_http_info(async_req=True)
@@ -311,7 +311,7 @@ class TimelineServiceApi(object):
     def timeline_service_list_events(self, **kwargs):  # noqa: E501
         """timeline_service_list_events  # noqa: E501
 
-        时间线事件列表（含散片组只读展示）  # noqa: E501
+        活动目录列表（包含空目录）  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_list_events(async_req=True)
@@ -332,7 +332,7 @@ class TimelineServiceApi(object):
     def timeline_service_list_events_with_http_info(self, **kwargs):  # noqa: E501
         """timeline_service_list_events  # noqa: E501
 
-        时间线事件列表（含散片组只读展示）  # noqa: E501
+        活动目录列表（包含空目录）  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_list_events_with_http_info(async_req=True)
@@ -485,7 +485,7 @@ class TimelineServiceApi(object):
     def timeline_service_recompute_timelines(self, body, **kwargs):  # noqa: E501
         """timeline_service_recompute_timelines  # noqa: E501
 
-        触发全量重算照片 timeline（异步，人工值保留）  # noqa: E501
+        同步目录活动（同步执行，成功返回 completed）  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_recompute_timelines(body, async_req=True)
@@ -507,7 +507,7 @@ class TimelineServiceApi(object):
     def timeline_service_recompute_timelines_with_http_info(self, body, **kwargs):  # noqa: E501
         """timeline_service_recompute_timelines  # noqa: E501
 
-        触发全量重算照片 timeline（异步，人工值保留）  # noqa: E501
+        同步目录活动（同步执行，成功返回 completed）  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_recompute_timelines_with_http_info(body, async_req=True)
@@ -584,7 +584,7 @@ class TimelineServiceApi(object):
     def timeline_service_save_event(self, body, **kwargs):  # noqa: E501
         """timeline_service_save_event  # noqa: E501
 
-        保存时间线事件（新建与更新合一，id 为空则新建）  # noqa: E501
+        保存目录活动（id 为空创建目录，名称变更会改目录名）  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_save_event(body, async_req=True)
@@ -606,7 +606,7 @@ class TimelineServiceApi(object):
     def timeline_service_save_event_with_http_info(self, body, **kwargs):  # noqa: E501
         """timeline_service_save_event  # noqa: E501
 
-        保存时间线事件（新建与更新合一，id 为空则新建）  # noqa: E501
+        保存目录活动（id 为空创建目录，名称变更会改目录名）  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.timeline_service_save_event_with_http_info(body, async_req=True)

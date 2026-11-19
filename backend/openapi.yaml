@@ -1793,6 +1793,8 @@ components:
                     format: int32
                 isScattered:
                     type: boolean
+                hasFavorites:
+                    type: boolean
             description: TimelineEventDetail 目录活动与隐藏文件元数据
         api.TimelineEventInfo:
             type: object

@@ -77,6 +77,10 @@ func (s *TimelineServer) ListEvents(ctx context.Context, _ *api.Empty) (*api.Lis
 	if err != nil {
 		return nil, err
 	}
+	favoriteActivityMap, err := data.PhotoDAO.GetFavoriteActivities(app)
+	if err != nil {
+		return nil, err
+	}
 	counts := make(map[string]int32)
 	for _, photo := range photos {
 		if photo.FileType != "nef" {
@@ -85,7 +89,12 @@ func (s *TimelineServer) ListEvents(ctx context.Context, _ *api.Empty) (*api.Lis
 	}
 	result := &api.ListTimelineEventsResponse{Events: make([]*api.TimelineEventDetail, 0, len(list)), Scattered: []*api.TimelineEventDetail{}}
 	for _, item := range list {
-		result.Events = append(result.Events, &api.TimelineEventDetail{Id: item.Metadata.ID, Date: item.Metadata.Date, Event: item.Name, Note: item.Metadata.Note, PhotoCount: counts[item.Name]})
+		result.Events = append(result.Events, &api.TimelineEventDetail{
+			Id: item.Metadata.ID, Date: item.Metadata.Date,
+			Event: item.Name, Note: item.Metadata.Note,
+			PhotoCount:   counts[item.Name],
+			HasFavorites: favoriteActivityMap[item.Name],
+		})
 	}
 	return result, nil
 }

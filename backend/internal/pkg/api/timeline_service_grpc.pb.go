@@ -38,15 +38,15 @@ type TimelineServiceClient interface {
 	ListTimelines(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListTimelinesResponse, error)
 	// 某时间线下的照片
 	GetPhotosByTimeline(ctx context.Context, in *GetPhotosByTimelineRequest, opts ...grpc.CallOption) (*GetPhotosByTimelineResponse, error)
-	// 时间线事件列表（含散片组只读展示）
+	// 活动目录列表（包含空目录）
 	ListEvents(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListTimelineEventsResponse, error)
-	// 保存时间线事件（新建与更新合一，id 为空则新建）
+	// 保存目录活动（id 为空创建目录，名称变更会改目录名）
 	SaveEvent(ctx context.Context, in *SaveTimelineEventRequest, opts ...grpc.CallOption) (*SaveTimelineEventResponse, error)
-	// 删除时间线事件
+	// 删除空活动目录
 	DeleteEvent(ctx context.Context, in *DeleteTimelineEventRequest, opts ...grpc.CallOption) (*Empty, error)
-	// 触发全量重算照片 timeline（异步，人工值保留）
+	// 同步目录活动（同步执行，成功返回 completed）
 	RecomputeTimelines(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RecomputeTimelinesResponse, error)
-	// 查询重算进度
+	// 查询最近一次目录同步计数
 	GetRecomputeTimelinesStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*GetRecomputeTimelinesStatusResponse, error)
 }
 
@@ -138,15 +138,15 @@ type TimelineServiceServer interface {
 	ListTimelines(context.Context, *Empty) (*ListTimelinesResponse, error)
 	// 某时间线下的照片
 	GetPhotosByTimeline(context.Context, *GetPhotosByTimelineRequest) (*GetPhotosByTimelineResponse, error)
-	// 时间线事件列表（含散片组只读展示）
+	// 活动目录列表（包含空目录）
 	ListEvents(context.Context, *Empty) (*ListTimelineEventsResponse, error)
-	// 保存时间线事件（新建与更新合一，id 为空则新建）
+	// 保存目录活动（id 为空创建目录，名称变更会改目录名）
 	SaveEvent(context.Context, *SaveTimelineEventRequest) (*SaveTimelineEventResponse, error)
-	// 删除时间线事件
+	// 删除空活动目录
 	DeleteEvent(context.Context, *DeleteTimelineEventRequest) (*Empty, error)
-	// 触发全量重算照片 timeline（异步，人工值保留）
+	// 同步目录活动（同步执行，成功返回 completed）
 	RecomputeTimelines(context.Context, *Empty) (*RecomputeTimelinesResponse, error)
-	// 查询重算进度
+	// 查询最近一次目录同步计数
 	GetRecomputeTimelinesStatus(context.Context, *Empty) (*GetRecomputeTimelinesStatusResponse, error)
 	mustEmbedUnimplementedTimelineServiceServer()
 }

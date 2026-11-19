@@ -6,6 +6,7 @@ import { NLayout, NLayoutContent, NLayoutHeader, NButton, NIcon, NInput,
   NPopconfirm, NTable, useMessage } from 'naive-ui'
 import { AddOutline, CreateOutline, TrashOutline, RefreshOutline,
   CalendarOutline } from '@vicons/ionicons5'
+import PhotoArchiveActions from '../components/PhotoArchiveActions.vue'
 import { useTimelines, type TimelineEventItem } from '../composables/useTimelines'
 
 const message = useMessage()
@@ -120,7 +121,7 @@ onMounted(fetchEvents)
             description="暂无活动目录，可导入照片或新建活动" />
           <div v-else class="event-list">
             <NTable size="small" :bordered="false" class="event-table">
-              <thead><tr><th>时间</th><th>活动</th><th>照片</th><th>操作</th></tr></thead>
+              <thead><tr><th>时间</th><th>活动</th><th>照片</th><th>选片</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="event in events" :key="event.id" class="event-item">
                   <td class="event-date">{{ displayDate(event.date) }}</td>
@@ -129,8 +130,10 @@ onMounted(fetchEvents)
                     <div v-if="event.note" class="event-note" :title="event.note">{{ event.note }}</div>
                   </td>
                   <td><NTag size="small" :type="event.photo_count > 0 ? 'success' : 'default'">{{ event.photo_count }} 张</NTag></td>
+                  <td><NTag v-if="event.has_favorites" size="small" type="success">已选片</NTag></td>
                   <td class="event-actions">
                     <div class="event-meta">
+                      <PhotoArchiveActions :activity="event.event" :disabled="!event.has_favorites" />
                       <NButton size="small" secondary @click="router.push({ path: '/photos', query: { activity: event.event } })">
                         查看图片
                       </NButton>

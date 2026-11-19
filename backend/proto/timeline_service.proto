@@ -84,6 +84,7 @@ message TimelineEventDetail {
     string note = 4;
     int32 photo_count = 5; // 该事件/散片组下照片数
     bool is_scattered = 6; // 兼容旧接口，目录模式固定为 false
+    bool has_favorites = 7; // 当前活动包含至少一张收藏照片，即已选片
 }
 
 message ListTimelineEventsResponse {

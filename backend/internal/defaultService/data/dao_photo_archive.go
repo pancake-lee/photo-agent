@@ -135,6 +135,25 @@ func (*photoDAO) GetPhotoFavoriteStatus(ctx *papp.AppCtx, ids, groupIDs []string
 	return favorites, counts, nil
 }
 
+// GetFavoriteActivities reads current activity flags without per-photo queries.
+func (*photoDAO) GetFavoriteActivities(
+	ctx *papp.AppCtx,
+) (map[string]bool, error) {
+	var activityList []string
+	err := pdb.GetGormDB().WithContext(ctx).Table("photos").
+		Joins("JOIN photo_archives ON photo_archives.photo_id = photos.id").
+		Where("photo_archives.favorite = ? AND photos.file_type <> ?",
+			true, "nef").Distinct().Pluck("photos.timeline", &activityList).Error
+	if err != nil {
+		return nil, err
+	}
+	activityMap := make(map[string]bool, len(activityList))
+	for _, activity := range activityList {
+		activityMap[activity] = true
+	}
+	return activityMap, nil
+}
+
 func (*photoDAO) ListArchiveActivity(ctx *papp.AppCtx, activity string) ([]PhotoDO, error) {
 	var rows []PhotoDO
 	err := pdb.GetGormDB().WithContext(ctx).

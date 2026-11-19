@@ -16,6 +16,7 @@ export interface TimelineEventItem {
   event: string
   note: string
   photo_count: number
+  has_favorites: boolean
   is_scattered: boolean
 }
 
@@ -54,6 +55,7 @@ function adaptEvent(e?: ApiTimelineEventDetail): TimelineEventItem {
     event: e?.event ?? '',
     note: e?.note ?? '',
     photo_count: e?.photoCount ?? 0,
+    has_favorites: e?.hasFavorites ?? false,
     is_scattered: e?.isScattered ?? false,
   }
 }

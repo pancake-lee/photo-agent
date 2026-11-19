@@ -170,15 +170,16 @@ func (x *GetPhotosByTimelineResponse) GetTotal() int32 {
 	return 0
 }
 
-// TimelineEventDetail 时间线事件（散片组 is_scattered=true，只读）
+// TimelineEventDetail 目录活动与隐藏文件元数据
 type TimelineEventDetail struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Date          string                 `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"`   // YYYY-MM-DD；散片组为该组首张照片所在月（YYYY-MM）
-	Event         string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"` // 活动名；散片组为散片名（YYYY-MM-散片N）
+	Date          string                 `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"`   // YYYY-MM-DD 或带时区 RFC3339，可空
+	Event         string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"` // 当前目录名
 	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
-	PhotoCount    int32                  `protobuf:"varint,5,opt,name=photo_count,json=photoCount,proto3" json:"photo_count,omitempty"`    // 该事件/散片组下照片数
-	IsScattered   bool                   `protobuf:"varint,6,opt,name=is_scattered,json=isScattered,proto3" json:"is_scattered,omitempty"` // 是否散片组（自动生成，不可编辑）
+	PhotoCount    int32                  `protobuf:"varint,5,opt,name=photo_count,json=photoCount,proto3" json:"photo_count,omitempty"`       // 该事件/散片组下照片数
+	IsScattered   bool                   `protobuf:"varint,6,opt,name=is_scattered,json=isScattered,proto3" json:"is_scattered,omitempty"`    // 兼容旧接口，目录模式固定为 false
+	HasFavorites  bool                   `protobuf:"varint,7,opt,name=has_favorites,json=hasFavorites,proto3" json:"has_favorites,omitempty"` // 当前活动包含至少一张收藏照片，即已选片
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -255,10 +256,17 @@ func (x *TimelineEventDetail) GetIsScattered() bool {
 	return false
 }
 
+func (x *TimelineEventDetail) GetHasFavorites() bool {
+	if x != nil {
+		return x.HasFavorites
+	}
+	return false
+}
+
 type ListTimelineEventsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Events        []*TimelineEventDetail `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`       // 人工维护的活动事件（按日期排序）
-	Scattered     []*TimelineEventDetail `protobuf:"bytes,2,rep,name=scattered,proto3" json:"scattered,omitempty"` // 散片组（按时间排序）
+	Events        []*TimelineEventDetail `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`       // 目录活动（按活动时间倒序）
+	Scattered     []*TimelineEventDetail `protobuf:"bytes,2,rep,name=scattered,proto3" json:"scattered,omitempty"` // 兼容旧接口，目录模式返回空列表
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -310,7 +318,7 @@ func (x *ListTimelineEventsResponse) GetScattered() []*TimelineEventDetail {
 type SaveTimelineEventRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`     // 为空则新建
-	Date          string                 `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"` // YYYY-MM-DD
+	Date          string                 `protobuf:"bytes,2,opt,name=date,proto3" json:"date,omitempty"` // YYYY-MM-DD 或带时区 RFC3339，可空
 	Event         string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"`
 	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -465,7 +473,7 @@ func (x *DeleteTimelineEventRequest) GetId() string {
 
 type RecomputeTimelinesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // running | already_running
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // completed
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -512,8 +520,8 @@ type GetRecomputeTimelinesStatusResponse struct {
 	Running        bool                   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
 	Processed      int32                  `protobuf:"varint,2,opt,name=processed,proto3" json:"processed,omitempty"`
 	Total          int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
-	EventCount     int32                  `protobuf:"varint,4,opt,name=event_count,json=eventCount,proto3" json:"event_count,omitempty"`             // 事件匹配照片数
-	ScatteredCount int32                  `protobuf:"varint,5,opt,name=scattered_count,json=scatteredCount,proto3" json:"scattered_count,omitempty"` // 散片填充照片数（跑完时为最终值）
+	EventCount     int32                  `protobuf:"varint,4,opt,name=event_count,json=eventCount,proto3" json:"event_count,omitempty"`             // 目录同步照片数
+	ScatteredCount int32                  `protobuf:"varint,5,opt,name=scattered_count,json=scatteredCount,proto3" json:"scattered_count,omitempty"` // 兼容旧接口，目录模式固定为 0
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -595,7 +603,7 @@ const file_timeline_service_proto_rawDesc = "" +
 	"\x1bGetPhotosByTimelineResponse\x12\x1a\n" +
 	"\btimeline\x18\x01 \x01(\tR\btimeline\x12$\n" +
 	"\x05items\x18\x02 \x03(\v2\x0e.api.PhotoItemR\x05items\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x05R\x05total\"\xa7\x01\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\"\xcc\x01\n" +
 	"\x13TimelineEventDetail\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04date\x18\x02 \x01(\tR\x04date\x12\x14\n" +
@@ -603,7 +611,8 @@ const file_timeline_service_proto_rawDesc = "" +
 	"\x04note\x18\x04 \x01(\tR\x04note\x12\x1f\n" +
 	"\vphoto_count\x18\x05 \x01(\x05R\n" +
 	"photoCount\x12!\n" +
-	"\fis_scattered\x18\x06 \x01(\bR\visScattered\"\x86\x01\n" +
+	"\fis_scattered\x18\x06 \x01(\bR\visScattered\x12#\n" +
+	"\rhas_favorites\x18\a \x01(\bR\fhasFavorites\"\x86\x01\n" +
 	"\x1aListTimelineEventsResponse\x120\n" +
 	"\x06events\x18\x01 \x03(\v2\x18.api.TimelineEventDetailR\x06events\x126\n" +
 	"\tscattered\x18\x02 \x03(\v2\x18.api.TimelineEventDetailR\tscattered\"h\n" +

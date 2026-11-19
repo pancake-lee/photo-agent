@@ -358,3 +358,36 @@ func TestMissingActivityDoesNotBlockOtherActivities(t *testing.T) {
 		t.Fatalf("cleanup is not retryable: %v", err)
 	}
 }
+
+func TestDirectoryActivitySelectedFlagTracksFavorites(t *testing.T) {
+	ctx, _ := setupUserPathTest(t)
+	_, favorite := importActivityTestPhoto(t, ctx, "已选片活动", true)
+	importActivityTestPhoto(t, ctx, "未选片活动", false)
+	server := TimelineServer{}
+	_, err := server.SaveEvent(ctx, &api.SaveTimelineEventRequest{
+		Event: "空活动",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFlags := func(want bool) {
+		t.Helper()
+		list, err := server.ListEvents(ctx, &api.Empty{})
+		if err != nil || len(list.Events) != 3 {
+			t.Fatalf("events: %+v %v", list, err)
+		}
+		for _, event := range list.Events {
+			expected := event.Event == "已选片活动" && want
+			if event.HasFavorites != expected {
+				t.Fatalf("activity %s selected = %v, want %v",
+					event.Event, event.HasFavorites, expected)
+			}
+		}
+	}
+	assertFlags(true)
+	err = data.PhotoDAO.SetArchiveFavorite(ctx, favorite.PhotoID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFlags(false)
+}

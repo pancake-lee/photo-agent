@@ -28,19 +28,19 @@ const OperationTimelineServiceRecomputeTimelines = "/api.TimelineService/Recompu
 const OperationTimelineServiceSaveEvent = "/api.TimelineService/SaveEvent"
 
 type TimelineServiceHTTPServer interface {
-	// DeleteEvent 删除时间线事件
+	// DeleteEvent 删除空活动目录
 	DeleteEvent(context.Context, *DeleteTimelineEventRequest) (*Empty, error)
 	// GetPhotosByTimeline 某时间线下的照片
 	GetPhotosByTimeline(context.Context, *GetPhotosByTimelineRequest) (*GetPhotosByTimelineResponse, error)
-	// GetRecomputeTimelinesStatus 查询重算进度
+	// GetRecomputeTimelinesStatus 查询最近一次目录同步计数
 	GetRecomputeTimelinesStatus(context.Context, *Empty) (*GetRecomputeTimelinesStatusResponse, error)
-	// ListEvents 时间线事件列表（含散片组只读展示）
+	// ListEvents 活动目录列表（包含空目录）
 	ListEvents(context.Context, *Empty) (*ListTimelineEventsResponse, error)
 	// ListTimelines 所有时间线列表
 	ListTimelines(context.Context, *Empty) (*ListTimelinesResponse, error)
-	// RecomputeTimelines 触发全量重算照片 timeline（异步，人工值保留）
+	// RecomputeTimelines 同步目录活动（同步执行，成功返回 completed）
 	RecomputeTimelines(context.Context, *Empty) (*RecomputeTimelinesResponse, error)
-	// SaveEvent 保存时间线事件（新建与更新合一，id 为空则新建）
+	// SaveEvent 保存目录活动（id 为空创建目录，名称变更会改目录名）
 	SaveEvent(context.Context, *SaveTimelineEventRequest) (*SaveTimelineEventResponse, error)
 }
 
@@ -201,19 +201,19 @@ func _TimelineService_GetRecomputeTimelinesStatus0_HTTP_Handler(srv TimelineServ
 }
 
 type TimelineServiceHTTPClient interface {
-	// DeleteEvent 删除时间线事件
+	// DeleteEvent 删除空活动目录
 	DeleteEvent(ctx context.Context, req *DeleteTimelineEventRequest, opts ...http.CallOption) (rsp *Empty, err error)
 	// GetPhotosByTimeline 某时间线下的照片
 	GetPhotosByTimeline(ctx context.Context, req *GetPhotosByTimelineRequest, opts ...http.CallOption) (rsp *GetPhotosByTimelineResponse, err error)
-	// GetRecomputeTimelinesStatus 查询重算进度
+	// GetRecomputeTimelinesStatus 查询最近一次目录同步计数
 	GetRecomputeTimelinesStatus(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *GetRecomputeTimelinesStatusResponse, err error)
-	// ListEvents 时间线事件列表（含散片组只读展示）
+	// ListEvents 活动目录列表（包含空目录）
 	ListEvents(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *ListTimelineEventsResponse, err error)
 	// ListTimelines 所有时间线列表
 	ListTimelines(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *ListTimelinesResponse, err error)
-	// RecomputeTimelines 触发全量重算照片 timeline（异步，人工值保留）
+	// RecomputeTimelines 同步目录活动（同步执行，成功返回 completed）
 	RecomputeTimelines(ctx context.Context, req *Empty, opts ...http.CallOption) (rsp *RecomputeTimelinesResponse, err error)
-	// SaveEvent 保存时间线事件（新建与更新合一，id 为空则新建）
+	// SaveEvent 保存目录活动（id 为空创建目录，名称变更会改目录名）
 	SaveEvent(ctx context.Context, req *SaveTimelineEventRequest, opts ...http.CallOption) (rsp *SaveTimelineEventResponse, err error)
 }
 
@@ -225,7 +225,7 @@ func NewTimelineServiceHTTPClient(client *http.Client) TimelineServiceHTTPClient
 	return &TimelineServiceHTTPClientImpl{client}
 }
 
-// DeleteEvent 删除时间线事件
+// DeleteEvent 删除空活动目录
 func (c *TimelineServiceHTTPClientImpl) DeleteEvent(ctx context.Context, in *DeleteTimelineEventRequest, opts ...http.CallOption) (*Empty, error) {
 	var out Empty
 	pattern := "/api/v1/timeline-events/{id}"
@@ -253,7 +253,7 @@ func (c *TimelineServiceHTTPClientImpl) GetPhotosByTimeline(ctx context.Context,
 	return &out, nil
 }
 
-// GetRecomputeTimelinesStatus 查询重算进度
+// GetRecomputeTimelinesStatus 查询最近一次目录同步计数
 func (c *TimelineServiceHTTPClientImpl) GetRecomputeTimelinesStatus(ctx context.Context, in *Empty, opts ...http.CallOption) (*GetRecomputeTimelinesStatusResponse, error) {
 	var out GetRecomputeTimelinesStatusResponse
 	pattern := "/api/v1/timeline-events/recompute/status"
@@ -267,7 +267,7 @@ func (c *TimelineServiceHTTPClientImpl) GetRecomputeTimelinesStatus(ctx context.
 	return &out, nil
 }
 
-// ListEvents 时间线事件列表（含散片组只读展示）
+// ListEvents 活动目录列表（包含空目录）
 func (c *TimelineServiceHTTPClientImpl) ListEvents(ctx context.Context, in *Empty, opts ...http.CallOption) (*ListTimelineEventsResponse, error) {
 	var out ListTimelineEventsResponse
 	pattern := "/api/v1/timeline-events"
@@ -295,7 +295,7 @@ func (c *TimelineServiceHTTPClientImpl) ListTimelines(ctx context.Context, in *E
 	return &out, nil
 }
 
-// RecomputeTimelines 触发全量重算照片 timeline（异步，人工值保留）
+// RecomputeTimelines 同步目录活动（同步执行，成功返回 completed）
 func (c *TimelineServiceHTTPClientImpl) RecomputeTimelines(ctx context.Context, in *Empty, opts ...http.CallOption) (*RecomputeTimelinesResponse, error) {
 	var out RecomputeTimelinesResponse
 	pattern := "/api/v1/timeline-events/recompute"
@@ -309,7 +309,7 @@ func (c *TimelineServiceHTTPClientImpl) RecomputeTimelines(ctx context.Context, 
 	return &out, nil
 }
 
-// SaveEvent 保存时间线事件（新建与更新合一，id 为空则新建）
+// SaveEvent 保存目录活动（id 为空创建目录，名称变更会改目录名）
 func (c *TimelineServiceHTTPClientImpl) SaveEvent(ctx context.Context, in *SaveTimelineEventRequest, opts ...http.CallOption) (*SaveTimelineEventResponse, error) {
 	var out SaveTimelineEventResponse
 	pattern := "/api/v1/timeline-events"
