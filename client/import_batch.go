@@ -64,6 +64,7 @@ type ImportBatchEntry struct {
 }
 
 type ImportBatch struct {
+	Review            *ImportReviewSync    `json:"review,omitempty"`
 	Bursts            *ImportReviewBursts  `json:"bursts,omitempty"`
 	ID                string               `json:"id"`
 	Activity          string               `json:"activity"`

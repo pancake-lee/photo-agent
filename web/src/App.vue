@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   darkTheme,
   dateZhCN,
@@ -9,6 +10,8 @@ import {
   NLayout,
 } from 'naive-ui'
 import SideMenu from './components/SideMenu.vue'
+
+const route = useRoute()
 
 // ── 桌面环境调试辅助 ──
 
@@ -77,8 +80,8 @@ onMounted(() => {
 <template>
   <NConfigProvider :theme="darkTheme" :locale="zhCN" :date-locale="dateZhCN">
     <NMessageProvider>
-      <NLayout has-sider position="absolute">
-        <SideMenu />
+      <NLayout has-sider position="absolute" :class="{ 'import-layout': route.path === '/import' }">
+        <SideMenu class="app-sider" />
         <router-view />
       </NLayout>
     </NMessageProvider>
@@ -86,6 +89,10 @@ onMounted(() => {
 </template>
 
 <style>
+@media (max-width: 600px) {
+  .import-layout > .app-sider { display: none; }
+}
+
 /* ── 全局滚动条（暗色主题） ── */
 
 ::-webkit-scrollbar {

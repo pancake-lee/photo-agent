@@ -5,7 +5,6 @@ import {
   NLayoutHeader,
   NSteps,
   NStep,
-  NCard,
   NButton,
   NSpin,
   NEmpty,
@@ -27,6 +26,7 @@ import type {
 } from '../utils/wails'
 import { settings } from '../stores/settings'
 import ImportBatchWorkflow from '../components/ImportBatchWorkflow.vue'
+import ImportRemoteReview from '../components/ImportRemoteReview.vue'
 import ImportWorkflowStep1 from '../components/ImportWorkflowStep1.vue'
 import ImportWorkflowStep2 from '../components/ImportWorkflowStep2.vue'
 import ImportWorkflowStep3 from '../components/ImportWorkflowStep3.vue'
@@ -408,6 +408,7 @@ onUnmounted(() => {
     <NLayoutHeader bordered>
       <div class="page-header">
         <h2 class="page-title">导入工作流</h2>
+        <a v-if="!isWails()" href="#/photos" class="mobile-back">图片管理</a>
         <NButton v-if="isWails()" text class="workflow-switch" @click="useLegacyImport = !useLegacyImport">
           {{ useLegacyImport ? '批次导入' : '中转目录导入' }}
         </NButton>
@@ -415,13 +416,7 @@ onUnmounted(() => {
     </NLayoutHeader>
 
     <NLayoutContent class="page-body">
-      <!-- 非 Wails 环境提示 -->
-      <NCard v-if="!isWails()" title="无法使用导入工作流" size="small" class="guard-card">
-        <p class="guard-note">
-          导入工作流依赖客户端本地文件操作，请在 Wails 桌面应用中打开此页面。
-          当前处于浏览器环境，无法扫描本地中转目录。
-        </p>
-      </NCard>
+      <ImportRemoteReview v-if="!isWails()" />
 
       <ImportBatchWorkflow v-else-if="!useLegacyImport" />
       <div v-else class="workflow-container">
@@ -514,6 +509,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 16px 24px;
 }
+.mobile-back { margin-left: auto; color: inherit; font-size: 13px; }
 .workflow-switch { margin-left: auto; }
 .page-title {
   margin: 0;
@@ -720,5 +716,9 @@ onUnmounted(() => {
 }
 .tip-warn {
   color: var(--n-warning-color);
+}
+@media (max-width: 600px) {
+  .page-body { padding: 8px; }
+  .page-header { padding: 12px 16px; }
 }
 </style>

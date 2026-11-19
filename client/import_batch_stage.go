@@ -107,6 +107,9 @@ func (a *App) StageImportJPGs(id, server string) (_ *ImportBatch, retErr error) 
 
 func cleanupImportBatchStage(batch *ImportBatch) error {
 	servers := append([]string(nil), batch.StageServers...)
+	if batch.Review != nil {
+		servers = append(servers, batch.Review.Server)
+	}
 	for _, entry := range batch.Entries {
 		servers = append(servers, entry.StagedServer)
 	}

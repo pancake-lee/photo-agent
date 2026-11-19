@@ -80,14 +80,11 @@ const topMenuOptions = computed<MenuOption[]>(() => {
     },
   ]
 
-  // 导入工作流仅在 Wails 桌面环境可用（依赖客户端本地文件操作）
-  if (isWails()) {
-    options.push({
-      label: '导入',
-      key: '/import',
-      icon: renderIcon(CloudUploadOutline),
-    })
-  }
+  options.push({
+    label: isWails() ? '导入' : '接续选片',
+    key: '/import',
+    icon: renderIcon(CloudUploadOutline),
+  })
 
   options.push({
     label: '新建对话',

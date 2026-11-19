@@ -14,6 +14,7 @@ import type {
 import { onWailsEvent, wailsApi, wailsError } from '../utils/wails'
 import { settings } from '../stores/settings'
 import { getApiBase } from '../config'
+import { importReviewLink } from '../utils/importReview'
 
 const message = useMessage()
 const router = useRouter()
@@ -31,6 +32,31 @@ const sources = ref<ImportSource[]>([])
 const mode = ref<ImportMode>('pc')
 const complete = ref(false)
 const busy = ref('')
+const showMobile = ref(false)
+const mobileBase = ref(localStorage.getItem('import.mobileWebAddress') ?? '')
+const mobileLink = computed(() => batch.value ? importReviewLink(mobileBase.value.trim(), batch.value.id) : '')
+watch(mobileBase, (value) => localStorage.setItem('import.mobileWebAddress', value))
+
+function refreshReview() {
+  return perform('刷新选片', async () => {
+    if (!batch.value) return
+    batch.value = await getImportBatchApp().RefreshImportReview(batch.value.id)
+    message.success('已读取服务器最新选片结果')
+  })
+}
+function openMobileReview() {
+  return perform('开启手机选片', async () => {
+    if (!batch.value) return
+    batch.value = await getImportBatchApp().PublishImportReview(batch.value.id, settings.backendUrl)
+    showMobile.value = true
+  })
+}
+async function copyMobileLink() {
+  try {
+    await navigator.clipboard.writeText(mobileLink.value)
+    message.success('链接已复制')
+  } catch { message.info('请选中下方链接复制') }
+}
 const grouping = ref(false)
 const groupingError = ref('')
 const progress = ref<ImportBurstProgress>()
@@ -393,6 +419,11 @@ async function ensureGrouping() {
   if (step.value === 'review' && stagedEntries.value.length && batch.value?.bursts?.server !== settings.backendUrl) {
     await runGrouping()
   }
+  if (step.value === 'review' && batch.value?.review) {
+    try {
+      batch.value = await getImportBatchApp().PublishImportReview(batch.value.id, settings.backendUrl)
+    } catch (error) { message.error(wailsError(error)) }
+  }
 }
 
 async function runGrouping() {
@@ -523,6 +554,11 @@ function handlePreviewKey(event: KeyboardEvent) {
   const entry = previewEntry.value
   if (!entry || busy.value || grouping.value) return
   const key = event.key.toLowerCase()
+  if (key === 'u' && !event.shiftKey && batch.value?.review) {
+    event.preventDefault()
+    void refreshReview()
+    return
+  }
   if (key === 'z' && !event.shiftKey && batch.value?.undo?.length) {
     event.preventDefault()
     void undoDecision()
@@ -827,7 +863,12 @@ onUnmounted(() => {
           <NSelect v-model:value="filter" :options="filters" style="width: 160px" aria-label="选片范围" />
           <NButton :disabled="!batch.undo?.length || !!busy || grouping" @click="undoDecision">撤销上一步</NButton>
         </NSpace>
-        <p>照片默认留存。标记删除后可撤销，原片在确认回收时处理。</p>
+        <NSpace align="center" class="form-row">
+          <NButton :disabled="!!busy || grouping || !stagedCount" :loading="busy === '开启手机选片'" @click="openMobileReview">手机接续选片</NButton>
+          <NButton :disabled="!!busy || grouping || !batch.review" :loading="busy === '刷新选片'" @click="refreshReview">刷新选片</NButton>
+          <span v-if="batch.review" class="sync-time">已同步 {{ new Date(batch.review.updated_at).toLocaleString() }}</span>
+        </NSpace>
+        <p>照片默认留存。标记删除后可撤销，原片在确认回收时处理。开启手机选片后，决定会保存到服务器；点击刷新读取另一端的改动。</p>
         <NAlert v-if="reviewIssueCount && filter !== 'review'" type="warning" class="form-row">
           {{ reviewIssueCount }} 张照片有待核对的来源、配对或上传问题。 <NButton text @click="filter = 'review'">查看需核对照片</NButton>
         </NAlert>
@@ -984,6 +1025,16 @@ onUnmounted(() => {
       </template>
     </NModal>
 
+    <NModal v-model:show="showMobile" preset="card" title="手机接续选片" style="width: min(560px, 94vw)">
+      <p>手机打开项目网页，进入「导入工作流」选择此批次。PC 可以关闭，照片和决定已保存到服务器。</p>
+      <p>仅包含已暂存且无需核对的照片。未上传或有配对问题的照片，请先在 PC 处理。</p>
+      <NFormItem label="手机可访问的项目网页地址">
+        <NInput v-model:value="mobileBase" placeholder="例如 http://服务器地址:网页端口" />
+      </NFormItem>
+      <NInput v-if="mobileLink" :value="mobileLink" readonly aria-label="手机选片链接" />
+      <NButton :disabled="!mobileLink" class="form-row" @click="copyMobileLink">复制本批次链接</NButton>
+      <p>双方用「刷新选片」读取对方改动，同一张以最后提交为准。回到 PC 点击「选片完成」后，手机将停止编辑。</p>
+    </NModal>
     <NModal :show="!!previewEntry" preset="card" :title="previewEntry ? entryName(previewEntry) : '照片预览'"
       :style="{ width: '95vw', height: '95vh' }" :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"
       @update:show="(show) => { if (!show) previewID = '' }">
@@ -1002,18 +1053,19 @@ onUnmounted(() => {
           <p v-if="boundary" class="preview-boundary" role="status">已到达{{ boundary.direction === -1 ? '第一张' : '最后一张' }}，再次操作跳出当前连拍组</p>
         </div>
         <NSpace v-if="step === 'review'" justify="center" align="center" class="preview-actions" :size="8">
+          <NButton v-if="batch?.review" :disabled="!!busy || grouping" :loading="busy === '刷新选片'" @click="refreshReview">刷新 (U)</NButton>
           <template v-if="canEdit(previewEntry)">
-          <NButton v-if="!previewEntry.reference_only" size="small" :disabled="!!busy || grouping" title="L 快捷键"
-            @click="toggleFavorite([previewID])">{{ favoriteLabel([previewID]) }} (L)</NButton>
-          <NButton size="small" type="error" secondary :disabled="!!busy || grouping" title="Delete 快捷键"
-            @click="decide([previewID], 'discarded')">删除当前照片 (D / Delete)</NButton>
-          <template v-if="previewGroup.length">
-            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="keepOnlyCurrent(previewID)">只保留当前照片 (K)</NButton>
-            <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(previewGroup)">{{ favoriteLabel(previewGroup) }} (Shift+L)</NButton>
-            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(previewGroup, 'discarded')">删除整组 (Shift+D)</NButton>
-          </template>
-          <NButton v-if="!previewEntry.reference_only && !previewEntry.upload" size="small" text :disabled="!!busy || grouping"
-            :title="previewEntry.shot_at || '填写拍摄时间'" @click="editShotAt(previewEntry)">拍摄时间 (T)</NButton>
+            <NButton v-if="!previewEntry.reference_only" size="small" :disabled="!!busy || grouping" title="L 快捷键"
+              @click="toggleFavorite([previewID])">{{ favoriteLabel([previewID]) }} (L)</NButton>
+            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" title="Delete 快捷键"
+              @click="decide([previewID], 'discarded')">删除当前照片 (D / Delete)</NButton>
+            <template v-if="previewGroup.length">
+              <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="keepOnlyCurrent(previewID)">只保留当前照片 (K)</NButton>
+              <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(previewGroup)">{{ favoriteLabel(previewGroup) }} (Shift+L)</NButton>
+              <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(previewGroup, 'discarded')">删除整组 (Shift+D)</NButton>
+            </template>
+            <NButton v-if="!previewEntry.reference_only && !previewEntry.upload" size="small" text :disabled="!!busy || grouping"
+              :title="previewEntry.shot_at || '填写拍摄时间'" @click="editShotAt(previewEntry)">拍摄时间 (T)</NButton>
           </template>
           <NButton v-if="canRestore(previewEntry)" size="small" :disabled="!!busy || grouping"
             @click="decide([previewID], 'kept')">恢复留存 (R)</NButton>
@@ -1039,6 +1091,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.sync-time { color: var(--n-text-color-3); font-size: 12px; }
 .batch-workflow { display: grid; gap: 16px; }
 .form-row { margin-top: 16px; }
 .source-field { margin-top: 16px; }

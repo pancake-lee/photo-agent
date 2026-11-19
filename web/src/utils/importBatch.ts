@@ -85,6 +85,7 @@ export interface ImportBatch extends ImportSummary {
   empty_favorite_dirs?: string[]
   undo?: unknown[]
   recycling?: ImportRecycleGroup[]
+  review?: { server: string; revision: number; updated_at: string; state: string }
   bursts?: { server: string; fine: string[][]; coarse: string[][] }
 }
 
@@ -107,6 +108,8 @@ interface ImportBatchApp {
   SetImportShotAt(id: string, entry: string, shotAt: string): Promise<ImportBatch>
   StageImportJPGs(id: string, server: string): Promise<ImportBatch>
   GroupImportBatch(id: string, server: string): Promise<ImportBatch>
+  PublishImportReview(id: string, server: string): Promise<ImportBatch>
+  RefreshImportReview(id: string): Promise<ImportBatch>
   CancelImportBursts(): Promise<void>
   AdvanceImportBatch(id: string, next: ImportStep, leaveLocal: boolean): Promise<ImportBatch>
   FinishImportBatch(id: string): Promise<ImportBatch>

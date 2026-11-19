@@ -132,6 +132,12 @@ func (a *App) ScanImportBatch(
 	if old != nil && old.Mode != mode {
 		return nil, fmt.Errorf("批次导入模式不可修改，请新建批次")
 	}
+	if old != nil {
+		err = old.refreshRemoteReview()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if old != nil && old.workflowStep() != "review" {
 		return nil, fmt.Errorf("返回选片后再重新扫描来源")
 	}
@@ -141,6 +147,7 @@ func (a *App) ScanImportBatch(
 	}
 	if old != nil {
 		batch.Name, batch.StageServers = old.Name, old.StageServers
+		batch.Review = old.Review
 	}
 	batch.Name, err = importBatchName(root, batch)
 	if err != nil {
@@ -183,14 +190,42 @@ func (a *App) DecideImportBatch(
 	id string, entries []string, decision string,
 ) (*ImportBatch, error) {
 	return a.editImportReview(id, func(batch *ImportBatch) error {
-		return batch.setDecisions(entries, decision)
+		err := batch.refreshRemoteReview()
+		if err != nil {
+			return err
+		}
+		err = batch.setDecisions(entries, decision)
+		if err != nil {
+			return err
+		}
+		changes := make([]importRemoteChange, 0, len(entries))
+		for _, entryID := range entries {
+			changes = append(changes, importRemoteChange{ID: entryID, Decision: decision})
+		}
+		return batch.editRemoteReview(changes, "")
 	})
 }
 
 func (a *App) UndoImportBatch(id string) (*ImportBatch, error) {
 	return a.editImportReview(id, func(batch *ImportBatch) error {
+		err := batch.refreshRemoteReview()
+		if err != nil {
+			return err
+		}
+		undo := append([]ImportBatchUndo(nil), batch.Undo...)
 		batch.undoDecisions()
-		return nil
+		changes := make([]importRemoteChange, 0, len(undo))
+		for _, previous := range undo {
+			for _, entry := range batch.Entries {
+				if entry.ID == previous.ID && entry.Decision == previous.Decision {
+					changes = append(changes, importRemoteChange{ID: entry.ID, Decision: entry.Decision})
+				}
+			}
+		}
+		if len(changes) == 0 {
+			return nil
+		}
+		return batch.editRemoteReview(changes, "")
 	})
 }
 
@@ -288,7 +323,17 @@ func (batch *ImportBatch) workflowStep() string {
 
 func (a *App) AdvanceImportBatch(id, next string, leaveLocal bool) (*ImportBatch, error) {
 	return a.editImportBatch(id, func(batch *ImportBatch) error {
-		return batch.advance(next, leaveLocal)
+		err := batch.advance(next, leaveLocal)
+		if err != nil {
+			return err
+		}
+		if next == "review" {
+			return batch.editRemoteReview(nil, "review")
+		}
+		if next == "reject" {
+			return batch.editRemoteReview(nil, "locked")
+		}
+		return nil
 	})
 }
 
@@ -347,10 +392,14 @@ func (a *App) AbandonImportBatch(id string) error {
 			return fmt.Errorf("批次已完成")
 		case "abandoning":
 		default:
+			err := batch.editRemoteReview(nil, "locked")
+			if err != nil {
+				return err
+			}
 			// Cleanup can succeed on one server and fail on another. Record the
 			// transition before cleanup so a partial batch cannot resume importing.
 			batch.Step = "abandoning"
-			err := saveImportBatch(importBatchRoot(), batch)
+			err = saveImportBatch(importBatchRoot(), batch)
 			if err != nil {
 				return err
 			}

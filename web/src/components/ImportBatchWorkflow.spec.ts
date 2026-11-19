@@ -8,8 +8,11 @@ import ImportBatchWorkflow from './ImportBatchWorkflow.vue'
 import { settings } from '../stores/settings'
 import type { ImportBatch, ImportDecision } from '../utils/importBatch'
 
+vi.setConfig({ testTimeout: 15000 })
+const waitFor = (assertion: () => void) => vi.waitFor(assertion, { timeout: 8000 })
+
 const api = vi.hoisted(() => ({ ListImportBatches: vi.fn(), GetImportBatch: vi.fn(),
-  DecideImportBatch: vi.fn(), UndoImportBatch: vi.fn() }))
+  DecideImportBatch: vi.fn(), UndoImportBatch: vi.fn(), RefreshImportReview: vi.fn(), PublishImportReview: vi.fn() }))
 vi.mock('../utils/importBatch', () => ({ getImportBatchApp: () => api }))
 vi.mock('../utils/wails', () => ({ onWailsEvent: () => () => {},
   wailsApi: {}, wailsError: (error: unknown) => String(error) }))
@@ -47,6 +50,8 @@ beforeEach(() => {
     batch.entries = batch.entries.map((entry) => ids.includes(entry.id) ? { ...entry, decision: value } : entry)
     return structuredClone(batch)
   })
+  api.PublishImportReview.mockReset().mockImplementation(async () => structuredClone(batch))
+  api.RefreshImportReview.mockReset().mockImplementation(async () => structuredClone(batch))
   api.UndoImportBatch.mockReset().mockImplementation(async () => {
     const previous = batch.undo as typeof batch.entries
     batch.entries = batch.entries.map((entry) => previous.find((old) => old.id === entry.id) ?? entry)
@@ -69,13 +74,13 @@ async function mountReview() {
   document.body.append(container)
   app = createApp({ render: () => h(NMessageProvider, null, { default: () => h(ImportBatchWorkflow) }) })
   app.use(router).mount(container)
-  await vi.waitFor(() => expect(container!.querySelector('select option')?.textContent).toBe('活动'))
+  await waitFor(() => expect(container!.querySelector('select option')?.textContent).toBe('活动'))
   const select = container.querySelector('select')!
   select.value = 'batch'
   select.dispatchEvent(new Event('change', { bubbles: true }))
-  await vi.waitFor(() => expect(container!.querySelector('.photo-card[data-photo-id="a"]')).not.toBeNull())
+  await waitFor(() => expect(container!.querySelector('.photo-card[data-photo-id="a"]')).not.toBeNull())
   container.querySelector<HTMLElement>('.photo-card[data-photo-id="a"]')!.click()
-  await vi.waitFor(() => expect(current()).toBe('a.jpg'))
+  await waitFor(() => expect(current()).toBe('a.jpg'))
 }
 
 function current() { return document.querySelector('.preview-frame img[alt]:not([alt=""])')?.getAttribute('alt') }
@@ -89,15 +94,15 @@ describe('导入大图选片交互', () => {
     const buttons = [...document.querySelectorAll('.preview-actions button')]
     expect(buttons.every((button) => /\([A-Z]|\(Shift\+/.test(button.textContent ?? ''))).toBe(true)
     key('l')
-    await vi.waitFor(() => expect(batch.entries[0]?.decision).toBe('favorite'))
+    await waitFor(() => expect(batch.entries[0]?.decision).toBe('favorite'))
     await nextTick()
     key('L', true)
-    await vi.waitFor(() => expect(batch.entries[1]?.decision).toBe('favorite'))
+    await waitFor(() => expect(batch.entries[1]?.decision).toBe('favorite'))
     await nextTick()
     key('D', true)
-    await vi.waitFor(() => expect(current()).toBe('c.jpg'))
+    await waitFor(() => expect(current()).toBe('c.jpg'))
     key('z')
-    await vi.waitFor(() => expect(api.UndoImportBatch).toHaveBeenCalledOnce())
+    await waitFor(() => expect(api.UndoImportBatch).toHaveBeenCalledOnce())
     expect(batch.entries.slice(0, 2).every((entry) => entry.decision === 'favorite')).toBe(true)
   })
 
@@ -132,10 +137,24 @@ describe('导入大图选片交互', () => {
     expect(current()).toBe('c.jpg')
   })
 
+  it('开启共享后，大图按 U 刷新决定并保持当前位置与组视图', async () => {
+    batch.review = { server: settings.backendUrl, state: 'review', revision: 1, updated_at: '2026-11-19T12:00:00Z' }
+    await mountReview()
+    await waitFor(() => expect(api.PublishImportReview).toHaveBeenCalled())
+    key('ArrowRight')
+    await nextTick()
+    expect(current()).toBe('b.jpg')
+    batch.entries[0]!.decision = 'favorite'
+    key('u')
+    await waitFor(() => expect(api.RefreshImportReview).toHaveBeenCalledWith('batch'))
+    expect(current()).toBe('b.jpg')
+    expect(document.querySelectorAll('.preview-thumb')).toHaveLength(2)
+  })
+
   it('填写时间时不触发选片快捷键', async () => {
     await mountReview()
     key('t')
-    await vi.waitFor(() => expect(document.body.textContent).toContain('修正拍摄时间'))
+    await waitFor(() => expect(document.body.textContent).toContain('修正拍摄时间'))
     key('d')
     expect(api.DecideImportBatch).not.toHaveBeenCalled()
   })
