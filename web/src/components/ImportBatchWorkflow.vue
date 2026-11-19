@@ -46,6 +46,9 @@ const originalReady = ref(false)
 const allowOriginal = ref(false)
 const boundary = ref<{ id: string; direction: -1 | 1 }>()
 let boundaryTimer: ReturnType<typeof setTimeout> | undefined
+let wheelAt = 0
+let wheelDistance = 0
+let wheelConsumed = false
 const uploadPlan = ref<ImportPlan[]>()
 const archivePage = ref(1)
 interface FileProgress {
@@ -244,6 +247,11 @@ watch(previewIDs, (ids, previous) => {
 })
 watch(previewID, async (id) => {
   clearBoundary()
+  if (!id) {
+    wheelAt = 0
+    wheelDistance = 0
+    wheelConsumed = false
+  }
   localPreview.value = ''
   previewLoaded.value = false
   previewFailed.value = false
@@ -422,6 +430,17 @@ function toggleFavorite(ids: string[]) {
   return decide(ids, allFavorited ? 'kept' : 'favorite')
 }
 
+function undoDecision() {
+  return perform('撤销', async () => {
+    if (batch.value?.undo?.length) batch.value = await getImportBatchApp().UndoImportBatch(batch.value.id)
+  })
+}
+
+function canRestore(entry: ImportEntry) {
+  return step.value === 'review' && entry.decision === 'discarded' && !!entry.jpg &&
+    !entry.reference_only && !entry.historical && !entry.upload?.verified && isStaged(entry)
+}
+
 function entryName(entry: ImportEntry) {
   return (entry.jpg?.path ?? entry.nef?.path ?? '').split(/[\\/]/).pop() ?? ''
 }
@@ -502,13 +521,51 @@ function handlePreviewKey(event: KeyboardEvent) {
     return
   }
   const entry = previewEntry.value
-  if (!entry || !canEdit(entry) || busy.value || grouping.value) return
-  if (event.key === 'Delete') {
+  if (!entry || busy.value || grouping.value) return
+  const key = event.key.toLowerCase()
+  if (key === 'z' && !event.shiftKey && batch.value?.undo?.length) {
     event.preventDefault()
-    void decide([entry.id], 'discarded')
-  } else if (event.key.toLowerCase() === 'l' && !entry.reference_only) {
+    void undoDecision()
+    return
+  }
+  if (key === 'r' && !event.shiftKey && canRestore(entry)) {
     event.preventDefault()
-    void toggleFavorite([entry.id])
+    void decide([entry.id], 'kept')
+    return
+  }
+  if (!canEdit(entry)) return
+  if (event.shiftKey && !previewGroup.value.length) return
+  if (key === 'd' || event.key === 'Delete' && !event.shiftKey) {
+    event.preventDefault()
+    void decide(event.shiftKey ? previewGroup.value : [entry.id], 'discarded')
+  } else if (key === 'l' && !entry.reference_only) {
+    event.preventDefault()
+    void toggleFavorite(event.shiftKey ? previewGroup.value : [entry.id])
+  } else if (key === 'k' && !event.shiftKey && previewGroup.value.length) {
+    event.preventDefault()
+    void keepOnlyCurrent(entry.id)
+  } else if (key === 't' && !event.shiftKey && !entry.reference_only && !entry.upload) {
+    event.preventDefault()
+    editShotAt(entry)
+  }
+}
+
+function handlePreviewWheel(event: WheelEvent) {
+  if (!previewID.value || shotEntry.value || event.defaultPrevented || event.ctrlKey || event.metaKey ||
+    !event.deltaY || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return
+  event.preventDefault()
+  if (busy.value || grouping.value) return
+  const now = Date.now()
+  if (now - wheelAt > 180 || Math.sign(wheelDistance) !== Math.sign(event.deltaY)) {
+    wheelDistance = 0
+    wheelConsumed = false
+  }
+  wheelAt = now
+  if (wheelConsumed) return
+  wheelDistance += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1)
+  if (Math.abs(wheelDistance) >= 32) {
+    wheelConsumed = true
+    navigatePreview(wheelDistance > 0 ? 1 : -1)
   }
 }
 
@@ -768,7 +825,7 @@ onUnmounted(() => {
         </div>
         <NSpace align="center" class="form-row">
           <NSelect v-model:value="filter" :options="filters" style="width: 160px" aria-label="选片范围" />
-          <NButton :disabled="!batch.undo?.length || !!busy || grouping" @click="perform('撤销', async () => { if (batch) batch = await getImportBatchApp().UndoImportBatch(batch.id) })">撤销上一步</NButton>
+          <NButton :disabled="!batch.undo?.length || !!busy || grouping" @click="undoDecision">撤销上一步</NButton>
         </NSpace>
         <p>照片默认留存。标记删除后可撤销，原片在确认回收时处理。</p>
         <NAlert v-if="reviewIssueCount && filter !== 'review'" type="warning" class="form-row">
@@ -931,7 +988,7 @@ onUnmounted(() => {
       :style="{ width: '95vw', height: '95vh' }" :content-style="{ display: 'flex', flexDirection: 'column', minHeight: 0 }"
       @update:show="(show) => { if (!show) previewID = '' }">
       <template v-if="previewEntry">
-        <div class="preview-frame">
+        <div class="preview-frame" @wheel="handlePreviewWheel">
           <NSpin v-if="!previewLoaded && !previewFailed && !originalReady" size="small" />
           <NEmpty v-if="previewFailed && !originalReady" description="无法读取照片预览" />
           <img v-if="previewThumbnail" :key="`preview-${previewID}`" class="preview-image" :class="{ visible: previewLoaded }"
@@ -944,19 +1001,25 @@ onUnmounted(() => {
             aria-label="下一张（右方向键）" @click="navigatePreview(1)">›</button>
           <p v-if="boundary" class="preview-boundary" role="status">已到达{{ boundary.direction === -1 ? '第一张' : '最后一张' }}，再次操作跳出当前连拍组</p>
         </div>
-        <NSpace v-if="canEdit(previewEntry)" align="center" class="preview-actions" :size="8">
+        <NSpace v-if="step === 'review'" justify="center" align="center" class="preview-actions" :size="8">
+          <template v-if="canEdit(previewEntry)">
           <NButton v-if="!previewEntry.reference_only" size="small" :disabled="!!busy || grouping" title="L 快捷键"
-            @click="toggleFavorite([previewID])">{{ favoriteLabel([previewID]) }}</NButton>
+            @click="toggleFavorite([previewID])">{{ favoriteLabel([previewID]) }} (L)</NButton>
           <NButton size="small" type="error" secondary :disabled="!!busy || grouping" title="Delete 快捷键"
-            @click="decide([previewID], 'discarded')">删除当前照片</NButton>
+            @click="decide([previewID], 'discarded')">删除当前照片 (D / Delete)</NButton>
           <template v-if="previewGroup.length">
-            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="keepOnlyCurrent(previewID)">只保留当前照片</NButton>
-            <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(previewGroup)">{{ favoriteLabel(previewGroup) }}</NButton>
-            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(previewGroup, 'discarded')">删除整组</NButton>
+            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="keepOnlyCurrent(previewID)">只保留当前照片 (K)</NButton>
+            <NButton size="small" :disabled="!!busy || grouping" @click="toggleFavorite(previewGroup)">{{ favoriteLabel(previewGroup) }} (Shift+L)</NButton>
+            <NButton size="small" type="error" secondary :disabled="!!busy || grouping" @click="decide(previewGroup, 'discarded')">删除整组 (Shift+D)</NButton>
           </template>
           <NButton v-if="!previewEntry.reference_only && !previewEntry.upload" size="small" text :disabled="!!busy || grouping"
-            @click="editShotAt(previewEntry)">{{ previewEntry.shot_at || '填写拍摄时间' }}</NButton>
+            :title="previewEntry.shot_at || '填写拍摄时间'" @click="editShotAt(previewEntry)">拍摄时间 (T)</NButton>
+          </template>
+          <NButton v-if="canRestore(previewEntry)" size="small" :disabled="!!busy || grouping"
+            @click="decide([previewID], 'kept')">恢复留存 (R)</NButton>
+          <NButton size="small" :disabled="!batch?.undo?.length || !!busy || grouping" @click="undoDecision">撤销上一步 (Z)</NButton>
         </NSpace>
+        <p class="preview-hint">{{ previewIndex + 1 }} / {{ previewIDs.length }} · ← / → 或滚轮切换 · Esc 关闭</p>
         <div v-if="previewGroup.length" ref="previewStrip" class="preview-strip" aria-label="连拍组照片">
           <template v-for="id in previewGroup" :key="id">
             <button v-if="entriesByID.get(id)" type="button" class="preview-thumb" :aria-pressed="id === previewID"
@@ -1003,6 +1066,7 @@ p.source-hint { margin: 4px 0 0; }
 .next { right: 0; }
 .preview-boundary { position: absolute; bottom: 16px; padding: 8px 16px; margin: 0; border-radius: 4px; color: white; background: rgb(0 0 0 / 80%); pointer-events: none; }
 .preview-actions, .preview-strip { margin-top: 8px; }
+.preview-hint { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--n-text-color-3); }
 .preview-strip { display: flex; gap: 8px; overflow-x: auto; }
 .preview-thumb { flex: 0 0 64px; height: 64px; padding: 0; border: 2px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; }
 .preview-thumb[aria-pressed="true"] { border-color: var(--primary-color, #18a058); }
